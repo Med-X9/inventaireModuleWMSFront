@@ -29,22 +29,6 @@
                                 <icon-calendar />
                             </router-link>
                         </li>
-                        <li>
-                            <router-link
-                                to="/apps/todolist"
-                                class="block p-2 rounded-full bg-white-light/40 dark:bg-dark/40 hover:text-primary hover:bg-white-light/90 dark:hover:bg-dark/60"
-                            >
-                                <icon-edit />
-                            </router-link>
-                        </li>
-                        <li>
-                            <router-link
-                                to="/apps/chat"
-                                class="block p-2 rounded-full bg-white-light/40 dark:bg-dark/40 hover:text-primary hover:bg-white-light/90 dark:hover:bg-dark/60"
-                            >
-                                <icon-chat-notification />
-                            </router-link>
-                        </li>
                     </ul>
                 </div>
                 <div
@@ -142,68 +126,6 @@
                         </Popper>
                     </div>
 
-                    <div class="dropdown shrink-0">
-                        <Popper :placement="store.rtlClass === 'rtl' ? 'bottom-start' : 'bottom-end'" offsetDistance="8">
-                            <button
-                                type="button"
-                                class="block p-2 rounded-full bg-white-light/40 dark:bg-dark/40 hover:text-primary hover:bg-white-light/90 dark:hover:bg-dark/60"
-                            >
-                                <icon-mail-dot />
-                            </button>
-                            <template #content="{ close }">
-                                <ul class="top-11 !py-0 text-dark dark:text-white-dark w-[300px] sm:w-[375px] text-xs">
-                                    <li class="mb-5">
-                                        <div class="overflow-hidden relative rounded-t-md !p-5 text-white">
-                                            <div
-                                                class="absolute h-full w-full bg-[url('/assets/images/menu-heade.jpg')] bg-no-repeat bg-center bg-cover inset-0"
-                                            ></div>
-                                            <h4 class="font-semibold relative z-10 text-lg">Messages</h4>
-                                        </div>
-                                    </li>
-                                    <template v-for="msg in messages" :key="msg.id">
-                                        <li>
-                                            <div class="flex items-center py-3 px-5">
-                                                <div v-html="msg.image"></div>
-                                                <span class="px-3 dark:text-gray-500">
-                                                    <div class="font-semibold text-sm dark:text-white-light/90" v-text="msg.title"></div>
-                                                    <div v-text="msg.message"></div>
-                                                </span>
-                                                <span
-                                                    class="font-semibold bg-white-dark/20 rounded text-dark/60 px-1 ltr:ml-auto rtl:mr-auto whitespace-pre dark:text-white-dark ltr:mr-2 rtl:ml-2"
-                                                    v-text="msg.time"
-                                                ></span>
-                                                <button type="button" class="text-neutral-300 hover:text-danger" @click="removeMessage(msg.id)">
-                                                    <icon-x-circle />
-                                                </button>
-                                            </div>
-                                        </li>
-                                    </template>
-                                    <template v-if="messages.length">
-                                        <li class="border-t border-white-light text-center dark:border-white/10 mt-5">
-                                            <div
-                                                class="flex items-center py-4 px-5 text-primary font-semibold group dark:text-gray-400 justify-center cursor-pointer"
-                                                @click="close()"
-                                            >
-                                                <span class="group-hover:underline ltr:mr-1 rtl:ml-1">VIEW ALL ACTIVITIES</span>
-
-                                                <icon-arrow-left class="group-hover:translate-x-1 transition duration-300 ltr:ml-1 rtl:mr-1" />
-                                            </div>
-                                        </li>
-                                    </template>
-                                    <template v-if="!messages.length">
-                                        <li class="mb-5">
-                                            <div class="!grid place-content-center hover:!bg-transparent text-lg min-h-[200px]">
-                                                <div class="mx-auto ring-4 ring-primary/30 rounded-full mb-4 text-primary">
-                                                    <icon-info-circle :fill="true" class="w-10 h-10" />
-                                                </div>
-                                                No data available.
-                                            </div>
-                                        </li>
-                                    </template>
-                                </ul>
-                            </template>
-                        </Popper>
-                    </div>
 
                     <div class="dropdown shrink-0">
                         <Popper :placement="store.rtlClass === 'rtl' ? 'bottom-end' : 'bottom-start'" offsetDistance="8">
@@ -315,13 +237,6 @@
                                         </router-link>
                                     </li>
                                     <li>
-                                        <router-link to="/apps/mailbox" class="dark:hover:text-white" @click="close()">
-                                            <icon-mail class="w-4.5 h-4.5 ltr:mr-2 rtl:ml-2 shrink-0" />
-
-                                            Inbox
-                                        </router-link>
-                                    </li>
-                                    <li>
                                         <router-link to="/auth/boxed-lockscreen" class="dark:hover:text-white" @click="close()">
                                             <icon-lock-dots class="w-4.5 h-4.5 ltr:mr-2 rtl:ml-2 shrink-0" />
 
@@ -361,15 +276,6 @@
                         <li>
                             <router-link to="/">{{ $t('sales') }}</router-link>
                         </li>
-                        <li>
-                            <router-link to="/analytics">{{ $t('analytics') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/finance">{{ $t('finance') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/crypto">{{ $t('crypto') }}</router-link>
-                        </li>
                     </ul>
                 </li>
                 <li class="menu nav-item relative">
@@ -384,24 +290,6 @@
                         </div>
                     </a>
                     <ul class="sub-menu">
-                        <li>
-                            <router-link to="/apps/chat">{{ $t('chat') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/apps/mailbox">{{ $t('mailbox') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/apps/todolist">{{ $t('todo_list') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/apps/notes">{{ $t('notes') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/apps/scrumboard">{{ $t('scrumboard') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/apps/contacts">{{ $t('contacts') }}</router-link>
-                        </li>
                         <li class="relative">
                             <a href="javascript:;"
                                 >{{ $t('invoice') }}
@@ -412,12 +300,6 @@
                             <ul
                                 class="rounded absolute top-0 ltr:left-[95%] rtl:right-[95%] min-w-[180px] bg-white z-[10] text-dark dark:text-white-dark dark:bg-[#1b2e4b] shadow p-0 py-2 hidden"
                             >
-                                <li>
-                                    <router-link to="/apps/invoice/list">{{ $t('list') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/apps/invoice/preview">{{ $t('preview') }}</router-link>
-                                </li>
                                 <li>
                                     <router-link to="/apps/invoice/add">{{ $t('add') }}</router-link>
                                 </li>
@@ -446,43 +328,13 @@
                             <router-link to="/components/tabs">{{ $t('tabs') }}</router-link>
                         </li>
                         <li>
-                            <router-link to="/components/accordions">{{ $t('accordions') }}</router-link>
-                        </li>
-                        <li>
                             <router-link to="/components/modals">{{ $t('modals') }}</router-link>
                         </li>
                         <li>
                             <router-link to="/components/cards">{{ $t('cards') }}</router-link>
                         </li>
                         <li>
-                            <router-link to="/components/carousel">{{ $t('carousel') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/components/countdown">{{ $t('countdown') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/components/counter">{{ $t('counter') }}</router-link>
-                        </li>
-                        <li>
                             <router-link to="/components/sweetalert">{{ $t('sweet_alerts') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/components/timeline">{{ $t('timeline') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/components/notifications">{{ $t('notifications') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/components/media-object">{{ $t('media_object') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/components/list-group">{{ $t('list_group') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/components/pricing-table">{{ $t('pricing_tables') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/components/lightbox">{{ $t('lightbox') }}</router-link>
                         </li>
                     </ul>
                 </li>
@@ -501,13 +353,7 @@
                             <router-link to="/elements/alerts">{{ $t('alerts') }}</router-link>
                         </li>
                         <li>
-                            <router-link to="/elements/avatar">{{ $t('avatar') }}</router-link>
-                        </li>
-                        <li>
                             <router-link to="/elements/badges">{{ $t('badges') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/elements/breadcrumbs">{{ $t('breadcrumbs') }}</router-link>
                         </li>
                         <li>
                             <router-link to="/elements/buttons">{{ $t('buttons') }}</router-link>
@@ -522,34 +368,13 @@
                             <router-link to="/elements/dropdown">{{ $t('dropdown') }}</router-link>
                         </li>
                         <li>
-                            <router-link to="/elements/infobox">{{ $t('infobox') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/elements/jumbotron">{{ $t('jumbotron') }}</router-link>
-                        </li>
-                        <li>
                             <router-link to="/elements/loader">{{ $t('loader') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/elements/pagination">{{ $t('pagination') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/elements/popovers">{{ $t('popovers') }}</router-link>
                         </li>
                         <li>
                             <router-link to="/elements/progress-bar">{{ $t('progress_bar') }}</router-link>
                         </li>
                         <li>
-                            <router-link to="/elements/search">{{ $t('search') }}</router-link>
-                        </li>
-                        <li>
                             <router-link to="/elements/tooltips">{{ $t('tooltips') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/elements/treeview">{{ $t('treeview') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/elements/typography">{{ $t('typography') }}</router-link>
                         </li>
                     </ul>
                 </li>
@@ -564,9 +389,6 @@
                         </div>
                     </a>
                     <ul class="sub-menu">
-                        <li>
-                            <router-link to="/tables">{{ $t('tables') }}</router-link>
-                        </li>
                         <li class="relative">
                             <a href="javascript:;"
                                 >{{ $t('datatables') }}
@@ -577,48 +399,6 @@
                             <ul
                                 class="rounded absolute top-0 ltr:left-[95%] rtl:right-[95%] min-w-[180px] bg-white z-[10] text-dark dark:text-white-dark dark:bg-[#1b2e4b] shadow p-0 py-2 hidden"
                             >
-                                <li>
-                                    <router-link to="/datatables/basic">{{ $t('basic') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/datatables/advanced">{{ $t('advanced') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/datatables/skin">{{ $t('skin') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/datatables/order-sorting">{{ $t('order_sorting') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/datatables/columns-filter">{{ $t('columns_filter') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/datatables/multi-column">{{ $t('multi_column') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/datatables/multiple-tables">{{ $t('multiple_tables') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/datatables/alt-pagination">{{ $t('alt_pagination') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/datatables/checkbox">{{ $t('checkbox') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/datatables/range-search">{{ $t('range_search') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/datatables/export">{{ $t('export') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/datatables/sticky-header">{{ $t('sticky_header') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/datatables/clone-header">{{ $t('clone_header') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/datatables/column-chooser">{{ $t('column_chooser') }}</router-link>
-                                </li>
                             </ul>
                         </li>
                     </ul>
@@ -710,27 +490,6 @@
                                 </li>
                             </ul>
                         </li>
-                        <li>
-                            <router-link to="/pages/knowledge-base">{{ $t('knowledge_base') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/pages/contact-us-boxed" target="_blank">{{ $t('contact_us_boxed') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/pages/contact-us-cover" target="_blank">{{ $t('contact_us_cover') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/pages/faq">FAQ</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/pages/coming-soon-boxed" target="_blank">{{ $t('coming_soon_boxed') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/pages/coming-soon-cover" target="_blank">{{ $t('coming_soon_cover') }}</router-link>
-                        </li>
-                        <li>
-                            <router-link to="/pages/maintenence" target="_blank">{{ $t('maintenence') }}</router-link>
-                        </li>
                         <li class="relative">
                             <a href="javascript:;"
                                 >{{ $t('error') }}
@@ -763,9 +522,6 @@
                                 class="rounded absolute top-0 ltr:left-[95%] rtl:right-[95%] min-w-[180px] bg-white z-[10] text-dark dark:text-white-dark dark:bg-[#1b2e4b] shadow p-0 py-2 hidden"
                             >
                                 <li>
-                                    <router-link to="/auth/cover-login" target="_blank">{{ $t('login_cover') }}</router-link>
-                                </li>
-                                <li>
                                     <router-link to="/auth/boxed-signin" target="_blank">{{ $t('login_boxed') }}</router-link>
                                 </li>
                             </ul>
@@ -780,9 +536,6 @@
                             <ul
                                 class="rounded absolute top-0 ltr:left-[95%] rtl:right-[95%] min-w-[180px] bg-white z-[10] text-dark dark:text-white-dark dark:bg-[#1b2e4b] shadow p-0 py-2 hidden"
                             >
-                                <li>
-                                    <router-link to="/auth/cover-register" target="_blank">{{ $t('register_cover') }}</router-link>
-                                </li>
                                 <li>
                                     <router-link to="/auth/boxed-signup" target="_blank">{{ $t('register_boxed') }}</router-link>
                                 </li>
@@ -799,28 +552,7 @@
                                 class="rounded absolute top-0 ltr:left-[95%] rtl:right-[95%] min-w-[180px] bg-white z-[10] text-dark dark:text-white-dark dark:bg-[#1b2e4b] shadow p-0 py-2 hidden"
                             >
                                 <li>
-                                    <router-link to="/auth/cover-password-reset" target="_blank">{{ $t('recover_id_cover') }}</router-link>
-                                </li>
-                                <li>
                                     <router-link to="/auth/boxed-password-reset" target="_blank">{{ $t('recover_id_boxed') }}</router-link>
-                                </li>
-                            </ul>
-                        </li>
-                        <li class="relative">
-                            <a href="javascript:;"
-                                >{{ $t('lockscreen') }}
-                                <div class="ltr:ml-auto rtl:mr-auto rtl:rotate-90 -rotate-90">
-                                    <icon-caret-down />
-                                </div>
-                            </a>
-                            <ul
-                                class="rounded absolute top-0 ltr:left-[95%] rtl:right-[95%] min-w-[180px] bg-white z-[10] text-dark dark:text-white-dark dark:bg-[#1b2e4b] shadow p-0 py-2 hidden"
-                            >
-                                <li>
-                                    <router-link to="/auth/cover-lockscreen" target="_blank">{{ $t('unlock_cover') }}</router-link>
-                                </li>
-                                <li>
-                                    <router-link to="/auth/boxed-lockscreen" target="_blank">{{ $t('unlock_boxed') }}</router-link>
                                 </li>
                             </ul>
                         </li>
@@ -871,8 +603,6 @@
 
     import IconMenu from '@/components/icon/icon-menu.vue';
     import IconCalendar from '@/components/icon/icon-calendar.vue';
-    import IconEdit from '@/components/icon/icon-edit.vue';
-    import IconChatNotification from '@/components/icon/icon-chat-notification.vue';
     import IconSearch from '@/components/icon/icon-search.vue';
     import IconXCircle from '@/components/icon/icon-x-circle.vue';
     import IconSun from '@/components/icon/icon-sun.vue';

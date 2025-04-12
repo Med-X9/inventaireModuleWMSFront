@@ -1,5 +1,7 @@
 import { createApp } from 'vue';
 import App from '@/App.vue';
+import 'ag-grid-community/styles/ag-theme-alpine.css';
+
 
 const app = createApp(App);
 

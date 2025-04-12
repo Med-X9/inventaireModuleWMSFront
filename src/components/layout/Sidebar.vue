@@ -22,42 +22,18 @@
                     }"
                     class="h-[calc(100vh-80px)] relative"
                 >
-                    <ul class="relative font-semibold space-y-0.5 p-4 py-0">
-                        <li class="menu nav-item">
-                            <button
-                                type="button"
-                                class="nav-link group w-full"
-                                :class="{ active: activeDropdown === 'dashboard' }"
-                                @click="activeDropdown === 'dashboard' ? (activeDropdown = null) : (activeDropdown = 'dashboard')"
-                            >
-                                <div class="flex items-center">
-                                    <icon-menu-dashboard class="group-hover:!text-primary shrink-0" />
-                                    <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">
-                                        {{ $t('dashboard') }}
-                                    </span>
-                                </div>
-                                <div :class="{ 'rtl:rotate-90 -rotate-90': activeDropdown !== 'dashboard' }">
-                                    <icon-caret-down />
-                                </div>
-                            </button>
-                            <HeightCollapsible :isOpen="activeDropdown === 'dashboard'">
-                                <ul class="sub-menu text-gray-500">
-                                    <li>
-                                        <router-link to="/" @click="toggleMobileMenu">{{ $t('sales') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/analytics" @click="toggleMobileMenu">{{ $t('analytics') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/finance" @click="toggleMobileMenu">{{ $t('finance') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/crypto" @click="toggleMobileMenu">{{ $t('crypto') }}</router-link>
-                                    </li>
-                                </ul>
-                            </HeightCollapsible>
-                        </li>
+                    <ul class="relative font-semibold space-y-0.5 p-4 py-5">
+                        <li class="nav-item">
+                                    <router-link to="/" class="group" @click="toggleMobileMenu">
+                                        <div class="flex items-center">
+                                            <icon-menu-dashboard class="group-hover:!text-primary shrink-0" />
 
+                                            <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">{{
+                                                $t('dashboard')
+                                            }}</span>
+                                        </div>
+                                    </router-link>
+                                </li>
                         <h2 class="py-3 px-7 flex items-center uppercase font-extrabold bg-white-light/30 dark:bg-dark dark:bg-opacity-[0.08] -mx-4 mb-1">
                             <icon-minus class="w-4 h-5 flex-none hidden" />
                             <span>{{ $t('apps') }}</span>
@@ -65,72 +41,6 @@
 
                         <li class="nav-item">
                             <ul>
-                                <li class="nav-item">
-                                    <router-link to="/apps/chat" class="group" @click="toggleMobileMenu">
-                                        <div class="flex items-center">
-                                            <icon-menu-chat class="group-hover:!text-primary shrink-0" />
-
-                                            <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">{{
-                                                $t('chat')
-                                            }}</span>
-                                        </div>
-                                    </router-link>
-                                </li>
-                                <li class="nav-item">
-                                    <router-link to="/apps/mailbox" class="group" @click="toggleMobileMenu">
-                                        <div class="flex items-center">
-                                            <icon-menu-mailbox class="group-hover:!text-primary shrink-0" />
-
-                                            <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">{{
-                                                $t('mailbox')
-                                            }}</span>
-                                        </div>
-                                    </router-link>
-                                </li>
-                                <li class="nav-item">
-                                    <router-link to="/apps/todolist" class="group" @click="toggleMobileMenu">
-                                        <div class="flex items-center">
-                                            <icon-menu-todo class="group-hover:!text-primary shrink-0" />
-
-                                            <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">{{
-                                                $t('todo_list')
-                                            }}</span>
-                                        </div>
-                                    </router-link>
-                                </li>
-                                <li class="nav-item">
-                                    <router-link to="/apps/notes" class="group" @click="toggleMobileMenu">
-                                        <div class="flex items-center">
-                                            <icon-menu-notes class="group-hover:!text-primary shrink-0" />
-
-                                            <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">{{
-                                                $t('notes')
-                                            }}</span>
-                                        </div>
-                                    </router-link>
-                                </li>
-                                <li class="nav-item">
-                                    <router-link to="/apps/scrumboard" class="group" @click="toggleMobileMenu">
-                                        <div class="flex items-center">
-                                            <icon-menu-scrumboard class="group-hover:!text-primary shrink-0" />
-
-                                            <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">{{
-                                                $t('scrumboard')
-                                            }}</span>
-                                        </div>
-                                    </router-link>
-                                </li>
-                                <li class="nav-item">
-                                    <router-link to="/apps/contacts" class="group" @click="toggleMobileMenu">
-                                        <div class="flex items-center">
-                                            <icon-menu-contacts class="group-hover:!text-primary shrink-0" />
-
-                                            <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">{{
-                                                $t('contacts')
-                                            }}</span>
-                                        </div>
-                                    </router-link>
-                                </li>
 
                                 <li class="menu nav-item">
                                     <button
@@ -153,12 +63,6 @@
                                     <HeightCollapsible :isOpen="activeDropdown === 'invoice'">
                                         <ul class="sub-menu text-gray-500">
                                             <li>
-                                                <router-link to="/apps/invoice/list" @click="toggleMobileMenu">{{ $t('list') }}</router-link>
-                                            </li>
-                                            <li>
-                                                <router-link to="/apps/invoice/preview" @click="toggleMobileMenu">{{ $t('preview') }}</router-link>
-                                            </li>
-                                            <li>
                                                 <router-link to="/apps/invoice/add" @click="toggleMobileMenu">{{ $t('add') }}</router-link>
                                             </li>
                                             <li>
@@ -166,9 +70,8 @@
                                             </li>
                                         </ul>
                                     </HeightCollapsible>
-                                </li>
-
-                                <li class="nav-item">
+                                </li> </ul>
+                                <!-- <li class="nav-item">
                                     <router-link to="/apps/calendar" class="group" @click="toggleMobileMenu">
                                         <div class="flex items-center">
                                             <icon-menu-calendar class="group-hover:!text-primary shrink-0" />
@@ -211,43 +114,13 @@
                                         <router-link to="/components/tabs" @click="toggleMobileMenu">{{ $t('tabs') }}</router-link>
                                     </li>
                                     <li>
-                                        <router-link to="/components/accordions" @click="toggleMobileMenu">{{ $t('accordions') }}</router-link>
-                                    </li>
-                                    <li>
                                         <router-link to="/components/modals" @click="toggleMobileMenu">{{ $t('modals') }}</router-link>
                                     </li>
                                     <li>
                                         <router-link to="/components/cards" @click="toggleMobileMenu">{{ $t('cards') }}</router-link>
                                     </li>
                                     <li>
-                                        <router-link to="/components/carousel" @click="toggleMobileMenu">{{ $t('carousel') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/components/countdown" @click="toggleMobileMenu">{{ $t('countdown') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/components/counter" @click="toggleMobileMenu">{{ $t('counter') }}</router-link>
-                                    </li>
-                                    <li>
                                         <router-link to="/components/sweetalert" @click="toggleMobileMenu">{{ $t('sweet_alerts') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/components/timeline" @click="toggleMobileMenu">{{ $t('timeline') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/components/notifications" @click="toggleMobileMenu">{{ $t('notifications') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/components/media-object" @click="toggleMobileMenu">{{ $t('media_object') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/components/list-group" @click="toggleMobileMenu">{{ $t('list_group') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/components/pricing-table" @click="toggleMobileMenu">{{ $t('pricing_tables') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/components/lightbox" @click="toggleMobileMenu">{{ $t('lightbox') }}</router-link>
                                     </li>
                                 </ul>
                             </HeightCollapsible>
@@ -275,13 +148,7 @@
                                         <router-link to="/elements/alerts" @click="toggleMobileMenu">{{ $t('alerts') }}</router-link>
                                     </li>
                                     <li>
-                                        <router-link to="/elements/avatar" @click="toggleMobileMenu">{{ $t('avatar') }}</router-link>
-                                    </li>
-                                    <li>
                                         <router-link to="/elements/badges" @click="toggleMobileMenu">{{ $t('badges') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/elements/breadcrumbs" @click="toggleMobileMenu">{{ $t('breadcrumbs') }}</router-link>
                                     </li>
                                     <li>
                                         <router-link to="/elements/buttons" @click="toggleMobileMenu">{{ $t('buttons') }}</router-link>
@@ -296,34 +163,13 @@
                                         <router-link to="/elements/dropdown" @click="toggleMobileMenu">{{ $t('dropdown') }}</router-link>
                                     </li>
                                     <li>
-                                        <router-link to="/elements/infobox" @click="toggleMobileMenu">{{ $t('infobox') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/elements/jumbotron" @click="toggleMobileMenu">{{ $t('jumbotron') }}</router-link>
-                                    </li>
-                                    <li>
                                         <router-link to="/elements/loader" @click="toggleMobileMenu">{{ $t('loader') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/elements/pagination" @click="toggleMobileMenu">{{ $t('pagination') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/elements/popovers" @click="toggleMobileMenu">{{ $t('popovers') }}</router-link>
                                     </li>
                                     <li>
                                         <router-link to="/elements/progress-bar" @click="toggleMobileMenu">{{ $t('progress_bar') }}</router-link>
                                     </li>
                                     <li>
-                                        <router-link to="/elements/search" @click="toggleMobileMenu">{{ $t('search') }}</router-link>
-                                    </li>
-                                    <li>
                                         <router-link to="/elements/tooltips" @click="toggleMobileMenu">{{ $t('tooltips') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/elements/treeview" @click="toggleMobileMenu">{{ $t('treeview') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/elements/typography" @click="toggleMobileMenu">{{ $t('typography') }}</router-link>
                                     </li>
                                 </ul>
                             </HeightCollapsible>
@@ -377,82 +223,6 @@
                             <icon-minus class="w-4 h-5 flex-none hidden" />
                             <span>{{ $t('tables_and_forms') }}</span>
                         </h2>
-
-                        <li class="menu nav-item">
-                            <router-link to="/tables" class="nav-link group" @click="toggleMobileMenu">
-                                <div class="flex items-center">
-                                    <icon-menu-tables class="group-hover:!text-primary shrink-0" />
-
-                                    <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">{{ $t('tables') }}</span>
-                                </div>
-                            </router-link>
-                        </li>
-
-                        <li class="menu nav-item">
-                            <button
-                                type="button"
-                                class="nav-link group w-full"
-                                :class="{ active: activeDropdown === 'datatables' }"
-                                @click="activeDropdown === 'datatables' ? (activeDropdown = null) : (activeDropdown = 'datatables')"
-                            >
-                                <div class="flex items-center">
-                                    <icon-menu-datatables class="group-hover:!text-primary shrink-0" />
-
-                                    <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">{{
-                                        $t('datatables')
-                                    }}</span>
-                                </div>
-                                <div :class="{ 'rtl:rotate-90 -rotate-90': activeDropdown !== 'datatables' }">
-                                    <icon-caret-down />
-                                </div>
-                            </button>
-                            <HeightCollapsible :isOpen="activeDropdown === 'datatables'">
-                                <ul class="sub-menu text-gray-500">
-                                    <li>
-                                        <router-link to="/datatables/basic" @click="toggleMobileMenu">{{ $t('basic') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/datatables/advanced" @click="toggleMobileMenu">{{ $t('advanced') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/datatables/skin" @click="toggleMobileMenu">{{ $t('skin') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/datatables/order-sorting" @click="toggleMobileMenu">{{ $t('order_sorting') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/datatables/columns-filter" @click="toggleMobileMenu">{{ $t('columns_filter') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/datatables/multi-column" @click="toggleMobileMenu">{{ $t('multi_column') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/datatables/multiple-tables" @click="toggleMobileMenu">{{ $t('multiple_tables') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/datatables/alt-pagination" @click="toggleMobileMenu">{{ $t('alt_pagination') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/datatables/checkbox" @click="toggleMobileMenu">{{ $t('checkbox') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/datatables/range-search" @click="toggleMobileMenu">{{ $t('range_search') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/datatables/export" @click="toggleMobileMenu">{{ $t('export') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/datatables/sticky-header" @click="toggleMobileMenu">{{ $t('sticky_header') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/datatables/clone-header" @click="toggleMobileMenu">{{ $t('clone_header') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/datatables/column-chooser" @click="toggleMobileMenu">{{ $t('column_chooser') }}</router-link>
-                                    </li>
-                                </ul>
-                            </HeightCollapsible>
-                        </li>
 
                         <li class="menu nav-item">
                             <button
@@ -572,24 +342,6 @@
                             </button>
                             <HeightCollapsible :isOpen="activeDropdown === 'pages'">
                                 <ul class="sub-menu text-gray-500">
-                                    <li>
-                                        <router-link to="/pages/knowledge-base" @click="toggleMobileMenu">{{ $t('knowledge_base') }}</router-link>
-                                    </li>
-                                    <li @click="toggleMobileMenu">
-                                        <router-link to="/pages/contact-us-boxed" target="_blank">{{ $t('contact_us_boxed') }}</router-link>
-                                    </li>
-                                    <li @click="toggleMobileMenu">
-                                        <router-link to="/pages/contact-us-cover" target="_blank">{{ $t('contact_us_cover') }}</router-link>
-                                    </li>
-                                    <li>
-                                        <router-link to="/pages/faq" @click="toggleMobileMenu">{{ $t('faq') }}</router-link>
-                                    </li>
-                                    <li @click="toggleMobileMenu">
-                                        <router-link to="/pages/coming-soon-boxed" target="_blank">{{ $t('coming_soon_boxed') }}</router-link>
-                                    </li>
-                                    <li @click="toggleMobileMenu">
-                                        <router-link to="/pages/coming-soon-cover" target="_blank">{{ $t('coming_soon_cover') }}</router-link>
-                                    </li>
                                     <li class="menu nav-item">
                                         <button
                                             type="button"
@@ -615,9 +367,6 @@
                                                 </li>
                                             </ul>
                                         </HeightCollapsible>
-                                    </li>
-                                    <li>
-                                        <router-link to="/pages/maintenence" target="_blank">{{ $t('maintenence') }}</router-link>
                                     </li>
                                 </ul>
                             </HeightCollapsible>
@@ -655,38 +404,11 @@
                                     <li @click="toggleMobileMenu">
                                         <router-link to="/auth/boxed-password-reset" target="_blank">{{ $t('recover_id_boxed') }}</router-link>
                                     </li>
-                                    <li @click="toggleMobileMenu">
-                                        <router-link to="/auth/cover-login" target="_blank">{{ $t('login_cover') }}</router-link>
-                                    </li>
-                                    <li @click="toggleMobileMenu">
-                                        <router-link to="/auth/cover-register" target="_blank">{{ $t('register_cover') }}</router-link>
-                                    </li>
-                                    <li @click="toggleMobileMenu">
-                                        <router-link to="/auth/cover-lockscreen" target="_blank">{{ $t('unlock_cover') }}</router-link>
-                                    </li>
-                                    <li @click="toggleMobileMenu">
-                                        <router-link to="/auth/cover-password-reset" target="_blank">{{ $t('recover_id_cover') }}</router-link>
-                                    </li>
+                                    
                                 </ul>
-                            </HeightCollapsible>
+                            </HeightCollapsible>  -->
                         </li>
 
-                        <h2 class="py-3 px-7 flex items-center uppercase font-extrabold bg-white-light/30 dark:bg-dark dark:bg-opacity-[0.08] -mx-4 mb-1">
-                            <icon-minus class="w-4 h-5 flex-none hidden" />
-                            <span>{{ $t('supports') }}</span>
-                        </h2>
-
-                        <li class="menu nav-item">
-                            <a href="https://vristo.sbthemes.com" target="_blank" class="nav-link group">
-                                <div class="flex items-center">
-                                    <icon-menu-documentation class="group-hover:!text-primary shrink-0" />
-
-                                    <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">{{
-                                        $t('documentation')
-                                    }}</span>
-                                </div>
-                            </a>
-                        </li>
                     </ul>
                 </perfect-scrollbar>
             </div>
@@ -703,12 +425,6 @@
     import IconCaretsDown from '@/components/icon/icon-carets-down.vue';
     import IconMenuDashboard from '@/components/icon/menu/icon-menu-dashboard.vue';
     import IconMinus from '@/components/icon/icon-minus.vue';
-    import IconMenuChat from '@/components/icon/menu/icon-menu-chat.vue';
-    import IconMenuMailbox from '@/components/icon/menu/icon-menu-mailbox.vue';
-    import IconMenuTodo from '@/components/icon/menu/icon-menu-todo.vue';
-    import IconMenuNotes from '@/components/icon/menu/icon-menu-notes.vue';
-    import IconMenuScrumboard from '@/components/icon/menu/icon-menu-scrumboard.vue';
-    import IconMenuContacts from '@/components/icon/menu/icon-menu-contacts.vue';
     import IconMenuInvoice from '@/components/icon/menu/icon-menu-invoice.vue';
     import IconCaretDown from '@/components/icon/icon-caret-down.vue';
     import IconMenuCalendar from '@/components/icon/menu/icon-menu-calendar.vue';
@@ -718,8 +434,6 @@
     import IconMenuWidgets from '@/components/icon/menu/icon-menu-widgets.vue';
     import IconMenuFontIcons from '@/components/icon/menu/icon-menu-font-icons.vue';
     import IconMenuDragAndDrop from '@/components/icon/menu/icon-menu-drag-and-drop.vue';
-    import IconMenuTables from '@/components/icon/menu/icon-menu-tables.vue';
-    import IconMenuDatatables from '@/components/icon/menu/icon-menu-datatables.vue';
     import IconMenuForms from '@/components/icon/menu/icon-menu-forms.vue';
     import IconMenuUsers from '@/components/icon/menu/icon-menu-users.vue';
     import IconMenuPages from '@/components/icon/menu/icon-menu-pages.vue';

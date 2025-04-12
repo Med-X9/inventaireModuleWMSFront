@@ -9,6 +9,8 @@
         "preview": "vite preview"
     },
     "dependencies": {
+        "@ag-grid-community/client-side-row-model": "^32.3.5",
+        "@ag-grid-community/core": "^32.3.5",
         "@bhplugin/vue3-datatable": "^1.0.3",
         "@fullcalendar/core": "^5.11.0",
         "@fullcalendar/daygrid": "^5.11.0",
@@ -23,7 +25,8 @@
         "@vuelidate/validators": "^2.0.0",
         "@vueuse/core": "^9.3.0",
         "@vueuse/head": "^0.9.7",
-        "easymde": "^2.18.0",
+        "ag-grid-community": "^33.2.3",
+        "ag-grid-vue3": "^33.2.3",
         "file-upload-with-preview": "^4.2.0",
         "highlight.js": "^11.3.1",
         "maska": "^1.5.0",
@@ -56,6 +59,7 @@
         "@rollup/plugin-alias": "^3.1.9",
         "@tailwindcss/forms": "^0.5.3",
         "@tailwindcss/typography": "^0.5.7",
+        "@types/node": "^22.14.0",
         "@vitejs/plugin-vue": "^3.1.0",
         "autoprefixer": "^10.4.12",
         "postcss": "^8.4.17",

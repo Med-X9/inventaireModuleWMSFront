@@ -7,6 +7,7 @@ const rotateX = plugin(function ({ addUtilities }) {
         },
     });
 });
+
 module.exports = {
     content: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
     darkMode: 'class',
@@ -37,10 +38,16 @@ module.exports = {
                     'dark-light': 'rgba(231,81,90,.15)',
                 },
                 warning: {
-                    DEFAULT: '#e2a03f',
+                    DEFAULT: '#fec63f', // Ajouté pour le bouton et les alertes
                     light: '#fff9ed',
                     'dark-light': 'rgba(226,160,63,.15)',
                 },
+                yellow: {  
+                    DEFAULT: '#fec63f', 
+                    light: '#fff9ed',
+                    'dark-light': 'rgba(226,160,63,.15)',
+                    dark: '#e2a03f',
+                  },
                 info: {
                     DEFAULT: '#2196f3',
                     light: '#e7f7ff',
