@@ -21,14 +21,14 @@ const routes: RouteRecordRaw[] = [
     name: 'inventory-management',
     component: () =>
       import(
-        /* webpackChunkName: "inventory-management" */ '../views/Inventory/InventoryManagement.vue'
+        /* webpackChunkName: "inventory-management" */ '../views/Inventory/Management/InventoryManagement.vue'
       )
   },  
   {
     path: '/inventory/results',
     name: 'inventory-results', // Nom de la route
     component: () =>
-      import(/* webpackChunkName: "inventory-results" */ '../views/Inventory/InventoryResults.vue'), // Import de la page des résultats
+      import(/* webpackChunkName: "inventory-results" */ '../views/Inventory/Results/InventoryResults.vue'), // Import de la page des résultats
   },
 {
     path: '/inventory/planning',

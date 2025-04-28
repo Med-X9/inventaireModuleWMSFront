@@ -4,8 +4,8 @@ import messages from '@intlify/vite-plugin-vue-i18n/messages';
 export default createI18n({
     legacy: false,
     allowComposition: true,
-    locale: 'en',
+    locale: 'fr',
     globalInjection: true,
-    fallbackLocale: 'en',
+    fallbackLocale: 'fr',
     messages,
 });

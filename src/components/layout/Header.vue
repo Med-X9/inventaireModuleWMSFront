@@ -4,10 +4,10 @@
             <div class="relative bg-white flex w-full items-center px-5 py-2.5 dark:bg-[#0e1726]">
                 <div class="horizontal-logo flex lg:hidden justify-between items-center ltr:mr-2 rtl:ml-2">
                     <router-link to="/" class="main-logo flex items-center shrink-0">
-                        <img class="w-8 ltr:-ml-1 rtl:-mr-1 inline" src="/assets/images/logo.svg" alt="" />
+                        <img class="w-10 ltr:-ml-1 rtl:-mr-1 inline" src="/assets/images/logo/logo.png" alt="" />
                         <span
                             class="text-2xl ltr:ml-1.5 rtl:mr-1.5 font-semibold align-middle hidden md:inline dark:text-white-light transition-all duration-300"
-                            >VRISTO</span
+                            >WMS</span
                         >
                     </router-link>
 
@@ -48,38 +48,6 @@
                         >
                             <icon-laptop />
                         </a>
-                    </div>
-
-                    <div class="dropdown shrink-0">
-                        <Popper :placement="store.rtlClass === 'rtl' ? 'bottom-end' : 'bottom-start'" offsetDistance="8">
-                            <button
-                                type="button"
-                                class="block p-2 rounded-full bg-white-light/40 dark:bg-dark/40 hover:text-primary hover:bg-white-light/90 dark:hover:bg-dark/60"
-                            >
-                                <img :src="currentFlag" alt="flag" class="w-5 h-5 object-cover rounded-full" />
-                            </button>
-                            <template #content="{ close }">
-                                <ul class="!px-2 text-dark dark:text-white-dark grid grid-cols-2 gap-2 font-semibold dark:text-white-light/90 w-[280px]">
-                                    <template v-for="item in store.languageList" :key="item.code">
-                                        <li>
-                                            <button
-                                                type="button"
-                                                class="w-full hover:text-primary"
-                                                :class="{ 'bg-primary/10 text-primary': i18n.locale === item.code }"
-                                                @click="changeLanguage(item), close()"
-                                            >
-                                                <img
-                                                    class="w-5 h-5 object-cover rounded-full"
-                                                    :src="`/assets/images/flags/${item.code.toUpperCase()}.svg`"
-                                                    alt=""
-                                                />
-                                                <span class="ltr:ml-3 rtl:mr-3">{{ item.name }}</span>
-                                            </button>
-                                        </li>
-                                    </template>
-                                </ul>
-                            </template>
-                        </Popper>
                     </div>
 
 
@@ -213,56 +181,97 @@
                 </div>
             </div>
 
+            <ul
+                class="horizontal-menu hidden py-1.5 font-semibold px-6 lg:space-x-1.5 xl:space-x-8 rtl:space-x-reverse bg-white border-t border-[#ebedf2] dark:border-[#191e3a] dark:bg-[#0e1726] text-black dark:text-white-dark"
+            >
+    
+      <!-- Dashboard simple link -->
+      <li class="nav-item">
+        <router-link
+          to="/"
+          exact
+          class="nav-link flex items-center hover:text-primary dark:hover:text-white"
+          @click="closeDropdown"
+        >
+          <icon-menu-dashboard class="shrink-0" />
+          <span class="px-2">{{ $t('dashboard') }}</span>
+        </router-link>
+      </li>
+
+      <!-- Inventaire avec dropdown -->
+      <li class="menu nav-item relative">
+  <a href="javascript:;" class="nav-link" @click="toggleDropdown('inventory')">
+    <div class="flex items-center">
+      <icon-menu-inventory class="shrink-0" />
+      <span class="px-2">{{ $t('inventaire') }}</span>
+    </div>
+    <div class="right_arrow">
+      <icon-caret-down 
+        class="transition-transform duration-300"
+        :class="{ 'rotate-180': activeDropdown === 'inventory' }"
+      />
+    </div>
+  </a>
+
+  <ul
+    v-show="activeDropdown === 'inventory'"
+    class="sub-menu"
+  >
+    <li>
+      <router-link to="/inventory/creation">
+        {{ $t('inventory_creation') }}
+      </router-link>
+    </li>
+    <li>
+      <router-link to="/inventory/management">
+        {{ $t('inventory_management') }}
+      </router-link>
+    </li>
+    <li>
+      <router-link to="/inventory/results">
+        {{ $t('inventory_results') }}
+      </router-link>
+    </li>
+  </ul>
+</li>
+
+    </ul>
         </div>
     </header>
 </template>
 
 <script lang="ts" setup>
-    import { ref, onMounted, computed, reactive, watch } from 'vue';
-    import { useI18n } from 'vue-i18n';
-
-    import appSetting from '@/app-setting';
+    import { ref, onMounted, watch } from 'vue';
 
     import { useRoute } from 'vue-router';
     import { useAppStore } from '@/stores/index';
 
     import IconMenu from '@/components/icon/icon-menu.vue';
-    import IconSearch from '@/components/icon/icon-search.vue';
     import IconXCircle from '@/components/icon/icon-x-circle.vue';
     import IconSun from '@/components/icon/icon-sun.vue';
     import IconMoon from '@/components/icon/icon-moon.vue';
     import IconLaptop from '@/components/icon/icon-laptop.vue';
-    import IconMailDot from '@/components/icon/icon-mail-dot.vue';
-    import IconArrowLeft from '@/components/icon/icon-arrow-left.vue';
+    import IconMenuDashboard from '@/components/icon/menu/icon-menu-dashboard.vue';
+    import IconCaretDown     from '@/components/icon/icon-caret-down.vue';
     import IconInfoCircle from '@/components/icon/icon-info-circle.vue';
     import IconBellBing from '@/components/icon/icon-bell-bing.vue';
     import IconUser from '@/components/icon/icon-user.vue';
-    import IconMail from '@/components/icon/icon-mail.vue';
     import IconLockDots from '@/components/icon/icon-lock-dots.vue';
     import IconLogout from '@/components/icon/icon-logout.vue';
-    import IconMenuDashboard from '@/components/icon/menu/icon-menu-dashboard.vue';
-    import IconCaretDown from '@/components/icon/icon-caret-down.vue';
-    import IconMenuApps from '@/components/icon/menu/icon-menu-apps.vue';
-    import IconMenuComponents from '@/components/icon/menu/icon-menu-components.vue';
-    import IconMenuElements from '@/components/icon/menu/icon-menu-elements.vue';
-    import IconMenuDatatables from '@/components/icon/menu/icon-menu-datatables.vue';
-    import IconMenuForms from '@/components/icon/menu/icon-menu-forms.vue';
-    import IconMenuPages from '@/components/icon/menu/icon-menu-pages.vue';
-    import IconMenuMore from '@/components/icon/menu/icon-menu-more.vue';
 
     const store = useAppStore();
     const route = useRoute();
     const search = ref(false);
+   
+    const activeDropdown = ref<string | null>(null);
 
-    // multi language
-    const i18n = reactive(useI18n());
-    const changeLanguage = (item: any) => {
-        i18n.locale = item.code;
-        appSetting.toggleLanguage(item);
-    };
-    const currentFlag = computed(() => {
-        return `/assets/images/flags/${i18n.locale.toUpperCase()}.svg`;
-    });
+    function toggleDropdown(name: string) {
+    activeDropdown.value = activeDropdown.value === name ? null : name;
+    }
+
+    function closeDropdown() {
+    activeDropdown.value = null;
+    }
 
     const notifications = ref([
         {
@@ -285,36 +294,7 @@
         },
     ]);
 
-    const messages = ref([
-        {
-            id: 1,
-            image: '<span class="grid place-content-center w-9 h-9 rounded-full bg-success-light dark:bg-success text-success dark:text-success-light"><svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></span>',
-            title: 'Congratulations!',
-            message: 'Your OS has been updated.',
-            time: '1hr',
-        },
-        {
-            id: 2,
-            image: '<span class="grid place-content-center w-9 h-9 rounded-full bg-info-light dark:bg-info text-info dark:text-info-light"><svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></span>',
-            title: 'Did you know?',
-            message: 'You can switch between artboards.',
-            time: '2hr',
-        },
-        {
-            id: 3,
-            image: '<span class="grid place-content-center w-9 h-9 rounded-full bg-danger-light dark:bg-danger text-danger dark:text-danger-light"> <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span>',
-            title: 'Something went wrong!',
-            message: 'Send Reposrt',
-            time: '2days',
-        },
-        {
-            id: 4,
-            image: '<span class="grid place-content-center w-9 h-9 rounded-full bg-warning-light dark:bg-warning text-warning dark:text-warning-light"><svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">    <circle cx="12" cy="12" r="10"></circle>    <line x1="12" y1="8" x2="12" y2="12"></line>    <line x1="12" y1="16" x2="12.01" y2="16"></line></svg></span>',
-            title: 'Warning',
-            message: 'Your password strength is low.',
-            time: '5days',
-        },
-    ]);
+   
 
     onMounted(() => {
         setActiveDropdown();
@@ -349,7 +329,4 @@
         notifications.value = notifications.value.filter((d) => d.id !== value);
     };
 
-    const removeMessage = (value: number) => {
-        messages.value = messages.value.filter((d) => d.id !== value);
-    };
 </script>

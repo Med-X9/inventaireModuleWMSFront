@@ -48,6 +48,24 @@ app.use(VueEasymde);
 import Popper from 'vue3-popper';
 app.component('Popper', Popper);
 
+//ag-grid
+import {
+    ModuleRegistry,
+    ClientSideRowModelModule,
+    RowSelectionModule,
+    TextFilterModule,
+    NumberFilterModule,
+    DateFilterModule,
+    PaginationModule,
+  } from 'ag-grid-community'
+  ModuleRegistry.registerModules([
+    ClientSideRowModelModule,
+    RowSelectionModule,
+    TextFilterModule,
+    NumberFilterModule,
+    DateFilterModule,
+    PaginationModule,
+  ])
 // json to excel
 import vue3JsonExcel from 'vue3-json-excel';
 app.use(vue3JsonExcel);

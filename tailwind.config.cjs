@@ -18,9 +18,10 @@ module.exports = {
         extend: {
             colors: {
                 primary: {
-                    DEFAULT: '#4361ee',
+                    DEFAULT: '#ffc107',
                     light: '#eaf1ff',
                     'dark-light': 'rgba(67,97,238,.15)',
+                     600:'#e0ac06',
                 },
                 secondary: {
                     DEFAULT: '#805dca',
@@ -68,6 +69,16 @@ module.exports = {
                     light: '#e0e6ed',
                     dark: '#888ea8',
                 },
+                //inputs
+               'field-bg': '#F5F5F5',  // Fond des inputs
+               'field-border': '#D1D5DB', // Bordure des inputs
+               'field-border-focus': '#9CA3AF', // Bordure au focus
+               'field-text': '#333333', // Texte principal
+               'field-placeholder': '#888888', // Texte du placeholder
+               'field-focus': '#1565C0', // Couleur de focus des inputs
+               'button-bg': '#4361ee', // Fond du bouton
+               'button-hover': '#1565C0', // Fond du bouton au survol
+              
             },
             fontFamily: {
                 nunito: ['Nunito', 'sans-serif'],

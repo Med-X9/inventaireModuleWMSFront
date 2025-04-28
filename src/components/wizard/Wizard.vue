@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-6xl mx-auto px-4 py-10">
+  <div class="mx-auto h-full panel px-2 py-4">
     <FormWizard
       ref="wizard"
       @on-complete="onComplete"
@@ -7,17 +7,18 @@
       :color="color"
       back-button-text="Précédent"
       next-button-text="Suivant"
-      finish-button-text="crée"
-      class="shadow-sm rounded-lg"
+      finish-button-text="Créer"
+      class=" overflow-auto "
     >
       <TabContent
         v-for="(step, index) in steps"
         :key="index"
         :title="step.title"
         :custom-icon="step.icon"
-        class="mt-12"
+        class="wizard-ste p-8"
       >
-        <div class="bg-white rounded-lg p-10 border border-gray-200">
+        <div class="shadow bg-[#f4f4f4af] dark:bg-white-dark/20 rounded-md space-y-3 cursor-move p-8">
+          <h2 class="text-xl px-4 font-semibold text-gray-800 mb-6">{{ step.title }}</h2>
           <slot :name="`step-${index}`" />
         </div>
       </TabContent>
@@ -47,5 +48,12 @@ function onComplete() {
 }
 </script>
 
-<style scoped>
+<style>
+
+
+
+
+.step-slot {
+  margin-top: 1.5rem;
+}
 </style>
