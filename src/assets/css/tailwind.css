@@ -1,11 +1,17 @@
+
+
+
+
+
+
+
+
+
 /* animation */
 @import 'animate.css';
 
 /* quill editor */
 @import 'quill-editor.css';
-
-/* full calendar */
-@import 'fullcalendar.css';
 
 /* swiper */
 @import 'swiper.css';
@@ -28,14 +34,10 @@
 /* markdown-editor */
 @import 'markdown-editor.css';
 
-/* select2 */
-@import 'select2.css';
-
 /* wizard */
 @import 'wizard.css';
 
-/* vue3-datatable */
-@import 'datatable.css';
+
 
 /* lightbox */
 @import 'lightbox.css';
@@ -46,8 +48,6 @@
 /* dragndrop */
 @import 'dragndrop.css';
 
-/* form element*/
-@import 'form-elements.css';
 
 @tailwind base;
 @tailwind components;

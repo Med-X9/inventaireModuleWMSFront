@@ -18,7 +18,7 @@ const routes: RouteRecordRaw[] = [
 },
 {
     path: '/inventory/management',
-    name: 'inventory-management',
+    name: 'inventory-list',
     component: () =>
       import(
         /* webpackChunkName: "inventory-management" */ '../views/Inventory/Management/InventoryManagement.vue'
@@ -37,12 +37,15 @@ const routes: RouteRecordRaw[] = [
       import(/* webpackChunkName: "inventory-planning" */ '../views/Inventory/Planning.vue')
   },
   {
-    path: '/inventaire/:id/edit',
+    path: '/inventory/:id/edit',
     name: 'inventory-edit',
-    component: () =>
-        import(/* webpackChunkName: "inventory-edit" */ '../views/Inventory/InventoryEdit.vue')
+    component: () => import('../views/Inventory/InventoryEdit.vue')
+  },
+    {
+      path: '/inventory/:id',
+      name: 'inventory-detail',
+      component: () => import('../views/Inventory/InventoryDetail.vue')
     },
-  
   {
     path: '/inventory/gestion-des-plannings',  // Chemin de la route
     name: 'gestion-des-plannings',  // Nom de la route

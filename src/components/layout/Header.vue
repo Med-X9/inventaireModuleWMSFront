@@ -154,14 +154,14 @@
                                         </div>
                                     </li>
                                     <li>
-                                        <router-link to="/users/profile" class="dark:hover:text-white" @click="close()">
+                                        <router-link to="" class="dark:hover:text-white" @click="close()">
                                             <icon-user class="w-4.5 h-4.5 ltr:mr-2 rtl:ml-2 shrink-0" />
 
                                             Profile
                                         </router-link>
                                     </li>
                                     <li>
-                                        <router-link to="/auth/boxed-lockscreen" class="dark:hover:text-white" @click="close()">
+                                        <router-link to="" class="dark:hover:text-white" @click="close()">
                                             <icon-lock-dots class="w-4.5 h-4.5 ltr:mr-2 rtl:ml-2 shrink-0" />
 
                                             Lock Screen
@@ -185,7 +185,7 @@
                 class="horizontal-menu hidden py-1.5 font-semibold px-6 lg:space-x-1.5 xl:space-x-8 rtl:space-x-reverse bg-white border-t border-[#ebedf2] dark:border-[#191e3a] dark:bg-[#0e1726] text-black dark:text-white-dark"
             >
     
-      <!-- Dashboard simple link -->
+      
       <li class="nav-item">
         <router-link
           to="/"
@@ -257,6 +257,7 @@
     import IconBellBing from '@/components/icon/icon-bell-bing.vue';
     import IconUser from '@/components/icon/icon-user.vue';
     import IconLockDots from '@/components/icon/icon-lock-dots.vue';
+    import IconMenuInventory from '@/components/icon/menu/icon-menu-inventory.vue';
     import IconLogout from '@/components/icon/icon-logout.vue';
 
     const store = useAppStore();

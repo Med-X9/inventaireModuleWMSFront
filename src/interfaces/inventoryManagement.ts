@@ -1,3 +1,4 @@
+import type { ContageConfig } from './inventoryCreation';
 export interface InventoryManagement {
     id: number;
     reference: string;
@@ -8,6 +9,8 @@ export interface InventoryManagement {
     date_status_launch: string;
     date_status_end: string;
     label: string;
+    type?: string;                  // ou `type: string;` si toujours présent
+    contages?: ContageConfig[]; 
   }
   
   export interface InventoryAction {

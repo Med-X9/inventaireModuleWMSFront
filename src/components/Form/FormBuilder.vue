@@ -1,107 +1,78 @@
 <template>
-  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-    <h2 v-if="title" class="text-2xl font-medium text-gray-900 dark:text-white mb-6">
+  <div class="container mx-auto px-4">
+    <h2 v-if="title" class="text-xl font-bold text-gray-800 mb-6">
       {{ title }}
     </h2>
 
     <form @submit.prevent="handleSubmit" :class="formGridClass">
-      <div v-for="field in fields" :key="field.key" class="space-y-6">
+      <div v-for="field in fields" :key="field.key" class="w-full mb-6">
         <label
           v-if="field.type !== 'checkbox'"
           :for="field.key"
-          class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          class="block text-sm font-medium text-gray-700 mb-2"
         >
           {{ field.label }}
         </label>
 
         <!-- Text / Email -->
-        <div class="relative" v-if="field.type === 'text' || field.type === 'email'">
+        <div v-if="field.type === 'text' || field.type === 'email'">
           <input
             :id="field.key"
             v-model="formData[field.key]"
             :type="field.type"
             :placeholder="field.props?.placeholder || `Entrer ${field.label.toLowerCase()}`"
-            class="w-full px-4 py-3 bg-field-bg dark:bg-gray-700 border-2 border-field-border dark:border-gray-600 rounded-md text-field-text dark:text-white placeholder-field-placeholder focus:outline-none focus:border-field-border-focus focus:ring-0 transition-colors duration-300"
             v-bind="field.props"
+            class="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-10 outline-none"
           />
         </div>
 
         <!-- Date -->
-        <div class="relative" v-else-if="field.type === 'date'">
+        <div v-else-if="field.type === 'date'">
           <input
             :id="field.key"
             v-model="formData[field.key]"
             type="date"
-            class="w-full px-4 py-3 bg-field-bg dark:bg-gray-700 border-2 border-field-border dark:border-gray-600 rounded-md text-field-text dark:text-white focus:outline-none focus:border-field-border-focus focus:ring-0 transition-colors duration-300"
+            class="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-10 outline-none"
           />
         </div>
 
+        <!-- Checkbox -->
         <div v-else-if="field.type === 'checkbox'" class="flex items-center space-x-2">
           <input
             :id="field.key"
             v-model="formData[field.key]"
             type="checkbox"
-            class="w-5 h-5 text-field-focus border-2 border-field-border dark:border-gray-600 rounded-md cursor-pointer focus:outline-none transition-all duration-300"
             @change="onSingleCheckbox(field.key)"
+            class="w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary-600"
           />
-          <label
-            :for="field.key"
-            class="text-sm text-field-text mt-2 dark:text-gray-300 cursor-pointer"
-          >
-            {{ field.key }}
+          <label :for="field.key" class="text-sm text-gray-700">
+            {{ field.label }}
           </label>
         </div>
 
-        <!-- Select -->
-        <div class="relative" v-else-if="field.type === 'select'">
-          <!-- Searchable -->
+        <!-- Select (vue-select) -->
+        <div v-else-if="field.type === 'select'">
           <v-select
-            v-if="field.searchable"
             :id="field.key"
             v-model="formData[field.key]"
             :options="formattedOptions(field.options)"
             :multiple="field.multiple || false"
-            :clearable="true"
-            :searchable="true"
+            :searchable="field.searchable ?? false"
+            :clearable="field.clearable ?? true"
             :placeholder="field.props?.placeholder || '-- Sélectionner --'"
             label="label"
-            :reduce="option => option.value"
-            class="w-full px-4 py-3 bg-field-bg dark:bg-gray-700 border-2 border-field-border dark:border-gray-600 rounded-md text-field-text dark:text-white focus:outline-none focus:border-field-border-focus focus:ring-0 transition-colors duration-300"
+            :reduce="opt => opt.value"
+            class="vs-custom"
           />
-
-          <!-- Native -->
-          <select
-            v-else
-            :id="field.key"
-            v-model="formData[field.key]"
-            class="w-full px-4 py-3 bg-field-bg dark:bg-gray-700 border-2 border-field-border dark:border-gray-600 rounded-md text-field-text dark:text-white appearance-none focus:outline-none focus:border-field-border-focus focus:ring-0 transition-colors duration-300"
-          >
-            <option disabled value="">-- Sélectionner --</option>
-            <option
-              v-for="option in field.options"
-              :key="typeof option === 'string' ? option : option.value"
-              :value="typeof option === 'string' ? option : option.value"
-            >
-              {{ typeof option === 'string' ? option : option.label }}
-            </option>
-          </select>
-
-          <!-- Flèche personnalisée -->
-          <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-            <svg class="w-5 h-5 text-field-placeholder" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-            </svg>
-          </div>
         </div>
       </div>
 
-      <!-- Submit Button -->
-      <div v-if="!hideSubmit" class="mt-6 col-span-full">
+      <div v-if="!hideSubmit" class="col-span-full mt-6">
         <button
           type="submit"
-          class="px-6 py-2 bg-button-bg hover:bg-button-hover text-white font-medium rounded-md shadow-md hover:shadow-lg transition-all duration-300"
+          class="w-full md:w-auto px-6 py-3 bg-blue-600 text-white font-medium rounded-lg transition-all duration-200 hover:bg-blue-700 focus:ring-4 focus:ring-blue-500 focus:ring-opacity-20"
         >
-          <span class="text-sm">{{ submitLabel || 'Enregistrer' }}</span>
+          {{ submitLabel || 'Enregistrer' }}
         </button>
       </div>
     </form>
@@ -110,36 +81,16 @@
 
 <script setup lang="ts">
 import { reactive, computed } from 'vue'
-import Swal from 'sweetalert2'
+import { alertService } from '@/services/alertService'
 import vSelect from 'vue-select'
 import 'vue-select/dist/vue-select.css'
 
-export interface SelectOption {
-  label: string
-  value: any
-}
+import type { FieldConfig, FormProps, SelectOption } from '@/interfaces/form'
 
-export interface FieldConfig {
-  key: string
-  label: string
-  type: 'text' | 'email' | 'checkbox' | 'select' | 'date'
-  options?: Array<string | SelectOption>
-  props?: Record<string, any>
-  searchable?: boolean
-  multiple?: boolean
-}
-
-const props = defineProps<{
-  fields: FieldConfig[]
-  initialData?: Record<string, any>
-  title?: string
-  submitLabel?: string
-  hideSubmit?: boolean
-}>()
-
+const props = defineProps<FormProps>()
 const emit = defineEmits<{ (e: 'submit', data: Record<string, any>): void }>()
 
-// Initialisation réactive des données de formulaire
+// Initialisation des données du formulaire
 const formData = reactive<Record<string, any>>({})
 props.fields.forEach(field => {
   formData[field.key] =
@@ -147,22 +98,23 @@ props.fields.forEach(field => {
     (field.multiple ? [] : field.type === 'checkbox' ? false : '')
 })
 
-// Grille responsive en fonction du nombre de champs
+// Classe de grille dynamique
 const formGridClass = computed(() => {
-  const cols = Math.min(props.fields.length, 3)
+  const count = props.fields.length
+  const cols = count >= 3 ? 3 : count === 2 ? 2 : 1
   return `grid grid-cols-1 md:grid-cols-${cols} gap-6`
 })
 
-// Pour formater les options des selects
+// Formatage des options pour vue-select
 function formattedOptions(options: Array<string | SelectOption> = []) {
-  return options.map(opt =>
+  return options.map(opt => 
     typeof opt === 'string'
       ? { label: opt, value: opt }
       : opt
   )
 }
 
-// Décoche toutes les autres checkbox quand on en coche une
+// Gestion des checkbox (un seul actif)
 function onSingleCheckbox(changedKey: string) {
   props.fields.forEach(f => {
     if (f.type === 'checkbox' && f.key !== changedKey) {
@@ -172,30 +124,80 @@ function onSingleCheckbox(changedKey: string) {
 }
 
 // Soumission du formulaire
-function handleSubmit() {
+async function handleSubmit() {
   emit('submit', { ...formData })
-  Swal.fire({
-    icon: 'success',
-    text: 'Votre formulaire a été soumis avec succès.',
-    padding: '2em',
-    customClass: { popup: 'sweet-alerts' }
+  await alertService.success({
+    text: 'Formulaire soumis avec succès'
   })
 }
 </script>
 
-<style scoped>
-input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.5);
+<style>
+/* Styles personnalisés pour vue-select */
+:root {
+  --vs-colors-lightest: rgba(60, 60, 60, 0.26);
+  --vs-colors-light:     rgba(60, 60, 60, 0.5);
+  --vs-colors-dark:      #333;
+  --vs-colors-darkest:   rgba(0, 0, 0, 0.15);
+
+  --vs-border-color:     #e2e8f0;
+  --vs-border-width:     1px;
+  --vs-border-style:     solid;
+  --vs-border-radius:    0.5rem;
+
+  --vs-dropdown-bg:      #fff;
+  --vs-dropdown-z-index: 1000;
+
+  --vs-actions-padding: 4px 6px 0 3px;
 }
 
-.dark input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1);
+.vs-custom {
+  font-family: inherit;
+  width: 100%;
 }
 
-.vue-select .vs__dropdown-toggle {
-  padding-right: 2.5rem;
+.vs-custom .vs__dropdown-toggle {
+  padding: 0.5rem;
+  background: white;
+  border: var(--vs-border-width) var(--vs-border-style) var(--vs-border-color);
+  border-radius: var(--vs-border-radius);
+  transition: all 0.2s;
 }
-.vue-select .vs__actions {
-  right: 0.75rem;
+
+.vs-custom .vs__dropdown-toggle:hover {
+  border-color: #cbd5e1;
+}
+
+.vs-custom .vs__dropdown-toggle:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  outline: none;
+}
+
+.vs-custom .vs__search {
+  padding: 0 7px;
+  margin: 4px 0 0 0;
+  font-size: 0.875rem;
+  border: none;
+}
+.vs-custom .vs__search::placeholder {
+  color: #94a3b8;
+}
+
+.vs-custom .vs__dropdown-menu {
+  padding: 0.5rem 0;
+  border: 1px solid var(--vs-border-color);
+  border-radius: var(--vs-border-radius);
+  background: white;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+              0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+.vs-custom .vs__dropdown-option {
+  padding: 0.5rem 1rem;
+  color: #64748b;
+}
+.vs-custom .vs__dropdown-option--highlight {
+  background: #f1f5f9;
+  color: #1e293b;
 }
 </style>

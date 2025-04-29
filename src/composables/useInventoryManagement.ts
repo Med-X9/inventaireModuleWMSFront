@@ -60,6 +60,14 @@ export function useInventoryManagement() {
 
   const actions: InventoryAction[] = [
     {
+        label: 'planifier',
+        icon: IconCalendar,
+        class: 'flex items-center gap-1 px-2 py-1 text-green-500 text-xs',
+        handler: (inventory: InventoryManagement) => {
+          router.push({ name: 'gestion-des-plannings', params: { id: inventory.id } });
+        },
+      },
+    {
       label: 'detail',
       icon: IconEye,
       class: 'flex items-center gap-1 px-2 py-1 text-blue-500 text-xs',
@@ -73,14 +81,6 @@ export function useInventoryManagement() {
       class: 'flex items-center gap-1 px-2 py-1 text-yellow-500 text-xs',
       handler: (inventory: InventoryManagement) => {
         router.push({ name: 'inventory-edit', params: { id: inventory.id } });
-      },
-    },
-    {
-      label: 'planifier',
-      icon: IconCalendar,
-      class: 'flex items-center gap-1 px-2 py-1 text-green-500 text-xs',
-      handler: (inventory: InventoryManagement) => {
-        router.push({ name: 'gestion-des-plannings', params: { id: inventory.id } });
       },
     },
     {
