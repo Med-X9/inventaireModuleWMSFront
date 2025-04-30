@@ -1,17 +1,13 @@
 // src/composables/useInventoryCreation.ts
-import { ref, reactive, computed, onMounted, watch } from 'vue';
-import { useRouter } from 'vue-router';
-import type {
-  InventoryCreationState,
-  ContageConfig,
-} from '@/interfaces/inventoryCreation';
+import { ref, reactive, watch, onMounted } from 'vue';
+import type { InventoryCreationState, ContageConfig } from '@/interfaces/inventoryCreation';
 import { indexedDBService } from '@/services/indexedDBService';
 import { alertService } from '@/services/alertService';
 import { inventoryCreationService } from '@/services/inventoryCreationService';
 
 export function useInventoryCreation() {
-  const router = useRouter();
   const currentStep = ref<number>(0);
+  const loaded = ref<boolean>(false);
 
   const state = reactive<InventoryCreationState>({
     step1Data: { libelle: '', date: '', type: 'Inventaire Général' },
@@ -25,37 +21,42 @@ export function useInventoryCreation() {
     currentStep: 0,
   });
 
-  const availableModesForStep = computed<
-    (index: number) => ContageConfig['mode'][]
-  >(() => {
-    return (stepIndex: number) =>
-      inventoryCreationService.getAvailableModesForStep(state, stepIndex);
-  });
-
-  async function loadState() {
-    try {
-      const saved = await indexedDBService.getState('creation');
-      if (saved) {
-        Object.assign(state, saved);
-        currentStep.value = saved.currentStep ?? 0;
-      }
-    } catch (err) {
-      console.error('Erreur loadState:', err);
-    }
+  function availableModesForStep(stepIndex: number) {
+    return inventoryCreationService.getAvailableModesForStep(state, stepIndex);
   }
 
   async function saveState() {
     try {
-      await indexedDBService.saveState(
-        { ...state, currentStep: currentStep.value },
-        'creation'
-      );
+      const snapshot = {
+        step1Data: state.step1Data,
+        step2Data: state.step2Data,
+        contages: state.contages,
+        currentStep: currentStep.value,
+      };
+      const plain = JSON.parse(JSON.stringify(snapshot));
+      await indexedDBService.saveState(plain, 'creation');
     } catch (err) {
       console.error('Erreur saveState:', err);
     }
   }
 
-  // Annulation : on nettoie et on repart à l’étape 1 du même formulaire
+  async function loadState() {
+    try {
+      const saved = await indexedDBService.getState('creation');
+      if (saved) {
+        // Restaurer pas à pas pour conserver la réactivité
+        state.step1Data = saved.step1Data;
+        state.step2Data = saved.step2Data;
+        state.contages.splice(0, state.contages.length, ...saved.contages);
+        currentStep.value = saved.currentStep ?? 0;
+      }
+    } catch (err) {
+      console.error('Erreur loadState:', err);
+    } finally {
+      loaded.value = true;
+    }
+  }
+
   async function cancelCreation() {
     const result = await alertService.confirm({
       title: 'Annuler la création',
@@ -63,17 +64,15 @@ export function useInventoryCreation() {
     });
     if (result.isConfirmed) {
       await indexedDBService.clearState('creation');
-      // réinitialiser l’état et l’étape
-      Object.assign(state, {
-        step1Data: { libelle: '', date: '', type: 'Inventaire Général' },
-        step2Data: { compte: '', magasin: [] },
-        contages: state.contages.map(() => ({
-          mode: '',
-          isVariant: false,
-          useScanner: false,
-          useSaisie: false,
-        })),
-      });
+      state.step1Data = { libelle: '', date: '', type: 'Inventaire Général' };
+      state.step2Data = { compte: '', magasin: [] };
+      const resetContages = Array(3).fill(null).map<ContageConfig>(() => ({
+        mode: '',
+        isVariant: false,
+        useScanner: false,
+        useSaisie: false,
+      }));
+      state.contages.splice(0, state.contages.length, ...resetContages);
       currentStep.value = 0;
       await saveState();
     }
@@ -91,14 +90,13 @@ export function useInventoryCreation() {
       await alertService.error({ text: 'Configuration invalide.' });
       return;
     }
-    // ici tout est en local : on garde en IndexedDB et on réinitialise
     await alertService.success({ text: 'Inventaire enregistré localement.' });
     await indexedDBService.clearState('creation');
-    router.push({ name: 'inventory-create' }); // renvoyer à l’étape 1 si besoin
+    currentStep.value = 0;
+    await saveState();
   }
 
-  // Sauvegarde automatique
-  watch(() => state, saveState, { deep: true });
+  watch(state, saveState, { deep: true });
   watch(currentStep, saveState);
 
   onMounted(loadState);
@@ -110,5 +108,6 @@ export function useInventoryCreation() {
     onStepComplete,
     onComplete,
     cancelCreation,
+    loaded,
   };
 }

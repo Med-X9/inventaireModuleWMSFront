@@ -25,13 +25,16 @@ export function usePlanningManagement() {
     {
       label: 'Affecter',
       icon: IconUser,
+      
       handler: async (store: Store) => {
         await planningManagementService.assignTeams(store.id);
       },
+      
     },
     {
       label: 'Planifier',
       icon: IconCalendar,
+      
       handler: (store: Store) => {
         router.push({ 
           name: 'inventory-planning', 

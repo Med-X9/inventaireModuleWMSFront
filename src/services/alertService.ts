@@ -1,4 +1,6 @@
+// src/services/alertService.ts
 import Swal from 'sweetalert2';
+import { palette } from '../theme/colors';  // votre module partagé
 
 interface AlertOptions {
   title?: string;
@@ -13,50 +15,48 @@ export const alertService = {
       text: options.text,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Oui, confirmer',
-      cancelButtonText: 'Annuler',
+      confirmButtonColor: palette.primary.DEFAULT,
+      cancelButtonColor:   palette.danger.DEFAULT,
+      confirmButtonText:   'Oui, confirmer',
+      cancelButtonText:    'Annuler',
       customClass: {
-        popup: 'sweet-alerts',
-        confirmButton: 'btn btn-primary',
-        cancelButton: 'btn btn-danger'
-      }
+        popup:         'sweet-alerts',
+        confirmButton: 'btn btn-secondary',
+        cancelButton:  'btn btn-danger',
+      },
     });
   },
 
-  success(options: AlertOptions) {
+  success(opts: AlertOptions) {
     return Swal.fire({
       icon: 'success',
-      title: options.title || 'Succès',
-      text: options.text,
-      timer: options.timer || 2000,
+      title: opts.title || 'Succès',
+      text: opts.text,
+      timer: opts.timer || 2000,
       showConfirmButton: false,
-      customClass: {
-        popup: 'sweet-alerts',
-      }
+      timerProgressBar:  true,
+  
+      customClass: { popup: 'sweet-alerts' },
     });
   },
 
-  error(options: AlertOptions) {
+  error(opts: AlertOptions) {
     return Swal.fire({
       icon: 'error',
-      title: options.title || 'Erreur',
-      text: options.text,
-      customClass: {
-        popup: 'sweet-alerts',
-      }
+      title: opts.title || 'Erreur',
+      text: opts.text,
+      confirmButtonColor: palette.danger.DEFAULT,
+      customClass: { popup: 'sweet-alerts' },
     });
   },
 
-  warning(options: AlertOptions) {
+  warning(opts: AlertOptions) {
     return Swal.fire({
       icon: 'warning',
-      title: options.title || 'Attention',
-      text: options.text,
-      customClass: {
-        popup: 'sweet-alerts',
-      }
+      title: opts.title || 'Attention',
+      text: opts.text,
+      confirmButtonColor: palette.warning.DEFAULT,
+      customClass: { popup: 'sweet-alerts' },
     });
   }
 };

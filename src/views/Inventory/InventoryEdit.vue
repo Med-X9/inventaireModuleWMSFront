@@ -1,5 +1,5 @@
 <template>
-  <div class="p-4">
+  <div>
     <div class="flex justify-between mb-6">
       <h1 class="text-xl font-bold">Modification d'inventaire</h1>
       <button
@@ -10,38 +10,37 @@
       </button>
     </div>
 
-    <div v-if="loading" class="flex justify-center items-center py-10">
-      <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-    </div>
+  
 
-    <template v-else>
-      <DynamicWizard 
-        :steps="wizardSteps" 
-        :current-step="currentStep"
-        color="#ffc107" 
+    <template>
+      <DynamicWizard
+        :steps="wizardSteps"
+        v-model:current-step="currentStep"
+        color="#ffc107"
         @complete="onComplete"
       >
+        <!-- Étape 1 -->
         <template #step-0>
           <FormBuilder
+            v-model:modelValue="state.step1Data"
             :fields="formFields"
-            :initial-data="state.step1Data"
             hide-submit
-            @submit="data => onStepComplete(0, data)"
           />
         </template>
 
+        <!-- Étape 2 -->
         <template #step-1>
           <FormBuilder
+            v-model:modelValue="state.step2Data"
             :fields="compteMagasinFields"
-            :initial-data="state.step2Data"
             hide-submit
-            @submit="data => onStepComplete(1, data)"
           />
         </template>
 
-        <template 
-          v-for="(_, idx) in state.contages" 
-          :key="idx" 
+        <!-- Paramétrages 1 à 3 -->
+        <template
+          v-for="(_, idx) in state.contages"
+          :key="idx"
           v-slot:[`step-${idx+2}`]
         >
           <ParamStep
@@ -82,16 +81,16 @@ const wizardSteps = [
 ];
 
 const formFields: FieldConfig[] = [
-  { 
-    key: 'libelle', 
-    label: 'Libellé', 
-    type: 'text', 
-    props: { placeholder: 'Entrer le libellé' } 
+  {
+    key: 'libelle',
+    label: 'Libellé',
+    type: 'text',
+    props: { placeholder: 'Entrer le libellé' }
   },
-  { 
-    key: 'date',    
-    label: 'Date',   
-    type: 'date' 
+  {
+    key: 'date',
+    label: 'Date',
+    type: 'date'
   },
   {
     key: 'type',

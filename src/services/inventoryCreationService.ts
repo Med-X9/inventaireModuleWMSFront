@@ -2,22 +2,15 @@
 import type { InventoryCreationState, ContageMode } from '@/interfaces/inventoryCreation';
 
 class InventoryCreationService {
-  // Validation inchangée
   validateContages(state: InventoryCreationState): boolean {
-    if (state.contages[0].mode === 'etat de stock') {
-      return (
-        state.contages[1].mode !== '' &&
-        state.contages[2].mode === state.contages[1].mode
-      );
+    const [c1, c2, c3] = state.contages.map(c => c.mode);
+    if (c1 === 'etat de stock') {
+      return c2 !== '' && c3 === c2;
+    } else {
+      return c1 !== '' && c2 !== '' && (c3 === c1 || c3 === c2);
     }
-    return (
-      state.contages[0].mode !== '' &&
-      state.contages[1].mode !== '' &&
-      state.contages[2].mode === state.contages[0].mode
-    );
   }
 
-  // Nouvelle logique de disponibilité des modes
   getAvailableModesForStep(
     state: InventoryCreationState,
     stepIndex: number
@@ -29,39 +22,26 @@ class InventoryCreationService {
       'hybride',
     ];
 
-    // Étape 1 : toujours tous les modes
     if (stepIndex === 0) {
-      return all;
+      return all;                                                                         // Contage 1 
     }
 
-    const first = state.contages[0].mode as ContageMode;
+    const first = state.contages[0].mode;
 
-    // Étape 2
     if (stepIndex === 1) {
-      if (first === 'etat de stock') {
-        // proposer les 3 autres
-        return all.filter((m) => m !== 'etat de stock');
-      } else {
-        // proposer les deux restants parmi les trois non-‘etat de stock’
-        return all
-          .filter((m) => m !== 'etat de stock' && m !== first);
-      }
+      return first === 'etat de stock'
+        ? all.filter(m => m !== 'etat de stock')                                           // Contage 2 cas “état de stock” 
+        : all.filter(m => m !== 'etat de stock' && m !== first);                          // Contage 2 autre cas
     }
 
-    const second = state.contages[1].mode as ContageMode;
+    const second = state.contages[1].mode;
 
-    // Étape 3
     if (stepIndex === 2) {
-      if (first === 'etat de stock') {
-        // n’afficher que le choix de l’étape 2
-        return [second];
-      } else {
-        // afficher les deux choix : 1 et 2
-        return [first, second];
-      }
+      return first === 'etat de stock'
+        ? [second]                                                                         // Contage 3 cas “état de stock”
+        : [first, second];                                                                 // Contage 3 sinon
     }
 
-    // Pas d’autres étapes
     return [];
   }
 }

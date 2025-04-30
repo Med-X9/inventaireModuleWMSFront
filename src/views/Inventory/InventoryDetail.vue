@@ -1,38 +1,33 @@
 <template>
-    <div class="p-6 space-y-10">
+    <div class="space-y-10">
       <!-- En-tête -->
       <div class="flex justify-between items-center">
-        <h1 class="text-2xl font-bold text-gray-800">Détail de l'inventaire</h1>
+        <h1 class="text-xl font-bold text-gray-800">Détail de l'inventaire</h1>
         <div class="flex gap-2">
-          <button @click="launchInventory" class="btn-green">Lancer</button>
-          <button @click="editInventory" class="btn-yellow">Modifier</button>
-          <button @click="goBack" class="btn-gray">Retour</button>
+          <button class="btn-green" @click="launchInventory">Lancer</button>
+          <button class="btn-yellow" @click="editInventory">Modifier</button>
+          <button class="btn-gray" @click="goBack">Retour</button>
         </div>
       </div>
   
-      <!-- Loading -->
-      <div v-if="loading" class="flex justify-center items-center py-10">
-        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-      </div>
-  
       <!-- Contenu -->
-      <div v-else class="bg-white rounded-xl shadow-md p-6 space-y-10">
+      <div class="bg-white rounded-xl shadow-md p-6 space-y-10">
         <!-- Section : Informations générales -->
         <section>
           <h2 class="section-title">Informations générales</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <InfoItem label="Type" :value="inventory.type || 'Inventaire Général'" />
+            <InfoItem label="Référence" :value="inventory.reference" />
+            <InfoItem label="Type" :value="inventory.type" />
             <InfoItem label="Libellé" :value="inventory.label" />
             <InfoItem label="Date d'inventaire" :value="formatDate(inventory.inventory_date)" />
             <div>
-              <h3 class="info-label">Statut</h3>
-              <span class="px-3 py-1 rounded-full text-sm font-semibold" :class="getStatusClass(inventory.statut)">
+              <h3 class="text-sm font-medium text-gray-500 mb-1">Statut</h3>
+              <span class="px-4 py-1 rounded-full text-sm font-semibold" :class="getStatusClass(inventory.statut)">
                 {{ inventory.statut }}
               </span>
             </div>
           </div>
         </section>
-        
   
         <!-- Section : Paramètres de comptage -->
         <section>
@@ -78,98 +73,49 @@
   </template>
   
   <script setup lang="ts">
-  import { ref, onMounted, defineComponent } from 'vue';
-  import { useRoute, useRouter } from 'vue-router';
-  import { inventoryManagementService } from '@/services/inventoryManagementService';
-  import { alertService } from '@/services/alertService';
-  import type { InventoryManagement } from '@/interfaces/inventoryManagement';
-  import type { ContageConfig } from '@/interfaces/inventoryCreation';
+  import { ref, defineComponent } from 'vue';
+  import { useRouter } from 'vue-router';
   
-  const route = useRoute();
+  interface ContageConfig {
+    mode: string;
+    isVariant?: boolean;
+    useScanner?: boolean;
+    useSaisie?: boolean;
+  }
+  
+  interface InventoryManagement {
+    id: number;
+    reference: string;
+    inventory_date: string;
+    statut: string;
+    label: string;
+    type: string;
+    contages: ContageConfig[];
+  }
+  
   const router = useRouter();
-  const inventoryId = Number(route.params.id);
-  const loading = ref(true);
   
-  const inventory = ref<InventoryManagement & { contages?: ContageConfig[] }>({
-    id: 0,
-    reference: '',
-    inventory_date: '',
-    statut: '',
-    pending_status_date: '',
-    current_status_date: '',
-    date_status_launch: '',
-    date_status_end: '',
-    label: '',
+  // données statiques déjà créées
+  const inventory = ref<InventoryManagement>({
+    id: 1,
+    reference: 'INV-001',
+    inventory_date: '2025-04-30',
+    statut: 'En cours',
+    label: 'Inventaire de printemps',
     type: 'Inventaire Général',
-    contages: []
+    contages: [
+      { mode: 'liste emplacement', useScanner: true },
+      { mode: 'article + emplacement', isVariant: true },
+      { mode: 'liste emplacement', useSaisie: true },
+    ],
   });
   
-  const fetchInventoryDetails = async () => {
-    try {
-      loading.value = true;
-      const data = await inventoryManagementService.getInventoryById(inventoryId);
-      if (data) {
-        inventory.value = {
-          ...data,
-          contages: data.contages || Array(3).fill({
-            mode: '',
-            isVariant: false,
-            useScanner: false,
-            useSaisie: false
-          })
-        };
-      } else {
-        throw new Error('Inventory not found');
-      }
-    } catch (error) {
-      await alertService.error({ text: "Erreur lors du chargement de l'inventaire" });
-      router.push({ name: 'inventory-list' });
-    } finally {
-      loading.value = false;
-    }
-  };
+  // Récupérer l'id pour la navigation
+  const inventoryId = inventory.value.id;
   
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-    } catch (error) {
-      return dateString;
-    }
-  };
-  
-  const getStatusClass = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'en attente':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'en cours':
-        return 'bg-blue-100 text-blue-800';
-      case 'terminé':
-        return 'bg-green-100 text-green-800';
-      case 'planifié':
-        return 'bg-purple-100 text-purple-800';
-      case 'en préparation':
-        return 'bg-orange-100 text-orange-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-  
-  const launchInventory = async () => {
-    try {
-      await inventoryManagementService.updateInventory(inventoryId, {
-        ...inventory.value,
-        statut: 'En cours'
-      });
-      await alertService.success({ text: "Inventaire lancé avec succès" });
-      await fetchInventoryDetails();
-    } catch {
-      await alertService.error({ text: "Erreur lors du lancement" });
-    }
+  const launchInventory = () => {
+    // logique de lancement
+    console.log('Lancement inventaire', inventoryId);
   };
   
   const editInventory = () => {
@@ -180,34 +126,43 @@
     router.push({ name: 'inventory-list' });
   };
   
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR', {
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    });
+  };
+  
+  const getStatusClass = (status: string): string => {
+    switch (status.toLowerCase()) {
+      case 'en attente': return 'bg-yellow-100 text-yellow-800';
+      case 'en cours':    return 'bg-blue-100 text-blue-800';
+      case 'terminé':     return 'bg-green-100 text-green-800';
+      case 'planifié':    return 'bg-purple-100 text-purple-800';
+      case 'en préparation': return 'bg-orange-100 text-orange-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+  
+  // Composant InfoItem générique
   const InfoItem = defineComponent({
     props: {
-      label: String,
-      value: String
+      label: { type: String, required: true },
+      value: { type: [String, Number], required: true }
     },
     template: `
       <div>
         <h3 class="text-sm font-medium text-gray-500">{{ label }}</h3>
         <p class="text-lg font-medium text-gray-800">{{ value }}</p>
       </div>
-    `
+    `,
   });
-  
-  onMounted(fetchInventoryDetails);
   </script>
   
   <style scoped>
-  .section-title {
-    @apply text-lg font-semibold text-gray-800 border-b pb-1 mb-4;
-  }
-  .btn-green {
-    @apply px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors;
-  }
-  .btn-yellow {
-    @apply px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors;
-  }
-  .btn-gray {
-    @apply px-4 py-2 text-gray-600 hover:text-gray-700 font-medium;
-  }
+  .section-title { @apply text-lg font-semibold text-gray-800 border-b pb-1 mb-4; }
+  .btn-green { @apply px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600; }
+  .btn-yellow{ @apply px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600; }
+  .btn-gray { @apply px-4 py-2 text-gray-600 hover:text-gray-700; }
   </style>
   

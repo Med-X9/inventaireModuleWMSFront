@@ -67,6 +67,7 @@
         </div>
       </div>
 
+      <!-- Si vous souhaitez toujours un bouton Enregistrer interne, laissez-le visible -->
       <div v-if="!hideSubmit" class="col-span-full mt-6">
         <button
           type="submit"
@@ -80,41 +81,57 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue'
+import { reactive, computed, watch } from 'vue'
 import { alertService } from '@/services/alertService'
 import vSelect from 'vue-select'
 import 'vue-select/dist/vue-select.css'
 
-import type { FieldConfig, FormProps, SelectOption } from '@/interfaces/form'
+import type { FieldConfig } from '@/interfaces/form'
 
-const props = defineProps<FormProps>()
-const emit = defineEmits<{ (e: 'submit', data: Record<string, any>): void }>()
+const props = defineProps<{
+  fields: FieldConfig[]
+  modelValue: Record<string, any>
+  hideSubmit?: boolean
+  submitLabel?: string
+  title?: string
+}>()
 
-// Initialisation des données du formulaire
-const formData = reactive<Record<string, any>>({})
-props.fields.forEach(field => {
-  formData[field.key] =
-    props.initialData?.[field.key] ??
-    (field.multiple ? [] : field.type === 'checkbox' ? false : '')
-})
+const emit = defineEmits<{
+  (e: 'submit', data: Record<string, any>): void
+  (e: 'update:modelValue', data: Record<string, any>): void
+}>()
 
-// Classe de grille dynamique
+// Initialise formData à partir de la prop modelValue
+const formData = reactive<{ [key: string]: any }>({ ...props.modelValue })
+
+// Sync si parent change modelValue de l'extérieur
+watch(
+  () => props.modelValue,
+  val => Object.assign(formData, val),
+  { deep: true }
+)
+
+// À chaque modif de formData, on émet pour mettre à jour le parent
+watch(
+  () => formData,
+  val => emit('update:modelValue', { ...val }),
+  { deep: true }
+)
+
 const formGridClass = computed(() => {
   const count = props.fields.length
   const cols = count >= 3 ? 3 : count === 2 ? 2 : 1
   return `grid grid-cols-1 md:grid-cols-${cols} gap-6`
 })
 
-// Formatage des options pour vue-select
-function formattedOptions(options: Array<string | SelectOption> = []) {
-  return options.map(opt => 
+function formattedOptions(options: Array<string | { label: string; value: any }> = []) {
+  return options.map(opt =>
     typeof opt === 'string'
       ? { label: opt, value: opt }
       : opt
   )
 }
 
-// Gestion des checkbox (un seul actif)
 function onSingleCheckbox(changedKey: string) {
   props.fields.forEach(f => {
     if (f.type === 'checkbox' && f.key !== changedKey) {
@@ -123,14 +140,12 @@ function onSingleCheckbox(changedKey: string) {
   })
 }
 
-// Soumission du formulaire
 async function handleSubmit() {
   emit('submit', { ...formData })
-  await alertService.success({
-    text: 'Formulaire soumis avec succès'
-  })
+  await alertService.success({ text: 'Formulaire soumis avec succès' })
 }
 </script>
+
 
 <style>
 /* Styles personnalisés pour vue-select */

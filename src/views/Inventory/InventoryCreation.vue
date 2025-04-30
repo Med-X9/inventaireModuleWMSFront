@@ -10,33 +10,41 @@
       </button>
     </div>
 
-    <DynamicWizard 
-      :steps="wizardSteps" 
+    <!-- Affiche un loader tant que l'état n'est pas restauré -->
+    <div v-if="!loaded" class="text-center py-10">
+      Chargement de votre brouillon…
+    </div>
+
+    <!-- Montre le wizard uniquement après loadState() -->
+    <DynamicWizard
+      v-else
+      :steps="wizardSteps"
       v-model:current-step="currentStep"
-      color="#ffc107" 
+      color="#ffc107"
       @complete="onComplete"
     >
+      <!-- Étape 1 -->
       <template #step-0>
         <FormBuilder
+          v-model:modelValue="state.step1Data"
           :fields="formFields"
-          :initial-data="state.step1Data"
           hide-submit
-          @submit="data => onStepComplete(0, data)"
         />
       </template>
 
+      <!-- Étape 2 -->
       <template #step-1>
         <FormBuilder
+          v-model:modelValue="state.step2Data"
           :fields="compteMagasinFields"
-          :initial-data="state.step2Data"
           hide-submit
-          @submit="data => onStepComplete(1, data)"
         />
       </template>
 
-      <template 
-        v-for="(_, idx) in state.contages" 
-        :key="idx" 
+      <!-- Paramétrages (3 étapes suivantes) -->
+      <template
+        v-for="(_, idx) in state.contages"
+        :key="idx"
         v-slot:[`step-${idx+2}`]
       >
         <ParamStep
@@ -63,7 +71,8 @@ const {
   availableModesForStep,
   onStepComplete,
   onComplete,
-  cancelCreation
+  cancelCreation,
+  loaded,            // on récupère notre flag
 } = useInventoryCreation();
 
 const wizardSteps = [
@@ -71,21 +80,12 @@ const wizardSteps = [
   { title: 'Comptes & Magasin' },
   { title: 'Paramétrage 1/3' },
   { title: 'Paramétrage 2/3' },
-  { title: 'Paramétrage 3/3' }
+  { title: 'Paramétrage 3/3' },
 ];
 
 const formFields: FieldConfig[] = [
-  { 
-    key: 'libelle', 
-    label: 'Libellé', 
-    type: 'text', 
-    props: { placeholder: 'Entrer le libellé' } 
-  },
-  { 
-    key: 'date',    
-    label: 'Date',   
-    type: 'date' 
-  },
+  { key: 'libelle', label: 'Libellé', type: 'text', props: { placeholder: 'Entrer le libellé' } },
+  { key: 'date',    label: 'Date',    type: 'date' },
   {
     key: 'type',
     label: 'Type',
@@ -93,8 +93,8 @@ const formFields: FieldConfig[] = [
     options: ['Inventaire Général'],
     props: { disabled: true },
     searchable: false,
-    clearable: false
-  }
+    clearable: false,
+  },
 ];
 
 const compteMagasinFields: FieldConfig[] = [
@@ -105,7 +105,7 @@ const compteMagasinFields: FieldConfig[] = [
     options: ['Compte 1', 'Compte 2'],
     searchable: false,
     clearable: true,
-    props: { placeholder: 'Sélectionner un compte' }
+    props: { placeholder: 'Sélectionner un compte' },
   },
   {
     key: 'magasin',
@@ -115,7 +115,7 @@ const compteMagasinFields: FieldConfig[] = [
     searchable: true,
     clearable: true,
     multiple: true,
-    props: { placeholder: 'Rechercher et sélectionner un magasin…' }
-  }
+    props: { placeholder: 'Rechercher et sélectionner un magasin…' },
+  },
 ];
 </script>
