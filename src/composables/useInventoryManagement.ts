@@ -62,7 +62,7 @@ export function useInventoryManagement() {
     {
         label: 'planifier',
         icon: IconCalendar,
-        class: 'flex items-center gap-1 px-2 py-1 text-green-500 text-xs',
+        class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
         handler: (inventory: InventoryManagement) => {
           router.push({ name: 'gestion-des-plannings', params: { id: inventory.id } });
         },
@@ -70,7 +70,7 @@ export function useInventoryManagement() {
     {
       label: 'detail',
       icon: IconEye,
-      class: 'flex items-center gap-1 px-2 py-1 text-blue-500 text-xs',
+      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
       handler: (inventory: InventoryManagement) => {
         router.push({ name: 'inventory-detail', params: { id: inventory.id } });
       },
@@ -78,21 +78,21 @@ export function useInventoryManagement() {
     {
       label: 'edit',
       icon: IconEdit,
-      class: 'flex items-center gap-1 px-2 py-1 text-yellow-500 text-xs',
+      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
       handler: (inventory: InventoryManagement) => {
         router.push({ name: 'inventory-edit', params: { id: inventory.id } });
       },
     },
     {
-      label: 'delete',
+      label: 'supprimer',
       icon: IconTrashLines,
-      class: 'flex items-center gap-1 px-2 py-1 text-red-500 text-xs',
+      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
       handler: handleDelete,
     },
   ];
 
   const redirectToAdd = () => {
-    router.push({ name: 'inventory-creation' });
+    router.push({ name: 'inventory-create' });
   };
 
   return {

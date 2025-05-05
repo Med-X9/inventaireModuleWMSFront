@@ -1,55 +1,53 @@
-import { ref, computed } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, watch, onMounted, toRaw } from 'vue';
 import type { Store, PlanningAction, ViewModeType } from '@/interfaces/planningManagement';
 import { planningManagementService } from '@/services/planningManagementService';
-import IconUser from '../components/icon/icon-user.vue';
-import IconCalendar from '../components/icon/icon-calendar.vue';
+import IconUser from '@/components/icon/icon-user.vue';
+import IconCalendar from '@/components/icon/icon-calendar.vue';
+import { indexedDBService } from '@/services/indexedDBService';
 
 export function usePlanningManagement() {
-  const router = useRouter();
   const viewMode = ref<ViewModeType>('table');
   const selectedStore = ref<Store | null>(null);
   const stores = ref<Store[]>([]);
   const loading = ref(false);
 
   const columns = [
-    { 
-      headerName: 'Nom du magasin', 
-      field: 'store_name', 
-      sortable: true, 
-      filter: 'agTextColumnFilter' 
-    }
+    { headerName: 'Nom du magasin', field: 'store_name', sortable: true, filter: 'agTextColumnFilter' },
   ];
 
   const actions: PlanningAction[] = [
     {
       label: 'Affecter',
       icon: IconUser,
-      
       handler: async (store: Store) => {
         await planningManagementService.assignTeams(store.id);
       },
-      
     },
     {
       label: 'Planifier',
       icon: IconCalendar,
-      
       handler: (store: Store) => {
-        router.push({ 
-          name: 'inventory-planning', 
-          params: { storeId: store.id.toString() } 
-        });
+        planningManagementService.navigateToPlanning(store.id);
       },
     },
   ];
 
+  const storageKey = 'planning-management';
+
+  onMounted(async () => {
+    const saved = await indexedDBService.getState(storageKey);
+    if (saved?.viewMode) viewMode.value = saved.viewMode;
+    await fetchStores();
+  });
+
+  watch(viewMode, async mode => {
+    await indexedDBService.saveState({ viewMode: toRaw(mode) }, storageKey);
+  });
+
   const fetchStores = async () => {
+    loading.value = true;
     try {
-      loading.value = true;
       stores.value = await planningManagementService.getStores();
-    } catch (error) {
-      console.error('Error fetching stores:', error);
     } finally {
       loading.value = false;
     }
@@ -57,10 +55,6 @@ export function usePlanningManagement() {
 
   const selectStore = (store: Store) => {
     selectedStore.value = store;
-  };
-
-  const toggleViewMode = () => {
-    viewMode.value = viewMode.value === 'table' ? 'grid' : 'table';
   };
 
   return {
@@ -72,6 +66,5 @@ export function usePlanningManagement() {
     actions,
     fetchStores,
     selectStore,
-    toggleViewMode
   };
 }

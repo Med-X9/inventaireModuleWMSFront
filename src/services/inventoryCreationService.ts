@@ -1,45 +1,46 @@
-// src/services/inventoryCreationService.ts
 import type { InventoryCreationState, ContageMode } from '@/interfaces/inventoryCreation';
 
 class InventoryCreationService {
   validateContages(state: InventoryCreationState): boolean {
-    const [c1, c2, c3] = state.contages.map(c => c.mode);
-    if (c1 === 'etat de stock') {
-      return c2 !== '' && c3 === c2;
-    } else {
-      return c1 !== '' && c2 !== '' && (c3 === c1 || c3 === c2);
+    const [c1, c2, c3] = state.contages;
+    
+    if (c1.mode === 'etat de stock') {
+      return c2.mode !== '' && c3.mode === c2.mode;
     }
+    
+    return c1.mode !== '' && 
+           c2.mode !== '' && 
+           (c3.mode === c1.mode || c3.mode === c2.mode);
   }
 
   getAvailableModesForStep(
     state: InventoryCreationState,
     stepIndex: number
   ): ContageMode[] {
-    const all: ContageMode[] = [
-      'etat de stock',
+    const standardModes: ContageMode[] = [
       'liste emplacement',
       'article + emplacement',
-      'hybride',
+      'hybride'
     ];
 
+    // First contage: all options available
     if (stepIndex === 0) {
-      return all;                                                                         // Contage 1 
+      return [...standardModes, 'etat de stock'];
     }
 
-    const first = state.contages[0].mode;
+    const firstContage = state.contages[0].mode;
 
+    // Second contage
     if (stepIndex === 1) {
-      return first === 'etat de stock'
-        ? all.filter(m => m !== 'etat de stock')                                           // Contage 2 cas “état de stock” 
-        : all.filter(m => m !== 'etat de stock' && m !== first);                          // Contage 2 autre cas
+      return standardModes;
     }
 
-    const second = state.contages[1].mode;
-
+    // Third contage
     if (stepIndex === 2) {
-      return first === 'etat de stock'
-        ? [second]                                                                         // Contage 3 cas “état de stock”
-        : [first, second];                                                                 // Contage 3 sinon
+      if (firstContage === 'etat de stock') {
+        return [state.contages[1].mode];
+      }
+      return [firstContage, state.contages[1].mode];
     }
 
     return [];

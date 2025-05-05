@@ -1,4 +1,3 @@
-// src/composables/useInventoryCreation.ts
 import { ref, reactive, watch, onMounted } from 'vue';
 import type { InventoryCreationState, ContageConfig } from '@/interfaces/inventoryCreation';
 import { indexedDBService } from '@/services/indexedDBService';
@@ -90,6 +89,8 @@ export function useInventoryCreation() {
       await alertService.error({ text: 'Configuration invalide.' });
       return;
     }
+      // Affichage dans la console pour indiquer le succès de la création
+      console.log('Création d\'inventaire réussie.');
     await alertService.success({ text: 'Inventaire enregistré localement.' });
     await indexedDBService.clearState('creation');
     currentStep.value = 0;

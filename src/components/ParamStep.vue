@@ -1,116 +1,90 @@
 <template>
   <div class="px-4">
-    <div class="grid grid-cols-1 gap-6">
-      <div>
-        <label for="mode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Mode</label>
-        <v-select
-          id="mode"
-          v-model="local.mode"
-          :options="formattedOptions"
-          placeholder="-- Sélectionner un mode --"
-          label="label"
-          :reduce="option => option.value"
-          class="vs-custom"
-        />
-      </div>
-
-      <div v-if="local.mode === 'liste emplacement'" class="space-y-4">
-        <div v-for="item in ['Scanner', 'Saisie']" :key="item" class="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            :checked="local['use' + item]"
-            @change="selectSingleOption(item)"
-            class="w-5 h-5 text-primary border border-gray-300 rounded focus:ring-2 transition-all duration-200"
-          />
-          <label class="text-sm text-gray-700 dark:text-gray-300 mt-2 cursor-pointer">{{ item }}</label>
-        </div>
-      </div>
-
-      <div v-if="local.mode === 'article + emplacement'" class="flex items-center space-x-2">
-        <input
-          type="checkbox"
-          v-model="local.isVariant"
-          @change="emitLocal"
-          class="w-5 h-5 text-primary border border-gray-300 rounded focus:ring-2 focus:ring-primary transition-all duration-200"
-        />
-        <label class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">Variantes</label>
-      </div>
-    </div>
+    <FormBuilder
+      :modelValue="local"
+      :fields="formFields"
+      :columns="1"
+      hide-submit
+      @update:modelValue="onFormBuilderUpdate"
+    />
   </div>
 </template>
-<script setup lang="ts">
-import { reactive, watch, computed } from 'vue'
-import vSelect from 'vue-select'
-import 'vue-select/dist/vue-select.css'
 
-import type { ContageConfig } from '../interfaces/inventoryCreation'
+<script setup lang="ts">
+import { reactive, watch, computed } from 'vue';
+import FormBuilder from '@/components/Form/FormBuilder.vue';
+import type { ContageConfig } from '@/interfaces/inventoryCreation';
+import type { FieldConfig } from '@/interfaces/form';
 
 const props = defineProps<{
-  modelValue: ContageConfig
-  stepIndex: number
-  availableModes: string[]
-}>()
+  modelValue: ContageConfig;
+  stepIndex: number;
+  availableModes: string[];
+}>();
 
+// Émission vers le parent de ParamStep
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: ContageConfig): void
-}>()
+  (e: 'update:modelValue', data: ContageConfig): void;
+}>();
 
-const local = reactive<ContageConfig>({ ...props.modelValue })
+// Copie locale réactive
+const local = reactive<ContageConfig>({ ...props.modelValue });
 
+// Champs dynamiques
+const formFields = computed<FieldConfig[]>(() => [
+  {
+    key: 'mode',
+    label: 'Mode de contage',
+    type: 'select',
+    options: props.availableModes.map(m => ({ label: m, value: m })),
+  },
+  ...((local.mode && local.mode !== 'etat de stock') ? getAdditionalFields() : []),
+]);
+
+function getAdditionalFields(): FieldConfig[] {
+  const list: FieldConfig[] = [];
+  if (local.mode === 'liste emplacement') {
+    list.push({
+      key: 'inputMethod',
+      label: 'Méthode de saisie',
+      type: 'radio',
+      options: [
+        { label: 'Scanner', value: 'scanner' },
+        { label: 'Saisie manuelle', value: 'manual' },
+      ],
+    });
+  }
+  if (['article + emplacement', 'hybride'].includes(local.mode)) {
+    list.push({ key: 'isVariant', label: 'Variantes', type: 'checkbox' });
+  }
+  return list;
+}
+
+// Handler pour l'update depuis FormBuilder
+function onFormBuilderUpdate(data: Record<string, unknown>) {
+  // On merge la mise à jour
+  const merged = { ...local, ...(data as Partial<ContageConfig>) };
+
+  // Réajustements selon mode
+  if (merged.mode === 'etat de stock') {
+    merged.isVariant = false; merged.useScanner = false; merged.useSaisie = false;
+  }
+  if (merged.inputMethod === 'scanner') {
+    merged.useScanner = true; merged.useSaisie = false;
+  }
+  if (merged.inputMethod === 'manual') {
+    merged.useScanner = false; merged.useSaisie = true;
+  }
+
+  // Met à jour local et émet vers parent
+  Object.assign(local, merged);
+  emit('update:modelValue', merged as ContageConfig);
+}
+
+// Mise à jour locale si parent change modelValue
 watch(
   () => props.modelValue,
-  (val) => Object.assign(local, val),
+  val => Object.assign(local, val),
   { deep: true }
-)
-
-watch(
-  () => local,
-  (val) => {
-    if (val.mode !== 'liste emplacement') {
-      val.useScanner = false
-      val.useSaisie = false
-    }
-    if (val.mode !== 'article + emplacement') {
-      val.isVariant = false
-    }
-    emit('update:modelValue', { ...val })
-  },
-  { deep: true }
-)
-
-const formattedOptions = computed(() => 
-  props.availableModes.map(mode => ({ label: mode, value: mode }))
-)
-
-function emitLocal() {
-  emit('update:modelValue', { ...local })
-}
-
-function selectSingleOption(option: string) {
-  local.useScanner = false
-  local.useSaisie = false
-  local['use' + option] = true
-  emitLocal()
-}
+);
 </script>
-<style>
-.vs-custom {
-  font-family: inherit;
-  width: 100%;
-}
-.vs-custom .vs__dropdown-toggle {
-  padding: 0.75rem;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  transition: all 0.2s;
-}
-.vs-custom .vs__dropdown-toggle:hover {
-  border-color: #cbd5e1;
-}
-.vs-custom .vs__dropdown-toggle:focus-within {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-  outline: none;
-}
-</style>

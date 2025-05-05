@@ -10,12 +10,6 @@ import { useLocalStorage } from '@/utils/storage'
 import type { ActionConfig } from '@/interfaces/dataTable'
 import ActionMenu from '@/components/DataTable/ActionMenu.vue'
 
-interface ExtendedGridApi extends GridApi {
-  paginationSetPageSize(ps: number): void
-  paginationGetCurrentPage(): number
-  paginationGoToPage(page: number): void
-}
-
 export interface UseDataTableProps {
   columns: ColDef[]
   rowDataProp: Record<string, unknown>[]
@@ -28,19 +22,18 @@ export interface UseDataTableProps {
 }
 
 export function useDataTable(props: UseDataTableProps) {
-  const gridApi = ref<ExtendedGridApi | null>(null)
+  // Référence à l'API AG-Grid
+  const gridApi = ref<GridApi|null>(null)
 
-  // 1) ref<T[]> pur
-  const rowData = ref<Record<string, unknown>[]>([])
-  // 2) watch immédiat pour synchroniser la prop
-  watch(
-    () => props.rowDataProp,
-    v => { rowData.value = v },
-    { immediate: true }
-  )
+  // --- ROW DATA ---
+  const rowData = ref(props.rowDataProp.slice())
+  watch(() => props.rowDataProp, v => (rowData.value = v.slice()), { immediate: true })
 
+  // --- PAGINATION STATE ---
   const pageSize = ref(50)
+  const paginationStorageKey = `${props.storageKey}_paginationState`
 
+  // --- COL DEFS PAR DÉFAUT ---
   const defaultColDef: ColDef = {
     resizable: true,
     sortable: true,
@@ -49,82 +42,113 @@ export function useDataTable(props: UseDataTableProps) {
     minWidth: 100,
   }
 
+  // --- VISIBLE FIELDS ---
   const minVisibleColumns = computed(() => {
     const t = props.columns.length
-    if (t > 4) return 3
-    if (t >= 3) return 2
-    return 1
+    return t > 4 ? 3 : t >= 3 ? 2 : 1
   })
-
   const visibleFields = useLocalStorage<string[]>(
     props.storageKey,
     props.columns.map(c => c.field!).filter(Boolean)
   )
 
+  // --- DROPDOWN SELECTEUR DE COLONNES ---
+  const showDropdown = ref(false)
+  const dropdownRef = ref<HTMLElement|null>(null)
+  const toggleDropdown = () => { showDropdown.value = !showDropdown.value }
+  const resetVisibleFields = () => {
+    visibleFields.value = props.columns.map(c => c.field!).filter(Boolean)
+    localStorage.removeItem(props.storageKey)
+  }
+  function handleClickOutside(e: MouseEvent) {
+    const wrap = dropdownRef.value
+    if (wrap && !wrap.contains(e.target as Node)) {
+      showDropdown.value = false
+    }
+  }
+
+  // --- LIFECYCLE ---
   onMounted(async () => {
+    document.addEventListener('click', handleClickOutside)
     if (props.dataUrl) {
       try {
         rowData.value = await fetchData(props.dataUrl)
-      } catch (e) {
-        console.error(e)
+      } catch (err) {
+        console.error('fetchData error', err)
       }
     }
-    document.addEventListener('click', handleClickOutside)
   })
-
   onUnmounted(() => {
     document.removeEventListener('click', handleClickOutside)
   })
 
+  // --- AG GRID READY ---
   function onGridReady(e: GridReadyEvent) {
-    gridApi.value = e.api as ExtendedGridApi
-    const saved = localStorage.getItem('paginationState')
-    if (saved && gridApi.value) {
-      const { pageSize: ps } = JSON.parse(saved)
-      if (ps) {
-        pageSize.value = ps
-        gridApi.value.paginationSetPageSize(ps)
-      }
+    gridApi.value = e.api
+
+    // Restauration du state de pagination
+    const saved = localStorage.getItem(paginationStorageKey)
+    let initialPage = 0
+    let initialSize = pageSize.value
+
+    if (saved) {
+      try {
+        const obj = JSON.parse(saved)
+        if (typeof obj.pageSize === 'number') initialSize = obj.pageSize
+        if (typeof obj.currentPage === 'number') initialPage = obj.currentPage
+      } catch {}
     }
-    if (gridApi.value && props.pagination) {
+
+    pageSize.value = initialSize
+
+    // ← Utilisation de la nouvelle API AG-Grid v32+
+    gridApi.value.setGridOption('paginationPageSize', initialSize)
+
+    if (props.pagination) {
       gridApi.value.addEventListener('paginationChanged', () => {
-        const curr = gridApi.value!.paginationGetCurrentPage()
         localStorage.setItem(
-          'paginationState',
-          JSON.stringify({ currentPage: curr, pageSize: pageSize.value })
+          paginationStorageKey,
+          JSON.stringify({
+            currentPage: gridApi.value!.paginationGetCurrentPage(),
+            pageSize:    gridApi.value!.paginationGetPageSize(),
+          })
         )
       })
+      // Naviguer vers la page restaurée
+      setTimeout(() => {
+        if (initialPage > 0) {
+          gridApi.value!.paginationGoToPage(initialPage)
+        }
+      }, 0)
     }
   }
 
-  function onFirstDataRendered(e: FirstDataRenderedEvent) {
-    const saved = localStorage.getItem('paginationState')
-    if (saved && gridApi.value) {
-      const { currentPage } = JSON.parse(saved)
-      if (typeof currentPage === 'number') {
-        gridApi.value.paginationGoToPage(currentPage)
-      }
-    }
+  function onFirstDataRendered(_: FirstDataRenderedEvent) {
+    // exposé si besoin
   }
 
+  // --- COLONNES VISIBLES CALCULÉES ---
   const computedVisibleColumnDefs = computed<ColDef[]>(() => {
     const base = props.columns.map(col => ({
       ...col,
-      filter: props.enableFiltering ? (col.filter || 'agTextColumnFilter') : false,
+      filter: props.enableFiltering
+        ? col.filter || 'agTextColumnFilter'
+        : false,
     }))
 
     if (props.actions.length) {
       base.push({
         headerName: props.actionsHeaderName,
-        field: 'actions',
-        sortable: false,
-        filter: false,
-        minWidth: 80,
-        maxWidth: 80,
-        cellRenderer: ActionMenu,
+        field:      'actions',
+        colId:      'actions',
+        sortable:   false,
+        filter:     false,
+        minWidth:   80,
+        maxWidth:   80,
+        cellRenderer:       ActionMenu,
         cellRendererParams: { actions: props.actions },
-        cellStyle: { overflow: 'visible' },
-        suppressSizeToFit: true,
+        cellStyle:          { overflow: 'visible' },
+        suppressSizeToFit:  true,
       })
     }
 
@@ -132,17 +156,6 @@ export function useDataTable(props: UseDataTableProps) {
       visibleFields.value.includes(c.field!) || c.field === 'actions'
     )
   })
-
-  const showDropdown = ref(false)
-  const toggleDropdown = () => { showDropdown.value = !showDropdown.value }
-  const resetVisibleFields = () => {
-    visibleFields.value = props.columns.map(c => c.field!).filter(Boolean)
-    localStorage.removeItem(props.storageKey)
-  }
-  function handleClickOutside(e: MouseEvent) {
-    const w = document.querySelector('.select-wrapper')
-    if (w && !w.contains(e.target as Node)) showDropdown.value = false
-  }
 
   return {
     defaultColDef,
@@ -156,5 +169,6 @@ export function useDataTable(props: UseDataTableProps) {
     toggleDropdown,
     resetVisibleFields,
     minVisibleColumns,
+    dropdownRef,
   }
 }

@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue';
+import { Ref, ref, computed } from 'vue';
 import type { InventoryOption, StoreOption, InventoryResult, ResultAction } from '../interfaces/inventoryResults';
 import { inventoryResultsService } from '../services/inventoryResultsService';
 import { alertService } from '@/services/alertService';
@@ -6,13 +6,13 @@ import IconEdit from '@/components/icon/icon-edit.vue';
 import IconLancer from '@/components/icon/icon-launch.vue';
 import IconValider from '@/components/icon/icon-check.vue';
 
-export function useInventoryResults() {
+export function useInventoryResults(
+  filterForm: Ref<{ inventory: string | null; store: string | null }>
+) {
   const loading = ref(false);
   const inventories = ref<InventoryOption[]>([]);
   const stores = ref<StoreOption[]>([]);
   const results = ref<InventoryResult[]>([]);
-  const selectedInventory = ref<string | null>(null);
-  const selectedStore = ref<string | null>(null);
 
   const columns = [
     { headerName: 'Article', field: 'article', sortable: true, filter: 'agTextColumnFilter' },
@@ -24,10 +24,13 @@ export function useInventoryResults() {
     { headerName: 'Résultats', field: 'resultats', sortable: true, filter: 'agTextColumnFilter' },
   ];
 
+  // Filtrage basé sur filterForm passé en paramètre
   const filteredResults = computed(() => {
     return results.value.filter(item => {
-      const matchesInventory = !selectedInventory.value || item.inventory === selectedInventory.value;
-      const matchesStore = !selectedStore.value || item.store === selectedStore.value;
+      const matchesInventory =
+        !filterForm.value.inventory || item.inventory === filterForm.value.inventory;
+      const matchesStore =
+        !filterForm.value.store || item.store === filterForm.value.store;
       return matchesInventory && matchesStore;
     });
   });
@@ -56,26 +59,18 @@ export function useInventoryResults() {
   const handleEdit = async (result: InventoryResult) => {
     try {
       await inventoryResultsService.editResult(result.id);
-      await alertService.success({
-        text: "Modification effectuée avec succès"
-      });
+      await alertService.success({ text: "Modification effectuée avec succès" });
     } catch (error) {
-      await alertService.error({
-        text: "Erreur lors de la modification"
-      });
+      await alertService.error({ text: "Erreur lors de la modification" });
     }
   };
 
   const handleLaunch = async (result: InventoryResult) => {
     try {
       await inventoryResultsService.launchResult(result.id);
-      await alertService.success({
-        text: "Lancement effectué avec succès"
-      });
+      await alertService.success({ text: "Lancement effectué avec succès" });
     } catch (error) {
-      await alertService.error({
-        text: "Erreur lors du lancement"
-      });
+      await alertService.error({ text: "Erreur lors du lancement" });
     }
   };
 
@@ -88,14 +83,10 @@ export function useInventoryResults() {
 
       if (confirmation.isConfirmed) {
         await inventoryResultsService.validateResult(result.id);
-        await alertService.success({
-          text: "Validation effectuée avec succès"
-        });
+        await alertService.success({ text: "Validation effectuée avec succès" });
       }
     } catch (error) {
-      await alertService.error({
-        text: "Erreur lors de la validation"
-      });
+      await alertService.error({ text: "Erreur lors de la validation" });
     }
   };
 
@@ -103,19 +94,19 @@ export function useInventoryResults() {
     {
       label: 'Éditer',
       icon: IconEdit,
-      class: 'flex items-center gap-1 px-2 py-1 text-yellow-500 text-xs',
+      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
       handler: handleEdit
     },
     {
       label: 'Lancer',
       icon: IconLancer,
-      class: 'flex items-center gap-1 px-2 py-1 text-blue-500 text-xs',
+      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
       handler: handleLaunch
     },
     {
       label: 'Valider',
       icon: IconValider,
-      class: 'flex items-center gap-1 px-2 py-1 text-green-600 text-xs',
+      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
       handler: handleValidate
     }
   ];
@@ -124,8 +115,6 @@ export function useInventoryResults() {
     loading,
     inventories,
     stores,
-    selectedInventory,
-    selectedStore,
     columns,
     actions,
     filteredResults,

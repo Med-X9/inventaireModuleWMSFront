@@ -80,3 +80,5 @@ export const inventoryResultsService = {
     console.log('Validate result:', id);
   }
 };
+
+

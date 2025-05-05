@@ -3,27 +3,24 @@
     <div class="flex justify-between mb-4">
       <h1 class="text-xl font-bold">Création d'inventaire</h1>
       <button
-        @click="cancelCreation"
+        @click="onCancelClick"
         class="px-4 py-2 text-red-600 hover:text-red-700 font-medium"
-      >
-        Annuler
-      </button>
+      >Annuler</button>
     </div>
 
-    <!-- Affiche un loader tant que l'état n'est pas restauré -->
     <div v-if="!loaded" class="text-center py-10">
       Chargement de votre brouillon…
     </div>
 
-    <!-- Montre le wizard uniquement après loadState() -->
     <DynamicWizard
       v-else
+      :key="wizardKey"
       :steps="wizardSteps"
       v-model:current-step="currentStep"
       color="#ffc107"
+      @on-change="handleStepChange"
       @complete="onComplete"
     >
-      <!-- Étape 1 -->
       <template #step-0>
         <FormBuilder
           v-model:modelValue="state.step1Data"
@@ -32,7 +29,6 @@
         />
       </template>
 
-      <!-- Étape 2 -->
       <template #step-1>
         <FormBuilder
           v-model:modelValue="state.step2Data"
@@ -41,7 +37,6 @@
         />
       </template>
 
-      <!-- Paramétrages (3 étapes suivantes) -->
       <template
         v-for="(_, idx) in state.contages"
         :key="idx"
@@ -58,12 +53,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref } from 'vue';
+import { useInventoryCreation } from '@/composables/useInventoryCreation';
 import DynamicWizard from '@/components/wizard/Wizard.vue';
 import FormBuilder from '@/components/Form/FormBuilder.vue';
 import ParamStep from '@/components/ParamStep.vue';
 import type { FieldConfig } from '@/interfaces/form';
-import { useInventoryCreation } from '@/composables/useInventoryCreation';
 
 const {
   state,
@@ -72,8 +67,11 @@ const {
   onStepComplete,
   onComplete,
   cancelCreation,
-  loaded,            // on récupère notre flag
+  loaded
 } = useInventoryCreation();
+
+// clé pour forcer la recréation du wizard
+const wizardKey = ref(Date.now());
 
 const wizardSteps = [
   { title: 'Création' },
@@ -118,4 +116,18 @@ const compteMagasinFields: FieldConfig[] = [
     props: { placeholder: 'Rechercher et sélectionner un magasin…' },
   },
 ];
+
+// Lorsqu'on clique sur Annuler, on appelle le service, puis on régénère la key pour remonter le wizard
+async function onCancelClick() {
+  await cancelCreation();
+  wizardKey.value = Date.now();
+}
+
+function handleStepChange(prev: number, next: number) {
+  let data;
+  if (prev === 0)      data = state.step1Data;
+  else if (prev === 1) data = state.step2Data;
+  else                 data = state.contages[prev - 2];
+  onStepComplete(prev, data);
+}
 </script>

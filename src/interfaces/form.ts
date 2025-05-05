@@ -1,26 +1,16 @@
-// src/interfaces/form.ts
+export interface FieldConfig {
+  key: string;
+  label: string;
+  type: 'text' | 'email' | 'date' | 'select' | 'checkbox' | 'radio' | 'button-group';
+  options?: Array<string | SelectOption>;
+  multiple?: boolean;
+  searchable?: boolean;
+  clearable?: boolean;
+  props?: Record<string, unknown>;
+  validators?: Array<{ key: string; fn: (value: unknown) => boolean; msg: string }>;
+}
 
 export interface SelectOption {
-    label: string;
-    value: any;
-  }
-  
-  export interface FieldConfig {
-    key: string;
-    label: string;
-    type: 'text' | 'email' | 'checkbox' | 'select' | 'date';
-    options?: Array<string | SelectOption>;
-    props?: Record<string, any>;
-    searchable?: boolean;   // active/désactive la barre de recherche
-    clearable?: boolean;    // active/désactive le bouton “×”
-    multiple?: boolean;     // autorise la sélection multiple
-  }
-  
-  export interface FormProps {
-    fields: FieldConfig[];
-    initialData?: Record<string, any>;
-    title?: string;
-    submitLabel?: string;
-    hideSubmit?: boolean;
-  }
-  
+  label: string;
+  value: string | number;
+}

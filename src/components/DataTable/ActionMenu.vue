@@ -1,7 +1,7 @@
 <template>
   <div ref="menu" class="relative flex h-full items-center justify-center">
     <button @click="toggle" class="flex p-1 hover:bg-gray-200 border border-gray-300 rounded-full">
-      <IconHorizontalDots class="text-gray-700" />
+      <IconHorizontalDots class="text-secondary" />
     </button>
     <teleport to="body">
       <transition name="fade">
@@ -14,12 +14,12 @@
           <li
             v-for="(a, i) in actions"
             :key="i"
-            class="text-sm text-gray-700 hover:bg-gray-100"
+            class="text-sm text-secondary hover:bg-gray-100"
           >
             <a
               href="#"
               @click.prevent="handleAction(a)"
-              class="flex items-center gap-2 px-3 py-2"
+              class="flex items-center justify-center w-full gap-2 px-3 py-2 "
               :class="a.class"
             >
               <component :is="a.icon" class="w-4 h-4" />
@@ -66,11 +66,11 @@ export default defineComponent({
       if (open.value) {
         await nextTick()
         const r = menu.value!.getBoundingClientRect()
-        const w = dropdown.value!.offsetWidth
         dropdownStyle.value = {
           position: 'absolute',
           top:  `${r.bottom + window.scrollY + 4}px`,
-          left: `${r.left   + window.scrollX + r.width/2 - w/2}px`
+          left: `${r.left + window.scrollX + r.width/2}px`,
+          transform: 'translateX(-50%)'
         }
       }
     }
@@ -93,6 +93,12 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.fade-enter-active, .fade-leave-active { transition: opacity .15s ease }
-.fade-enter-from, .fade-leave-to     { opacity: 0 }
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity .15s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
 </style>

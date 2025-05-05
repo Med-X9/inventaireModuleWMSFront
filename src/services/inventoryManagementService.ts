@@ -47,16 +47,19 @@ const mockInventories: InventoryManagement[] = [
     label: 'Inventaire Général Juillet',
   },
   {
-    id: 5,
-    reference: 'INV-005',
-    inventory_date: '2025-08-05',
-    statut: 'En préparation',
-    pending_status_date: '2025-08-05',
-    current_status_date: '2025-08-06',
-    date_status_launch: '2025-08-07',
-    date_status_end: '2025-08-08',
-    label: 'Inventaire Général Août',
+    id: 4,
+    reference: 'INV-004',
+    inventory_date: '2025-07-10',
+    statut: 'Planifié',
+    pending_status_date: '2025-07-10',
+    current_status_date: '2025-07-11',
+    date_status_launch: '2025-07-12',
+    date_status_end: '2025-07-13',
+    label: 'Inventaire Général Juillet',
   },
+ 
+  
+  
 ];
 
 export const inventoryManagementService = {
