@@ -80,9 +80,9 @@
                 <p class="font-semibold mb-2 text-gray-700">Comptage {{ i + 1 }}</p>
                 <ul class="text-sm text-gray-600 space-y-1">
                   <li><strong>Mode : </strong>{{ contage.mode || 'Non défini' }}</li>
-                  <li v-if="contage.isVariant">✅ Variantes activées</li>
-                  <li v-if="contage.useScanner">📱 Scanner activé</li>
-                  <li v-if="contage.useSaisie">⌨️ Saisie activée</li>
+                  <li v-if="contage.isVariant"> Variantes activées</li>
+                  <li v-if="contage.useScanner"> Scanner activé</li>
+                  <li v-if="contage.useSaisie"> Saisie activée</li>
                 </ul>
               </div>
             </div>
