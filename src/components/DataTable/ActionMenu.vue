@@ -9,7 +9,9 @@
           v-if="open"
           ref="dropdown"
           :style="dropdownStyle"
-          class="absolute bg-white border rounded shadow-lg z-50 min-w-[110px] py-1"
+          class="absolute top-full mt-2 left-1/2 transform -translate-x-1/2
+                 bg-white border border-gray-200 rounded-md shadow-lg z-50
+                  divide-y divide-gray-100"
         >
           <li
             v-for="(a, i) in actions"

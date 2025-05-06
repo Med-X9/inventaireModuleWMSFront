@@ -1,12 +1,26 @@
-import { ref } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import type { InventoryManagement } from '@/interfaces/inventoryManagement';
-import { inventoryDetailService } from '../services/inventoryDetailService';
+import type { ViewModeType } from '@/interfaces/planningManagement';
+import { inventoryDetailService } from '@/services/inventoryDetailService';
+import { useAppStore } from '@/stores';
 
 export function useInventoryDetail(initialInventory: InventoryManagement) {
   const router = useRouter();
-  const currentTab = ref('general');
-  const viewMode = ref('table');
+  const appStore = useAppStore();
+
+  // Onglet courant persistant
+  const currentTab = computed<string>({
+    get: () => appStore.inventoryCurrentTab,
+    set: (tab: string) => appStore.setInventoryCurrentTab(tab)
+  });
+
+  // Mode d'affichage persistant ("table" | "grid")
+  const viewMode = computed<ViewModeType>({
+    get: () => appStore.inventoryViewMode,
+    set: (mode: ViewModeType) => appStore.setInventoryViewMode(mode)
+  });
+
   const inventory = ref<InventoryManagement>(initialInventory);
 
   const tabs = [
@@ -18,7 +32,7 @@ export function useInventoryDetail(initialInventory: InventoryManagement) {
 
   const jobColumns = [
     { headerName: 'Nom', field: 'name', sortable: true },
-    { headerName: 'Status', field: 'status', sortable: true }
+    { headerName: 'Statut', field: 'status', sortable: true }
   ];
 
   const jobsData = [

@@ -5,7 +5,11 @@
     </h2>
 
     <form :class="formGridClass">
-      <div v-for="field in fields" :key="field.key" class="w-full mb-6">
+      <div
+        v-for="field in fields"
+        :key="field.key"
+        class="w-full mb-6"
+      >
         <!-- Label pour tous sauf checkbox -->
         <label
           v-if="field.type !== 'checkbox'"
@@ -26,20 +30,29 @@
         />
 
         <!-- Checkbox -->
-        <div v-else-if="field.type === 'checkbox'" class="flex items-center space-x-2">
+        <div
+          v-else-if="field.type === 'checkbox'"
+          class="flex items-center space-x-2"
+        >
           <input
             :id="field.key"
             v-model="formData[field.key]"
             type="checkbox"
-            class="w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary"
+            class="input-primary"
           />
-          <label :for="field.key" class="text-sm text-gray-700">
+          <label
+            :for="field.key"
+            class="text-sm mt-2 text-gray-700"
+          >
             {{ field.label }}
           </label>
         </div>
 
         <!-- Radio -->
-        <div v-else-if="field.type === 'radio'" class="space-y-2">
+        <div
+          v-else-if="field.type === 'radio'"
+          class="space-y-2"
+        >
           <div
             v-for="opt in formattedOptions(field.options)"
             :key="opt.value"
@@ -50,15 +63,18 @@
               v-model="formData[field.key]"
               :value="opt.value"
               type="radio"
-              class="w-4 h-4 text-primary border-gray-300 focus:ring-primary"
+              class="radio-primary"
             />
-            <label :for="`${field.key}-${opt.value}`" class="text-sm text-gray-700">
+            <label
+              :for="`${field.key}-${opt.value}`"
+              class="text-sm mt-2 text-gray-700"
+            >
               {{ opt.label }}
             </label>
           </div>
         </div>
 
-        <!-- Select avec vue-select -->
+        <!-- Select -->
         <div v-else-if="field.type === 'select'">
           <v-select
             :id="field.key"
@@ -74,19 +90,17 @@
           />
         </div>
 
-        <!-- Button-group personnalisé -->
+        <!-- Button-group -->
         <div v-else-if="field.type === 'button-group'">
-         <div class="flex flex-wrap max-h-[200px] overflow-x-auto gap-2 bg-white p-4 rounded-lg border border-gray-200">
-
+          <div class="flex flex-wrap max-h-[200px] overflow-x-auto gap-2 bg-white p-4 rounded-lg border border-gray-200">
             <button
               v-for="opt in formattedOptions(field.options)"
               :key="opt.value"
               type="button"
               @click="toggleValue(field.key, opt.value)"
-              :class="[
-                'px-4 py-2 rounded-lg text-sm transition-all duration-200',
+              :class="[ 'px-4 py-2 rounded-lg text-sm transition-all duration-200',
                 isSelected(field.key, opt.value)
-                  ? 'bg-primary-600 text-white'
+                  ? 'bg-primary text-white'
                   : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
               ]"
             >
@@ -101,7 +115,7 @@
         </p>
       </div>
 
-      <!-- Bouton de soumission -->
+      <!-- Bouton de soumission (non utilisé si hideSubmit) -->
       <div v-if="!hideSubmit" class="col-span-full mt-6">
         <SubmitButton
           type="button"
@@ -146,36 +160,31 @@ watch(
   { deep: true }
 );
 
-// Grille selon nombre de colonnes
+// Grille
 const formGridClass = computed(() => {
   const cols = props.columns ?? (props.fields.length >= 3 ? 3 : props.fields.length === 2 ? 2 : 1);
   return `grid grid-cols-1 md:grid-cols-${cols} gap-6`;
 });
 
-// Normalisation des options
+// Options
 function formattedOptions(options: Array<string | SelectOption> = []): SelectOption[] {
   return options.map(opt => (typeof opt === 'string' ? { label: opt, value: opt } : opt));
 }
 
-// Vérifie si une valeur est sélectionnée (pour button-group)
+// Button-group helpers
 function isSelected(key: string, value: unknown): boolean {
   const val = formData[key];
   return Array.isArray(val) && (val as unknown[]).includes(value);
 }
-
-// Ajoute ou retire une valeur du tableau (pour button-group)
 function toggleValue(key: string, value: unknown) {
   const arr = (formData[key] as unknown[]) || [];
   const idx = arr.indexOf(value);
-  if (idx >= 0) {
-    arr.splice(idx, 1);
-  } else {
-    arr.push(value);
-  }
+  if (idx >= 0) arr.splice(idx, 1);
+  else arr.push(value);
   emit('update:modelValue', { ...formData });
 }
 
-// Validation du bouton
+// Validation “canCreate” (bouton standard)
 const canCreate = computed(() => {
   if (isSubmitting.value) return false;
   return props.fields.every(f => {
@@ -186,12 +195,17 @@ const canCreate = computed(() => {
   });
 });
 
-// Soumission
+// Soumission via le SubmitButton interne
 async function handleSubmit() {
-  if (!canCreate.value) return;
+  if (!validate()) return;
   isSubmitting.value = true;
-  Object.keys(errors).forEach(k => (errors[k] = null));
+  await emit('submit', { ...formData });
+  isSubmitting.value = false;
+}
 
+// Méthode de validation exposée
+function validate(): boolean {
+  Object.keys(errors).forEach(k => (errors[k] = null));
   let valid = true;
   props.fields.forEach(field => {
     field.validators?.forEach(v => {
@@ -201,15 +215,11 @@ async function handleSubmit() {
       }
     });
   });
-
-  if (!valid) {
-    isSubmitting.value = false;
-    return;
-  }
-
-  await emit('submit', { ...formData });
-  isSubmitting.value = false;
+  return valid;
 }
+
+// Expose validate() au parent
+defineExpose({ validate });
 </script>
 
 
@@ -232,6 +242,7 @@ async function handleSubmit() {
   --vs-actions-padding: 4px 6px 0 3px;
 }
 
+/* Styles pour vue-select */
 .vs-custom {
   font-family: inherit;
   width: 100%;

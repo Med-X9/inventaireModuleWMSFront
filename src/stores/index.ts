@@ -1,9 +1,14 @@
 import { defineStore } from 'pinia';
 import i18n from '@/i18n';
 import appSetting from '@/app-setting';
-
+import type { ViewModeType } from '@/interfaces/planningManagement';
 export const useAppStore = defineStore('app', {
     state: () => ({
+        viewMode: (localStorage.getItem('viewMode') as ViewModeType) || 'table',
+        inventoryCurrentTab: localStorage.getItem('inventoryCurrentTab') || 'general',
+        inventoryViewMode: (localStorage.getItem('inventoryViewMode') as ViewModeType) || 'table',
+        planningTeamsViewMode: (localStorage.getItem('planningTeamsViewMode') as ViewModeType) || 'grid',
+        planningJobsViewMode: (localStorage.getItem('planningJobsViewMode') as ViewModeType) || 'grid',
         isDarkMode: false,
         mainLayout: 'app',
         theme: 'light',
@@ -37,6 +42,29 @@ export const useAppStore = defineStore('app', {
     }),
 
     actions: {
+        setViewMode(mode: ViewModeType) {
+            this.viewMode = mode;
+            localStorage.setItem('viewMode', mode);
+          },
+          setInventoryCurrentTab(tab: string) {
+            this.inventoryCurrentTab = tab;
+            localStorage.setItem('inventoryCurrentTab', tab);
+          },
+          setInventoryViewMode(mode: ViewModeType) {
+            this.inventoryViewMode = mode;
+            localStorage.setItem('inventoryViewMode', mode);
+          },
+          setPlanningTeamsViewMode(mode: ViewModeType) {
+            this.planningTeamsViewMode = mode;
+            localStorage.setItem('planningTeamsViewMode', mode);
+          },
+          setPlanningJobsViewMode(mode: ViewModeType) {
+            this.planningJobsViewMode = mode;
+            localStorage.setItem('planningJobsViewMode', mode);
+          },
+
+
+
         setMainLayout(payload: any = null) {
             this.mainLayout = payload; //app , auth
         },

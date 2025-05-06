@@ -1,11 +1,11 @@
 <template>
   <div class="panel px-6 py-8 border-[#e0e6ed] dark:border-[#1b2e4b]">
     <!-- Header : selecteur de colonnes + slot actions -->
-    <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
+    <div class="flex flex-col md:flex-row justify-between items-center gap-4">
       <div
         v-if="showColumnSelector"
         ref="dropdownRef"
-        class="relative w-full md:w-72 select-wrapper"
+        class="relative mb-8 w-full md:w-72 select-wrapper"
       >
         <button
           @click="toggleDropdown"
@@ -53,7 +53,7 @@
       </div>
 
       <div class="flex-shrink-0">
-        <slot name="table-actions" />
+        <slot name="table-actions" class="mb-8" />
       </div>
     </div>
 

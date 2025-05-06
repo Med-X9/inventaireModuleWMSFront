@@ -1,12 +1,4 @@
 
-
-
-
-
-
-
-
-
 /* animation */
 @import 'animate.css';
 
@@ -65,6 +57,41 @@
     body.dark {
         @apply bg-[#060818];
     }
+
+/* form */
+
+.input-primary {
+    @apply  w-5 h-5 border border-secondary rounded bg-white accent-primary
+           checked:bg-primary checked:border-primary checked:text-white
+           focus:ring-0 focus:outline-none transition-all duration-200;
+  }
+  
+  .radio-primary {
+    @apply appearance-none w-4 h-4 border border-secondary rounded-full bg-white accent-primary
+           checked:bg-primary checked:border-primary checked:text-white
+           focus:ring-0 focus:outline-none transition-all duration-200;
+  }
+
+
+
+  .btn-modern {
+    @apply w-full flex items-center justify-center px-2 py-2 rounded text-sm font-medium shadow-lg transition-all duration-200;
+  }
+  .btn-add {
+    @apply bg-primary text-black hover:bg-primary-600;
+  }
+  .btn-remove {
+    @apply bg-secondary text-white hover:bg-secondary;
+  }
+  .btn-icon {
+    @apply w-8 h-8 flex items-center justify-center rounded-full text-xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200;
+  }
+  .badge {
+    @apply px-3 py-1 rounded-full text-sm font-medium bg-yellow-400 text-black;
+  }
+
+
+  
 
     /* Panel */
     .panel {

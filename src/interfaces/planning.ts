@@ -19,3 +19,8 @@ export interface Team {
     id: string;
     name: string;
   }
+  
+export interface TeamJobs {
+  teamId: string;
+  jobIds: string[];
+}

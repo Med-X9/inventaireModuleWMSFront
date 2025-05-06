@@ -1,12 +1,22 @@
-import { ref, watch, onMounted, toRaw } from 'vue';
+// src/composables/usePlanningManagement.ts
+import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';              // ← Ajout
 import type { Store, PlanningAction, ViewModeType } from '@/interfaces/planningManagement';
 import { planningManagementService } from '@/services/planningManagementService';
+import { useAppStore } from '@/stores';
 import IconUser from '@/components/icon/icon-user.vue';
 import IconCalendar from '@/components/icon/icon-calendar.vue';
-import { indexedDBService } from '@/services/indexedDBService';
 
 export function usePlanningManagement() {
-  const viewMode = ref<ViewModeType>('table');
+  const appStore = useAppStore();
+  const router = useRouter();                         // ← Création de l’instance du router
+
+  // viewMode dans Pinia (persisté en localStorage)
+  const viewMode = computed<ViewModeType>({
+    get: () => appStore.viewMode,
+    set: (mode: ViewModeType) => appStore.setViewMode(mode),
+  });
+
   const selectedStore = ref<Store | null>(null);
   const stores = ref<Store[]>([]);
   const loading = ref(false);
@@ -19,8 +29,12 @@ export function usePlanningManagement() {
     {
       label: 'Affecter',
       icon: IconUser,
-      handler: async (store: Store) => {
-        await planningManagementService.assignTeams(store.id);
+      handler: (store: Store) => {
+        // ← Navigation vers ta page d’affectation
+        router.push({
+          name: 'inventory-affecter',
+          query: { storeId: store.id.toString() }
+        });
       },
     },
     {
@@ -32,30 +46,20 @@ export function usePlanningManagement() {
     },
   ];
 
-  const storageKey = 'planning-management';
-
-  onMounted(async () => {
-    const saved = await indexedDBService.getState(storageKey);
-    if (saved?.viewMode) viewMode.value = saved.viewMode;
-    await fetchStores();
-  });
-
-  watch(viewMode, async mode => {
-    await indexedDBService.saveState({ viewMode: toRaw(mode) }, storageKey);
-  });
-
-  const fetchStores = async () => {
+  async function fetchStores() {
     loading.value = true;
     try {
       stores.value = await planningManagementService.getStores();
     } finally {
       loading.value = false;
     }
-  };
+  }
 
-  const selectStore = (store: Store) => {
+  onMounted(fetchStores);
+
+  function selectStore(store: Store) {
     selectedStore.value = store;
-  };
+  }
 
   return {
     viewMode,

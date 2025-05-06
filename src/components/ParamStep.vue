@@ -1,5 +1,5 @@
 <template>
-  <div class="px-4">
+  <div >
     <FormBuilder
       :modelValue="local"
       :fields="formFields"
@@ -15,6 +15,7 @@ import { reactive, watch, computed } from 'vue';
 import FormBuilder from '@/components/Form/FormBuilder.vue';
 import type { ContageConfig } from '@/interfaces/inventoryCreation';
 import type { FieldConfig } from '@/interfaces/form';
+import { required, selectRequired } from '@/utils/validate';
 
 const props = defineProps<{
   modelValue: ContageConfig;

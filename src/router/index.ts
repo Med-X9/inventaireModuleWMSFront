@@ -37,6 +37,12 @@ const routes: RouteRecordRaw[] = [
       import(/* webpackChunkName: "inventory-planning" */ '../views/Inventory/Planning.vue')
   },
   {
+    path: '/inventory/affecter',
+    name: 'inventory-affecter',               // <— <-- nouvelle route
+    component: () =>
+      import(/* webpackChunkName: "inventory-affecter" */ '../views/Inventory/Affecter.vue')
+  },
+  {
     path: '/inventory/:id/edit',
     name: 'inventory-edit',
     component: () => import('../views/Inventory/InventoryEdit.vue')

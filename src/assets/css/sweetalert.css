@@ -40,7 +40,7 @@ body.swal2-toast-shown .swal2-container.toast {
 
 .swal2-popup .swal2-styled.swal2-cancel {
     background-color: #fff !important;
-    color: #4361ee;
+
     border: 1px solid #e8e8e8;
     box-shadow: none;
     padding: 7px 20px;
