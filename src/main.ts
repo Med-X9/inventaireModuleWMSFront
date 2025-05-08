@@ -61,7 +61,7 @@ import {
   PaginationModule,
   ValidationModule,    // pour lister précisément les modules manquants en dev
   EventApiModule,      // <-- module pour api.addEventListener
-  CellStyleModule      // <-- ajouté pour activer la validation et voir les messages d’erreur détaillés
+  CellStyleModule,     
 } from 'ag-grid-community';
 
 ModuleRegistry.registerModules([

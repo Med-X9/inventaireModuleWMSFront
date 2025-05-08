@@ -1,8 +1,82 @@
+<template>
+  <div class="px-6">
+    <ul class="flex space-x-2 rtl:space-x-reverse">
+        <li>
+          <router-link
+            :to="{ name: 'inventory-list' }"
+            class="text-primary hover:underline"
+          >
+            Gestion d’inventaire
+          </router-link>
+        </li>
+        <li class="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
+          <span>gestion-des-plannings</span>
+        </li>
+      </ul>
+    <!-- Toggle Buttons -->
+    <div class="flex justify-end mb-6">
+      <ToggleButtons v-model="viewMode" :options="viewOptions" />
+    </div>
+
+    <!-- Loading State -->
+    <div v-if="loading" class="flex justify-center items-center h-64">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+    </div>
+
+    <!-- Content -->
+    <template v-else>
+      <!-- Table View -->
+      <div v-if="viewMode === 'table'" class="animate-fade-in">
+        <DataTable
+          :columns="columns"
+          :rowDataProp="stores"
+          :actions="actions"
+          :pagination="true"
+          :enableFiltering="true"
+          :showColumnSelector="false"
+          storageKey="planning_table"
+        />
+      </div>
+
+      <!-- Grid View -->
+      <GridView
+        v-else
+        :data="stores"
+        titleField="store_name"
+        :selectedItem="selectedStore"
+        :onItemClick="handleItemClick"
+        :enableStats="true"
+        :stats="[
+          { label: 'Équipes', value: 'teams_count', suffix: 'équipes' },
+          { label: 'Jobs', value: 'jobs_count', suffix: 'jobs' }
+        ]"
+        :enableActions="true"
+        :actions="[
+          {
+            label: actions[0].label,
+            icon: IconUser,
+            handler: handleAssignTeams,
+            variant: 'primary'
+          },
+          {
+            label: actions[1].label,
+            icon: IconCalendar,
+            handler: handlePlanningAction,
+            variant: 'secondary'
+          }
+        ]"
+      >
+        <template #header>
+          <h2 class="text-xl font-semibold mb-6 text-gray-800 flex items-center">
+            Magasins
+          </h2>
+        </template>
+      </GridView>
+    </template>
+  </div>
+</template>
+
 <script setup lang="ts">
-import { onMounted } from 'vue';
-import { useRouter } from 'vue-router';
-
-
 
 import DataTable from '@/components/DataTable/DataTable.vue';
 import ToggleButtons from '@/components/ToggleButtons/ToggleButtons.vue';
@@ -66,71 +140,6 @@ const handlePlanningAction = (item: GridDataItem) => {
   }
 };
 </script>
-
-<template>
-  <div class="px-6">
-    <!-- Toggle Buttons -->
-    <div class="flex justify-end mb-6">
-      <ToggleButtons v-model="viewMode" :options="viewOptions" />
-    </div>
-
-    <!-- Loading State -->
-    <div v-if="loading" class="flex justify-center items-center h-64">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-    </div>
-
-    <!-- Content -->
-    <template v-else>
-      <!-- Table View -->
-      <div v-if="viewMode === 'table'" class="animate-fade-in">
-        <DataTable
-          :columns="columns"
-          :rowDataProp="stores"
-          :actions="actions"
-          :pagination="true"
-          :enableFiltering="true"
-          :showColumnSelector="false"
-          storageKey="planning_table"
-        />
-      </div>
-
-      <!-- Grid View -->
-      <GridView
-        v-else
-        :data="stores"
-        titleField="store_name"
-        :selectedItem="selectedStore"
-        :onItemClick="handleItemClick"
-        :enableStats="true"
-        :stats="[
-          { label: 'Équipes', value: 'teams_count', suffix: 'équipes' },
-          { label: 'Jobs', value: 'jobs_count', suffix: 'jobs' }
-        ]"
-        :enableActions="true"
-        :actions="[
-          {
-            label: actions[0].label,
-            icon: IconUser,
-            handler: handleAssignTeams,
-            variant: 'primary'
-          },
-          {
-            label: actions[1].label,
-            icon: IconCalendar,
-            handler: handlePlanningAction,
-            variant: 'secondary'
-          }
-        ]"
-      >
-        <template #header>
-          <h2 class="text-xl font-semibold mb-6 text-gray-800 flex items-center">
-            Magasins
-          </h2>
-        </template>
-      </GridView>
-    </template>
-  </div>
-</template>
 
 <style scoped>
 .animate-fade-in {

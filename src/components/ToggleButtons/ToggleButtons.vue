@@ -18,7 +18,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="bg-secondary-light p-1 rounded-lg shadow-sm">
+  <div class="bg-secondary-light dark:bg-dark-bg dark:border-dark-borde p-1 rounded-lg shadow-sm">
     <button
       v-for="option in options"
       :key="option.value"
@@ -26,7 +26,7 @@ const emit = defineEmits<{
       :class="[
         'px-4 py-2 rounded-md transition-all duration-300 transform',
         modelValue === option.value
-          ? 'bg-white text-primary shadow-sm scale-100'
+          ? 'bg-white dark:bg-dark-light/10 text-primary shadow-sm scale-100'
           : 'text-secondary hover:text-secondary-dark scale-95 hover:scale-100'
       ]"
     >

@@ -21,6 +21,8 @@ module.exports = {
         info:      { DEFAULT: '#2196f3', light: '#e7f7ff', 'dark-light': 'rgba(33,150,243,.15)' },
         dark:      { DEFAULT: '#3b3f5c', light: '#eaeaec', 'dark-light': 'rgba(59,63,92,.15)' },
         black:     { DEFAULT: '#0e1726', light: '#e3e4eb', 'dark-light': 'rgba(14,23,38,.15)' },
+        'dark-bg':    '#1b2e4b',   
+        'dark-border':'#253b5c',
         white:     { DEFAULT: '#ffffff', light: '#e0e6ed', dark: '#888ea8' },
       },
       fontFamily: { nunito: ['Nunito', 'sans-serif'] },

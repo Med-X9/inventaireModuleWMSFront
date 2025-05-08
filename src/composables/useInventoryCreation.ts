@@ -1,22 +1,19 @@
 import { ref, reactive, watch, onMounted } from 'vue';
-import type { InventoryCreationState, ContageConfig } from '@/interfaces/inventoryCreation';
 import { indexedDBService } from '@/services/indexedDBService';
 import { alertService } from '@/services/alertService';
 import { inventoryCreationService } from '@/services/inventoryCreationService';
+import type { InventoryCreationState, ContageConfig } from '@/interfaces/inventoryCreation';
+import { validateCreation } from '@/utils/validate';
 
 export function useInventoryCreation() {
   const currentStep = ref<number>(0);
   const loaded = ref<boolean>(false);
+  const isValid = ref<boolean>(false);
 
   const state = reactive<InventoryCreationState>({
     step1Data: { libelle: '', date: '', type: 'Inventaire Général' },
     step2Data: { compte: '', magasin: [] },
-    contages: Array(3).fill(null).map<ContageConfig>(() => ({
-      mode: '',
-      isVariant: false,
-      useScanner: false,
-      useSaisie: false,
-    })),
+    contages: Array(3).fill(null).map<ContageConfig>(() => ({ mode: '', isVariant: false, useScanner: false, useSaisie: false })),
     currentStep: 0,
   });
 
@@ -25,90 +22,125 @@ export function useInventoryCreation() {
   }
 
   async function saveState() {
-    try {
-      const snapshot = {
-        step1Data: state.step1Data,
-        step2Data: state.step2Data,
-        contages: state.contages,
-        currentStep: currentStep.value,
-      };
-      const plain = JSON.parse(JSON.stringify(snapshot));
-      await indexedDBService.saveState(plain, 'creation');
-    } catch (err) {
-      console.error('Erreur saveState:', err);
-    }
+    const snapshot = {
+      step1Data: state.step1Data,
+      step2Data: state.step2Data,
+      contages: state.contages,
+      currentStep: currentStep.value,
+    };
+    await indexedDBService.saveState(JSON.parse(JSON.stringify(snapshot)), 'creation');
   }
 
   async function loadState() {
-    try {
-      const saved = await indexedDBService.getState('creation');
-      if (saved) {
-        // Restaurer pas à pas pour conserver la réactivité
-        state.step1Data = saved.step1Data;
-        state.step2Data = saved.step2Data;
-        state.contages.splice(0, state.contages.length, ...saved.contages);
-        currentStep.value = saved.currentStep ?? 0;
-      }
-    } catch (err) {
-      console.error('Erreur loadState:', err);
-    } finally {
-      loaded.value = true;
+    const saved = await indexedDBService.getState('creation');
+    if (saved) {
+      state.step1Data = saved.step1Data;
+      state.step2Data = saved.step2Data;
+      state.contages.splice(0, state.contages.length, ...saved.contages);
+      currentStep.value = saved.currentStep ?? 0;
     }
+    loaded.value = true;
   }
 
   async function cancelCreation() {
-    const result = await alertService.confirm({
-      title: 'Annuler la création',
-      text: 'Voulez-vous vraiment annuler ?',
-    });
+    const result = await alertService.confirm({ title: 'Annuler la création', text: 'Voulez-vous vraiment annuler ?' });
     if (result.isConfirmed) {
       await indexedDBService.clearState('creation');
       state.step1Data = { libelle: '', date: '', type: 'Inventaire Général' };
       state.step2Data = { compte: '', magasin: [] };
-      const resetContages = Array(3).fill(null).map<ContageConfig>(() => ({
-        mode: '',
-        isVariant: false,
-        useScanner: false,
-        useSaisie: false,
-      }));
-      state.contages.splice(0, state.contages.length, ...resetContages);
+      state.contages.splice(0, state.contages.length, ...Array(3).fill(null).map<ContageConfig>(() => ({ mode: '', isVariant: false, useScanner: false, useSaisie: false })));
       currentStep.value = 0;
       await saveState();
     }
   }
 
+  async function validateCurrentStep(): Promise<boolean> {
+    const validation = validateCreation(state);
+    const currentStepValidation = getCurrentStepValidation(validation);
+    
+    if (!currentStepValidation.isValid) {
+      await alertService.error({
+        title: 'Validation',
+        text: currentStepValidation.errors.join('\n')
+      });
+      return false;
+    }
+    
+    return true;
+  }
+
+  function getCurrentStepValidation(validation: ReturnType<typeof validateCreation>) {
+    switch (currentStep.value) {
+      case 0:
+        return {
+          isValid: Object.keys(validation.step1Errors).length === 0,
+          errors: Object.values(validation.step1Errors)
+        };
+      case 1:
+        return {
+          isValid: Object.keys(validation.step2Errors).length === 0,
+          errors: Object.values(validation.step2Errors)
+        };
+      default:
+        const contageIndex = currentStep.value - 2;
+        return {
+          isValid: !validation.contageResult.fieldErrors.mode[contageIndex],
+          errors: validation.contageResult.fieldErrors.mode.filter((_, i) => i === contageIndex)
+        };
+    }
+  }
+
   async function onStepComplete(step: number, data: any) {
-    if (step === 0) state.step1Data = { ...data };
-    else if (step === 1) state.step2Data = { ...data };
+    if (!await validateCurrentStep()) {
+      return false;
+    }
+
+    if (step === 0) {
+      state.step1Data = { ...data };
+    } else if (step === 1) {
+      state.step2Data = { ...data };
+    } else {
+      state.contages[step-2] = { ...data };
+    }
+
     currentStep.value = step + 1;
     await saveState();
+    return true;
   }
 
   async function onComplete() {
-    if (!inventoryCreationService.validateContages(state)) {
-      await alertService.error({ text: 'Configuration invalide.' });
+    if (!await validateCurrentStep()) {
       return;
     }
-      // Affichage dans la console pour indiquer le succès de la création
-      console.log('Création d\'inventaire réussie.');
+
     await alertService.success({ text: 'Inventaire enregistré localement.' });
     await indexedDBService.clearState('creation');
     currentStep.value = 0;
     await saveState();
   }
 
-  watch(state, saveState, { deep: true });
-  watch(currentStep, saveState);
+  watch(state, () => {
+    const validation = validateCreation(state);
+    isValid.value = getCurrentStepValidation(validation).isValid;
+    saveState();
+  }, { deep: true });
+
+  watch(currentStep, () => {
+    const validation = validateCreation(state);
+    isValid.value = getCurrentStepValidation(validation).isValid;
+    saveState();
+  });
 
   onMounted(loadState);
 
-  return {
-    state,
-    currentStep,
-    availableModesForStep,
-    onStepComplete,
-    onComplete,
-    cancelCreation,
+  return { 
+    state, 
+    currentStep, 
+    availableModesForStep, 
+    onStepComplete, 
+    onComplete, 
+    cancelCreation, 
     loaded,
+    isValid 
   };
 }

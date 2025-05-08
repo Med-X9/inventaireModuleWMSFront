@@ -1,11 +1,8 @@
 import type { InventoryCreationState, ContageMode } from '@/interfaces/inventoryCreation';
-import { validateContages } from '@/utils/validate';
+
 
 class InventoryCreationService {
-  validateContages(state: InventoryCreationState): boolean {
-    const validation = validateContages(state.contages);
-    return validation.isValid;
-  }
+ 
 
   getAvailableModesForStep(
     state: InventoryCreationState,

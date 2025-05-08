@@ -1,38 +1,53 @@
 <template>
-  <div class="mx-auto h-full panel px-6 py-6">
+  <div class="mx-auto h-full panel px-6 py-4">
     <FormWizard
       ref="wizard"
       :startIndex="internalStep"
       @on-change="onChange"
-      @on-complete="onComplete"
-      :beforeChange="validateCurrentStep"
+      @on-complete="handleFinishWizard"
+      :before-change="beforeChange"
       :color="color"
       back-button-text="Précédent"
       next-button-text="Suivant"
-      finish-button-text="Créer"
+      class="circle"
+      :finish-button-text="props.finishButtonText || 'Créer'"
     >
-      <!-- Slot Finish personnalisé -->
-      <template #finish="{ nextTab, isLastStep, fillButtonStyle }">
+      <!-- Bouton Suivant -->
+      <template #next="{ nextTab, fillButtonStyle }">
         <SubmitButton
           type="button"
           :loading="isSubmitting"
-          :disabled="isSubmitting"
+          :disabled="!props.isValid || isSubmitting"
           :style="fillButtonStyle"
-          :label="isLastStep ? 'Créer' : 'Suivant'"
-          @click="handleFinish(nextTab, isLastStep)"
+          label="Suivant"
+          @click.stop="handleNext(nextTab)"
         />
       </template>
 
-      <!-- Contenu des étapes -->
+      <!-- Bouton Créer -->
+      <template #finish="{ finishWizard, fillButtonStyle }">
+        <SubmitButton
+          type="button"
+          :loading="isSubmitting"
+          :disabled="!props.isValid || isSubmitting"
+          :style="fillButtonStyle"
+          :label="props.finishButtonText || 'Créer'"
+          @click.stop="handleFinish(finishWizard)"
+        />
+      </template>
+
+      <!-- Contenu dynamique des étapes -->
       <TabContent
         v-for="(step, idx) in steps"
         :key="idx"
         :title="step.title"
         :custom-icon="step.icon"
-        class="wizard-step px-6 py-3"
+        class="wizard-step md:px-6 py-1"
       >
-        <div class="shadow bg-gray-50 dark:bg-white-dark/10 rounded-md space-y-3 p-10">
-          <h2 class="text-xl px-4 font-semibold text-gray-800 mb-6">{{ step.title }}</h2>
+        <div class="shadow bg-gray-50 dark:bg-[#0e1726]  rounded-md space-y-3 p-10">
+          <h2 class="text-xl px-4 font-semibold dark:text-white-light  text-gray-800 mb-6">
+            {{ step.title }}
+          </h2>
           <slot :name="`step-${idx}`" />
         </div>
       </TabContent>
@@ -41,70 +56,60 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, toRefs } from 'vue';
 import { FormWizard, TabContent } from 'vue3-form-wizard';
 import SubmitButton from '@/components/Form/SubmitButton.vue';
+import type { Step } from '@/interfaces/wizard';
 import 'vue3-form-wizard/dist/style.css';
-
-type Step = { title: string; icon?: string };
 
 const props = defineProps<{
   steps: Step[];
   color?: string;
-  beforeChange?: (prev: number, next: number) => boolean | Promise<boolean>;
   currentStep?: number;
+  isValid: boolean;
+  beforeChange: (prev: number, next: number) => boolean | Promise<boolean>;
+  finishButtonText?: string;
 }>();
+
 const emit = defineEmits<{
   (e: 'complete'): void;
   (e: 'update:current-step', step: number): void;
 }>();
 
-// Références
+const { beforeChange } = toRefs(props);
 const wizard = ref<InstanceType<typeof FormWizard> | null>(null);
+// État de soumission pour bloquer le bouton
 const isSubmitting = ref(false);
 
-// Synchronisation de l’étape
 const internalStep = computed(() => props.currentStep ?? 0);
 
-// Emission on-change
 function onChange(prev: number, next: number) {
   emit('update:current-step', next);
 }
 
-// Finale
-function onComplete() {
+async function handleNext(nextTab: () => void) {
+  const allow = await beforeChange.value!(internalStep.value, internalStep.value + 1);
+  if (!allow) return;
+  isSubmitting.value = true;
+  nextTab();
+  // reset de isSubmitting dans on-change ou on-complete
+}
+
+async function handleFinish(finishWizard: () => void) {
+  const allow = await beforeChange.value!(internalStep.value, internalStep.value + 1);
+  if (!allow) return;
+  isSubmitting.value = true;
+  finishWizard();
+  // on-complete du FormWizard déclenche handleFinishWizard
+}
+
+// Réinitialise isSubmitting quand le wizard signale la complétion
+function handleFinishWizard() {
+  isSubmitting.value = false;
   emit('complete');
 }
-
-// Validation avant chaque changement d’onglet
-async function validateCurrentStep(prev: number, next: number): Promise<boolean> {
-  // trouve le FormBuilder dans la slot step prev
-  const formBuilder = wizard.value
-    ? (wizard.value.$el.querySelector(`[slot="step-${prev}"] form-builder`)?.__vueParentComponent?.proxy)
-    : null;
-  if (formBuilder?.validate) {
-    return formBuilder.validate();
-  }
-  return true;
-}
-
-// Clic sur “Suivant” ou “Créer”
-async function handleFinish(nextTab: () => void, isLast: boolean) {
-  // validation finale
-  const formBuilder = wizard.value
-    ? (wizard.value.$el.querySelector(`[slot="step-${internalStep.value}"] form-builder`)?.__vueParentComponent?.proxy)
-    : null;
-  if (formBuilder?.validate && !formBuilder.validate()) {
-    return;
-  }
-
-  isSubmitting.value = true;
-  if (isLast) {
-    await Promise.resolve(); // appel API
-    onComplete();
-  } else {
-    nextTab();
-  }
-  setTimeout(() => { isSubmitting.value = false; }, 3000);
-}
 </script>
+
+<style scoped>
+/* Vos styles ici */
+</style>

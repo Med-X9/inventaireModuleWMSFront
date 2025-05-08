@@ -39,7 +39,7 @@
 }
 .vue-form-wizard.circle .wizard-icon-circle,
 .vue-form-wizard.square .wizard-icon-circle {
-  @apply !w-16 !h-16 !border-[#f3f2ee] dark:!border-[#1b2e4b] bg-white dark:bg-[#253b5c];
+  @apply !w-14 !h-14 !border-[#f3f2ee] dark:!border-[#1b2e4b] bg-white dark:bg-[#253b5c];
 }
 .vue-form-wizard .wizard-navigation .wizard-progress-with-circle {
   @apply !top-[30px];

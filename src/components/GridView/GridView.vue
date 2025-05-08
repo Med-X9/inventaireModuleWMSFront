@@ -57,32 +57,32 @@ const gridColsClass = computed(() => {
 
 // Color classes for actions
 const getActionColorClasses = (variant: 'primary' | 'secondary' = 'primary') => ({
-  primary: 'text-primary border-primary hover:bg-primary-light',
-  secondary: 'text-secondary border-secondary hover:bg-secondary-light',
+  primary: 'text-primary border-primary hover:bg-primary hover:text-white',
+  secondary: 'text-secondary dark:text-white hover:text-white border-secondary hover:bg-secondary',
 }[variant]);
 </script>
 
 <template>
-  <div class="bg-white rounded-xl shadow-md p-6">
+  <div class="panel ">
     <slot name="header"></slot>
 
     <div :class="gridColsClass">
       <div
         v-for="item in data"
         :key="String(item.id || JSON.stringify(item))"
-        class="group border border-gray-200 p-5 rounded-lg cursor-pointer transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1"
+        class="group border dark:border-dark-border dark:text-white-light border-gray-200 p-5 rounded-lg cursor-pointer transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1"
         :class="{ 'bg-bg-white border-secondary shadow-md': selectedItem?.id === item.id }"
         @click="onItemClick?.(item)"
       >
-        <h3 class="font-semibold text-lg text-secondary group-hover:text-primary transition-colors duration-300">
+        <h3 class="font-semibold text-lg dark:text-white-dark text-secondary group-hover:text-primary transition-colors duration-300">
           {{ String(item[titleField]) }}
         </h3>
 
         <div
           v-if="enableStats && stats.length"
-          class="mt-4 pt-3 border-t border-gray-100 grid grid-cols-2 gap-4 text-sm"
+          class="mt-4 pt-3 border-t dark:text-white-dark border-gray-100 grid grid-cols-2 gap-4 text-sm"
         >
-          <div v-for="(stat, index) in stats" :key="index" class="text-gray-600">
+          <div v-for="(stat, index) in stats" :key="index" class="text-gray-600 dark:text-white-dark">
             <span class="font-medium">{{ String(item[stat.value]) }}</span>
             {{ stat.suffix || '' }}
           </div>

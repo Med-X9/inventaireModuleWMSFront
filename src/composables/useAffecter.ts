@@ -1,4 +1,3 @@
-// src/composables/useAffecter.ts
 import { ref, computed, watch, onMounted } from 'vue';
 import type { Team, Job } from '@/interfaces/planning';
 import type { FieldConfig } from '@/interfaces/form';
@@ -30,114 +29,210 @@ export function useAffecter() {
 
   const formFields1 = computed<FieldConfig[]>(() => [
     {
-      key: 'team', label: 'Sélectionner une équipe', type: 'select',
+      key: 'team', 
+      label: 'Sélectionner une équipe', 
+      type: 'select',
       options: teams.map(t => ({ label: t.name, value: t.id })),
-      multiple: false, searchable: true, clearable: true,
-      props: { placeholder: 'Rechercher...' },
+      multiple: false, 
+      searchable: true, 
+      clearable: true,
+      props: { placeholder: 'Rechercher une équipe...' },
       validators: [{ key: 'required', fn: v => !!v, msg: 'Équipe requise' }]
     },
     {
-      key: 'jobs', label: 'Sélectionner les jobs', type: 'button-group',
+      key: 'jobs', 
+      label: 'Sélectionner les zones', 
+      type: 'button-group',
       options: availableJobs1.value.map(j => ({ label: j.locations.join(', '), value: j.id })),
-      validators: [{ key: 'required', fn: v => Array.isArray(v) && v.length > 0, msg: 'Au moins un job' }]
+      validators: [{ key: 'required', fn: v => Array.isArray(v) && v.length > 0, msg: 'Au moins une zone requise' }]
     }
   ]);
 
   const formFields2 = computed<FieldConfig[]>(() => [
     {
-      key: 'team', label: 'Sélectionner une équipe', type: 'select',
+      key: 'team', 
+      label: 'Sélectionner une équipe', 
+      type: 'select',
       options: teams.map(t => ({ label: t.name, value: t.id })),
-      multiple: false, searchable: true, clearable: true,
-      props: { placeholder: 'Rechercher...' },
+      multiple: false, 
+      searchable: true, 
+      clearable: true,
+      props: { placeholder: 'Rechercher une équipe...' },
       validators: [{ key: 'required', fn: v => !!v, msg: 'Équipe requise' }]
     },
     {
-      key: 'jobs', label: 'Sélectionner les jobs', type: 'button-group',
+      key: 'jobs', 
+      label: 'Sélectionner les zones', 
+      type: 'button-group',
       options: availableJobs2.value.map(j => ({ label: j.locations.join(', '), value: j.id })),
-      validators: [{ key: 'required', fn: v => Array.isArray(v) && v.length > 0, msg: 'Au moins un job' }]
+      validators: [{ key: 'required', fn: v => Array.isArray(v) && v.length > 0, msg: 'Au moins une zone requise' }]
     }
   ]);
 
-  function handleTeamSelect1() {
-    const { team, jobs: selJobs } = counting1Form.value;
-    if (!team) return;
-    if (!selectedTeams1.value.find(t => t.id === team)) {
-      selectedTeams1.value.push(teams.find(t => t.id === team)!);
-      teamJobs1.value.set(team, selJobs.slice());  // Map.set :contentReference[oaicite:4]{index=4}
+  async function saveState() {
+    try {
+      const snapshot = {
+        counting1Form: counting1Form.value,
+        counting2Form: counting2Form.value,
+        selectedTeams1: selectedTeams1.value.map(t => t.id),
+        selectedTeams2: selectedTeams2.value.map(t => t.id),
+        teamJobs1: Array.from(teamJobs1.value.entries()),
+        teamJobs2: Array.from(teamJobs2.value.entries()),
+        currentStep: currentStep.value
+      };
+      await indexedDBService.saveState(JSON.parse(JSON.stringify(snapshot)), STORAGE_KEY);
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde:', error);
+      await alertService.error({
+        title: 'Erreur',
+        text: 'Impossible de sauvegarder l\'état actuel.'
+      });
     }
-    counting1Form.value = { team: '', jobs: [] };
-  }
-  function handleTeamSelect2() {
-    const { team, jobs: selJobs } = counting2Form.value;
-    if (!team) return;
-    if (!selectedTeams2.value.find(t => t.id === team)) {
-      selectedTeams2.value.push(teams.find(t => t.id === team)!);
-      teamJobs2.value.set(team, selJobs.slice());
-    }
-    counting2Form.value = { team: '', jobs: [] };
   }
 
-  function removeTeam1(id: string) {
+  async function loadState() {
+    try {
+      const saved = await indexedDBService.getState(STORAGE_KEY);
+      if (saved) {
+        counting1Form.value = saved.counting1Form;
+        counting2Form.value = saved.counting2Form;
+        teamJobs1.value = new Map(saved.teamJobs1);
+        teamJobs2.value = new Map(saved.teamJobs2);
+        selectedTeams1.value = saved.selectedTeams1.map((id: string) => teams.find(t => t.id === id)!);
+        selectedTeams2.value = saved.selectedTeams2.map((id: string) => teams.find(t => t.id === id)!);
+        currentStep.value = saved.currentStep;
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement:', error);
+      await alertService.error({
+        title: 'Erreur',
+        text: 'Impossible de charger votre brouillon.'
+      });
+    } finally {
+      loaded.value = true;
+    }
+  }
+
+  async function handleTeamSelect1() {
+    const { team, jobs: selJobs } = counting1Form.value;
+    if (!team || !selJobs.length) {
+      await alertService.error({ 
+        title: 'Validation', 
+        text: !team ? 'Sélectionnez une équipe.' : 'Sélectionnez au moins une zone.' 
+      });
+      return;
+    }
+
+    if (selectedTeams1.value.find(t => t.id === team)) {
+      await alertService.error({ 
+        title: 'Validation', 
+        text: 'Cette équipe est déjà affectée au premier comptage.' 
+      });
+      return;
+    }
+
+    selectedTeams1.value.push(teams.find(t => t.id === team)!);
+    teamJobs1.value.set(team, selJobs.slice());
+    counting1Form.value = { team: '', jobs: [] };
+    await saveState();
+  }
+
+  async function handleTeamSelect2() {
+    const { team, jobs: selJobs } = counting2Form.value;
+    if (!team || !selJobs.length) {
+      await alertService.error({ 
+        title: 'Validation', 
+        text: !team ? 'Sélectionnez une équipe.' : 'Sélectionnez au moins une zone.' 
+      });
+      return;
+    }
+
+    if (selectedTeams2.value.find(t => t.id === team)) {
+      await alertService.error({ 
+        title: 'Validation', 
+        text: 'Cette équipe est déjà affectée au deuxième comptage.' 
+      });
+      return;
+    }
+
+    selectedTeams2.value.push(teams.find(t => t.id === team)!);
+    teamJobs2.value.set(team, selJobs.slice());
+    counting2Form.value = { team: '', jobs: [] };
+    await saveState();
+  }
+
+  async function removeTeam1(id: string) {
     selectedTeams1.value = selectedTeams1.value.filter(t => t.id !== id);
     teamJobs1.value.delete(id);
+    await saveState();
   }
-  function removeTeam2(id: string) {
+
+  async function removeTeam2(id: string) {
     selectedTeams2.value = selectedTeams2.value.filter(t => t.id !== id);
     teamJobs2.value.delete(id);
+    await saveState();
   }
-  function clearAll1() { selectedTeams1.value = []; teamJobs1.value.clear(); }
-  function clearAll2() { selectedTeams2.value = []; teamJobs2.value.clear(); }
+
+  async function clearAll1() {
+    const result = await alertService.confirm({
+      title: 'Confirmation',
+      text: 'Voulez-vous vraiment retirer toutes les équipes du premier comptage ?'
+    });
+    
+    if (result.isConfirmed) {
+      selectedTeams1.value = [];
+      teamJobs1.value.clear();
+      await saveState();
+    }
+  }
+
+  async function clearAll2() {
+    const result = await alertService.confirm({
+      title: 'Confirmation',
+      text: 'Voulez-vous vraiment retirer toutes les équipes du deuxième comptage ?'
+    });
+    
+    if (result.isConfirmed) {
+      selectedTeams2.value = [];
+      teamJobs2.value.clear();
+      await saveState();
+    }
+  }
 
   function getJobLocation(id: string) {
     return jobs.find(j => j.id === id)?.locations.join(', ') || '';
   }
 
-  function validateStep(prev: number) {
+  async function validateStep(prev: number) {
     if (prev === 0 && !selectedTeams1.value.length) {
-      alert('Ajoutez au moins une équipe au 1ᵉʳ comptage');
+      await alertService.error({ 
+        title: 'Validation', 
+        text: 'Affectez au moins une équipe au premier comptage.' 
+      });
       return false;
     }
     if (prev === 1 && !selectedTeams2.value.length) {
-      alert('Ajoutez au moins une équipe au 2ᵉ comptage');
+      await alertService.error({ 
+        title: 'Validation', 
+        text: 'Affectez au moins une équipe au deuxième comptage.' 
+      });
       return false;
     }
     return true;
   }
 
-  async function saveState() {
-    const snapshot = {
-      counting1Form: counting1Form.value,
-      counting2Form: counting2Form.value,
-      selectedTeams1: selectedTeams1.value.map(t => t.id),
-      selectedTeams2: selectedTeams2.value.map(t => t.id),
-      teamJobs1: Array.from(teamJobs1.value.entries()),    // Map.entries :contentReference[oaicite:5]{index=5}
-      teamJobs2: Array.from(teamJobs2.value.entries()),
-      currentStep: currentStep.value
-    };
-    await indexedDBService.saveState(JSON.parse(JSON.stringify(snapshot)), STORAGE_KEY);
-  }
-
-  async function loadState() {
-    const saved = await indexedDBService.getState(STORAGE_KEY);
-    if (saved) {
-      counting1Form.value = saved.counting1Form;
-      counting2Form.value = saved.counting2Form;
-      teamJobs1.value = new Map(saved.teamJobs1);
-      teamJobs2.value = new Map(saved.teamJobs2);
-      selectedTeams1.value = saved.selectedTeams1.map((id: string) => teams.find(t => t.id === id)!);
-      selectedTeams2.value = saved.selectedTeams2.map((id: string) => teams.find(t => t.id === id)!);
-      currentStep.value = saved.currentStep;
-    }
-    loaded.value = true;
-  }
-
   async function cancelAffecter() {
-    const res = await alertService.confirm({ title: 'Annuler', text: 'Effacer l’état ?' });
+    const res = await alertService.confirm({ 
+      title: 'Annuler les affectations', 
+      text: 'Voulez-vous vraiment annuler ? Toutes les affectations seront perdues.' 
+    });
+    
     if (res.isConfirmed) {
       await indexedDBService.clearState(STORAGE_KEY);
+      await clearAll1();
+      await clearAll2();
       counting1Form.value = { team: '', jobs: [] };
       counting2Form.value = { team: '', jobs: [] };
-      clearAll1(); clearAll2();
       currentStep.value = 0;
       await saveState();
     }
@@ -148,29 +243,44 @@ export function useAffecter() {
     saveState,
     { deep: true }
   );
-  onMounted(loadState);
+
+  onMounted(async () => {
+    await loadState();
+    await saveState();
+  });
 
   return {
-    currentStep, loaded,
-    counting1Form, counting2Form,
-    formFields1, formFields2,
-    selectedTeams1, selectedTeams2,
-    teamJobs1, teamJobs2,
-    availableJobs1, availableJobs2,
-    handleTeamSelect1, handleTeamSelect2,
-    removeTeam1, removeTeam2,
-    clearAll1, clearAll2,
-    getJobLocation, validateStep,
-    cancelAffecter
+    currentStep,
+    loaded,
+    counting1Form,
+    counting2Form,
+    formFields1,
+    formFields2,
+    selectedTeams1,
+    selectedTeams2,
+    teamJobs1,
+    teamJobs2,
+    availableJobs1,
+    availableJobs2,
+    handleTeamSelect1,
+    handleTeamSelect2,
+    removeTeam1,
+    removeTeam2,
+    clearAll1,
+    clearAll2,
+    getJobLocation,
+    validateStep,
+    cancelAffecter,
+    saveState
   };
 }
 
-// Mock data (à extraire en service si besoin)
 const teams: Team[] = [
   { id: '1', name: 'Équipe A' },
   { id: '2', name: 'Équipe B' },
   { id: '3', name: 'Équipe C' }
 ];
+
 const jobs: Job[] = [
   { id: '1', locations: ['Zone A'] },
   { id: '2', locations: ['Zone B'] },

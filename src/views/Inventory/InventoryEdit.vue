@@ -1,10 +1,22 @@
 <template>
   <div>
-    <div class="flex justify-between mb-6">
-      <h1 class="text-xl font-bold">Modification d'inventaire</h1>
+    <div class="flex justify-between mb-2">
+      <ul class="flex space-x-2 rtl:space-x-reverse">
+        <li>
+          <router-link
+            :to="{ name: 'inventory-list' }"
+            class="text-primary hover:underline"
+          >
+            Gestion d’inventaire
+          </router-link>
+        </li>
+        <li class="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
+          <span>Modification d’inventaire</span>
+        </li>
+      </ul>
       <button
         @click="onCancelClick"
-        class="px-4 py-2 text-red-600 hover:text-red-700 font-medium"
+        class="px-4 py-2 text-black dark:text-white-light  border border-secondary font-medium rounded-lg transition-colors"
       >
         Annuler
       </button>
@@ -18,9 +30,11 @@
       v-else
       :steps="wizardSteps"
       v-model:current-step="currentStep"
+      :is-valid="isValid"
+      :before-change="handleStepChange"
       color="#ffc107"
-      @on-change="handleStepChange"
       @complete="onComplete"
+      finish-button-text="Modifier"
     >
       <!-- Étape 1 : infos générales -->
       <template #step-0>
@@ -61,19 +75,21 @@ import { useInventoryEdit } from '@/composables/useInventoryEdit';
 import DynamicWizard from '@/components/wizard/Wizard.vue';
 import FormBuilder from '@/components/Form/FormBuilder.vue';
 import ParamStep from '@/components/ParamStep.vue';
-import { required, date, selectRequired } from '@/utils/validate';
 import type { FieldConfig } from '@/interfaces/form';
+import { required, date, selectRequired } from '@/utils/validate';
 
 const {
   state,
   currentStep,
   loading,
   availableModesForStep,
-  onStepComplete,
+  handleStepChange,
+  isValid,
   onComplete,
   cancelEdit
 } = useInventoryEdit();
 
+// Étapes du wizard
 const wizardSteps = [
   { title: 'Modification' },
   { title: 'Comptes & Magasin' },
@@ -89,9 +105,7 @@ const formFields: FieldConfig[] = [
     label: 'Libellé',
     type: 'text',
     props: { placeholder: 'Entrer le libellé' },
-    validators: [
-      { key: 'libelle', ...required() }
-    ]
+    validators: [{ key: 'libelle', ...required() }]
   },
   {
     key: 'date',
@@ -124,9 +138,7 @@ const compteMagasinFields: FieldConfig[] = [
     props: { placeholder: 'Sélectionner un compte' },
     searchable: false,
     clearable: true,
-    validators: [
-      { key: 'compte', ...selectRequired() }
-    ]
+    validators: [{ key: 'compte', ...selectRequired() }]
   },
   {
     key: 'magasin',
@@ -137,22 +149,11 @@ const compteMagasinFields: FieldConfig[] = [
     searchable: true,
     clearable: true,
     props: { placeholder: 'Rechercher et sélectionner un magasin…' },
-    validators: [
-      { key: 'magasin', ...selectRequired() }
-    ]
+    validators: [{ key: 'magasin', ...selectRequired() }]
   }
 ];
 
-// Sauvegarde avant changement d'étape
-function handleStepChange(prev: number, next: number) {
-  let data;
-  if (prev === 0) data = state.step1Data;
-  else if (prev === 1) data = state.step2Data;
-  else data = state.contages[prev - 2];
-  onStepComplete(prev, data);
-}
-
-// Annulation (renommée pour éviter doublon)
+// Appel de l'annulation
 function onCancelClick() {
   cancelEdit();
 }

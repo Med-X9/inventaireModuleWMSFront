@@ -2,7 +2,19 @@
   <div class="space-y-6">
     <!-- En-tête -->
     <div class="flex justify-between items-center">
-      <h1 class="text-xl font-bold text-gray-800">Détail de l'inventaire</h1>
+      <ul class="flex space-x-2 rtl:space-x-reverse">
+        <li>
+          <router-link
+            :to="{ name: 'inventory-list' }"
+            class="text-primary hover:underline"
+          >
+            Gestion d’inventaire
+          </router-link>
+        </li>
+        <li class="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
+          <span>Détail de l'inventaire</span>
+        </li>
+      </ul>
       <div class="flex gap-2">
         <button
           class="px-4 py-2 bg-primary hover:bg-primary-600 text-black font-medium rounded transition-colors"

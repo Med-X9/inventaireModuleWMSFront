@@ -13,17 +13,17 @@ export class PlanningManagementService {
     return [...PlanningManagementService.MOCK_STORES];
   }
 
-  async assignTeams(storeId: number): Promise<void> {
-    await new Promise(resolve => setTimeout(resolve, 50));
-    console.log(`Assigning teams to store ${storeId}`);
-  }
+  // async assignTeams(storeId: number): Promise<void> {
+  //   await new Promise(resolve => setTimeout(resolve, 50));
+  //   console.log(`Assigning teams to store ${storeId}`);
+  // }
 
-  navigateToPlanning(storeId: number): void {
-    router.push({
-      name: 'inventory-planning',
-      params: { storeId: storeId.toString() }
-    })
-  }
+  // navigateToPlanning(storeId: number): void {
+  //   router.push({
+  //     name: 'inventory-planning',
+  //     params: { storeId: storeId.toString() }
+  //   })
+  // }
 }
 
 export const planningManagementService = new PlanningManagementService();

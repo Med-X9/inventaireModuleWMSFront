@@ -1,5 +1,5 @@
 <template>
-  <div class="panel px-6 py-8 border-[#e0e6ed] dark:border-[#1b2e4b]">
+  <div class="panel px-6 py-8">
     <!-- Header : selecteur de colonnes + slot actions -->
     <div class="flex flex-col md:flex-row justify-between items-center gap-4">
       <div
@@ -9,7 +9,7 @@
       >
         <button
           @click="toggleDropdown"
-          class="flex items-center justify-between p-2 bg-white border rounded text-sm text-gray-700 shadow-sm hover:border-gray-400 w-full"
+          class="flex items-center justify-between p-2  dark:bg-dark-bg dark:border-dark-border dark:text-white-dark  bg-white border rounded text-sm text-gray-700 shadow-sm hover:border-gray-400 w-full"
         >
           <span>Sélectionner colonnes</span>
           <svg
@@ -26,12 +26,12 @@
         </button>
         <div
           v-if="showDropdown"
-          class="absolute top-full left-0 w-full bg-white border rounded shadow-md z-10 p-2 max-h-64 overflow-y-auto"
+          class="absolute top-full left-0 w-full dark:bg-dark-bg dark:border-dark-border dark:text-white-dark bg-white border rounded shadow-md z-10 p-2 max-h-64 overflow-y-auto"
           @click.stop
         >
           <button
             @click.stop="resetVisibleFields"
-            class="flex items-center gap-2 w-full text-sm text-primary px-2 py-1 mb-3 hover:bg-gray-100"
+            class="flex items-center dark:hover:bg-dark-light/10 gap-2 w-full text-sm text-primary px-2 py-1 mb-3 hover:bg-gray-500/10"
           >
             Réinitialiser
           </button>
@@ -63,6 +63,7 @@
         class="ag-theme-alpine auto-height-grid"
         style="width: 100%;"
         domLayout="autoHeight"
+        :theme="gridTheme"
         @grid-ready="onGridReady"
         @first-data-rendered="onFirstDataRendered"
         :columnDefs="computedVisibleColumnDefs"
@@ -86,6 +87,10 @@ import type { PropType } from 'vue'
 import type { ColDef } from 'ag-grid-community'
 import type { ActionConfig } from '@/interfaces/dataTable'
 import { useDataTable } from '@/composables/useDataTable'
+import { useAppStore } from '@/stores/index'       // votre store Pinia
+import { themeQuartz, colorSchemeLightWarm, colorSchemeDarkBlue } from 'ag-grid-community' 
+import { computed } from 'vue'
+
 
 const props = defineProps({
   columns:            { type: Array as PropType<ColDef[]>, required: true },
@@ -100,6 +105,21 @@ const props = defineProps({
 })
 
 const { columns, pagination, showColumnSelector } = toRefs(props)
+// Récupération du store
+const themeStore = useAppStore()
+
+// Thèmes Quartz clair et sombre
+const themeLight = themeQuartz.withPart(colorSchemeLightWarm)
+const themeDark  = themeQuartz.withPart(colorSchemeDarkBlue)
+
+// Computed qui renvoie le thème actif
+const gridTheme = computed(() =>
+  themeStore.theme === 'dark'
+    ? themeDark
+    : themeStore.theme === 'light'
+      ? themeLight
+      : themeLight  // par défaut système, on prend clair
+)
 
 const {
   defaultColDef,

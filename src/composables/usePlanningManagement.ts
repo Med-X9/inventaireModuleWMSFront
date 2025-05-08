@@ -41,7 +41,11 @@ export function usePlanningManagement() {
       label: 'Planifier',
       icon: IconCalendar,
       handler: (store: Store) => {
-        planningManagementService.navigateToPlanning(store.id);
+        // ← Navigation vers ta page d’affectation
+        router.push({
+          name: 'inventory-planning',
+          query: { storeId: store.id.toString() }
+        });
       },
     },
   ];

@@ -1,14 +1,28 @@
 <template>
-  <div class="bg-gray-50 p-8">
+ <div>
+  <ul class="flex space-x-2 rtl:space-x-reverse">
+        <li>
+          <router-link
+            :to="{ name: 'gestion-des-plannings' }"
+            class="text-primary hover:underline"
+          >
+          gestion-des-plannings
+          </router-link>
+        </li>
+        <li class="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
+          <span>Planifier</span>
+        </li>
+      </ul>
+  <div class="py-10">
     <!-- Header -->
     <div class="mb-8 flex flex-col lg:flex-row justify-between items-start gap-8">
-      <div class="flex-1 bg-white rounded-xl shadow-sm px-6 py-4">
-        <h2 class="text-xl font-semibold text-gray-800 mb-4">Date de planification</h2>
+      <div class="flex-1 panel bg-white rounded-xl shadow-sm px-6 py-4">
+        <h2 class="text-xl   dark:text-white-dark font-semibold text-gray-800 mb-4">Date de planification</h2>
         <FormBuilder v-model="dateForm" :fields="dateFields" :columns="1" hide-submit />
       </div>
-      <div class="w-full lg:w-72 bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+      <div class="w-full lg:w-72 panel  rounded-xl shadow-sm p-6">
         <div class="text-center space-y-4">
-          <p class="text-sm text-gray-600">Confirmez ou annulez la planification</p>
+          <p class="text-sm dark:text-white-dark text-gray-600">Confirmez ou annulez la planification</p>
           <button @click="validateAll"
                   :disabled="!canValidate || isSubmitting"
                   class="w-full px-4 py-2 bg-primary text-white rounded-lg disabled:opacity-50">
@@ -25,7 +39,7 @@
     <!-- Équipes & Jobs -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
       <!-- Équipes -->
-      <section class="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+      <section class="panel rounded-xl shadow-lg p-6">
         <div class="flex justify-between mb-6">
           <h2 class="text-xl font-semibold text-gray-800">Équipes</h2>
           <button @click="showNewTeamForm = !showNewTeamForm"
@@ -81,7 +95,7 @@
       </section>
 
       <!-- Jobs -->
-      <section class="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+      <section class="panel rounded-xl shadow-lg p-6">
         <div class="flex justify-between mb-6">
           <h2 class="text-xl font-semibold text-gray-800">Jobs</h2>
           <button @click="showNewJobForm = !showNewJobForm"
@@ -133,7 +147,7 @@
               </div>
             </div>
             <div v-if="!jobs.length" class="col-span-full text-center py-12 border-dashed border-2">
-              <p class="text-gray-500 mb-2">Aucun job</p>
+              <p class="text-gray-500  mb-2">Aucun job</p>
               <button @click="showNewJobForm = true"
                       class="w-full px-4 py-2 text-secondary rounded">
                 Créer un job
@@ -144,6 +158,7 @@
       </section>
     </div>
   </div>
+ </div>
 </template>
 
 <script setup lang="ts">

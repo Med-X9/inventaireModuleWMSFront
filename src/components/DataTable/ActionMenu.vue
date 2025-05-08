@@ -1,7 +1,7 @@
 <template>
   <div ref="menu" class="relative flex h-full items-center justify-center">
     <button @click="toggle" class="flex p-1 hover:bg-gray-200 border border-gray-300 rounded-full">
-      <IconHorizontalDots class="text-secondary" />
+      <IconHorizontalDots class="text-secondary dark:text-white-dark" />
     </button>
     <teleport to="body">
       <transition name="fade">
@@ -10,18 +10,18 @@
           ref="dropdown"
           :style="dropdownStyle"
           class="absolute top-full mt-2 left-1/2 transform -translate-x-1/2
-                 bg-white border border-gray-200 rounded-md shadow-lg z-50
+                 bg-white border border-gray-200 dark:bg-dark-bg dark:border-dark-border dark:text-white-dark rounded-md shadow-lg z-50
                   divide-y divide-gray-100"
         >
           <li
             v-for="(a, i) in actions"
             :key="i"
-            class="text-sm text-secondary hover:bg-gray-100"
+            class="text-sm text-secondary  hover:bg-gray-500/10 dark:text-white dark:hover:bg-white-dark"
           >
             <a
               href="#"
               @click.prevent="handleAction(a)"
-              class="flex items-center justify-center w-full gap-2 px-3 py-2 "
+              class="flex items-center  dark:text-white justify-center w-full gap-2 px-3 py-2 "
               :class="a.class"
             >
               <component :is="a.icon" class="w-4 h-4" />

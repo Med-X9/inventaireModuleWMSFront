@@ -1,11 +1,12 @@
 <template>
-  <div >
+  <div>
     <FormBuilder
       :modelValue="local"
       :fields="formFields"
       :columns="1"
       hide-submit
       @update:modelValue="onFormBuilderUpdate"
+      @validation-change="onValidationChange"
     />
   </div>
 </template>
@@ -23,66 +24,92 @@ const props = defineProps<{
   availableModes: string[];
 }>();
 
-// Émission vers le parent de ParamStep
 const emit = defineEmits<{
   (e: 'update:modelValue', data: ContageConfig): void;
+  (e: 'validation-change', isValid: boolean): void;
 }>();
 
-// Copie locale réactive
+// Local reactive copy
 const local = reactive<ContageConfig>({ ...props.modelValue });
 
-// Champs dynamiques
-const formFields = computed<FieldConfig[]>(() => [
-  {
-    key: 'mode',
-    label: 'Mode de contage',
-    type: 'select',
-    options: props.availableModes.map(m => ({ label: m, value: m })),
-  },
-  ...((local.mode && local.mode !== 'etat de stock') ? getAdditionalFields() : []),
-]);
+// Computed fields configuration
+const formFields = computed<FieldConfig[]>(() => {
+  const fields: FieldConfig[] = [
+    {
+      key: 'mode',
+      label: 'Mode de contage',
+      type: 'select',
+      options: props.availableModes.map(m => ({ label: m, value: m })),
+      validators: [{ key: 'mode', ...selectRequired('Mode de contage requis') }]
+    }
+  ];
 
-function getAdditionalFields(): FieldConfig[] {
-  const list: FieldConfig[] = [];
-  if (local.mode === 'liste emplacement') {
-    list.push({
-      key: 'inputMethod',
-      label: 'Méthode de saisie',
-      type: 'radio',
-      options: [
-        { label: 'Scanner', value: 'scanner' },
-        { label: 'Saisie manuelle', value: 'manual' },
-      ],
-    });
-  }
-  if (['article + emplacement', 'hybride'].includes(local.mode)) {
-    list.push({ key: 'isVariant', label: 'Variantes', type: 'checkbox' });
-  }
-  return list;
-}
+  switch (local.mode) {
+    case 'liste emplacement':
+      fields.push(
+        {
+          key: 'inputMethod',
+          label: 'Méthode de saisie',
+          type: 'radio',
+          options: [
+            { label: 'Scanner', value: 'scanner' },
+            { label: 'Saisie manuelle', value: 'manual' }
+          ],
+          validators: [{ key: 'inputMethod', ...selectRequired('Méthode de saisie requise') }]
+        }
+      );
+      break;
 
-// Handler pour l'update depuis FormBuilder
+    case 'article + emplacement':
+    case 'hybride':
+      fields.push(
+        { key: 'isVariant', label: 'Variantes', type: 'checkbox' }
+      );
+      break;
+
+    // 'etat de stock' → pas d'options supplémentaires
+  }
+
+  return fields;
+});
+
+// Handle updates from FormBuilder
 function onFormBuilderUpdate(data: Record<string, unknown>) {
-  // On merge la mise à jour
   const merged = { ...local, ...(data as Partial<ContageConfig>) };
 
-  // Réajustements selon mode
+  // Reset fields based on mode
   if (merged.mode === 'etat de stock') {
-    merged.isVariant = false; merged.useScanner = false; merged.useSaisie = false;
+    merged.isVariant = false;
+    merged.useScanner = false;
+    merged.useSaisie = false;
   }
-  if (merged.inputMethod === 'scanner') {
-    merged.useScanner = true; merged.useSaisie = false;
+  else if (merged.mode === 'liste emplacement') {
+    // Convert inputMethod to useScanner/useSaisie flags
+    if (merged.inputMethod === 'scanner') {
+      merged.useScanner = true;
+      merged.useSaisie = false;
+    } else if (merged.inputMethod === 'manual') {
+      merged.useScanner = false;
+      merged.useSaisie = true;
+    }
+    merged.isVariant = false;
   }
-  if (merged.inputMethod === 'manual') {
-    merged.useScanner = false; merged.useSaisie = true;
+  else if (merged.mode === 'article + emplacement' || merged.mode === 'hybride') {
+    merged.useScanner = false;
+    merged.useSaisie = false;
+    // isVariant handled by checkbox
   }
 
-  // Met à jour local et émet vers parent
   Object.assign(local, merged);
-  emit('update:modelValue', merged as ContageConfig);
+  emit('update:modelValue', { ...merged });
 }
 
-// Mise à jour locale si parent change modelValue
+// Propagate validation state
+function onValidationChange(isValid: boolean) {
+  emit('validation-change', isValid);
+}
+
+// Keep local in sync if parent modelValue changes
 watch(
   () => props.modelValue,
   val => Object.assign(local, val),
