@@ -1,5 +1,5 @@
 <template>
-    <div class="datatable">
+    <div class="datatable panel px-6 py-8">
       <DataTable
         :columns="columns"
         :rowDataProp="inventories"

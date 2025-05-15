@@ -53,10 +53,10 @@ const routes: RouteRecordRaw[] = [
       component: () => import('../views/Inventory/InventoryDetail.vue')
     },
   {
-    path: '/inventory/gestion-des-plannings',  // Chemin de la route
-    name: 'gestion-des-plannings',  // Nom de la route
+    path: '/inventory/planning-management',  // Chemin de la route
+    name: 'planning-management',  // Nom de la route
     component: () =>
-      import(/* webpackChunkName: "gestion-des-plannings" */ '../views/Inventory/GestionDesPlannings.vue')  // Charger le composant
+      import(/* webpackChunkName: "planning-management" */ '../views/Inventory/PlanningManagement.vue')  // Charger le composant
   },
   
 

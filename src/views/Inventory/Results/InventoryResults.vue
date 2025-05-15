@@ -7,7 +7,7 @@
       v-model="filterForm"
       :fields="filterFields"
       :hide-submit="true"
-      class="mb-8"
+      class="mb-4"
       :columns="2"
     />
 
@@ -27,7 +27,7 @@
         leave-to-class="opacity-0"
       >
         <!-- Table -->
-        <div v-if="filterForm.inventory && filterForm.store" key="table">
+        <div v-if="filterForm.inventory && filterForm.store" key="table" class=" panel px-6 py-8">
           <DataTable
             :columns="columns"
             :rowDataProp="filteredResults"
@@ -37,7 +37,7 @@
             storageKey="inventory_results_table"
           />
         </div>
-
+        
         <!-- Message de sélection -->
         <div
           v-else

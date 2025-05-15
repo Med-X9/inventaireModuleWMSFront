@@ -1,7 +1,7 @@
 <template>
-  <div class="panel px-6 py-8">
+  <div>
     <!-- Header : selecteur de colonnes + slot actions -->
-    <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+    <div class="flex flex-col md:flex-row justify-between  items-end md:items-center gap-2">
       <div
         v-if="showColumnSelector"
         ref="dropdownRef"
@@ -52,7 +52,7 @@
         </div>
       </div>
 
-      <div class="flex-shrink-0">
+      <div class="flex-shrink-0 mb-8 md:mb-1">
         <slot name="table-actions" class="mb-8" />
       </div>
     </div>

@@ -1,4 +1,3 @@
-// src/composables/useInventoryEdit.ts
 import { ref, reactive, computed, onMounted, watch, toRaw } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import type { InventoryCreationState, ContageConfig } from '@/interfaces/inventoryCreation';
@@ -15,6 +14,7 @@ export function useInventoryEdit() {
 
   const currentStep = ref<number>(0);
   const loading = ref<boolean>(true);
+  const isSubmitting = ref<boolean>(false);
 
   const state = reactive<InventoryCreationState>({
     step1Data: { libelle: '', date: '', type: 'Inventaire Général' },
@@ -25,6 +25,19 @@ export function useInventoryEdit() {
 
   const availableModesForStep = (stepIndex: number): string[] =>
     inventoryEditService.getAvailableModesForStep(state, stepIndex);
+
+  async function clearState() {
+    await indexedDBService.clearState(storageKey.value);
+    state.step1Data = { libelle: '', date: '', type: 'Inventaire Général' };
+    state.step2Data = { compte: '', magasin: [] };
+    state.contages = Array(3).fill(null).map<ContageConfig>(() => ({
+      mode: '',
+      isVariant: false,
+      useScanner: false,
+      useSaisie: false
+    }));
+    currentStep.value = 0;
+  }
 
   const loadInventoryData = async () => {
     loading.value = true;
@@ -42,7 +55,6 @@ export function useInventoryEdit() {
         };
         state.step2Data = { compte: 'Compte 1', magasin: ['Magasin A'] };
 
-        // default contage settings or map from API
         state.contages[0] = { mode: 'liste emplacement', isVariant: false, useScanner: true, useSaisie: false };
         state.contages[1] = { mode: 'article + emplacement', isVariant: true, useScanner: false, useSaisie: false };
         state.contages[2] = { mode: 'liste emplacement', isVariant: false, useScanner: false, useSaisie: true };
@@ -78,12 +90,11 @@ export function useInventoryEdit() {
       text: 'Voulez-vous vraiment annuler la modification de cet inventaire ?'
     });
     if (result.isConfirmed) {
-      await indexedDBService.clearState(storageKey.value);
+      await clearState();
       router.push({ name: 'inventory-list' });
     }
   };
 
-  // Validation status of the current step
   const isValid = computed(() => {
     const validation = validateCreation(state);
     switch (currentStep.value) {
@@ -97,25 +108,21 @@ export function useInventoryEdit() {
     }
   });
 
-  // Called before each step change: validate + save
   async function handleStepChange(prev: number, next: number): Promise<boolean> {
-    // Perform validation
     if (!isValid.value) {
       await alertService.error({ title: 'Validation', text: 'Veuillez corriger les erreurs avant de continuer.' });
       return false;
     }
-    // Persist data for the step
+
     let data: any;
     if (prev === 0) data = state.step1Data;
     else if (prev === 1) data = state.step2Data;
     else data = state.contages[prev - 2];
 
-    // Save and advance
     await onStepComplete(prev, data);
     return true;
   }
 
-  // Save data and move to next
   async function onStepComplete(step: number, data: any) {
     if (step === 0) state.step1Data = { ...data };
     else if (step === 1) state.step2Data = { ...data };
@@ -125,19 +132,25 @@ export function useInventoryEdit() {
     await saveState();
   }
 
-  // Final submission
   const onComplete = async () => {
-    if (!inventoryEditService.validateContages(state)) {
-      await alertService.error({ text: 'Configuration invalide.' });
-      return;
-    }
+    if (isSubmitting.value) return;
+
     try {
+      isSubmitting.value = true;
+
+      if (!inventoryEditService.validateContages(state)) {
+        await alertService.error({ text: 'Configuration invalide.' });
+        return;
+      }
+
       await inventoryEditService.updateInventory(inventoryId.value, state);
-      await indexedDBService.clearState(storageKey.value);
+      await clearState();
       await alertService.success({ text: 'Inventaire mis à jour avec succès' });
       router.push({ name: 'inventory-list' });
     } catch {
       await alertService.error({ text: "Erreur lors de la mise à jour de l'inventaire" });
+    } finally {
+      isSubmitting.value = false;
     }
   };
 
@@ -154,6 +167,7 @@ export function useInventoryEdit() {
     isValid,
     handleStepChange,
     onComplete,
-    cancelEdit
+    cancelEdit,
+    isSubmitting
   };
 }

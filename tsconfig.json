@@ -14,9 +14,7 @@
       "lib": ["ESNext", "DOM"],
       "skipLibCheck": true,
       "baseUrl": "./",
-      "paths": {
-        "@/*": ["src/*"]
-      },
+      "paths": { "@/*": ["src/*"] },
       "noImplicitAny": false,
       "allowJs": true,
       "types": ["vite/client", "vue"]  // Retirer ou ajuster les types si nécessaire

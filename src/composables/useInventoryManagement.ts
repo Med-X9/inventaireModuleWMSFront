@@ -64,7 +64,7 @@ export function useInventoryManagement() {
         icon: IconCalendar,
         class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
         handler: (inventory: InventoryManagement) => {
-          router.push({ name: 'gestion-des-plannings', params: { id: inventory.id } });
+          router.push({ name: 'planning-management', params: { id: inventory.id } });
         },
       },
     {

@@ -1,31 +1,33 @@
 <template>
   <div>
-    <div class="flex justify-between mb-4">
-      <ul class="flex space-x-2 rtl:space-x-reverse">
+    <!-- Fil d’Ariane et bouton Annuler -->
+    <div class="flex flex-col mb-4">
+      <ul class="flex space-x-2">
         <li>
-          <router-link
-            :to="{ name: 'inventory-list' }"
-            class="text-primary hover:underline"
-          >
+          <router-link :to="{ name: 'inventory-list' }" class="text-primary hover:underline">
             Gestion d'inventaire
           </router-link>
         </li>
-        <li class="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
+        <li class="before:content-['/'] ltr:before:mr-2">
           <span>Création d'inventaire</span>
         </li>
       </ul>
-      <button
-        @click="onCancelClick"
-        class="px-4 py-2 text-black  dark:text-white-light border border-secondary font-medium rounded-lg transition-colors"
-      >
-        Annuler
-      </button>
+      <div class="flex justify-end mt-2">
+        <button
+          @click="onCancelClick"
+          class="px-4 py-2 dark:text-white-light text-black border border-secondary rounded-lg"
+        >
+          Annuler
+        </button>
+      </div>
     </div>
 
+    <!-- Brouillon en cours de chargement -->
     <div v-if="!loaded" class="text-center py-10">
       Chargement de votre brouillon…
     </div>
 
+    <!-- Wizard -->
     <DynamicWizard
       v-else
       :key="wizardKey"
@@ -34,40 +36,33 @@
       :is-valid="isValid"
       :beforeChange="validateAndSaveStep"
       @complete="handleSubmit"
-      :finish-button-text="isSubmitting ? 'Création en cours...' : 'Créer'"
+      :finish-button-text="isSubmitting ? 'Création…' : 'Créer'"
       color="#ffc107"
     >
-      <!-- Étape 1 : Création -->
+      <!-- Étape 1 -->
       <template #step-0>
         <FormBuilder
           v-model:modelValue="state.step1Data"
           :fields="formFields"
           hide-submit
-          @validation-change="onValidationChange"
         />
       </template>
 
-      <!-- Étape 2 : Comptes & Magasins -->
+      <!-- Étape 2 -->
       <template #step-1>
         <FormBuilder
           v-model:modelValue="state.step2Data"
           :fields="compteMagasinFields"
           hide-submit
-          @validation-change="onValidationChange"
         />
       </template>
 
-      <!-- Paramétrages 1/3, 2/3, 3/3 -->
-      <template
-        v-for="(_, idx) in state.contages"
-        :key="idx"
-        v-slot:[`step-${idx+2}`]
-      >
+      <!-- Paramétrages dynamiques -->
+      <template v-for="(_, idx) in state.contages" :key="idx" v-slot:[`step-${idx+2}`]>
         <ParamStep
           v-model="state.contages[idx]"
           :step-index="idx"
           :available-modes="availableModesForStep(idx)"
-          @validation-change="onValidationChange"
         />
       </template>
     </DynamicWizard>
@@ -85,9 +80,9 @@ import type { FieldConfig } from '@/interfaces/form';
 import { required, date, selectRequired } from '@/utils/validate';
 import { alertService } from '@/services/alertService';
 
-
 const router = useRouter();
 const isSubmitting = ref(false);
+const wizardKey = ref(Date.now());
 
 const {
   state,
@@ -97,11 +92,62 @@ const {
   onComplete,
   cancelCreation,
   loaded,
-  isValid
+  isValid,
 } = useInventoryCreation();
 
-const wizardKey = ref(Date.now());
+/* Étape 1 */
+const formFields: FieldConfig[] = [
+  {
+    key: 'libelle',
+    label: 'Libellé',
+    type: 'text',
+    props: { placeholder: 'Entrer le libellé' },
+    validators: [{ key: 'libelle', ...required('Le libellé est requis') }]
+  },
+  {
+    key: 'date',
+    label: 'Date',
+    type: 'date',
+    validators: [
+      { key: 'date', ...required('La date est requise') },
+      { key: 'date', ...date('Format de date invalide') }
+    ]
+  },
+  {
+    key: 'type',
+    label: 'Type',
+    type: 'select',
+    options: ['Inventaire Général'],
+    props: { disabled: true },
+    searchable: false,
+    clearable: false,
+    validators: []
+  }
+];
 
+/* Étape 2 */
+const compteMagasinFields: FieldConfig[] = [
+  {
+    key: 'compte',
+    label: 'Compte',
+    type: 'select',
+    options: ['Compte 1', 'Compte 2'],
+    validators: [{ key: 'compte', ...selectRequired('Veuillez sélectionner un compte') }]
+  },
+  {
+    key: 'magasin',
+    label: 'Magasin',
+    type: 'select',
+    options: ['Magasin A', 'Magasin B'],
+    multiple: true,
+    searchable: true,
+    clearable: true,
+    props: { placeholder: 'Sélectionnez un ou plusieurs magasins' },
+    validators: [{ key: 'magasin', ...selectRequired('Veuillez sélectionner au moins un magasin') }]
+  }
+];
+
+/* Définitions des étapes du wizard */
 const wizardSteps = [
   { title: 'Création' },
   { title: 'Comptes & Magasin' },
@@ -110,61 +156,7 @@ const wizardSteps = [
   { title: 'Paramétrage 3/3' }
 ];
 
-const formFields: FieldConfig[] = [
-  { 
-    key: 'libelle', 
-    label: 'Libellé', 
-    type: 'text', 
-    props: { placeholder: 'Entrer le libellé' },
-    validators: [{ key: 'libelle', ...required() }] 
-  },
-  { 
-    key: 'date', 
-    label: 'Date', 
-    type: 'date', 
-    validators: [
-      { key: 'date', ...required() }, 
-      { key: 'date', ...date() }
-    ] 
-  },
-  { 
-    key: 'type', 
-    label: 'Type', 
-    type: 'select', 
-    options: ['Inventaire Général'], 
-    props: { disabled: true }, 
-    searchable: false, 
-    clearable: false, 
-    validators: [] 
-  }
-];
-
-const compteMagasinFields: FieldConfig[] = [
-  { 
-    key: 'compte', 
-    label: 'Compte', 
-    type: 'select', 
-    options: ['Compte 1', 'Compte 2'], 
-    validators: [{ key: 'compte', ...selectRequired() }] 
-  },
-  { 
-    key: 'magasin', 
-    label: 'Magasin', 
-    type: 'select', 
-    options: ['Magasin A', 'Magasin B'], 
-    multiple: true, 
-    searchable: true, 
-    clearable: true, 
-    props: { placeholder: 'Sélectionnez un ou plusieurs magasins' }, 
-    validators: [{ key: 'magasin', ...selectRequired() }] 
-  }
-];
-
-async function onCancelClick() {
-  await cancelCreation();
-  wizardKey.value = Date.now();
-}
-
+/* Valider et sauvegarder avant chaque changement d’étape */
 async function validateAndSaveStep(prev: number, next: number): Promise<boolean> {
   let data: any;
   if (prev === 0) data = state.step1Data;
@@ -174,45 +166,56 @@ async function validateAndSaveStep(prev: number, next: number): Promise<boolean>
   return await onStepComplete(prev, data);
 }
 
-function onValidationChange(valid: boolean) {
-  isValid.value = valid;
+/* Annuler la création */
+async function onCancelClick() {
+  await cancelCreation();
+  wizardKey.value = Date.now();
 }
 
+/* Soumission finale */
 async function handleSubmit() {
   if (isSubmitting.value) return;
-  
   try {
     isSubmitting.value = true;
-    
-    // Validation finale
-    if (!isValid.value) {
-      await alertService.error({
-        title: 'Erreur de validation',
-        text: 'Veuillez vérifier tous les champs requis.'
-      });
-      return;
+
+    // Validation et sauvegarde de toutes les étapes
+    for (let i = 0; i < wizardSteps.length; i++) {
+      const ok = await validateAndSaveStep(i, i + 1);
+      if (!ok) {
+        await alertService.error({
+          title: 'Validation',
+          text: `Erreurs de validation à l'étape ${i + 1}`
+        });
+        return;
+      }
     }
 
-    // Appel du service pour sauvegarder l'inventaire
+    // Nettoyage et reset du composable
     await onComplete();
 
-    // Afficher le message de succès
+    
+     // → Redirection vers la liste des inventaires
+     router.push({ name: 'inventory-list' });
+    // Alerte de succès
     await alertService.success({
       title: 'Succès',
-      text: 'L\'inventaire a été créé avec succès!'
+      text: 'Votre inventaire a été créé avec succès !'
     });
 
-    // Redirection vers la liste des inventaires
-    router.push({ name: 'inventory-list' });
+   
 
-  } catch (error) {
-    console.error('Erreur lors de la création de l\'inventaire:', error);
+  } catch (err) {
+    console.error(err);
     await alertService.error({
       title: 'Erreur',
-      text: 'Une erreur est survenue lors de la création de l\'inventaire. Veuillez réessayer.'
+      text: "Une erreur est survenue lors de la création de l'inventaire."
     });
   } finally {
     isSubmitting.value = false;
   }
 }
 </script>
+
+<style scoped>
+/* Vos styles ici */
+</style>

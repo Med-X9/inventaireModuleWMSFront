@@ -1,27 +1,29 @@
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import type { InventoryManagement } from '@/interfaces/inventoryManagement';
 import type { ViewModeType } from '@/interfaces/planningManagement';
+import type { DetailData } from '@/interfaces/Detail';
 import { inventoryDetailService } from '@/services/inventoryDetailService';
 import { useAppStore } from '@/stores';
 
-export function useInventoryDetail(initialInventory: InventoryManagement) {
+export function useInventoryDetail(inventoryId: number) {
   const router = useRouter();
   const appStore = useAppStore();
+  const detailData = ref<DetailData>({
+    inventory: {} as InventoryManagement,
+    magasins: [],
+    jobsData: {}
+  });
 
-  // Onglet courant persistant
   const currentTab = computed<string>({
     get: () => appStore.inventoryCurrentTab,
     set: (tab: string) => appStore.setInventoryCurrentTab(tab)
   });
 
-  // Mode d'affichage persistant ("table" | "grid")
   const viewMode = computed<ViewModeType>({
     get: () => appStore.inventoryViewMode,
     set: (mode: ViewModeType) => appStore.setInventoryViewMode(mode)
   });
-
-  const inventory = ref<InventoryManagement>(initialInventory);
 
   const tabs = [
     { id: 'general', label: 'Informations générales' },
@@ -32,18 +34,21 @@ export function useInventoryDetail(initialInventory: InventoryManagement) {
 
   const jobColumns = [
     { headerName: 'Nom', field: 'name', sortable: true },
-    { headerName: 'Statut', field: 'status', sortable: true }
+    { headerName: 'Statut', field: 'status', sortable: true },
+    { headerName: 'Date', field: 'date', sortable: true },
+    { 
+      headerName: 'Opérateur', 
+      field: 'operator', 
+      sortable: true,
+      cellRenderer: (params: any) => {
+        return params.data.status.toLowerCase() === 'terminé' ? params.data.operator : '';
+      }
+    }
   ];
 
-  const jobsData = [
-    { name: 'Préparation zone', status: 'Terminé' },
-    { name: 'Scan emplacements', status: 'En cours' },
-    { name: 'Vérification', status: 'En attente' }
-  ];
-
-  const magasins = ['Magasin Central', 'Dépôt Nord', 'Entrepôt Sud'];
-
-  const getStatusClass = (status: string): string => {
+  const getStatusClass = (status: string | undefined): string => {
+    if (!status) return 'bg-secondary-light text-secondary';
+    
     switch (status.toLowerCase()) {
       case 'en attente': return 'bg-warning-light text-warning';
       case 'en cours': return 'bg-primary-light text-primary';
@@ -54,15 +59,35 @@ export function useInventoryDetail(initialInventory: InventoryManagement) {
     }
   };
 
+  const getJobsForTab = (tabId: string) => {
+    return detailData.value.jobsData[tabId] || [];
+  };
+
+  const getCompletedJobsCount = (tabId: string) => {
+    return getJobsForTab(tabId).filter(job => job.status.toLowerCase() === 'terminé').length;
+  };
+
+  const getInProgressJobsCount = (tabId: string) => {
+    return getJobsForTab(tabId).filter(job => job.status.toLowerCase() === 'en cours').length;
+  };
+
+  const getRemainingJobsCount = (tabId: string) => {
+    return getJobsForTab(tabId).filter(job => job.status.toLowerCase() === 'en attente').length;
+  };
+
+  const getTotalJobsCount = (tabId: string) => {
+    return getJobsForTab(tabId).length;
+  };
+
   const launchInventory = async () => {
-    const success = await inventoryDetailService.launchInventory(inventory.value);
+    const success = await inventoryDetailService.launchInventory(detailData.value.inventory);
     if (success) {
-      inventory.value.statut = 'En cours';
+      detailData.value.inventory.statut = 'En cours';
     }
   };
 
   const editInventory = () => {
-    router.push({ name: 'inventory-edit', params: { id: inventory.value.id } });
+    router.push({ name: 'inventory-edit', params: { id: inventoryId } });
   };
 
   const goBack = () => {
@@ -76,18 +101,32 @@ export function useInventoryDetail(initialInventory: InventoryManagement) {
     });
   };
 
+  const loadDetailData = async () => {
+    try {
+      const data = await inventoryDetailService.getInventoryDetail(inventoryId);
+      detailData.value = data;
+    } catch (error) {
+      console.error('Error loading inventory details:', error);
+    }
+  };
+
   return {
     currentTab,
     viewMode,
-    inventory,
+    inventory: computed(() => detailData.value.inventory),
+    magasins: computed(() => detailData.value.magasins),
     tabs,
     jobColumns,
-    jobsData,
-    magasins,
     launchInventory,
     editInventory,
     goBack,
     formatDate,
     getStatusClass,
+    getJobsForTab,
+    loadDetailData,
+    getCompletedJobsCount,
+    getInProgressJobsCount,
+    getRemainingJobsCount,
+    getTotalJobsCount
   };
 }

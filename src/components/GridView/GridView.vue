@@ -70,8 +70,8 @@ const getActionColorClasses = (variant: 'primary' | 'secondary' = 'primary') => 
       <div
         v-for="item in data"
         :key="String(item.id || JSON.stringify(item))"
-        class="group border dark:border-dark-border dark:text-white-light border-gray-200 p-5 rounded-lg cursor-pointer transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1"
-        :class="{ 'bg-bg-white border-secondary shadow-md': selectedItem?.id === item.id }"
+        class="group border dark:border-dark-border dark:text-white-light border-gray-500/20 p-5 rounded-lg cursor-pointer transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1"
+        :class="{ 'bg-bg-white  shadow-md': selectedItem?.id === item.id }"
         @click="onItemClick?.(item)"
       >
         <h3 class="font-semibold text-lg dark:text-white-dark text-secondary group-hover:text-primary transition-colors duration-300">

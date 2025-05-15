@@ -1,10 +1,11 @@
 <template>
-  <div class="container mx-auto px-4">
-    <div class="flex justify-between items-center mb-6">
-      <ul class="flex space-x-2 rtl:space-x-reverse text-sm">
+  <div class="container mx-auto">
+    <!-- Fil d’Ariane et bouton Annuler -->
+    <div class="flex flex-col mb-4">
+      <ul class="flex space-x-2 rtl:space-x-reverse">
         <li>
           <router-link
-            :to="{ name: 'gestion-des-plannings' }"
+            :to="{ name: 'planning-management' }"
             class="text-primary hover:underline"
           >
             Gestion des plannings
@@ -14,18 +15,23 @@
           <span>Affectation des équipes</span>
         </li>
       </ul>
-      <button
-        @click="cancelAffecter"
-        class="flex items-center dark:text-white-light  border border-secondary text-secondary px-4 py-2 rounded-lg text-sm font-medium shadow transition-all duration-200 hover:bg-secondary hover:text-white"
-      >
-        Annuler
-      </button>
+
+      <div class="flex justify-start md:justify-end mt-3">
+        <button
+          @click="cancelAffecter"
+          class="border border-secondary text-secondary dark:text-white-light px-4 py-2 rounded-lg text-sm font-medium shadow transition-all duration-200 hover:bg-secondary hover:text-white"
+        >
+          Annuler
+        </button>
+      </div>
     </div>
 
+    <!-- Chargement du brouillon -->
     <div v-if="!loaded" class="text-center py-10">
       Chargement de votre brouillon...
     </div>
 
+    <!-- Wizard -->
     <Wizard
       v-else
       :steps="steps"
@@ -39,15 +45,18 @@
       <!-- Étape 1 -->
       <template #step-0>
         <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-          <div class="w-full md:col-span-5 bg-white rounded-2xl shadow-lg px-6 py-4">
-         
+          <!-- Formulaire de sélection -->
+          <div class="w-full panel md:col-span-5 rounded-2xl shadow-lg px-6 py-4">
             <FormBuilder
+              :key="`form1-${counting1Form.team}-${counting1Form.jobs.join(',')}`"
               v-model="counting1Form"
               :fields="formFields1"
               :columns="1"
               hide-submit
             />
           </div>
+
+          <!-- Boutons Ajouter / Retirer tout -->
           <div class="w-full md:col-span-2 flex flex-row md:flex-col items-center justify-center gap-4">
             <button 
               @click="handleTeamSelect1" 
@@ -64,7 +73,9 @@
               ← Retirer tout
             </button>
           </div>
-          <div class="w-full md:col-span-5 panel rounded-2xl shadow-lg p-6">
+
+          <!-- Liste des équipes affectées -->
+          <div class="w-full dark:border dark:border-gray-500/10 md:col-span-5 panel rounded-2xl shadow-lg p-6">
             <h3 class="text-xl font-semibold mb-4">Équipes sélectionnées</h3>
             <div class="max-h-[500px] overflow-auto space-y-4">
               <div
@@ -77,7 +88,7 @@
                   <button @click="removeTeam1(team.id)" class="btn-icon">×</button>
                 </div>
                 <div>
-                  <h4 class="text-sm font-medium mb-1">Zones affectées :</h4>
+                  <h4 class="text-sm font-medium mb-1">jobs affectées :</h4>
                   <div class="flex flex-wrap gap-2">
                     <span
                       v-for="j in teamJobs1.get(team.id) || []"
@@ -100,15 +111,18 @@
       <!-- Étape 2 -->
       <template #step-1>
         <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+          <!-- Formulaire 2 -->
           <div class="w-full md:col-span-5 panel rounded-2xl shadow-lg px-6 py-4">
-        
             <FormBuilder
+              :key="`form2-${counting2Form.team}-${counting2Form.jobs.join(',')}`"
               v-model="counting2Form"
               :fields="formFields2"
               :columns="1"
               hide-submit
             />
           </div>
+
+          <!-- Boutons 2 -->
           <div class="w-full md:col-span-2 flex flex-row md:flex-col items-center justify-center gap-4">
             <button 
               @click="handleTeamSelect2" 
@@ -125,7 +139,9 @@
               ← Retirer tout
             </button>
           </div>
-          <div class="w-full md:col-span-5 panel rounded-2xl shadow-lg p-6">
+
+          <!-- Liste équipes 2 -->
+          <div class="w-full dark:border dark:border-gray-500/10 md:col-span-5 panel rounded-2xl shadow-lg p-6">
             <h3 class="text-xl font-semibold mb-4">Équipes sélectionnées</h3>
             <div class="max-h-[500px] overflow-auto space-y-4">
               <div
@@ -138,7 +154,7 @@
                   <button @click="removeTeam2(team.id)" class="btn-icon">×</button>
                 </div>
                 <div>
-                  <h4 class="text-sm font-medium mb-1">Zones affectées :</h4>
+                  <h4 class="text-sm font-medium mb-1">jobs affectées :</h4>
                   <div class="flex flex-wrap gap-2">
                     <span
                       v-for="j in teamJobs2.get(team.id) || []"
@@ -168,6 +184,7 @@ import Wizard from '@/components/wizard/Wizard.vue';
 import FormBuilder from '@/components/Form/FormBuilder.vue';
 import { useAffecter } from '@/composables/useAffecter';
 import { alertService } from '@/services/alertService';
+import { indexedDBService } from '@/services/indexedDBService'; // ← ajout
 
 const router = useRouter();
 const isSubmitting = ref(false);
@@ -220,6 +237,7 @@ async function handleComplete() {
       return;
     }
 
+    // Préparation des données (optionnel)
     const data = {
       comptage1: {
         teams: selectedTeams1.value,
@@ -231,19 +249,21 @@ async function handleComplete() {
       },
     };
 
-    // Ici, appeler votre service pour sauvegarder les affectations
+    // Sauvegarde de l’état actuel
     await saveState();
+
+    // ← Nouveau : vider le state IndexedDB
+    await indexedDBService.clearState('affecter');
 
     await alertService.success({
       title: 'Succès',
-      text: 'Les affectations ont été enregistrées avec succès!'
+      text: 'Les affectations ont été enregistrées avec succès !'
     });
 
-    // Redirection vers la liste des plannings
-    router.push({ name: 'gestion-des-plannings' });
-
+    // Redirection vers la gestion des plannings
+    router.push({ name: 'planning-management' });
   } catch (error) {
-    console.error('Erreur lors de l\'affectation:', error);
+    console.error('Erreur lors de l\'affectation :', error);
     await alertService.error({
       title: 'Erreur',
       text: 'Une erreur est survenue lors de l\'enregistrement des affectations.'
@@ -259,5 +279,4 @@ async function handleComplete() {
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
               0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
-
 </style>

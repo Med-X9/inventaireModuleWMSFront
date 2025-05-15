@@ -7,8 +7,7 @@ export const useAppStore = defineStore('app', {
         viewMode: (localStorage.getItem('viewMode') as ViewModeType) || 'table',
         inventoryCurrentTab: localStorage.getItem('inventoryCurrentTab') || 'general',
         inventoryViewMode: (localStorage.getItem('inventoryViewMode') as ViewModeType) || 'table',
-        planningTeamsViewMode: (localStorage.getItem('planningTeamsViewMode') as ViewModeType) || 'grid',
-        planningJobsViewMode: (localStorage.getItem('planningJobsViewMode') as ViewModeType) || 'grid',
+        planningViewModeAll: (localStorage.getItem('planningViewModeAll') as ViewModeType) || 'table',
         isDarkMode: false,
         mainLayout: 'app',
         theme: 'light',
@@ -54,13 +53,9 @@ export const useAppStore = defineStore('app', {
             this.inventoryViewMode = mode;
             localStorage.setItem('inventoryViewMode', mode);
           },
-          setPlanningTeamsViewMode(mode: ViewModeType) {
-            this.planningTeamsViewMode = mode;
-            localStorage.setItem('planningTeamsViewMode', mode);
-          },
-          setPlanningJobsViewMode(mode: ViewModeType) {
-            this.planningJobsViewMode = mode;
-            localStorage.setItem('planningJobsViewMode', mode);
+          setPlanningViewModeAll(mode: ViewModeType) {
+            this.planningViewModeAll = mode;
+            localStorage.setItem('planningViewModeAll', mode);
           },
 
 

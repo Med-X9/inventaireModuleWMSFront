@@ -6,7 +6,7 @@
         <div class="flex justify-between items-center px-3 py-6">
           <router-link to="/" class="main-logo flex items-center shrink-0">
             <img class="w-10 ml-[5px] flex-none" src="/assets/images/logo/logo.png" alt="Logo" />
-            <span class="text-2xl ltr:ml-1.5 rtl:mr-1.5 font-semibold align-middle lg:inline dark:text-white-light">WMS</span>
+            <span class="text-2xl ltr:ml-1.5 rtl:mr-1.5 font-semibold align-middle lg:inline dark:text-white-light">Inventaire</span>
           </router-link>
           <a
             href="javascript:;"
@@ -51,7 +51,7 @@
   >
     <div class="flex items-center justify-between w-full">
       <div class="flex items-center">
-        <icon-menu-dashboard class="group-hover:!text-primary shrink-0" />
+        <IconMenuInventory class="group-hover:!text-primary shrink-0" />
         <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">
           {{ $t('inventaire') }}
         </span>
@@ -115,6 +115,7 @@ import { useAppStore } from '@/stores/index';
 import IconCaretsDown from '@/components/icon/icon-carets-down.vue';
 import IconCaretDown from '@/components/icon/icon-caret-down.vue';
 import IconMenuDashboard from '@/components/icon/menu/icon-menu-dashboard.vue';
+import IconMenuInventory from '@/components/icon/menu/icon-menu-inventory.vue';
 
 const store = useAppStore();
 const activeDropdown = ref<string | null>(null);

@@ -18,7 +18,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="bg-secondary-light dark:bg-dark-bg dark:border-dark-borde p-1 rounded-lg shadow-sm">
+  <div class="bg-gray-500/5 dark:bg-dark-bg dark:border-dark-borde py-1 px-4 rounded-lg shadow-sm">
     <button
       v-for="option in options"
       :key="option.value"

@@ -1,29 +1,16 @@
 <template>
   <button
-    :type="type"
-    class="px-4 py-2 bg-primary text-white rounded-lg shadow transition-all duration-200 flex items-center justify-center relative group"
-    :class="{
-      'opacity-50 cursor-not-allowed hover:opacity-50': disabled,
-      'hover:opacity-90': !disabled
-    }"
-    :disabled="disabled"
-    @click="onClick"
+    v-bind="$attrs"
+    class="px-4 py-2 bg-primary text-white rounded-lg shadow transition-all duration-200 flex items-center justify-center relative"
+    :class="{ 'opacity-50 cursor-not-allowed': loading || disabled }"
+    :disabled="loading || disabled"
+    @click="handleClick"
   >
-    <svg
+    <span
       v-if="loading"
-      class="animate-spin h-5 w-5 mr-2"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-      <path
-        class="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8v4l3-3-3-3v4a12 12 0 00-12 12h4z"
-      />
-    </svg>
-    <span>{{ label }}</span>
+      class="absolute left-4 w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"
+    />
+    <span :class="{ 'ml-6': loading }">{{ label }}</span>
   </button>
 </template>
 
@@ -33,25 +20,27 @@ const props = defineProps<{
   loading?: boolean;
   disabled?: boolean;
   label?: string;
+  validate?: () => Promise<boolean> | boolean;
 }>();
 
-const emit = defineEmits(['click'] as const);
+const emit = defineEmits<{
+  (e: 'click', event: MouseEvent): void;
+}>();
 
-function onClick() {
-  if (!props.disabled) {
-    emit('click');
+async function handleClick(event: MouseEvent) {
+  if (props.loading || props.disabled) {
+    event.preventDefault();
+    return;
   }
+
+  if (props.validate) {
+    const isValid = await props.validate();
+    if (!isValid) {
+      event.preventDefault();
+      return;
+    }
+  }
+
+  emit('click', event);
 }
 </script>
-
-<style scoped>
-.group:disabled::before {
-  position: absolute;
-  right: -1.5rem;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-.group:disabled:hover::before {
-  opacity: 1;
-}
-</style>

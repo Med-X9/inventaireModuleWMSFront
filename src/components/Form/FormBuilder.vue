@@ -1,6 +1,6 @@
 
 <template>
-  <div class="container mx-auto px-4">
+  <div class="container mx-auto">
     <h2 v-if="title" class="text-xl font-bold text-gray-800 mb-6">
       {{ title }}
     </h2>
@@ -9,7 +9,7 @@
       <div
         v-for="field in fields"
         :key="field.key"
-        class="w-full mb-6"
+        class="w-full"
       >
         <!-- Label pour tous sauf checkbox -->
         <label

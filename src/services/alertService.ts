@@ -1,24 +1,28 @@
-// alertService.ts
 import Swal from 'sweetalert2';
 
-// Récupère une variable CSS
 const getCssVar = (name: string) =>
   getComputedStyle(document.documentElement)
     .getPropertyValue(name)
     .trim();
 
-// Mixin de base pour les toasts
 const Toast = Swal.mixin({
   toast: true,
   position: 'top-end',
   showConfirmButton: false,
   timer: 3000,
   timerProgressBar: true,
-  customClass: { popup: 'sweet-alerts toast-alert' },
+  customClass: {
+    popup: 'sweet-alerts toast-alert',
+    title: 'toast-title',
+    htmlContainer: 'toast-message'
+  },
+  showClass: {
+    popup: ''
+  },
   didOpen: (toast) => {
     toast.addEventListener('mouseenter', Swal.stopTimer);
     toast.addEventListener('mouseleave', Swal.resumeTimer);
-  },
+  }
 });
 
 export interface AlertOptions {
@@ -28,67 +32,65 @@ export interface AlertOptions {
 }
 
 export const alertService = {
-  /** Modal de confirmation */
   async confirm(opts: AlertOptions) {
     return Swal.fire({
       title: opts.title || 'Confirmation',
       text: opts.text,
       icon: 'warning',
       showCancelButton: true,
-   
       confirmButtonColor: getCssVar('--color-primary'),
-      cancelButtonColor:  getCssVar('--color-secondary'),
+      cancelButtonColor: getCssVar('--color-secondary'),
       confirmButtonText: 'Oui, confirmer',
-      cancelButtonText:  'Annuler',
+      cancelButtonText: 'Annuler',
       customClass: {
-        popup:          'sweet-alerts',
+        popup: 'sweet-alerts',
         confirmButton: 'btn btn-primary',
-        cancelButton:  'bg-secondary/10 text-secondary hover:bg-secondary/5',
+        cancelButton: 'bg-secondary/10 text-secondary hover:bg-secondary/5',
       },
     });
   },
 
-  /** Toast Succès (vert) */
   success(opts: AlertOptions) {
     return Toast.fire({
-      icon:       'success',
-      title:      opts.title || 'Succès',
-      text:       opts.text,
-      timer:      opts.timer ?? 3000,
+      icon: 'success',
+      title: opts.title || 'Succès',
+      text: opts.text,
+      timer: opts.timer ?? 3000,
       background: getCssVar('--color-success'),
+      iconColor: 'white',
     });
   },
 
-  /** Toast Erreur (rouge) */
   error(opts: AlertOptions) {
     return Toast.fire({
-      icon:       'error',
-      title:      opts.title || 'Erreur',
-      text:       opts.text,
-      timer:      opts.timer ?? 3000,
+      icon: 'error',
+      title: opts.title || 'Erreur',
+      text: opts.text,
+      timer: opts.timer ?? 3000,
       background: getCssVar('--color-danger'),
+      iconColor: 'white',
     });
   },
 
-  /** Toast Avertissement (jaune) */
   warning(opts: AlertOptions) {
     return Toast.fire({
-      icon:       'warning',
-      title:      opts.title || 'Attention',
-      text:       opts.text,
-      timer:      opts.timer ?? 3000,
+      icon: 'warning',
+      title: opts.title || 'Attention',
+      text: opts.text,
+      timer: opts.timer ?? 3000,
       background: getCssVar('--color-warning'),
+      iconColor: 'white',
     });
   },
 
-  /** Toast Info / En cours (bleu) */
   info(opts: AlertOptions) {
     return Toast.fire({
-      icon:       'info',
-      title:      opts.title || 'Info',
-      text:       opts.text,
-      timer:      opts.timer ?? 3000,
+      icon: 'info',
+      title: opts.title || 'Info',
+      text: opts.text,
+      timer: opts.timer ?? 3000,
       background: getCssVar('--color-info'),
+      iconColor: 'white',
     });
   },
 };

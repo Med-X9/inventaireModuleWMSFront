@@ -1,34 +1,37 @@
 import type { InventoryCreationState, ContageMode } from '@/interfaces/inventoryCreation';
 
-
 class InventoryCreationService {
- 
-
   getAvailableModesForStep(
     state: InventoryCreationState,
     stepIndex: number
   ): ContageMode[] {
-    const standardModes: ContageMode[] = [
+    // Emplacements standard pour Contage 1
+    const firstOptions: ContageMode[] = [
       'liste emplacement',
       'article + emplacement',
-      'hybride'
+      'hybride',
+      'etat de stock'
     ];
 
     if (stepIndex === 0) {
-      return [...standardModes, 'etat de stock'];
+      // Toujours les 4 options
+      return firstOptions;
     }
 
-    const firstContage = state.contages[0].mode;
+    const first = state.contages[0].mode as ContageMode;
+    const second = state.contages[1].mode as ContageMode;
 
     if (stepIndex === 1) {
-      return standardModes;
+      // Contage 2 : si premier = 'etat de stock', sinon même 3
+      return ['liste emplacement', 'article + emplacement', 'hybride'];
     }
 
     if (stepIndex === 2) {
-      if (firstContage === 'etat de stock') {
-        return [state.contages[1].mode];
+      // Contage 3 : si premier = 'etat de stock' → unique second, sinon [first, second]
+      if (first === 'etat de stock') {
+        return [second];
       }
-      return [firstContage, state.contages[1].mode];
+      return [first, second];
     }
 
     return [];

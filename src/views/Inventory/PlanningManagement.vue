@@ -14,7 +14,7 @@
         </li>
       </ul>
     <!-- Toggle Buttons -->
-    <div class="flex justify-end mb-6">
+    <div class="flex justify-start md:justify-end mb-6 mt-6 md:mt-1">
       <ToggleButtons v-model="viewMode" :options="viewOptions" />
     </div>
 

@@ -128,28 +128,7 @@
                             </button>
                         </div>
                     </div>
-                    <div class="border border-dashed border-[#e0e6ed] dark:border-[#1b2e4b] rounded-md mb-3 p-3">
-                        <h5 class="mb-1 text-base dark:text-white leading-none">Direction</h5>
-                        <p class="text-white-dark text-xs">Select the direction for your app.</p>
-                        <div class="flex gap-2 mt-3">
-                            <button
-                                type="button"
-                                class="btn flex-auto"
-                                :class="[store.rtlClass === 'ltr' ? 'btn-primary' : 'btn-outline-primary']"
-                                @click="store.toggleRTL('ltr')"
-                            >
-                                LTR
-                            </button>
-                            <button
-                                type="button"
-                                class="btn flex-auto"
-                                :class="[store.rtlClass === 'rtl' ? 'btn-primary' : 'btn-outline-primary']"
-                                @click="store.toggleRTL('rtl')"
-                            >
-                                RTL
-                            </button>
-                        </div>
-                    </div>
+                   
 
                     <div class="border border-dashed border-[#e0e6ed] dark:border-[#1b2e4b] rounded-md mb-3 p-3">
                         <h5 class="mb-1 text-base dark:text-white leading-none">Navbar Type</h5>
