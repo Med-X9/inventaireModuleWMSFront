@@ -5,7 +5,7 @@
       <div
         v-if="showColumnSelector"
         ref="dropdownRef"
-        class="relative mb-8 w-full md:w-72 select-wrapper"
+        class="relative mb-4 w-full md:w-72 select-wrapper"
       >
         <button
           @click="toggleDropdown"
@@ -52,7 +52,7 @@
         </div>
       </div>
 
-      <div class="flex-shrink-0 mb-8 md:mb-1">
+      <div class="flex-shrink-0 mb-4 md:mb-1">
         <slot name="table-actions" class="mb-8" />
       </div>
     </div>
@@ -66,7 +66,8 @@
         :theme="gridTheme"
         @grid-ready="onGridReady"
         @first-data-rendered="onFirstDataRendered"
-        :columnDefs="computedVisibleColumnDefs"
+       
+        :columnDefs="computedVisibleColumnDefsWithIndex"
         :defaultColDef="defaultColDef"
         :rowData="rowData"
         :pagination="pagination"
@@ -81,17 +82,16 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, toRefs } from 'vue'
+import { defineProps, toRefs, computed } from 'vue'
 import { AgGridVue } from 'ag-grid-vue3'
 import type { PropType } from 'vue'
 import type { ColDef } from 'ag-grid-community'
 import type { ActionConfig } from '@/interfaces/dataTable'
 import { useDataTable } from '@/composables/useDataTable'
-import { useAppStore } from '@/stores/index'       // votre store Pinia
-import { themeQuartz, colorSchemeLightWarm, colorSchemeDarkBlue } from 'ag-grid-community' 
-import { computed } from 'vue'
+import { useAppStore } from '@/stores/index'
+import { themeQuartz, colorSchemeLightWarm, colorSchemeDarkBlue } from 'ag-grid-community'
 
-
+// Props définition
 const props = defineProps({
   columns:            { type: Array as PropType<ColDef[]>, required: true },
   rowDataProp:        { type: Array as PropType<Record<string, unknown>[]>, default: () => [] },
@@ -104,7 +104,6 @@ const props = defineProps({
   actionsHeaderName:  { type: String, default: 'Actions' },
 })
 
-const { columns, pagination, showColumnSelector } = toRefs(props)
 // Récupération du store
 const themeStore = useAppStore()
 
@@ -118,9 +117,24 @@ const gridTheme = computed(() =>
     ? themeDark
     : themeStore.theme === 'light'
       ? themeLight
-      : themeLight  // par défaut système, on prend clair
+      : themeLight  // par défaut
 )
 
+// Colonne de numéros de ligne
+const rowNumberColumn: ColDef = {
+  headerName: 'N°',
+  valueGetter: params => params.node?.rowIndex != null ? (params.node.rowIndex + 1).toString() : '',
+  width: 65,  
+  minWidth: 65,
+  maxWidth: 70,
+  suppressSizeToFit: true,
+  menuTabs: [],        
+  sortable: false,     
+  filter: false,      
+  cellClass: 'text-left',
+}
+
+// Utilisation du composable
 const {
   defaultColDef,
   rowData,
@@ -135,14 +149,54 @@ const {
   minVisibleColumns,
   dropdownRef,
 } = useDataTable(props)
+
+// Mise à jour de computedVisibleColumnDefs pour inclure la colonne de ligne
+const computedVisibleColumnDefsWithIndex = computed<ColDef[]>(() => {
+  // on clone les colonnes passées en props
+  const cols = [...computedVisibleColumnDefs.value]
+  // on insère la colonne d'index en début
+  cols.unshift(rowNumberColumn)
+  return cols
+})
 </script>
 
 <style scoped>
 .auto-height-grid ::v-deep .ag-root-wrapper-body,
 .auto-height-grid ::v-deep .ag-center-cols-viewport,
 .auto-height-grid ::v-deep .ag-body-viewport-wrapper {
-  max-height: 400px !important;
+  max-height: 430px !important;
   height: auto !important;
   overflow-y: auto !important;
+
 }
+/* Pagination AG Grid super-compacte pour mobile */
+@media (max-width: 640px) {
+  /* Conteneur de la pagination */
+  ::v-deep .ag-paging-panel {
+    font-size: 0.55rem;        /* texte très petit */
+    padding: 0.15rem 0.3rem;   /* très peu d’espacement */
+  }
+
+  /* Boutons de page (« Précédent », numéros, « Suivant ») */
+  ::v-deep .ag-pagination-button {
+    min-width: 1.2rem;         /* largeur mini */
+    height: 1.2rem;            /* hauteur mini */
+    padding: 0.15rem;          /* rembourrage mini */
+  }
+
+  /* Sélecteur du nombre de lignes par page */
+  ::v-deep .ag-page-size-panel,
+  ::v-deep .ag-page-size {
+    font-size: 0.55rem;
+    padding: 0.15rem;
+  }
+
+  /* Input de numéro de page */
+  ::v-deep .ag-input-field-input {
+    font-size: 0.55rem;
+    padding: 0.15rem;
+  }
+}
+
+
 </style>

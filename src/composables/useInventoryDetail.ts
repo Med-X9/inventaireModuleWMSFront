@@ -5,6 +5,7 @@ import type { ViewModeType } from '@/interfaces/planningManagement';
 import type { DetailData } from '@/interfaces/Detail';
 import { inventoryDetailService } from '@/services/inventoryDetailService';
 import { useAppStore } from '@/stores';
+import { generatePDF } from '@/utils/pdfGenerator';
 
 export function useInventoryDetail(inventoryId: number) {
   const router = useRouter();
@@ -34,7 +35,15 @@ export function useInventoryDetail(inventoryId: number) {
 
   const jobColumns = [
     { headerName: 'Nom', field: 'name', sortable: true },
-    { headerName: 'Statut', field: 'status', sortable: true },
+    { 
+      headerName: 'Statut', 
+      field: 'status', 
+      sortable: true,
+      cellRenderer: (params: any) => {
+        const statusClass = getStatusClass(params.data.status);
+        return `<span class="px-3 py-1 rounded-full text-sm  ${statusClass}">${params.data.status}</span>`;
+      }
+    },
     { headerName: 'Date', field: 'date', sortable: true },
     { 
       headerName: 'Opérateur', 
@@ -47,11 +56,11 @@ export function useInventoryDetail(inventoryId: number) {
   ];
 
   const getStatusClass = (status: string | undefined): string => {
-    if (!status) return 'bg-secondary-light text-secondary';
+    if (!status) return 'bg-secondary';
     
     switch (status.toLowerCase()) {
       case 'en attente': return 'bg-warning-light text-warning';
-      case 'en cours': return 'bg-primary-light text-primary';
+      case 'en cours': return 'bg-info-light text-info';
       case 'terminé': return 'bg-success-light text-success';
       case 'planifié': return 'bg-secondary-light text-secondary';
       case 'en préparation': return 'bg-warning-light text-warning';
@@ -90,8 +99,11 @@ export function useInventoryDetail(inventoryId: number) {
     router.push({ name: 'inventory-edit', params: { id: inventoryId } });
   };
 
-  const goBack = () => {
-    router.push({ name: 'inventory-list' });
+  const cancelInventory = async () => {
+    const success = await inventoryDetailService.cancelInventory();
+    if (success) {
+      detailData.value.inventory.statut = 'En attente';
+    }
   };
 
   const formatDate = (dateString: string): string => {
@@ -110,6 +122,27 @@ export function useInventoryDetail(inventoryId: number) {
     }
   };
 
+  const exportToPDF = async () => {
+    const data = {
+      inventory: detailData.value.inventory,
+      magasins: detailData.value.magasins,
+      jobsData: detailData.value.jobsData,
+      stats: tabs.reduce((acc, tab) => {
+        if (tab.id !== 'general') {
+          acc[tab.id] = {
+            completed: getCompletedJobsCount(tab.id),
+            inProgress: getInProgressJobsCount(tab.id),
+            remaining: getRemainingJobsCount(tab.id),
+            total: getTotalJobsCount(tab.id)
+          };
+        }
+        return acc;
+      }, {} as Record<string, any>)
+    };
+
+    await generatePDF(data, `Inventaire_${detailData.value.inventory.reference}`);
+  };
+
   return {
     currentTab,
     viewMode,
@@ -119,7 +152,7 @@ export function useInventoryDetail(inventoryId: number) {
     jobColumns,
     launchInventory,
     editInventory,
-    goBack,
+    cancelInventory,
     formatDate,
     getStatusClass,
     getJobsForTab,
@@ -127,6 +160,7 @@ export function useInventoryDetail(inventoryId: number) {
     getCompletedJobsCount,
     getInProgressJobsCount,
     getRemainingJobsCount,
-    getTotalJobsCount
+    getTotalJobsCount,
+    exportToPDF,
   };
 }

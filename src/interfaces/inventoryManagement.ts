@@ -1,4 +1,8 @@
 import type { ContageConfig } from './inventoryCreation';
+export interface Team {
+  id: number;
+  name: string;
+}
 export interface InventoryManagement {
     id: number;
     reference: string;
@@ -11,6 +15,7 @@ export interface InventoryManagement {
     label: string;
     type?: string;                  // ou `type: string;` si toujours présent
     contages?: ContageConfig[]; 
+      teams?: Team[];
   }
   
   export interface InventoryAction {

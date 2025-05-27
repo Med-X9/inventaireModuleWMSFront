@@ -51,8 +51,8 @@
   >
     <div class="flex items-center justify-between w-full">
       <div class="flex items-center">
-        <IconMenuInventory class="group-hover:!text-primary shrink-0" />
-        <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">
+        <IconMenuInventory class="shrink-0 " />
+        <span class="ltr:pl-3 group-hover:!text-primary  rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">
           {{ $t('inventaire') }}
         </span>
       </div>
@@ -84,17 +84,6 @@
         @click="toggleMobileMenu"
       >
         {{ $t('inventory_management') }}
-      </router-link>
-    </li>
-    <li>
-      <router-link
-        to="/inventory/results"
-        exact
-        class="group"
-        active-class="text-primary dark:text-white"
-        @click="toggleMobileMenu"
-      >
-        {{ $t('inventory_results') }}
       </router-link>
     </li>
   </ul>

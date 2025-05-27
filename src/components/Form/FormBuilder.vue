@@ -1,11 +1,10 @@
-
 <template>
   <div class="container mx-auto">
     <h2 v-if="title" class="text-xl font-bold text-gray-800 mb-6">
       {{ title }}
     </h2>
 
-    <form :class="formGridClass" @submit.prevent>
+    <form :class="formGridClass" @submit.prevent="handleSubmit">
       <div
         v-for="field in fields"
         :key="field.key"
@@ -18,7 +17,7 @@
           class="block text-sm font-medium dark:text-gray-400  text-gray-700 mb-2"
         >
           {{ field.label }}
-          <span v-if="field.validators?.some(v => v.key === field.key && v.fn === required().fn)" class="text-red-500">*</span>
+          <span v-if="field.validators?.some(v => v.fn === required().fn)" class="text-red-500">*</span>
         </label>
 
         <!-- Input texte/email/date -->
@@ -29,11 +28,10 @@
           :type="field.type"
           v-bind="field.props"
           class="w-full form-input px-4   py-3 bg-white border border-gray-200 rounded-lg transition-all duration-200 focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-10 outline-none"
-          :class="{'border-red-500': errors[field.key]}"
-          @blur="validateField(field)"
-          @input="onFieldChange(field)"
+          :class="{'border-red-500': errors[field.key] && submitted}"
         />
-
+        
+        
         <!-- Checkbox -->
         <div
           v-else-if="field.type === 'checkbox'"
@@ -44,7 +42,6 @@
             v-model="formData[field.key]"
             type="checkbox"
             class="form-checkbox"
-            @change="validateField(field)"
           />
           <label
             :for="field.key"
@@ -69,8 +66,7 @@
               v-model="formData[field.key]"
               :value="opt.value"
               type="radio"
-              name="default_radio" class="form-radio" checked
-              @change="validateField(field)"
+              name="default_radio" class="form-radio"
             />
             <label
               :for="`${field.key}-${opt.value}`"
@@ -84,20 +80,18 @@
         <!-- Select -->
         <div v-else-if="field.type === 'select'">
           <v-select
-  :id="field.key"
-  v-model="formData[field.key]"
-  :options="formattedOptions(field.options)"
-  :multiple="field.multiple || false"
-  :searchable="field.searchable ?? false"
-  :clearable="field.clearable ?? true"
-  :placeholder="(field.props?.placeholder as string) || '-- Sélectionner --'"
-  label="label"
-  :reduce="opt => opt.value"
-  class="vs-custom  dark"
-  :class="{'vs-error': errors[field.key]}"
-  @input="onFieldChange(field)"
-/>
-
+            :id="field.key"
+            v-model="formData[field.key]"
+            :options="formattedOptions(field.options)"
+            :multiple="field.multiple || false"
+            :searchable="field.searchable ?? false"
+            :clearable="field.clearable ?? true"
+            :placeholder="(field.props?.placeholder as string) || '-- Sélectionner --'"
+            label="label"
+            :reduce="opt => opt.value"
+            class="vs-custom  dark"
+            :class="{'vs-error': errors[field.key] && submitted}"
+          />
         </div>
 
         <!-- Button-group -->
@@ -120,17 +114,17 @@
         </div>
 
         <!-- Message d'erreur -->
-        <p v-if="errors[field.key]" class="text-sm text-red-500 mt-1">
+        <p v-if="errors[field.key] && submitted" class="text-sm text-red-500 mt-1">
           {{ errors[field.key] }}
         </p>
       </div>
 
-      <!-- Bouton de soumission (non utilisé si hideSubmit) -->
+      <!-- Bouton de soumission -->
       <div v-if="!hideSubmit" class="col-span-full">
         <SubmitButton
           type="button"
           :loading="isSubmitting"
-          :disabled="!isValid"
+          :disabled="submitted && !isValid"
           :label="submitLabel || 'Enregistrer'"
           @click="handleSubmit"
         />
@@ -145,6 +139,8 @@ import vSelect from 'vue-select';
 import SubmitButton from './SubmitButton.vue';
 import type { FieldConfig, SelectOption } from '@/interfaces/form';
 import { required } from '@/utils/validate';
+import FlatPickr from 'vue-flatpickr-component';
+import 'flatpickr/dist/flatpickr.css'
 import 'vue-select/dist/vue-select.css';
 
 const props = defineProps<{
@@ -155,7 +151,7 @@ const props = defineProps<{
   title?: string;
   columns?: number;
 }>();
-
+const components = { FlatPickr };
 const emit = defineEmits<{
   (e: 'submit', data: Record<string, unknown>): void;
   (e: 'update:modelValue', data: Record<string, unknown>): void;
@@ -163,6 +159,7 @@ const emit = defineEmits<{
 }>();
 
 const isSubmitting = ref(false);
+const submitted = ref(false);
 const formData = reactive<Record<string, unknown>>(props.modelValue as Record<string, unknown>);
 const errors = reactive<Record<string, string | null>>({});
 
@@ -194,7 +191,7 @@ function validateField(field: FieldConfig) {
 }
 
 function onFieldChange(field: FieldConfig) {
-  validateField(field);
+  if (submitted.value) validateField(field);
 }
 
 // Réémettre à chaque changement
@@ -202,7 +199,7 @@ watch(
   () => formData,
   val => {
     emit('update:modelValue', { ...val });
-    props.fields.forEach(validateField);
+    if (submitted.value) props.fields.forEach(validateField);
   },
   { deep: true }
 );
@@ -230,14 +227,14 @@ function toggleValue(key: string, value: unknown) {
   if (idx >= 0) arr.splice(idx, 1);
   else arr.push(value);
   emit('update:modelValue', { ...formData });
-  validateField(props.fields.find(f => f.key === key)!);
+  if (submitted.value) validateField(props.fields.find(f => f.key === key)!);
 }
 
-// Soumission via le SubmitButton interne
+// Soumission
 async function handleSubmit() {
-  const valid = validate();
-  if (!valid) return;
-  
+  submitted.value = true;
+  props.fields.forEach(field => validateField(field));
+  if (!isValid.value) return;
   isSubmitting.value = true;
   await emit('submit', { ...formData });
   isSubmitting.value = false;
@@ -245,6 +242,7 @@ async function handleSubmit() {
 
 // Méthode de validation exposée
 function validate(): boolean {
+  submitted.value = true;
   let valid = true;
   props.fields.forEach(field => {
     if (!validateField(field)) {
@@ -264,8 +262,6 @@ defineExpose({ validate });
   --vs-border-color: #ef4444;
 }
 </style>
-
-
 
 <style>
 :root {
@@ -372,8 +368,6 @@ defineExpose({ validate });
 }
 
 .dark .vs-custom .vs__dropdown-option--highlight {
-  
   color: #ffcc11; /* Primary color for highlighted option */
 }
-
 </style>

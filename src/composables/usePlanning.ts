@@ -1,3 +1,4 @@
+
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { format } from 'date-fns';
 import type { Team, Job } from '@/interfaces/planning';
@@ -14,37 +15,75 @@ export function usePlanning() {
   const selectedDate = ref<string>(format(new Date(), 'yyyy-MM-dd'));
   const teams = ref<Team[]>([]);
   const jobs = ref<Job[]>([]);
-
-  const teamForm = ref<{ name: string }>({ name: '' });
-  const jobForm = ref<{ locations: string[] }>({ locations: [] });
-
+  const selectedZone = ref<string>('');
+  const selectedSubZone = ref<string>('');
+  const selectedLocations = ref<string[]>([]);
+  const locationSearchQuery = ref('');
+  
+  const teamForm = ref<{ name: string; session: string }>({ name: '', session: '' });
   const showNewTeamForm = ref(false);
   const showNewJobForm = ref(false);
   const isSubmitting = ref(false);
-  const locations = planningService.getLocations();
+  const allLocations = planningService.getLocations();
 
-  const canValidate = computed(
-    () =>
-      !!selectedDate.value &&
-      teams.value.length > 0 &&
-      jobs.value.length > 0 &&
-      !isSubmitting.value
+  // Get unique zones and subzones
+  const zones = computed(() => {
+    const uniqueZones = new Set(allLocations.map(loc => planningService.parseLocation(loc).zone));
+    return Array.from(uniqueZones);
+  });
+
+  const subZones = computed(() => {
+    const uniqueSubZones = new Set(
+      allLocations
+        .filter(loc => !selectedZone.value || planningService.parseLocation(loc).zone === selectedZone.value)
+        .map(loc => planningService.parseLocation(loc).sousZone)
+    );
+    return Array.from(uniqueSubZones);
+  });
+
+  // Filtered locations based on search and zone/subzone selection
+  const filteredLocations = computed(() => {
+    let filtered = allLocations;
+    const query = locationSearchQuery.value.toLowerCase().trim();
+
+    if (selectedZone.value) {
+      filtered = filtered.filter(loc => planningService.parseLocation(loc).zone === selectedZone.value);
+    }
+
+    if (selectedSubZone.value) {
+      filtered = filtered.filter(loc => planningService.parseLocation(loc).sousZone === selectedSubZone.value);
+    }
+
+    if (query) {
+      filtered = filtered.filter(loc => loc.toLowerCase().includes(query));
+    }
+
+    // Exclude locations that are already in jobs
+    const usedLocations = new Set(jobs.value.flatMap(job => job.locations));
+    return filtered.filter(loc => !usedLocations.has(loc));
+  });
+
+  const canValidate = computed(() => 
+    !!selectedDate.value && 
+    teams.value.length > 0 && 
+    jobs.value.length > 0 && 
+    !isSubmitting.value
   );
 
   async function saveState() {
-    const snap = {
+    const state = {
       selectedDate: selectedDate.value,
       teams: teams.value,
       jobs: jobs.value,
       teamForm: teamForm.value,
-      jobForm: jobForm.value
+      selectedLocations: selectedLocations.value
     };
     try {
-      await indexedDBService.saveState(JSON.parse(JSON.stringify(snap)), STORAGE_KEY);
-    } catch {
+      await indexedDBService.saveState(JSON.parse(JSON.stringify(state)), STORAGE_KEY);
+    } catch (error) {
       await alertService.error({
         title: 'Erreur',
-        text: 'Impossible de sauvegarder l’état.'
+        text: 'Impossible de sauvegarder l\'état'
       });
     }
   }
@@ -53,17 +92,17 @@ export function usePlanning() {
     try {
       const saved = await indexedDBService.getState(STORAGE_KEY);
       if (saved) {
-        const s: any = saved;
-        selectedDate.value = s.selectedDate;
-        teams.value = s.teams || [];
-        jobs.value = s.jobs || [];
-        teamForm.value = s.teamForm || { name: '' };
-        jobForm.value = s.jobForm || { locations: [] };
+        const state: any = saved;
+        selectedDate.value = state.selectedDate;
+        teams.value = state.teams || [];
+        jobs.value = state.jobs || [];
+        teamForm.value = state.teamForm || { name: '', session: '' };
+        selectedLocations.value = state.selectedLocations || [];
       }
-    } catch {
+    } catch (error) {
       await alertService.error({
         title: 'Erreur',
-        text: 'Impossible de charger l’état.'
+        text: 'Impossible de charger l\'état'
       });
     }
   }
@@ -78,8 +117,8 @@ export function usePlanning() {
       () => selectedDate.value,
       () => teams.value,
       () => jobs.value,
-      () => teamForm.value.name,
-      () => jobForm.value.locations
+      () => teamForm.value,
+      () => selectedLocations.value
     ],
     saveState,
     { deep: true }
@@ -88,17 +127,19 @@ export function usePlanning() {
   async function cancelPlanning() {
     const res = await alertService.confirm({
       title: 'Annuler',
-      text: 'Effacer le state ?'
+      text: 'Effacer le planning ?'
     });
     if (!res.isConfirmed) return;
+    
     try {
       await indexedDBService.clearState(STORAGE_KEY);
     } catch {}
+    
     selectedDate.value = format(new Date(), 'yyyy-MM-dd');
     teams.value = [];
     jobs.value = [];
-    teamForm.value = { name: '' };
-    jobForm.value = { locations: [] };
+    teamForm.value = { name: '', session: '' };
+    selectedLocations.value = [];
     showNewTeamForm.value = false;
     showNewJobForm.value = false;
   }
@@ -121,21 +162,26 @@ export function usePlanning() {
     }
   }
 
-  async function addTeam(data: { name: string }) {
-    teams.value.push({ id: crypto.randomUUID(), name: data.name });
-    teamForm.value.name = '';
+  async function addTeam(data: { name: string; session: string }) {
+    teams.value.push({
+      id: crypto.randomUUID(),
+      name: data.name,
+      session: data.session
+    });
     showNewTeamForm.value = false;
-    await nextTick();
+    teamForm.value = { name: '', session: '' };
   }
 
-  async function addJob(data: { locations: string[] }) {
-    jobs.value.push({ id: crypto.randomUUID(), locations: data.locations });
-    jobForm.value.locations = [];
+  async function addJob(locations: string[]) {
+    jobs.value.push({
+      id: crypto.randomUUID(),
+      locations
+    });
+    selectedLocations.value = [];
     showNewJobForm.value = false;
     await nextTick();
   }
 
-  // Confirmation avant suppression
   async function deleteTeam(id: string) {
     const res = await alertService.confirm({
       title: 'Confirmer la suppression',
@@ -160,9 +206,14 @@ export function usePlanning() {
     selectedDate,
     teams,
     jobs,
-    locations,
+    zones,
+    subZones,
+    selectedZone,
+    selectedSubZone,
+    filteredLocations,
+    selectedLocations,
+    locationSearchQuery,
     teamForm,
-    jobForm,
     showNewTeamForm,
     showNewJobForm,
     isSubmitting,

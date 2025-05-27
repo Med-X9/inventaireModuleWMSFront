@@ -1,18 +1,16 @@
-import { Ref, ref, computed } from 'vue';
-import type { InventoryOption, StoreOption, InventoryResult, ResultAction } from '../interfaces/inventoryResults';
+import { ref, computed } from 'vue';
+import type { StoreOption, InventoryResult, ResultAction } from '../interfaces/inventoryResults';
 import { inventoryResultsService } from '../services/inventoryResultsService';
 import { alertService } from '@/services/alertService';
 import IconEdit from '@/components/icon/icon-edit.vue';
 import IconLancer from '@/components/icon/icon-launch.vue';
 import IconValider from '@/components/icon/icon-check.vue';
 
-export function useInventoryResults(
-  filterForm: Ref<{ inventory: string | null; store: string | null }>
-) {
+export function useInventoryResults(invId: number) {
   const loading = ref(false);
-  const inventories = ref<InventoryOption[]>([]);
   const stores = ref<StoreOption[]>([]);
   const results = ref<InventoryResult[]>([]);
+  const selectedStore = ref<string | null>(null);
 
   const columns = [
     { headerName: 'Article', field: 'article', sortable: true, filter: 'agTextColumnFilter' },
@@ -24,32 +22,26 @@ export function useInventoryResults(
     { headerName: 'Résultats', field: 'resultats', sortable: true, filter: 'agTextColumnFilter' },
   ];
 
-  // Filtrage basé sur filterForm passé en paramètre
-  const filteredResults = computed(() => {
-    return results.value.filter(item => {
-      const matchesInventory =
-        !filterForm.value.inventory || item.inventory === filterForm.value.inventory;
-      const matchesStore =
-        !filterForm.value.store || item.store === filterForm.value.store;
-      return matchesInventory && matchesStore;
-    });
-  });
-
-  const fetchData = async () => {
+  const fetchStores = async () => {
     try {
       loading.value = true;
-      const [inventoryOptions, storeOptions, resultData] = await Promise.all([
-        inventoryResultsService.getInventoryOptions(),
-        inventoryResultsService.getStoreOptions(),
-        inventoryResultsService.getResults()
-      ]);
-      
-      inventories.value = inventoryOptions;
-      stores.value = storeOptions;
-      results.value = resultData;
+      stores.value = await inventoryResultsService.getStoreOptionsForInventory(invId);
     } catch (error) {
       await alertService.error({
-        text: "Erreur lors du chargement des données"
+        text: "Erreur lors du chargement des magasins"
+      });
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  const fetchResults = async (storeId: string) => {
+    try {
+      loading.value = true;
+      results.value = await inventoryResultsService.getResultsForInventoryAndStore(invId, storeId);
+    } catch (error) {
+      await alertService.error({
+        text: "Erreur lors du chargement des résultats"
       });
     } finally {
       loading.value = false;
@@ -113,11 +105,12 @@ export function useInventoryResults(
 
   return {
     loading,
-    inventories,
     stores,
+    results,
     columns,
     actions,
-    filteredResults,
-    fetchData
+    selectedStore,
+    fetchStores,
+    fetchResults
   };
 }

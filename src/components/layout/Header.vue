@@ -227,11 +227,6 @@
         {{ $t('inventory_management') }}
       </router-link>
     </li>
-    <li>
-      <router-link to="/inventory/results">
-        {{ $t('inventory_results') }}
-      </router-link>
-    </li>
   </ul>
 </li>
 

@@ -21,6 +21,11 @@ class InventoryDetailService {
           { mode: 'liste emplacement', isVariant: false, useScanner: true, useSaisie: false },
           { mode: 'article + emplacement', isVariant: true, useScanner: false, useSaisie: false },
           { mode: 'liste emplacement', isVariant: false, useScanner: false, useSaisie: true }
+        ],
+        teams: [
+          { id: 1, name: 'Équipe Scanner' },
+          { id: 2, name: 'Équipe Contrôle' },
+          { id: 3, name: 'Équipe Saisie' }
         ]
       },
       magasins: [
@@ -63,6 +68,29 @@ class InventoryDetailService {
     } catch (error) {
       await alertService.error({
         text: 'Une erreur est survenue lors du lancement de l\'inventaire'
+      });
+      return false;
+    }
+  }
+
+  async cancelInventory(): Promise<boolean> {
+    try {
+      const result = await alertService.confirm({
+        title: 'Annuler l\'inventaire',
+        text: 'Êtes-vous sûr de vouloir annuler le lancement de l\'inventaire ?'
+      });
+
+      if (result.isConfirmed) {
+        await alertService.success({
+          text: 'L\'inventaire a été annulé'
+        });
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      await alertService.error({
+        text: 'Une erreur est survenue lors de l\'annulation'
       });
       return false;
     }

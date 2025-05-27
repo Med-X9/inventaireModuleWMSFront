@@ -1,13 +1,9 @@
-import type { InventoryOption, StoreOption, InventoryResult } from '../interfaces/inventoryResults';
-
-const mockInventories: InventoryOption[] = [
-  { label: 'Inventaire 1', value: 'inventory_1' },
-  { label: 'Inventaire 2', value: 'inventory_2' },
-];
+import type { StoreOption, InventoryResult } from '../interfaces/inventoryResults';
 
 const mockStores: StoreOption[] = [
   { label: 'Magasin A', value: 'store_A' },
   { label: 'Magasin B', value: 'store_B' },
+  
 ];
 
 const mockResults: InventoryResult[] = [
@@ -50,35 +46,28 @@ const mockResults: InventoryResult[] = [
 ];
 
 export const inventoryResultsService = {
-  async getInventoryOptions(): Promise<InventoryOption[]> {
-    // API call would go here
-    return mockInventories;
-  },
-
-  async getStoreOptions(): Promise<StoreOption[]> {
-    // API call would go here
+  async getStoreOptionsForInventory(inventoryId: number): Promise<StoreOption[]> {
+    await new Promise(resolve => setTimeout(resolve, 300));
     return mockStores;
   },
 
-  async getResults(): Promise<InventoryResult[]> {
-    // API call would go here
-    return mockResults;
+  async getResultsForInventoryAndStore(inventoryId: number, storeId: string): Promise<InventoryResult[]> {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return mockResults.filter(result => result.store === storeId);
   },
 
   async editResult(id: number): Promise<void> {
-    // API call would go here
+    await new Promise(resolve => setTimeout(resolve, 300));
     console.log('Edit result:', id);
   },
 
   async launchResult(id: number): Promise<void> {
-    // API call would go here
+    await new Promise(resolve => setTimeout(resolve, 300));
     console.log('Launch result:', id);
   },
 
   async validateResult(id: number): Promise<void> {
-    // API call would go here
+    await new Promise(resolve => setTimeout(resolve, 300));
     console.log('Validate result:', id);
   }
 };
-
-

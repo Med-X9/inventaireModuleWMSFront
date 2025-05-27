@@ -24,7 +24,7 @@ const emit = defineEmits<{
       :key="option.value"
       @click="emit('update:modelValue', option.value)"
       :class="[
-        'px-4 py-2 rounded-md transition-all duration-300 transform',
+        'px-3 py-1 rounded-md transition-all duration-300 transform',
         modelValue === option.value
           ? 'bg-white dark:bg-dark-light/10 text-primary shadow-sm scale-100'
           : 'text-secondary hover:text-secondary-dark scale-95 hover:scale-100'

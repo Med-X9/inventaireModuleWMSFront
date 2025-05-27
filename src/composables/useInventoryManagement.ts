@@ -83,6 +83,15 @@ export function useInventoryManagement() {
         router.push({ name: 'inventory-edit', params: { id: inventory.id } });
       },
     },
+     {
+      label: 'Résultats',
+      icon: IconEdit,
+      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
+       handler: inv =>{
+        router.push({ name: 'inventory-results', params: { id: inv.id } })
+
+      },
+    },
     {
       label: 'supprimer',
       icon: IconTrashLines,

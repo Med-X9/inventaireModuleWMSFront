@@ -1,5 +1,5 @@
 <template>
-    <div class="datatable panel px-6 py-8">
+    <div class="datatable panel py-7">
       <DataTable
         :columns="columns"
         :rowDataProp="inventories"
@@ -11,7 +11,7 @@
         <template #table-actions>
           <div>
             <button
-              class="text-white btn btn-primary text-sm"
+              class="text-white btn btn-primary mb-4 "
               @click="redirectToAdd"
             >
               Ajouter
