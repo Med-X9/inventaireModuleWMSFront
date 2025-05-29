@@ -19,6 +19,12 @@ export interface PlanningAction {
   icon?: Component;
   handler: (store: Store) => void;
 }
+// src/interfaces/planningManagement.ts
+export interface Job {
+  id: number;
+  name: string;
+  status: string;
+}
 
 /**
  * Available display modes

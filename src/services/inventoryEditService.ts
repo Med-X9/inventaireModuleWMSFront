@@ -67,37 +67,84 @@ class InventoryEditService {
   validateContages(state: InventoryCreationState): boolean {
     const [c1, c2, c3] = state.contages;
     
-    if (c1.mode === 'etat de stock') {
-      return c2.mode !== '' && c3.mode === c2.mode;
-    }
+    // First contage must have a mode
+    if (!c1.mode) return false;
     
-    return c1.mode !== '' && 
-           c2.mode !== '' && 
-           (c3.mode === c1.mode || c3.mode === c2.mode);
+    // Second contage must have a mode and can't be 'etat de stock'
+    if (!c2.mode || c2.mode === 'etat de stock') return false;
+    
+    // Third contage validation
+    if (c1.mode === 'etat de stock') {
+      // If first is 'etat de stock', third must match second
+      return c3.mode === c2.mode;
+    } else {
+      // Third must match either first or second
+      return c3.mode === c1.mode || c3.mode === c2.mode;
+    }
+  }
+
+  getOptionsForMode(mode: ContageMode): { hasVariant: boolean; hasScanner: boolean; hasQuantite: boolean; } {
+    switch (mode) {
+      case 'liste emplacement':
+        return {
+          hasVariant: false,
+          hasScanner: true,
+          hasQuantite: false
+        };
+      case 'article + emplacement':
+        return {
+          hasVariant: true,
+          hasScanner: false,
+          hasQuantite: true
+        };
+      case 'hybride':
+        return {
+          hasVariant: true,
+          hasScanner: false,
+          hasQuantite: false
+        };
+      default:
+        return {
+          hasVariant: false,
+          hasScanner: false,
+          hasQuantite: false
+        };
+    }
   }
 
   getAvailableModesForStep(state: InventoryCreationState, stepIndex: number): ContageMode[] {
-    const standardModes: ContageMode[] = [
-      'liste emplacement',
-      'article + emplacement',
-      'hybride'
-    ];
-
+    // First contage - all options available
     if (stepIndex === 0) {
-      return [...standardModes, 'etat de stock'];
+      return [
+        'etat de stock',
+        'liste emplacement',
+        'article + emplacement',
+        'hybride'
+      ];
     }
 
-    const firstContage = state.contages[0].mode;
-
+    // Second contage - always three options (no 'etat de stock')
     if (stepIndex === 1) {
-      return standardModes;
+      return [
+        'liste emplacement',
+        'article + emplacement',
+        'hybride'
+      ];
     }
 
+    // Third contage - depends on previous selections
     if (stepIndex === 2) {
-      if (firstContage === 'etat de stock') {
-        return [state.contages[1].mode];
+      const firstContage = state.contages[0];
+      const secondContage = state.contages[1];
+
+      // If first contage is 'etat de stock', only show second contage's mode
+      if (firstContage.mode === 'etat de stock') {
+        return [secondContage.mode];
       }
-      return [firstContage, state.contages[1].mode];
+
+      // Otherwise, show unique values from first and second contage
+      const uniqueModes = new Set([firstContage.mode, secondContage.mode]);
+      return Array.from(uniqueModes) as ContageMode[];
     }
 
     return [];

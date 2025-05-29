@@ -48,6 +48,13 @@ export function usePlanningManagement() {
         });
       },
     },
+        {
+      label: 'Lancer',
+      icon: IconCalendar,
+      handler: (store: Store) => {
+        router.push({ name: 'jobs-launch', query: { storeId: store.id.toString() } });
+      },
+    },
   ];
 
   async function fetchStores() {

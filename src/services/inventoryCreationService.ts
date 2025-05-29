@@ -1,40 +1,74 @@
 import type { InventoryCreationState, ContageMode } from '@/interfaces/inventoryCreation';
 
-class InventoryCreationService {
+export class InventoryCreationService {
   getAvailableModesForStep(
     state: InventoryCreationState,
     stepIndex: number
   ): ContageMode[] {
-    // Emplacements standard pour Contage 1
-    const firstOptions: ContageMode[] = [
-      'liste emplacement',
-      'article + emplacement',
-      'hybride',
-      'etat de stock'
-    ];
-
+    // First contage - all options available, default to 'etat de stock'
     if (stepIndex === 0) {
-      // Toujours les 4 options
-      return firstOptions;
+      return [
+        'etat de stock',
+        'liste emplacement',
+        'article + emplacement',
+        'hybride'
+      ];
     }
 
-    const first = state.contages[0].mode as ContageMode;
-    const second = state.contages[1].mode as ContageMode;
-
+    // Second contage - always three options (no 'etat de stock')
     if (stepIndex === 1) {
-      // Contage 2 : si premier = 'etat de stock', sinon même 3
-      return ['liste emplacement', 'article + emplacement', 'hybride'];
+      return [
+        'liste emplacement',
+        'article + emplacement',
+        'hybride'
+      ];
     }
 
+    // Third contage - depends on previous selections
     if (stepIndex === 2) {
-      // Contage 3 : si premier = 'etat de stock' → unique second, sinon [first, second]
-      if (first === 'etat de stock') {
-        return [second];
+      const firstContage = state.contages[0];
+      const secondContage = state.contages[1];
+
+      // If first contage is 'etat de stock', only show second contage's mode
+      if (firstContage.mode === 'etat de stock') {
+        return [secondContage.mode];
       }
-      return [first, second];
+
+      // Otherwise, show unique values from first and second contage
+      const uniqueModes = new Set([firstContage.mode, secondContage.mode]);
+      return Array.from(uniqueModes) as ContageMode[];
     }
 
     return [];
+  }
+
+  getOptionsForMode(mode: ContageMode): { hasVariant: boolean; hasScanner: boolean; hasQuantite: boolean; } {
+    switch (mode) {
+      case 'liste emplacement':
+        return {
+          hasVariant: false,
+          hasScanner: true,
+          hasQuantite: false
+        };
+      case 'article + emplacement':
+        return {
+          hasVariant: true,
+          hasScanner: false,
+          hasQuantite: true
+        };
+      case 'hybride':
+        return {
+          hasVariant: true,
+          hasScanner: false,
+          hasQuantite: false
+        };
+      default:
+        return {
+          hasVariant: false,
+          hasScanner: false,
+          hasQuantite: false
+        };
+    }
   }
 }
 

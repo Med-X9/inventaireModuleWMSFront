@@ -15,7 +15,11 @@ export function useInventoryCreation() {
     step1Data: { libelle: '', date: '', type: 'Inventaire Général' },
     step2Data: { compte: '', magasin: [] },
     contages: Array(3).fill(null).map<ContageConfig>(() => ({
-      mode: '', isVariant: false, useScanner: false, useSaisie: false
+      mode: '',
+      isVariant: false,
+      useScanner: false,
+      useSaisie: false,
+      isStock: false
     })),
     currentStep: 0,
   });
@@ -25,7 +29,11 @@ export function useInventoryCreation() {
     state.step2Data = { compte: '', magasin: [] };
     state.contages.splice(0, state.contages.length,
       ...Array(3).fill(null).map<ContageConfig>(() => ({
-        mode: '', isVariant: false, useScanner: false, useSaisie: false
+        mode: '',
+        isVariant: false,
+        useScanner: false,
+        useSaisie: false,
+        isStock: false
       }))
     );
     currentStep.value = 0;
@@ -109,24 +117,20 @@ export function useInventoryCreation() {
   async function onStepComplete(step: number, data: any): Promise<boolean> {
     if (!await validateCurrentStep()) return false;
 
-    if (step === 0)       state.step1Data = { ...data };
-    else if (step === 1)  state.step2Data = { ...data };
-    else                  state.contages[step - 2] = { ...data };
+    if (step === 0) state.step1Data = { ...data };
+    else if (step === 1) state.step2Data = { ...data };
+    else state.contages[step - 2] = { ...data };
 
     currentStep.value = step + 1;
     await saveState();
     return true;
   }
 
-  /** Ce qui se passe à la toute fin du wizard */
   async function onComplete() {
     if (!await validateCurrentStep()) return;
-    // 1. Vider le state dans IndexedDB
     await clearSavedState();
-    // 2. Réinitialiser le state en mémoire
     resetState();
     await saveState();
-    // 3. currentStep reste à 0 pour un prochain lancement
   }
 
   watch(state, () => {

@@ -7,6 +7,7 @@ import IconEdit from '@/components/icon/icon-edit.vue';
 import IconTrashLines from '@/components/icon/icon-trash-lines.vue';
 import IconEye from '@/components/icon/icon-eye.vue';
 import IconCalendar from '@/components/icon/icon-calendar.vue';
+ import IconSquareCheck  from '@/components/icon/icon-square-check.vue';
 
 export function useInventoryManagement() {
   const router = useRouter();
@@ -62,7 +63,7 @@ export function useInventoryManagement() {
     {
         label: 'planifier',
         icon: IconCalendar,
-        class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
+        class: 'flex items-center gap-1 px-2 py-1 text-secondary text-md',
         handler: (inventory: InventoryManagement) => {
           router.push({ name: 'planning-management', params: { id: inventory.id } });
         },
@@ -70,7 +71,7 @@ export function useInventoryManagement() {
     {
       label: 'detail',
       icon: IconEye,
-      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
+      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-md',
       handler: (inventory: InventoryManagement) => {
         router.push({ name: 'inventory-detail', params: { id: inventory.id } });
       },
@@ -78,15 +79,15 @@ export function useInventoryManagement() {
     {
       label: 'edit',
       icon: IconEdit,
-      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
+      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-md',
       handler: (inventory: InventoryManagement) => {
         router.push({ name: 'inventory-edit', params: { id: inventory.id } });
       },
     },
      {
       label: 'Résultats',
-      icon: IconEdit,
-      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
+      icon: IconSquareCheck ,
+      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-md',
        handler: inv =>{
         router.push({ name: 'inventory-results', params: { id: inv.id } })
 
@@ -95,7 +96,7 @@ export function useInventoryManagement() {
     {
       label: 'supprimer',
       icon: IconTrashLines,
-      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-xs',
+      class: 'flex items-center gap-1 px-2 py-1 text-secondary text-md',
       handler: handleDelete,
     },
   ];

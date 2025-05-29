@@ -63,6 +63,7 @@
           v-model="state.contages[idx]"
           :step-index="idx"
           :available-modes="availableModesForStep(idx)"
+          :prev-contages="state.contages"
         />
       </template>
     </DynamicWizard>

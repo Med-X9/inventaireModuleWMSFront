@@ -66,7 +66,14 @@ const routes: RouteRecordRaw[] = [
     component: () => import(/* webpackChunkName: "auth-boxed-signin" */ '../views/auth/boxed-signin.vue'),
     meta: { layout: 'auth' },
 },
-
+{
+  path: '/inventory/launch-jobs',
+  name: 'jobs-launch',
+  component: () =>
+    import(
+      /* webpackChunkName: "jobs-launch" */ '../views/Inventory/LaunchJobs.vue'
+    )
+},
 
 ];
 

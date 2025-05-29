@@ -9,7 +9,7 @@
       >
         <button
           @click="toggleDropdown"
-          class="flex items-center justify-between p-2  dark:bg-dark-bg dark:border-dark-border dark:text-white-dark  bg-white border rounded text-sm text-gray-700 shadow-sm hover:border-gray-400 w-full"
+          class="flex items-center justify-between p-2  dark:bg-dark-bg dark:border-dark-border dark:text-white-dark  bg-white border rounded text-sm text-gray-700 shadow-sm hover:border-gray-300 w-full"
         >
           <span>Sélectionner colonnes</span>
           <svg

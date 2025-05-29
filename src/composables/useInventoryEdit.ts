@@ -19,7 +19,14 @@ export function useInventoryEdit() {
   const state = reactive<InventoryCreationState>({
     step1Data: { libelle: '', date: '', type: 'Inventaire Général' },
     step2Data: { compte: '', magasin: [] },
-    contages: Array(3).fill(null).map<ContageConfig>(() => ({ mode: '', isVariant: false, useScanner: false, useSaisie: false })),
+    contages: Array(3).fill(null).map<ContageConfig>(() => ({
+      mode: '',
+      isVariant: false,
+      useScanner: false,
+      useSaisie: false,
+      quantite: false,
+      inputMethod: undefined
+    })),
     currentStep: 0
   });
 
@@ -34,7 +41,9 @@ export function useInventoryEdit() {
       mode: '',
       isVariant: false,
       useScanner: false,
-      useSaisie: false
+      useSaisie: false,
+      quantite: false,
+      inputMethod: undefined
     }));
     currentStep.value = 0;
   }
@@ -55,9 +64,14 @@ export function useInventoryEdit() {
         };
         state.step2Data = { compte: 'Compte 1', magasin: ['Magasin A'] };
 
-        state.contages[0] = { mode: 'liste emplacement', isVariant: false, useScanner: true, useSaisie: false };
-        state.contages[1] = { mode: 'article + emplacement', isVariant: true, useScanner: false, useSaisie: false };
-        state.contages[2] = { mode: 'liste emplacement', isVariant: false, useScanner: false, useSaisie: true };
+        // Set default first contage to 'etat de stock'
+        state.contages[0] = {
+          mode: 'etat de stock',
+          isVariant: false,
+          useScanner: false,
+          useSaisie: false,
+          quantite: false
+        };
 
         await saveState();
       }
@@ -139,7 +153,7 @@ export function useInventoryEdit() {
       isSubmitting.value = true;
 
       if (!inventoryEditService.validateContages(state)) {
-        await alertService.error({ text: 'Configuration invalide.' });
+        await alertService.error({ text: 'Configuration des contages invalide.' });
         return;
       }
 
