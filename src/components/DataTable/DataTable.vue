@@ -1,64 +1,90 @@
 <template>
   <div>
-    <!-- Header : selecteur de colonnes + slot actions -->
-    <div class="flex flex-col md:flex-row justify-between  items-end md:items-center gap-2">
-      <div
-        v-if="showColumnSelector"
-        ref="dropdownRef"
-        class="relative mb-4 w-full md:w-72 select-wrapper"
-      >
-        <button
-          @click="toggleDropdown"
-          class="flex items-center justify-between p-2  dark:bg-dark-bg dark:border-dark-border dark:text-white-dark  bg-white border rounded text-sm text-gray-700 shadow-sm hover:border-gray-300 w-full"
-        >
-          <span>Sélectionner colonnes</span>
-          <svg
-            class="w-4 h-4 ml-2 transition-transform"
-            :class="{ 'rotate-180': showDropdown }"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M19 9l-7 7-7-7"/>
-          </svg>
-        </button>
+    <div class="flex flex-col mb-3  md:flex-row justify-between items-end md:items-center gap-2">
+      <!-- Sélecteur de colonnes -->
+      <div class="flex flex-wrap gap-2 items-center">
         <div
-          v-if="showDropdown"
-          class="absolute top-full left-0 w-full dark:bg-dark-bg dark:border-dark-border dark:text-white-dark bg-white border rounded shadow-md z-10 p-2 max-h-64 overflow-y-auto"
-          @click.stop
+          v-if="showColumnSelector"
+          ref="dropdownRef"
+          class="relative mb-4 w-full md:w-72 select-wrapper"
         >
           <button
-            @click.stop="resetVisibleFields"
-            class="flex items-center dark:hover:bg-dark-light/10 gap-2 w-full text-sm text-primary px-2 py-1 mb-3 hover:bg-gray-500/10"
+            @click="toggleDropdown"
+            class="flex items-center justify-between p-2 dark:bg-dark-bg dark:border-dark-border dark:text-white-dark bg-white border rounded text-sm text-gray-700 shadow-sm hover:border-gray-300 w-full"
           >
-            Réinitialiser
+            <span>Sélectionner colonnes</span>
+            <svg
+              class="w-4 h-4 ml-2 transition-transform"
+              :class="{ 'rotate-180': showDropdown }"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
           </button>
-          <label
-            v-for="col in columns"
-            :key="col.field!"
-            class="flex items-center gap-2 mb-2 text-sm"
+          <div
+            v-if="showDropdown"
+            class="absolute top-full left-0 w-full dark:bg-dark-bg dark:border-dark-border dark:text-white-dark bg-white border rounded shadow-md z-10 p-2 max-h-64 overflow-y-auto"
+            @click.stop
           >
-            <input
-              type="checkbox"
-              :value="col.field!"
-              v-model="visibleFields"
-              :disabled="visibleFields.length <= minVisibleColumns && visibleFields.includes(col.field!)"
-              class="form-checkbox accent-primary focus:ring-primary"
-            />
-            {{ col.headerName || col.field }}
-          </label>
+            <button
+              @click.stop="resetVisibleFields"
+              class="flex items-center dark:hover:bg-dark-light/10 gap-2 w-full text-sm text-primary px-2 py-1 mb-3 hover:bg-gray-500/10"
+            >
+              Réinitialiser
+            </button>
+            <label
+              v-for="col in columns"
+              :key="col.field!"
+              class="flex items-center gap-2 mb-2 text-sm"
+            >
+              <input
+                type="checkbox"
+                :value="col.field!"
+                v-model="visibleFields"
+                :disabled="visibleFields.length <= minVisibleColumns && visibleFields.includes(col.field!)"
+                class="form-checkbox accent-primary focus:ring-primary"
+              />
+              {{ col.headerName || col.field }}
+            </label>
+          </div>
         </div>
       </div>
 
-      <div class="flex-shrink-0 mb-4 md:mb-1">
-        <slot name="table-actions" class="mb-8" />
+      <!-- Boutons d'export -->
+      <div class="flex-shrink-0 gap-2 flex mb-4 md:mb-0">
+        <slot name="table-actions" />
+        <div class="flex gap-2">
+          <button
+            @click="exportToCsv"
+            class="text-white btn btn-primary mb-4 btn-sm flex items-center gap-2"
+          >
+            <IconFile class="w-4 h-4" />
+            CSV
+          </button>
+          <button
+            @click="exportToExcel"
+            class="text-white btn btn-primary mb-4 btn-sm flex items-center gap-2"
+          >
+            <IconFile class="w-4 h-4" />
+            Excel
+          </button>
+          <button
+            @click="exportToPdf"
+            class="text-white btn btn-primary mb-4 btn-sm flex items-center gap-2"
+          >
+            <IconDownload class="w-4 h-4" />
+            PDF
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- AG Grid (protégé par v-if pour éviter les patchs sur nodes null) -->
+    <!-- Grille AG Grid -->
     <div v-if="rowData !== undefined">
+      <!-- Émission de l’événement row-clicked vers le parent -->
       <ag-grid-vue
         class="ag-theme-alpine auto-height-grid"
         style="width: 100%;"
@@ -66,12 +92,27 @@
         :theme="gridTheme"
         @grid-ready="onGridReady"
         @first-data-rendered="onFirstDataRendered"
-       
+        @selection-changed="onSelectionChanged"
+        @row-clicked="$emit('row-clicked', $event)"
         :columnDefs="computedVisibleColumnDefsWithIndex"
         :defaultColDef="defaultColDef"
         :rowData="rowData"
         :pagination="pagination"
         :paginationPageSize="pageSize"
+        :rowSelection="
+          rowSelection
+            ? {
+                mode:           'multiRow',
+                checkboxes:     true,
+                headerCheckbox: true,
+              }
+            : undefined
+        "
+        :selectionColumnDef="{
+          minWidth:  65,
+          maxWidth:  70,
+          cellClass: 'text-left'
+        }"
       />
     </div>
 
@@ -82,59 +123,146 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, toRefs, computed } from 'vue'
-import { AgGridVue } from 'ag-grid-vue3'
-import type { PropType } from 'vue'
-import type { ColDef } from 'ag-grid-community'
-import type { ActionConfig } from '@/interfaces/dataTable'
-import { useDataTable } from '@/composables/useDataTable'
-import { useAppStore } from '@/stores/index'
-import { themeQuartz, colorSchemeLightWarm, colorSchemeDarkBlue } from 'ag-grid-community'
+import { defineProps, computed, defineEmits } from 'vue';
+import { AgGridVue } from 'ag-grid-vue3';
+import type { PropType } from 'vue';
+import type { ColDef, CsvExportParams } from 'ag-grid-community';
+import type { ActionConfig, TableRow } from '@/interfaces/dataTable';
+import { useDataTable } from '@/composables/useDataTable';
+import { useAppStore } from '@/stores/index';
+import { themeQuartz, colorSchemeLightWarm, colorSchemeDarkBlue } from 'ag-grid-community';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
+import IconFile from '@/components/icon/icon-file.vue';
+import IconDownload from '@/components/icon/icon-download.vue';
 
-// Props définition
+const emit = defineEmits(['selection-changed', 'row-clicked']);
+
 const props = defineProps({
-  columns:            { type: Array as PropType<ColDef[]>, required: true },
-  rowDataProp:        { type: Array as PropType<Record<string, unknown>[]>, default: () => [] },
-  dataUrl:            String,
-  enableFiltering:    { type: Boolean, default: true },
-  pagination:         { type: Boolean, default: true },
-  storageKey:         { type: String, default: 'visibleFields' },
+  columns: { type: Array as PropType<ColDef[]>, required: true },
+  rowDataProp: { type: Array as PropType<TableRow[]>, default: () => [] },
+  dataUrl: String,
+  enableFiltering: { type: Boolean, default: true },
+  pagination: { type: Boolean, default: true },
+  storageKey: { type: String, default: 'visibleFields' },
   showColumnSelector: { type: Boolean, default: true },
-  actions:            { type: Array as PropType<ActionConfig[]>, default: () => [] },
-  actionsHeaderName:  { type: String, default: 'Actions' },
-})
+  actions: { type: Array as PropType<ActionConfig[]>, default: () => [] },
+  actionsHeaderName: { type: String, default: 'Actions' },
+  rowSelection: { type: Boolean, default: false },
+  exportTitle: { type: String, default: 'Export de données' },
+});
 
-// Récupération du store
-const themeStore = useAppStore()
+const themeStore = useAppStore();
 
-// Thèmes Quartz clair et sombre
-const themeLight = themeQuartz.withPart(colorSchemeLightWarm)
-const themeDark  = themeQuartz.withPart(colorSchemeDarkBlue)
+const themeLight = themeQuartz.withPart(colorSchemeLightWarm);
+const themeDark = themeQuartz.withPart(colorSchemeDarkBlue);
 
-// Computed qui renvoie le thème actif
 const gridTheme = computed(() =>
-  themeStore.theme === 'dark'
-    ? themeDark
-    : themeStore.theme === 'light'
-      ? themeLight
-      : themeLight  // par défaut
-)
+  themeStore.theme === 'dark' ? themeDark : themeLight
+);
 
-// Colonne de numéros de ligne
-const rowNumberColumn: ColDef = {
-  headerName: 'N°',
-  valueGetter: params => params.node?.rowIndex != null ? (params.node.rowIndex + 1).toString() : '',
-  width: 65,  
-  minWidth: 65,
-  maxWidth: 70,
-  suppressSizeToFit: true,
-  menuTabs: [],        
-  sortable: false,     
-  filter: false,      
-  cellClass: 'text-left',
-}
+const onSelectionChanged = () => {
+  if (!gridApi.value) return;
+  const selectedRows = gridApi.value.getSelectedRows();
+  emit('selection-changed', selectedRows);
+};
 
-// Utilisation du composable
+const getExportableColumns = () => {
+  return computedVisibleColumnDefsWithIndex.value
+    .filter(col => col.field !== 'actions' && col.field !== undefined);
+};
+
+const exportToCsv = () => {
+  if (!gridApi.value) return;
+  const params: CsvExportParams = {
+    columnSeparator: ',',
+    columnKeys: getExportableColumns().map(col => col.field!) as string[],
+  };
+  gridApi.value.exportDataAsCsv(params);
+};
+
+const exportToExcel = () => {
+  if (!gridApi.value) return;
+
+  const allData: Record<string, unknown>[] = [];
+  gridApi.value.forEachNodeAfterFilterAndSort(node => {
+    if (node.data) allData.push(node.data);
+  });
+  if (!allData.length) return;
+
+  const visibleCols = getExportableColumns();
+  const headers = visibleCols.map(col => col.headerName || col.field);
+
+  const dataForSheet = allData.map(row => {
+    const obj: Record<string, unknown> = {};
+    visibleCols.forEach(col => {
+      if (col.field) obj[col.field] = row[col.field];
+    });
+    return obj;
+  });
+
+  const ws = XLSX.utils.json_to_sheet(dataForSheet, {
+    header: visibleCols.map(c => c.field as string).filter(Boolean)
+  });
+  XLSX.utils.sheet_add_aoa(ws, [headers], { origin: 'A1' });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Données');
+
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbout], { type: 'application/octet-stream' });
+  saveAs(blob, 'export.xlsx');
+};
+
+const exportToPdf = () => {
+  if (!gridApi.value) return;
+  const doc = new jsPDF();
+
+  // Titre
+  doc.setFontSize(16);
+  doc.setTextColor(44, 62, 80);
+  doc.text(props.exportTitle, 14, 15);
+
+  const columns = getExportableColumns()
+    .map(col => col.headerName || col.field || '')
+    .filter(Boolean);
+
+  const csvData = gridApi.value.getDataAsCsv({
+    columnKeys: getExportableColumns().map(col => col.field) as string[],
+  });
+  if (!csvData) return;
+
+  const data = csvData
+    .split('\n')
+    .slice(1)
+    .map(row => row.split(','));
+
+  autoTable(doc, {
+    head: [columns],
+    body: data,
+    startY: 25,
+    headStyles: { fillColor: [41, 128, 185] },
+    didDrawPage: () => {
+      const pageCount = doc.getNumberOfPages();
+      doc.setFontSize(10);
+      doc.setTextColor(128, 128, 128);
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.text(
+          `Page ${i} sur ${pageCount}`,
+          doc.internal.pageSize.width - 20,
+          doc.internal.pageSize.height - 10,
+          { align: 'right' }
+        );
+      }
+    }
+  });
+
+  doc.save('export.pdf');
+};
+
 const {
   defaultColDef,
   rowData,
@@ -148,16 +276,30 @@ const {
   resetVisibleFields,
   minVisibleColumns,
   dropdownRef,
-} = useDataTable(props)
+  gridApi,
+} = useDataTable(props);
 
-// Mise à jour de computedVisibleColumnDefs pour inclure la colonne de ligne
+const rowNumberColumn: ColDef = {
+  headerName: 'N°',
+  valueGetter: params =>
+    params.node?.rowIndex != null
+      ? (params.node.rowIndex + 1).toString()
+      : '',
+  width: 70,
+  minWidth: 70,
+  maxWidth: 80,
+  suppressSizeToFit: true,
+  menuTabs: [],
+  sortable: false,
+  filter: true,
+  cellClass: 'text-left',
+};
+
 const computedVisibleColumnDefsWithIndex = computed<ColDef[]>(() => {
-  // on clone les colonnes passées en props
-  const cols = [...computedVisibleColumnDefs.value]
-  // on insère la colonne d'index en début
-  cols.unshift(rowNumberColumn)
-  return cols
-})
+  const cols = [...computedVisibleColumnDefs.value];
+  cols.unshift(rowNumberColumn);
+  return cols;
+});
 </script>
 
 <style scoped>
@@ -167,36 +309,34 @@ const computedVisibleColumnDefsWithIndex = computed<ColDef[]>(() => {
   max-height: 430px !important;
   height: auto !important;
   overflow-y: auto !important;
-
 }
-/* Pagination AG Grid super-compacte pour mobile */
+.auto-height-grid ::v-deep .ag-header-cell-text,
+.auto-height-grid ::v-deep .ag-header-cell-label {
+  font-size: 13.5px;
+}
+.auto-height-grid ::v-deep .ag-cell {
+  font-size: 12.5px;
+}
+.auto-height-grid ::v-deep .ag-paging-panel,
+.auto-height-grid ::v-deep .ag-pagination-button,
+.auto-height-grid ::v-deep .ag-page-size-panel,
+.auto-height-grid ::v-deep .ag-page-size,
+.auto-height-grid ::v-deep .ag-input-field-input {
+  font-size: 13.5px;
+}
 @media (max-width: 640px) {
-  /* Conteneur de la pagination */
-  ::v-deep .ag-paging-panel {
-    font-size: 0.55rem;        /* texte très petit */
-    padding: 0.15rem 0.3rem;   /* très peu d’espacement */
-  }
-
-  /* Boutons de page (« Précédent », numéros, « Suivant ») */
   ::v-deep .ag-pagination-button {
-    min-width: 1.2rem;         /* largeur mini */
-    height: 1.2rem;            /* hauteur mini */
-    padding: 0.15rem;          /* rembourrage mini */
-  }
-
-  /* Sélecteur du nombre de lignes par page */
-  ::v-deep .ag-page-size-panel,
-  ::v-deep .ag-page-size {
-    font-size: 0.55rem;
+    min-width: 1.2rem;
+    height: 1.2rem;
     padding: 0.15rem;
   }
-
-  /* Input de numéro de page */
-  ::v-deep .ag-input-field-input {
-    font-size: 0.55rem;
-    padding: 0.15rem;
+  .auto-height-grid ::v-deep .ag-paging-panel,
+  .auto-height-grid ::v-deep .ag-pagination-button,
+  .auto-height-grid ::v-deep .ag-page-size-panel,
+  .auto-height-grid ::v-deep .ag-page-size,
+  .auto-height-grid ::v-deep .ag-input-field-input {
+    font-size: 6.5px;
+    padding: 0.3rem;
   }
 }
-
-
 </style>

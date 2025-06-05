@@ -1,78 +1,101 @@
 <template>
-  <div class="panel py-7 datatable">
-    <DataTable
-      :columns="columns"
-      :rowDataProp="jobs"
-      :actions="actions"
-      :pagination="true"
-      :enableFiltering="true"
-      :rowSelection="rowSelection"
-      @selection-changed="onSelectionChanged"
-      storageKey="jobs_management_table"
-    >
-      <template #table-actions>
-        <button
-          class="text-white btn btn-primary mb-4"
-          @click="launchSelected"
-          :disabled="!selectedJobs.length"
+    <ul class="flex space-x-2 mb-4">
+        <li>
+            <router-link :to="{ name: 'inventory-list' }" class="text-primary hover:underline"> Gestion d'inventaire </router-link>
+        </li>
+        <li>
+            <router-link :to="{ name: 'planning-management' }" class="before:content-['/'] ltr:before:mr-2 text-primary hover:underline"
+                >Gestion des plannings</router-link
+            >
+        </li>
+        <li class="before:content-['/'] ltr:before:mr-2"><span>Lancer</span></li>
+    </ul>
+    <div class="panel py-7 datatable">
+        <DataTable
+            :columns="columns"
+            :rowDataProp="jobs"
+            :actions="actions"
+            :pagination="true"
+            :enableFiltering="true"
+            :rowSelection="true"
+            @selection-changed="onSelectionChanged"
+            storageKey="jobs_management_table"
         >
-          Lancer sélection
-        </button>
-      </template>
-    </DataTable>
-  </div>
+            <template #table-actions>
+                <button class="btn btn-primary mb-4" @click="launchSelected">Lancer</button>
+            </template>
+        </DataTable>
+    </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import DataTable from '@/components/DataTable/DataTable.vue'
-import { planningManagementService } from '@/services/planningManagementService'
+    import { ref } from 'vue';
+    import { useRoute } from 'vue-router';
+    import DataTable from '@/components/DataTable/DataTable.vue';
+    import type { ActionConfig } from '@/interfaces/dataTable';
 
-import IconReassign from '@/components/icon/icon-refresh.vue'
-import type { ActionConfig } from '@/interfaces/dataTable'
+    interface Job {
+        id: number;
+        name: string;
+        status: string;
+    }
 
-type Job = { id: number; name: string; status: string }
+    // Static data for jobs
+    const jobs = ref<Job[]>([
+        { id: 1, name: 'Job 1', status: 'En attente' },
+        { id: 2, name: 'Job 2', status: 'En cours' },
+        { id: 3, name: 'Job 3', status: 'Terminé' },
+        { id: 4, name: 'Job 4', status: 'En attente' },
+    ]);
 
-const route = useRoute()
-const storeId = Number(route.query.storeId || route.params.storeId)
+    const selectedJobs = ref<Job[]>([]);
 
-const jobs = ref<Job[]>([])
-const selectedJobs = ref<Job[]>([])
+    const columns = [
+        {
+            headerName: 'Job',
+            field: 'name',
+            sortable: true,
+            filter: 'agTextColumnFilter',
+        },
+        {
+            headerName: 'Statut',
+            field: 'status',
+            sortable: true,
+            filter: 'agTextColumnFilter',
+            cellRenderer: (params: any) => {
+                const statusClass = getStatusClass(params.value);
+                return `<span class="px-3 py-1 rounded-full text-sm ${statusClass}">${params.value}</span>`;
+            },
+        },
+    ];
 
-const rowSelection = { mode: 'multiple' }
+    const getStatusClass = (status: string): string => {
+        switch (status.toLowerCase()) {
+            case 'en attente':
+                return 'bg-warning-light text-warning';
+            case 'en cours':
+                return 'bg-info-light text-info';
+            case 'terminé':
+                return 'bg-success-light text-success';
+            default:
+                return 'bg-gray-100 text-gray-600';
+        }
+    };
 
-async function fetchJobs() {
-  if (!storeId) return
-  // utilise la méthode existante pour récupérer les jobs d’un magasin
-  jobs.value = await planningManagementService.getJobsByStore(storeId)
-}
+    const actions: ActionConfig[] = [];
 
-onMounted(fetchJobs)
+    function onSelectionChanged(rows: Job[]): void {
+        selectedJobs.value = rows;
+    }
 
-const columns = [
-  { headerName: 'Nom', field: 'name', sortable: true, filter: 'agTextColumnFilter' },
-  { headerName: 'Statut', field: 'status', sortable: true, filter: 'agTextColumnFilter' }
-]
-
-const actions: ActionConfig[] = [
- 
-]
-
-let gridApi: any = null
-
-function onGridReady(params: any) {
-  gridApi = params.api
-}
-
-function onSelectionChanged(rows: Job[]) {
-  selectedJobs.value = rows
-}
-
-async function launchSelected() {
-  const ids = selectedJobs.value.map(j => j.id)
-  if (!storeId || !ids.length) return
-  await planningManagementService.launchJobsForStore(storeId, ids)
-  await fetchJobs()
-}
+    function launchSelected(): void {
+        console.log('Launching selected jobs:', selectedJobs.value);
+    }
 </script>
+
+<style scoped>
+    .datatable :deep(.ag-cell) {
+        display: flex;
+        align-items: center;
+    }
+</style>

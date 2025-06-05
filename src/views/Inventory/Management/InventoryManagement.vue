@@ -5,17 +5,20 @@
         :rowDataProp="inventories"
         :actions="actions"
         :pagination="true"
+        :enableRowSelection="true"
         :enableFiltering="true"
         storageKey="inventory_management_table"
       >
         <template #table-actions>
-          <div>
+          <div class="flex items-center flex-wrap gap-2">
             <button
-              class="text-white btn btn-primary mb-4 "
+              class=" btn btn-primary mb-4 btn-sm "
               @click="redirectToAdd"
             >
-              Ajouter
+              <icon-plus class="w-5 h-5 ltr:mr-1 rtl:ml-1 " />
+              Create
             </button>
+            
           </div>
         </template>
       </DataTable>
@@ -26,10 +29,11 @@
   import { defineComponent, onMounted } from 'vue';
   import DataTable from '@/components/DataTable/DataTable.vue';
   import { useInventoryManagement } from '@/composables/useInventoryManagement';
+  import IconPlus from '@/components/icon/icon-plus.vue';
   
   export default defineComponent({
     name: 'InventoryManagement',
-    components: { DataTable },
+    components: { DataTable, IconPlus },
     
     setup() {
       const {

@@ -41,54 +41,23 @@
               </router-link>
             </li>
 
-            <!-- Menu déroulant Inventaire -->
-            <li class="nav-item menu">
-  <button
-    type="button"
-    class="nav-link group w-full"
-    :class="{ active: activeDropdown === 'inventory' }"
-    @click="activeDropdown = activeDropdown === 'inventory' ? null : 'inventory'"
-  >
-    <div class="flex items-center justify-between w-full">
-      <div class="flex items-center">
-        <IconMenuInventory class="shrink-0 " />
-        <span class="ltr:pl-3 group-hover:!text-primary  rtl:pr-3 text-black dark:text-[#506690] dark:group-hover:text-white-dark">
-          {{ $t('inventaire') }}
-        </span>
-      </div>
-      <div :class="{ 'rtl:rotate-90 -rotate-90': activeDropdown !== 'inventory' }">
-        <icon-caret-down />
-      </div>
-    </div>
-  </button>
-
-  <!-- Sous-menu -->
-  <ul v-show="activeDropdown === 'inventory'" class="sub-menu text-gray-500 mt-2 space-y-1">
-    <li>
-      <router-link
-        to="/inventory/creation"
-        exact
-        class="group"
-        active-class="text-primary dark:text-white"
-        @click="toggleMobileMenu"
-      >
-        {{ $t('inventory_creation') }}
-      </router-link>
-    </li>
-    <li>
-      <router-link
-        to="/inventory/management"
-        exact
-        class="group"
-        active-class="text-primary dark:text-white"
-        @click="toggleMobileMenu"
-      >
-        {{ $t('inventory_management') }}
-      </router-link>
-    </li>
-  </ul>
-</li>
-
+            <!-- Lien simple Inventaire -->
+            <li class="nav-item">
+              <router-link
+                to="/inventory/management"
+                exact
+                class="group"
+                active-class="text-primary dark:text-white"
+                @click="toggleMobileMenu"
+              >
+                <div class="flex items-center">
+                  <icon-menu-inventory class="shrink-0 group-hover:text-primary" />
+                  <span class="ltr:pl-3 rtl:pr-3 text-black dark:text-[#506690] group-hover:text-primary dark:group-hover:text-white-dark">
+                    {{ $t('inventaire') }}
+                  </span>
+                </div>
+              </router-link>
+            </li>
 
             <!-- Autres éléments de menu peuvent être ajoutés ici -->
           </ul>
@@ -99,20 +68,13 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue';
+import { onMounted } from 'vue';
 import { useAppStore } from '@/stores/index';
 import IconCaretsDown from '@/components/icon/icon-carets-down.vue';
-import IconCaretDown from '@/components/icon/icon-caret-down.vue';
 import IconMenuDashboard from '@/components/icon/menu/icon-menu-dashboard.vue';
 import IconMenuInventory from '@/components/icon/menu/icon-menu-inventory.vue';
 
 const store = useAppStore();
-const activeDropdown = ref<string | null>(null);
-
-// Fonction pour basculer l'affichage du menu déroulant
-function toggleDropdown(name: string) {
-  activeDropdown.value = activeDropdown.value === name ? null : name;
-}
 
 // Fonction pour fermer la sidebar en mode mobile
 function toggleMobileMenu() {
@@ -126,18 +88,6 @@ onMounted(() => {
   const selector = document.querySelector('.sidebar ul a[href="' + window.location.pathname + '"]');
   if (selector) {
     selector.classList.add('active');
-    const ul = selector.closest('ul.sub-menu');
-    if (ul) {
-      const parentMenu = ul.closest('li.menu');
-      if (parentMenu) {
-        const navLink = parentMenu.querySelector('.nav-link');
-        if (navLink) {
-          setTimeout(() => {
-            (navLink as HTMLElement).click();
-          });
-        }
-      }
-    }
   }
 });
 </script>

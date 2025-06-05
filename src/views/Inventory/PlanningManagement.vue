@@ -75,17 +75,18 @@ const handleItemClick = (item: GridDataItem) => {
   }
 };
 
-const handleAssignTeams = (item: GridDataItem) => {
+const handlePlanningAction = (item: GridDataItem) => {
   if (isStore(item)) {
     actions[0].handler(item);
   }
 };
 
-const handlePlanningAction = (item: GridDataItem) => {
+const handleAssignTeams = (item: GridDataItem) => {
   if (isStore(item)) {
     actions[1].handler(item);
   }
 };
+
 
 const handleLaunchAction = (item: GridDataItem) => {
   if (!isStore(item)) return;
@@ -187,17 +188,17 @@ onUnmounted(() => {
           { label: 'Jobs', value: 'jobs_count', suffix: 'jobs' }
         ]"
         :enableActions="true"
-        :actions="[
+        :actions="[ 
           {
             label: actions[0].label,
-            icon: IconUser,
-            handler: handleAssignTeams,
+            icon: IconCalendar,
+            handler: handlePlanningAction,
             variant: 'secondary'
           },
           {
             label: actions[1].label,
-            icon: IconCalendar,
-            handler: handlePlanningAction,
+            icon: IconUser,
+            handler: handleAssignTeams,
             variant: 'secondary'
           },
           {

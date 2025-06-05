@@ -1,13 +1,11 @@
-
 import { format, isValid, parse } from 'date-fns';
-import type { ContageConfig } from '@/interfaces/inventoryCreation';
+import type { ContageConfig, InventoryCreationState } from '@/interfaces/inventoryCreation';
 
 export interface Validator {
   fn: (value: unknown) => boolean;
   msg: string;
 }
 
-// Validators de base
 export const required = (msg = 'Ce champ est requis'): Validator => ({
   fn: (value: unknown) => {
     if (Array.isArray(value)) return value.length > 0;
@@ -68,7 +66,6 @@ export const number = (msg = 'Valeur numérique invalide'): Validator => ({
   msg
 });
 
-// Validation des contages
 export interface ContageValidationResult {
   isValid: boolean;
   errors: string[];
@@ -94,9 +91,7 @@ export const validateContages = (contages: ContageConfig[]): ContageValidationRe
       fieldErrors.mode[index] = `Le mode du contage ${index + 1} est requis`;
     }
 
-    if (contage.mode !== 'etat de stock' && !(contage.useScanner || contage.useSaisie)) {
-      fieldErrors.useScanner[index] = `Méthode de saisie requise pour le contage ${index + 1}`;
-    }
+   
   });
 
   const isValidOverall = errors.length === 0 &&
@@ -105,41 +100,31 @@ export const validateContages = (contages: ContageConfig[]): ContageValidationRe
   return { isValid: isValidOverall, errors, fieldErrors };
 };
 
-// Validation globale de la création d'inventaire
-import type { InventoryCreationState } from '@/interfaces/inventoryCreation';
-
 export interface CreationValidationResult {
   isValid: boolean;
   step1Errors: Record<string, string>;
-  step2Errors: Record<string, string>;
   contageResult: ContageValidationResult;
 }
 
 export const validateCreation = (state: InventoryCreationState): CreationValidationResult => {
   const step1Errors: Record<string, string> = {};
-  const step2Errors: Record<string, string> = {};
 
-  // Étape 1: libelle, date
   if (!required().fn(state.step1Data.libelle)) {
     step1Errors.libelle = required().msg;
   }
   if (!date().fn(state.step1Data.date)) {
     step1Errors.date = date().msg;
   }
-
-  // Étape 2: compte, magasin
-  if (!selectRequired().fn(state.step2Data.compte)) {
-    step2Errors.compte = selectRequired().msg;
+  if (!selectRequired().fn(state.step1Data.compte)) {
+    step1Errors.compte = selectRequired().msg;
   }
-  if (!selectRequired().fn(state.step2Data.magasin)) {
-    step2Errors.magasin = selectRequired().msg;
+  if (!selectRequired().fn(state.step1Data.magasin)) {
+    step1Errors.magasin = selectRequired().msg;
   }
 
   const contageResult = validateContages(state.contages);
 
-  const isValid = Object.keys(step1Errors).length === 0 &&
-    Object.keys(step2Errors).length === 0 &&
-    contageResult.isValid;
+  const isValid = Object.keys(step1Errors).length === 0 && contageResult.isValid;
 
-  return { isValid, step1Errors, step2Errors, contageResult };
+  return { isValid, step1Errors, contageResult };
 };

@@ -168,7 +168,7 @@
                                         </router-link>
                                     </li>
                                     <li class="border-t border-white-light dark:border-white-light/10">
-                                        <router-link to="/auth/boxed-signin" class="text-danger !py-3" @click="close()">
+                                        <router-link to="/auth/login" class="text-danger !py-3" @click="close()">
                                             <icon-logout class="w-4.5 h-4.5 ltr:mr-2 rtl:ml-2 rotate-90 shrink-0" />
 
                                             Sign Out
@@ -184,8 +184,6 @@
             <ul
                 class="horizontal-menu hidden py-1.5 font-semibold px-6 lg:space-x-1.5 xl:space-x-8 rtl:space-x-reverse bg-white border-t border-[#ebedf2] dark:border-[#191e3a] dark:bg-[#0e1726] text-black dark:text-white-dark"
             >
-    
-      
       <li class="nav-item">
         <router-link
           to="/"
@@ -198,39 +196,22 @@
         </router-link>
       </li>
 
-      <!-- Inventaire avec dropdown -->
-      <li class="menu nav-item relative">
-  <a href="javascript:;" class="nav-link" @click="toggleDropdown('inventory')">
-    <div class="flex items-center">
-      <icon-menu-inventory class="shrink-0" />
-      <span class="px-2">{{ $t('inventaire') }}</span>
-    </div>
-    <div class="right_arrow">
-      <icon-caret-down 
-        class="transition-transform duration-300"
-        :class="{ 'rotate-180': activeDropdown === 'inventory' }"
-      />
-    </div>
-  </a>
+      <!-- Lien simple Inventaire -->
+      <li class="nav-item">
+        <router-link
+          to="/inventory/management"
+          exact
+          class="nav-link flex items-center hover:text-primary dark:hover:text-white"
+          @click="closeDropdown"
+        >
+          <icon-menu-inventory class="shrink-0" />
+          <span class="px-2">{{ $t('inventaire') }}</span>
+        </router-link>
+      </li>
 
-  <ul
-    v-show="activeDropdown === 'inventory'"
-    class="sub-menu"
-  >
-    <li>
-      <router-link to="/inventory/creation">
-        {{ $t('inventory_creation') }}
-      </router-link>
-    </li>
-    <li>
-      <router-link to="/inventory/management">
-        {{ $t('inventory_management') }}
-      </router-link>
-    </li>
-  </ul>
-</li>
-
+      <!-- Autres éléments de menu peuvent être ajoutés ici -->
     </ul>
+    
         </div>
     </header>
 </template>

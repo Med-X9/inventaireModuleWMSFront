@@ -45,7 +45,7 @@ export function useDataTable(props: UseDataTableProps) {
   // --- VISIBLE FIELDS ---
   const minVisibleColumns = computed(() => {
     const t = props.columns.length
-    return t > 4 ? 3 : t >= 3 ? 2 : 1
+    return t > 4 ? 5 : t >= 3 ? 2 : 1
   })
   const visibleFields = useLocalStorage<string[]>(
     props.storageKey,
@@ -170,5 +170,6 @@ export function useDataTable(props: UseDataTableProps) {
     resetVisibleFields,
     minVisibleColumns,
     dropdownRef,
+    gridApi,
   }
 }

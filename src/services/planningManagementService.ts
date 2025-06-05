@@ -5,7 +5,13 @@ export class PlanningManagementService {
   private static readonly MOCK_STORES: Store[] = [
     { id: 1, store_name: 'Magasin A', teams_count: 5, jobs_count: 12 },
     { id: 2, store_name: 'Magasin B', teams_count: 3, jobs_count: 8 },
-    { id: 3, store_name: 'Magasin C', teams_count: 7, jobs_count: 15 }
+    { id: 3, store_name: 'Magasin C', teams_count: 7, jobs_count: 15 },
+     { id: 4, store_name: 'Magasin D', teams_count: 5, jobs_count: 12 },
+    { id: 5, store_name: 'Magasin E', teams_count: 3, jobs_count: 8 },
+    { id: 6, store_name: 'Magasin F', teams_count: 7, jobs_count: 15 },
+     { id: 7, store_name: 'Magasin G', teams_count: 5, jobs_count: 12 },
+    { id: 8, store_name: 'Magasin H', teams_count: 3, jobs_count: 8 },
+    { id: 9, store_name: 'Magasin I', teams_count: 7, jobs_count: 15 },
   ];
 
   // Stub jobs data per store

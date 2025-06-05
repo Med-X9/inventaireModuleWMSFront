@@ -60,7 +60,7 @@
               <button
                 type="submit"
                 :disabled="isSubmitting"
-                class="btn btn-gradient w-full mt-6 uppercase shadow-lg disabled:opacity-50"
+                class="btn btn-primary w-full mt-6 uppercase shadow-lg disabled:opacity-50"
               >
                 {{ isSubmitting ? 'Connexion...' : 'Se connecter' }}
               </button>

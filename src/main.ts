@@ -1,5 +1,3 @@
-// src/main.ts
-
 import { createApp } from 'vue';
 import App from '@/App.vue';
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
@@ -54,28 +52,31 @@ app.use(vue3JsonExcel);
 import {
   ModuleRegistry,
   ClientSideRowModelModule,
-  RowSelectionModule,
-  TextFilterModule,
-  NumberFilterModule,
-  DateFilterModule,
-  PaginationModule,
-  ValidationModule,    // pour lister précisément les modules manquants en dev
-  EventApiModule,      // <-- module pour api.addEventListener
-  CellStyleModule,     
-} from 'ag-grid-community';
-
-ModuleRegistry.registerModules([
-  ClientSideRowModelModule,
+  ClientSideRowModelApiModule,
   RowSelectionModule,
   TextFilterModule,
   NumberFilterModule,
   DateFilterModule,
   PaginationModule,
   ValidationModule,
-  EventApiModule,      // sans cela, api.addEventListener() échoue :contentReference[oaicite:3]{index=3}
-  CellStyleModule      // sans cela, la propriété cellStyle n’est pas reconnue :contentReference[oaicite:4]{index=4}
-]);
+  EventApiModule,
+  CellStyleModule,
+  CsvExportModule,
+} from 'ag-grid-community'
 
+ModuleRegistry.registerModules([
+  ClientSideRowModelModule,
+  ClientSideRowModelApiModule,
+  RowSelectionModule,
+  TextFilterModule,
+  NumberFilterModule,
+  DateFilterModule,
+  PaginationModule,
+  ValidationModule,
+  EventApiModule,
+  CellStyleModule,
+  CsvExportModule,
+])
 
-// montez l’app après avoir enregistré vos modules
+// montez l'app après avoir enregistré vos modules
 app.mount('#app');

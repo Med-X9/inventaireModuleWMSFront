@@ -15,10 +15,10 @@
           <span>Détail de l'inventaire</span>
         </li>
       </ul>
-      <div class="flex flex-wrap gap-2">
+      <div class="flex flex-wrap gap-2 mb-4">
         <template v-if="inventory?.statut?.toLowerCase() === 'en attente'">
           <button
-            class="btn btn-primary"
+            class="btn btn-primary "
             @click="launchInventory"
           >
             Lancer
@@ -32,13 +32,13 @@
         </template>
 
         <button
-          class="btn btn-danger"
+          class="btn btn-danger "
           @click="cancelInventory"
         >
           Annuler
         </button>
           
-          <button type="button"  @click="exportToPDF" v-tippy:button class="btn btn-primary"><IconDownload class="w-5 h-5 " /></button>
+          <button type="button"  @click="exportToPDF" v-tippy:button class="btn btn-primary"><IconDownload class="w-5 h-5 mr-2" />PDF</button>
           <tippy target="button" placement="bottom">Exporter en PDF</tippy>
       </div>
     </div>
@@ -53,7 +53,7 @@
             :key="tab.id"
             @click="currentTab = tab.id"
             :class="[
-              'text-base font-medium whitespace-nowrap',
+              ' font-medium whitespace-nowrap',
               currentTab === tab.id
                 ? 'border-b-2 border-primary text-primary'
                 : 'text-secondary  dark:text-white-dark hover:text-secondary-600 hover:border-secondary-light'
@@ -70,7 +70,7 @@
         
           <div class="bg-white dark:bg-gray-700 rounded-2xl shadow-md ring-1 ring-gray-200 dark:ring-gray-600 overflow-hidden">
             <div class="px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-center border-b border-gray-200 dark:border-gray-700">
-              <h2 class="text-lg font-semibold text-gray-800 dark:text-white-light mb-2 sm:mb-0">Informations générales</h2>
+              <h2 class="text-lg  text-gray-800 dark:text-white-light mb-2 sm:mb-0">Informations générales</h2>
               <span
                 :class="[
                   'px-3 py-1 rounded-full text-sm font-semibold',
@@ -84,21 +84,21 @@
               <!-- Libellé -->
               <div class="flex flex-col">
                 <span class="text-sm text-gray-500 dark:text-gray-400">Libellé</span>
-                <span class="mt-1 text-lg font-medium text-gray-700 dark:text-gray-200">
+                <span class="mt-1 text-base font-medium text-gray-700 dark:text-gray-200">
                   {{ inventory.label || 'Non défini' }}
                 </span>
               </div>
               <!-- Date d'inventaire -->
               <div class="flex flex-col">
                 <span class="text-sm text-gray-500 dark:text-gray-400">Date d'inventaire</span>
-                <span class="mt-1 text-lg font-medium text-gray-700 dark:text-gray-200">
+                <span class="mt-1  text-base font-medium text-gray-700 dark:text-gray-200">
                   {{ formatDate(inventory.inventory_date) }}
                 </span>
               </div>
               <!-- Type -->
               <div class="flex flex-col">
                 <span class="text-sm text-gray-500 dark:text-gray-400">Type</span>
-                <span class="mt-1 text-lg font-medium text-gray-700 dark:text-gray-200">
+                <span class="mt-1  text-base font-medium text-gray-700 dark:text-gray-200">
                   {{ inventory.type || 'Non défini' }}
                 </span>
               </div>
@@ -109,7 +109,7 @@
           <div class="bg-white dark:bg-gray-700 rounded-2xl shadow-md ring-1 ring-gray-200 dark:ring-gray-600 overflow-hidden">
 
             <div class="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 class="text-lg font-semibold text-gray-800 dark:text-white-light">Paramètres de comptage</h3>
+              <h3 class="text-lg  text-gray-800 dark:text-white-light">Paramètres de comptage</h3>
             </div>
             <div class="px-4 sm:px-6 py-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div
@@ -140,7 +140,7 @@
           <!-- Card : Magasins associés -->
           <div class="bg-white dark:bg-gray-700 rounded-2xl shadow-md ring-1 ring-gray-200 dark:ring-gray-600 overflow-hidden">
             <div class="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 class="text-lg font-semibold text-gray-800 dark:text-white-light">Magasins associés</h3>
+              <h3 class="text-lg  text-gray-800 dark:text-white-light">Magasins associés</h3>
             </div>
             <div class="px-4 sm:px-6 py-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div
@@ -157,7 +157,7 @@
           <!-- Card : Équipes assignées -->
           <div class="bg-white dark:bg-gray-700 rounded-2xl shadow-md ring-1 ring-gray-200 dark:ring-gray-600 overflow-hidden">
             <div class="px-4 sm:px-6 py-4  border border-gray-200 dark:border-gray-700">
-              <h3 class="text-lg font-semibold text-gray-800 dark:text-white-light">Équipes assignées</h3>
+              <h3 class="text-lg  text-gray-800 dark:text-white-light">Équipes assignées</h3>
             </div>
             <div class="px-4 sm:px-6 py-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div
@@ -174,58 +174,37 @@
           </div>
         </div>
         <!-- Contages détaillés -->
-        <div v-else class=" py-4">
+        <div v-else class="py-4">
           <template v-for="tab in tabs.filter(t => t.id !== 'general')" :key="tab.id">
             <div v-if="currentTab === tab.id">
               <div class="space-y-2">
                 <div class="flex flex-col sm:flex-row gap-4 md:items-center justify-between">
-                 <div class="flex flex-col sm:flex-row gap-4">
-                   <h2 class="text-lg font-semibold text-gray-800 dark:text-white-light flex items-center">
-                    {{ tab.label }}
-                     </h2>
-                    <div class="flex space-x-3">
-                      <div class="flex items-center px-2 py-1  justify-center  bg-white border border-gray-300 rounded">
-                        <div class="w-2 h-2 justify-center  bg-primary rounded-full mr-2"></div>
-                        <span class="text-sm text-gray-600 dark:text-gray-400"> en attente : {{ getRemainingJobsCount(tab.id) }}</span>
+                  <div class="flex flex-col sm:flex-row gap-4">
+                    <div class="flex space-x-2 mb-2">
+                      <div class="flex items-center px-2 py-1 justify-center bg-white border border-gray-300 rounded">
+                        <div class="w-2 h-2 justify-center bg-primary rounded-full mr-2"></div>
+                        <span class="text-sm text-gray-600 dark:text-gray-400">en attente : {{ getRemainingJobsCount(tab.id) }}</span>
                       </div>
-                      <div class="flex items-center px-2 py-1  justify-center  bg-white border border-gray-300 rounded">
+                      <div class="flex items-center px-2 py-1 justify-center bg-white border border-gray-300 rounded">
                         <div class="w-2 h-2 bg-info rounded-full mr-2"></div>
-                        <span class="text-sm text-gray-600 dark:text-gray-400">en cours : {{ getInProgressJobsCount(tab.id) }} </span>
+                        <span class="text-sm text-gray-600 dark:text-gray-400">en cours : {{ getInProgressJobsCount(tab.id) }}</span>
                       </div>
-                      <div class="flex items-center px-2 py-1  justify-center  bg-white border border-gray-300 rounded">
+                      <div class="flex items-center px-2 py-1 justify-center bg-white border border-gray-300 rounded">
                         <div class="w-2 h-2 bg-success rounded-full mr-2"></div>
                         <span class="text-sm text-gray-600 dark:text-gray-400">terminés : {{ getCompletedJobsCount(tab.id) }}</span>
                       </div>
                     </div>
-                 </div>
-                 
-                  <div class="flex gap-2">
-                    <ToggleButtons
-                      v-model="viewMode"
-                      :options="[
-                        { value: 'table', icon: IconListCheck },
-                        { value: 'grid', icon: IconLayoutGrid }
-                      ]"
-                    />
                   </div>
                 </div>
 
-                <!-- Table/Grid view -->
-                <div class="  overflow-hidden">
+                <!-- Table view -->
+                <div class="overflow-hidden">
                   <DataTable
-                    v-if="viewMode === 'table'"
                     :columns="jobColumns"
                     :rowDataProp="getJobsForTab(tab.id)"
                     :pagination="true"
                     :showColumnSelector="true"
                     :storageKey="'inventory_jobs_' + tab.id"
-                  />
-                  <GridView
-                    v-else
-                    :data="getJobsForTab(tab.id)"
-                    titleField="name"
-                    :stats="[{ label: 'Status', value: 'status' }]"
-                    :selected-item="null"
                   />
                 </div>
               </div>
@@ -241,19 +220,14 @@
 import { onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DataTable from '@/components/DataTable/DataTable.vue';
-import GridView from '@/components/GridView/GridView.vue';
-import ToggleButtons from '@/components/ToggleButtons/ToggleButtons.vue';
-import IconListCheck from '@/components/icon/icon-list-check.vue';
-import IconLayoutGrid from '@/components/icon/icon-layout-grid.vue';
-import { useInventoryDetail } from '@/composables/useInventoryDetail';
 import IconDownload from '@/components/icon/icon-download.vue';
+import { useInventoryDetail } from '@/composables/useInventoryDetail';
 
 const route = useRoute();
 const inventoryId = Number(route.params.id);
 
 const {
   currentTab,
-  viewMode,
   inventory,
   tabs,
   jobColumns,

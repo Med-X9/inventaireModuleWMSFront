@@ -8,6 +8,11 @@ export interface FieldConfig {
   clearable?: boolean;
   props?: Record<string, unknown>;
   validators?: Array<{ key: string; fn: (value: unknown) => boolean; msg: string }>;
+  min?: string;
+  max?: string;
+  defaultDate?: string;
+  enableTime?: boolean;
+  dateFormat?: string;
 }
 
 export interface SelectOption {

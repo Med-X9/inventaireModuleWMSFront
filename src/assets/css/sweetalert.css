@@ -397,3 +397,14 @@ body.swal2-toast-shown .swal2-container.toast {
 }
 
 
+.sweet-alerts.toast-alert .swal2-icon .swal2-icon-content {
+  font-size: 1.5rem !important;
+  line-height: 20px !important;
+}
+
+/* Adjust warning icon specifically */
+.sweet-alerts.toast-alert .swal2-icon.swal2-warning {
+  font-size: 15px !important;
+  line-height: 20px !important;
+  margin: 0 8px 0 0 !important;
+}

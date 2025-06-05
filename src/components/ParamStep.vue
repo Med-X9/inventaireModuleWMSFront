@@ -31,12 +31,8 @@ const emit = defineEmits<{
   (e: 'validation-change', isValid: boolean): void;
 }>();
 
-// copie locale reactive
 const local = reactive<ContageConfig>({ ...props.modelValue });
 
-
-
-// configuration des champs
 const formFields = computed<FieldConfig[]>(() => {
   const fields: FieldConfig[] = [
     {
@@ -50,7 +46,6 @@ const formFields = computed<FieldConfig[]>(() => {
 
   const options = inventoryCreationService.getOptionsForMode(local.mode);
 
-  // Cas spécial Contage 3 avec liste emplacement
   if (props.stepIndex === 2 && local.mode === 'liste emplacement') {
     const methods = props.prevContages.slice(0, 2)
       .map(c => c.inputMethod)
@@ -58,7 +53,6 @@ const formFields = computed<FieldConfig[]>(() => {
     const unique = Array.from(new Set(methods)) as Array<'scanner' | 'manual'>;
     const radioOpts = unique.map(m => ({ label: m === 'scanner' ? 'Scanner' : 'Saisie manuelle', value: m }));
 
-    // Default auto-selection à la première option si non défini
     if (!local.inputMethod && radioOpts.length) {
       local.inputMethod = radioOpts[0].value;
     }
@@ -73,13 +67,11 @@ const formFields = computed<FieldConfig[]>(() => {
     return fields;
   }
 
-  // Option radio Scanner / Saisie manuelle
   if (options.hasScanner) {
     const radioOptions: Array<{ label: string; value: 'scanner' | 'manual' }> = [
       { label: 'Scanner', value: 'scanner' },
       { label: 'Saisie manuelle', value: 'manual' }
     ];
-    // Default auto-selection
     if (!local.inputMethod) {
       local.inputMethod = radioOptions[0].value;
     }
@@ -95,8 +87,8 @@ const formFields = computed<FieldConfig[]>(() => {
   if (options.hasVariant) {
     fields.push({ key: 'isVariant', label: 'Variantes', type: 'checkbox' });
   }
-  if (options.hasQuantite) {
-    fields.push({ key: 'quantite', label: 'Quantité', type: 'checkbox' });
+  if (options.hasStock) {
+    fields.push({ key: 'stock', label: 'Stock', type: 'checkbox' });
   }
 
   return fields;
@@ -104,24 +96,23 @@ const formFields = computed<FieldConfig[]>(() => {
 
 function onFormBuilderUpdate(data: Record<string, unknown>) {
   const merged = { ...local, ...(data as Partial<ContageConfig>) };
-  // Reset selon mode
   if (merged.mode === 'etat de stock') {
     merged.isVariant = false;
     merged.useScanner = false;
     merged.useSaisie = false;
-    merged.quantite = false;
+    merged.stock = false;
   } else if (merged.mode === 'liste emplacement') {
     merged.useScanner = merged.inputMethod === 'scanner';
     merged.useSaisie = merged.inputMethod === 'manual';
     merged.isVariant = false;
-    merged.quantite = false;
+    merged.stock = false;
   } else if (merged.mode === 'article + emplacement') {
     merged.useScanner = false;
     merged.useSaisie = false;
   } else if (merged.mode === 'hybride') {
     merged.useScanner = false;
     merged.useSaisie = false;
-    merged.quantite = false;
+    merged.stock = false;
   }
   Object.assign(local, merged);
   emit('update:modelValue', { ...merged });

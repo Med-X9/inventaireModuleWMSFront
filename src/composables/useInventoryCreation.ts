@@ -1,3 +1,4 @@
+// src/composables/useInventoryCreation.ts
 import { ref, reactive, watch, onMounted } from 'vue';
 import { indexedDBService } from '@/services/indexedDBService';
 import { alertService } from '@/services/alertService';
@@ -12,28 +13,38 @@ export function useInventoryCreation() {
   const isSubmitting = ref<boolean>(false);
 
   const state = reactive<InventoryCreationState>({
-    step1Data: { libelle: '', date: '', type: 'Inventaire Général' },
-    step2Data: { compte: '', magasin: [] },
+    step1Data: {
+      libelle: '',
+      date: '',
+      type: 'Inventaire Général',
+      compte: '',
+      magasin: []
+    },
     contages: Array(3).fill(null).map<ContageConfig>(() => ({
       mode: '',
       isVariant: false,
       useScanner: false,
       useSaisie: false,
-      isStock: false
+      stock: false
     })),
     currentStep: 0,
   });
 
   function resetState() {
-    state.step1Data = { libelle: '', date: '', type: 'Inventaire Général' };
-    state.step2Data = { compte: '', magasin: [] };
+    state.step1Data = {
+      libelle: '',
+      date: '',
+      type: 'Inventaire Général',
+      compte: '',
+      magasin: []
+    };
     state.contages.splice(0, state.contages.length,
       ...Array(3).fill(null).map<ContageConfig>(() => ({
         mode: '',
         isVariant: false,
         useScanner: false,
         useSaisie: false,
-        isStock: false
+        stock: false
       }))
     );
     currentStep.value = 0;
@@ -50,7 +61,6 @@ export function useInventoryCreation() {
   async function saveState() {
     const snapshot = {
       step1Data: state.step1Data,
-      step2Data: state.step2Data,
       contages: state.contages,
       currentStep: currentStep.value,
     };
@@ -60,8 +70,8 @@ export function useInventoryCreation() {
   async function loadState() {
     const saved = await indexedDBService.getState('creation');
     if (saved) {
-      state.step1Data = saved.step1Data;
-      state.step2Data = saved.step2Data;
+      // Merge saved.step1Data into the reactive object to preserve defaults
+      Object.assign(state.step1Data, saved.step1Data);
       state.contages.splice(0, state.contages.length, ...saved.contages);
       currentStep.value = saved.currentStep ?? 0;
     }
@@ -99,13 +109,8 @@ export function useInventoryCreation() {
         isValid: Object.keys(validation.step1Errors).length === 0,
         errors: Object.values(validation.step1Errors)
       };
-    } else if (currentStep.value === 1) {
-      return {
-        isValid: Object.keys(validation.step2Errors).length === 0,
-        errors: Object.values(validation.step2Errors)
-      };
     } else {
-      const idx = currentStep.value - 2;
+      const idx = currentStep.value - 1;
       const err = validation.contageResult.fieldErrors.mode[idx];
       return {
         isValid: !err,
@@ -117,9 +122,11 @@ export function useInventoryCreation() {
   async function onStepComplete(step: number, data: any): Promise<boolean> {
     if (!await validateCurrentStep()) return false;
 
-    if (step === 0) state.step1Data = { ...data };
-    else if (step === 1) state.step2Data = { ...data };
-    else state.contages[step - 2] = { ...data };
+    if (step === 0) {
+      state.step1Data = { ...data };
+    } else {
+      state.contages[step - 1] = { ...data };
+    }
 
     currentStep.value = step + 1;
     await saveState();

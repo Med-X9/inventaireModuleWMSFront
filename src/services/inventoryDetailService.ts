@@ -1,5 +1,8 @@
+// src/services/inventoryDetailService.ts
+
 import { alertService } from './alertService';
 import type { InventoryManagement } from '@/interfaces/inventoryManagement';
+import type { ContageConfig } from '@/interfaces/inventoryCreation';
 import type { DetailData } from '@/interfaces/Detail';
 
 class InventoryDetailService {
@@ -18,9 +21,27 @@ class InventoryDetailService {
         date_status_launch: '2025-04-30',
         date_status_end: '2025-04-30',
         contages: [
-          { mode: 'liste emplacement', isVariant: false, useScanner: true, useSaisie: false },
-          { mode: 'article + emplacement', isVariant: true, useScanner: false, useSaisie: false },
-          { mode: 'liste emplacement', isVariant: false, useScanner: false, useSaisie: true }
+          {
+            mode: 'liste emplacement',
+            isVariant: false,
+            useScanner: true,
+            useSaisie: false,
+            stock: false,           // added stock
+          } as ContageConfig,
+          {
+            mode: 'article + emplacement',
+            isVariant: true,
+            useScanner: false,
+            useSaisie: false,
+            stock: true,            // added stock
+          } as ContageConfig,
+          {
+            mode: 'liste emplacement',
+            isVariant: false,
+            useScanner: false,
+            useSaisie: true,
+            stock: false,           // added stock
+          } as ContageConfig
         ],
         teams: [
           { id: 1, name: 'Équipe Scanner' },

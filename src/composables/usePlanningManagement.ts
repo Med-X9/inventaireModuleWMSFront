@@ -27,23 +27,23 @@ export function usePlanningManagement() {
 
   const actions: PlanningAction[] = [
     {
-      label: 'Affecter',
-      icon: IconUser,
-      handler: (store: Store) => {
-        // ← Navigation vers ta page d’affectation
-        router.push({
-          name: 'inventory-affecter',
-          query: { storeId: store.id.toString() }
-        });
-      },
-    },
-    {
       label: 'Planifier',
       icon: IconCalendar,
       handler: (store: Store) => {
         // ← Navigation vers ta page d’affectation
         router.push({
           name: 'inventory-planning',
+          query: { storeId: store.id.toString() }
+        });
+      },
+    },
+    {
+      label: 'Affecter',
+      icon: IconUser,
+      handler: (store: Store) => {
+        // ← Navigation vers ta page d’affectation
+        router.push({
+          name: 'inventory-affecter',
           query: { storeId: store.id.toString() }
         });
       },

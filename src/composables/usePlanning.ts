@@ -1,4 +1,3 @@
-
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { format } from 'date-fns';
 import type { Team, Job } from '@/interfaces/planning';
@@ -17,13 +16,12 @@ export function usePlanning() {
   const jobs = ref<Job[]>([]);
   const selectedZone = ref<string>('');
   const selectedSubZone = ref<string>('');
-  const selectedLocations = ref<string[]>([]);
   const locationSearchQuery = ref('');
-  
-  const teamForm = ref<{ name: string; session: string }>({ name: '', session: '' });
-  const showNewTeamForm = ref(false);
-  const showNewJobForm = ref(false);
   const isSubmitting = ref(false);
+  const tempSelectedLocations = ref<string[]>([]);
+  const selectedAvailable = ref<string[]>([]);
+  const selectedAdded = ref<string[]>([]);
+  
   const allLocations = planningService.getLocations();
 
   // Get unique zones and subzones
@@ -41,8 +39,8 @@ export function usePlanning() {
     return Array.from(uniqueSubZones);
   });
 
-  // Filtered locations based on search and zone/subzone selection
-  const filteredLocations = computed(() => {
+  // Available locations (excluding already selected ones)
+  const availableLocations = computed(() => {
     let filtered = allLocations;
     const query = locationSearchQuery.value.toLowerCase().trim();
 
@@ -58,8 +56,11 @@ export function usePlanning() {
       filtered = filtered.filter(loc => loc.toLowerCase().includes(query));
     }
 
-    // Exclude locations that are already in jobs
-    const usedLocations = new Set(jobs.value.flatMap(job => job.locations));
+    // Exclude locations that are already in jobs or temporarily selected
+    const usedLocations = new Set([
+      ...jobs.value.flatMap(job => job.locations),
+      ...tempSelectedLocations.value
+    ]);
     return filtered.filter(loc => !usedLocations.has(loc));
   });
 
@@ -70,13 +71,51 @@ export function usePlanning() {
     !isSubmitting.value
   );
 
+  // Job creation methods
+  function addSelectedLocations() {
+    const toAdd = availableLocations.value.filter(loc => selectedAvailable.value.includes(loc));
+    if (toAdd.length) {
+      tempSelectedLocations.value.push(...toAdd);
+    }
+    selectedAvailable.value = [];
+  }
+
+  function addAllLocations() {
+    if (availableLocations.value.length) {
+      tempSelectedLocations.value.push(...availableLocations.value);
+    }
+  }
+
+  function removeSelectedLocations() {
+    tempSelectedLocations.value = tempSelectedLocations.value.filter(
+      loc => !selectedAdded.value.includes(loc)
+    );
+    selectedAdded.value = [];
+  }
+
+  function removeAllLocations() {
+    tempSelectedLocations.value = [];
+  }
+
+  async function createJob() {
+    if (tempSelectedLocations.value.length) {
+      await addJob(tempSelectedLocations.value);
+      tempSelectedLocations.value = [];
+    }
+  }
+
+  function cancelJobCreation() {
+    tempSelectedLocations.value = [];
+    selectedAvailable.value = [];
+    selectedAdded.value = [];
+  }
+
   async function saveState() {
     const state = {
       selectedDate: selectedDate.value,
       teams: teams.value,
       jobs: jobs.value,
-      teamForm: teamForm.value,
-      selectedLocations: selectedLocations.value
+      tempSelectedLocations: tempSelectedLocations.value
     };
     try {
       await indexedDBService.saveState(JSON.parse(JSON.stringify(state)), STORAGE_KEY);
@@ -96,8 +135,7 @@ export function usePlanning() {
         selectedDate.value = state.selectedDate;
         teams.value = state.teams || [];
         jobs.value = state.jobs || [];
-        teamForm.value = state.teamForm || { name: '', session: '' };
-        selectedLocations.value = state.selectedLocations || [];
+        tempSelectedLocations.value = state.tempSelectedLocations || [];
       }
     } catch (error) {
       await alertService.error({
@@ -117,8 +155,7 @@ export function usePlanning() {
       () => selectedDate.value,
       () => teams.value,
       () => jobs.value,
-      () => teamForm.value,
-      () => selectedLocations.value
+      () => tempSelectedLocations.value
     ],
     saveState,
     { deep: true }
@@ -138,10 +175,9 @@ export function usePlanning() {
     selectedDate.value = format(new Date(), 'yyyy-MM-dd');
     teams.value = [];
     jobs.value = [];
-    teamForm.value = { name: '', session: '' };
-    selectedLocations.value = [];
-    showNewTeamForm.value = false;
-    showNewJobForm.value = false;
+    tempSelectedLocations.value = [];
+    selectedAvailable.value = [];
+    selectedAdded.value = [];
   }
 
   async function validateAll() {
@@ -162,34 +198,12 @@ export function usePlanning() {
     }
   }
 
-  async function addTeam(data: { name: string; session: string }) {
-    teams.value.push({
-      id: crypto.randomUUID(),
-      name: data.name,
-      session: data.session
-    });
-    showNewTeamForm.value = false;
-    teamForm.value = { name: '', session: '' };
-  }
-
   async function addJob(locations: string[]) {
     jobs.value.push({
       id: crypto.randomUUID(),
       locations
     });
-    selectedLocations.value = [];
-    showNewJobForm.value = false;
     await nextTick();
-  }
-
-  async function deleteTeam(id: string) {
-    const res = await alertService.confirm({
-      title: 'Confirmer la suppression',
-      text: 'Voulez-vous vraiment supprimer cette équipe ?'
-    });
-    if (res.isConfirmed) {
-      teams.value = teams.value.filter(t => t.id !== id);
-    }
   }
 
   async function deleteJob(id: string) {
@@ -210,19 +224,22 @@ export function usePlanning() {
     subZones,
     selectedZone,
     selectedSubZone,
-    filteredLocations,
-    selectedLocations,
+    availableLocations,
+    tempSelectedLocations,
     locationSearchQuery,
-    teamForm,
-    showNewTeamForm,
-    showNewJobForm,
+    selectedAvailable,
+    selectedAdded,
     isSubmitting,
     canValidate,
-    addTeam,
     addJob,
-    deleteTeam,
     deleteJob,
     validateAll,
-    cancelPlanning
+    cancelPlanning,
+    addSelectedLocations,
+    addAllLocations,
+    removeSelectedLocations,
+    removeAllLocations,
+    createJob,
+    cancelJobCreation
   };
 }

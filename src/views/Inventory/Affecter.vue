@@ -1,10 +1,18 @@
 <template>
-  <div class="container mx-auto py-6">
-    <!-- Fil d'Ariane et bouton Annuler -->
-    <div class="flex flex-col mb-4">
+  <div class="container mx-auto ">
+    <!-- Fil d’Ariane + Bouton Annuler -->
+    <div class="flex flex-col mb-6">
       <ul class="flex space-x-2 rtl:space-x-reverse">
         <li>
-          <router-link :to="{ name: 'planning-management' }" class="text-primary hover:underline">
+          <router-link :to="{ name: 'inventory-list' }" class="text-primary hover:underline">
+            Gestion d'inventaire
+          </router-link>
+        </li>
+        <li>
+          <router-link
+            :to="{ name: 'planning-management' }"
+            class="before:content-['/'] ltr:before:mr-2 text-primary hover:underline"
+          >
             Gestion des plannings
           </router-link>
         </li>
@@ -12,252 +20,379 @@
           <span>Affectation des équipes</span>
         </li>
       </ul>
-      <div class="flex justify-end mt-3">
-        <button @click="cancelAffecter" class="border border-secondary text-secondary px-4 py-2 rounded-lg text-sm font-medium shadow hover:bg-secondary hover:text-white transition">
-          Annuler
-        </button>
-      </div>
     </div>
 
-    <!-- Wizard -->
-    <Wizard
-      v-if="loaded"
-      :steps="steps"
-      v-model:current-step="currentStep"
-      :before-change="validateStep"
-      :is-valid="isStepValid"
-      :finish-button-text="isSubmitting ? 'Affectation en cours...' : 'Terminer'"
-      color="var(--color-primary)"
-      @complete="handleComplete"
-    >
-      <!-- Étape 1 -->
-      <template #step-0>
-        <div class="panel bg-white shadow-lg rounded-lg p-6 mb-6">
-          <h3 class="text-xl font-semibold mb-4">Premier comptage</h3>
-
-          <!-- FormBuilder lien à l'objet entier -->
-          <FormBuilder v-model="counting1Form" :fields="formFields1" hide-submit />
-
-          <!-- Dual-list jobs Step 1 -->
-          <div class="grid grid-cols-1 gap-y-4 lg:grid-cols-[2fr_auto_2fr] lg:gap-x-4 mt-6">
-            <!-- Jobs disponibles -->
-            <section class="rounded-xl shadow-sm p-4 flex flex-col">
-              <div class="flex justify-between items-center mb-2">
-                <h4 class="font-semibold">Jobs disponibles</h4>
-                <span class="inline-block bg-primary-light text-primary-600 text-xs font-medium px-2 py-0.5 rounded-full">
-                  {{ filteredAvailable1.length }}
-                </span>
-              </div>
-              <div class="relative mb-3 flex items-center">
-                <input v-model="filter1" type="search" placeholder="Rechercher un job..." class="w-full form-input px-4 py-2 border rounded-lg focus:border-primary transition" />
-                <button @click="filter1 = ''" class="absolute right-2 text-gray-400 hover:text-gray-600">×</button>
-              </div>
-              <ul class="flex-1 overflow-auto max-h-60 divide-y divide-gray-200 border border-gray-300 rounded">
-                <li v-for="job in filteredAvailable1" :key="job.id" @click="toggleAvailable1(job.id)"
-                  :class="['flex items-center px-3 py-2 cursor-pointer hover:bg-gray-100', selectedAvailable1.includes(job.id) ? 'bg-gray-100 font-medium' : '']">
-                  <input type="checkbox" :checked="selectedAvailable1.includes(job.id)" class="mr-2 form-checkbox" />
-                  <span>{{ job.locations.join(', ') }}</span>
-                </li>
-              </ul>
-              <div class="mt-2 text-center">
-                <button @click="addAll1" :disabled="!filteredAvailable1.length" class="text-xs text-gray-500 hover:underline disabled:text-gray-300 inline-flex items-center">
-                  Tout sélectionner <span class="ml-2 bg-gray-100 rounded-lg p-1">»</span>
-                </button>
-              </div>
-            </section>
-
-            <!-- Contrôles -->
-            <div class="flex flex-col items-center justify-center space-y-2">
-              <button @click="addSelected1" :disabled="!selectedAvailable1.length" class="p-2 bg-primary hover:bg-primary-dark text-white rounded-full disabled:opacity-50">&gt;</button>
-              <button @click="removeSelected1" :disabled="!selectedAdded1.length" class="p-2 bg-danger hover:bg-danger-dark text-white rounded-full disabled:opacity-50">&lt;</button>
-            </div>
-
-            <!-- Jobs sélectionnés -->
-            <section class="bg-white rounded-xl shadow-sm p-4 flex flex-col">
-              <div class="flex justify-between items-center mb-2">
-                <h4 class="font-semibold">Jobs sélectionnés</h4>
-                <span class="inline-block bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">
-                  {{ addedJobs1.length }}
-                </span>
-              </div>
-              <ul class="flex-1 overflow-auto max-h-60 divide-y divide-gray-200 rounded">
-                <li v-for="job in addedJobs1" :key="job.id" @click="toggleAdded1(job.id)"
-                  :class="['flex items-center px-3 py-2 cursor-pointer hover:bg-gray-100', selectedAdded1.includes(job.id) ? 'bg-gray-100 font-medium' : '']">
-                  <input type="checkbox" :checked="selectedAdded1.includes(job.id)" class="mr-2 form-checkbox" />
-                  <span class="flex-1">{{ job.locations.join(', ') }}</span>
-                  <input v-model="dates1[job.id]" type="date" class="w-32 form-input px-2 py-1 border rounded ml-2" />
-                </li>
-              </ul>
-              <div class="mt-2 text-center">
-                <button @click="removeAll1" :disabled="!addedJobs1.length" class="text-xs text-gray-500 hover:underline disabled:text-gray-300 inline-flex items-center">
-                  Tout supprimer <span class="ml-2 bg-gray-100 rounded-lg p-1">«</span>
-                </button>
-              </div>
-            </section>
-          </div>
-
-          <!-- Bouton Affecter Step 1 -->
-          <div class="flex justify-end mt-4">
-            <button @click="handleTeamSelect1" class="bg-primary text-white px-4 py-2 rounded-lg shadow hover:bg-primary-dark transition">
-              Affecter
+    <!-- DataTable (master) -->
+    <div class="panel datatable">
+      <DataTable
+        :columns="columns"
+        :rowDataProp="displayData"
+        :actions="rowActions"
+        :pagination="true"
+        :enableFiltering="true"
+        :rowSelection="true"
+        @selection-changed="onSelectionChanged"
+        @row-clicked="onRowClicked"
+        storageKey="affecter_table"
+      >
+        <template #table-actions>
+          <div class="flex gap-3 mb-4">
+            <button
+              @click="handleAffecterPremierComptageClick"
+              class="btn px-6 py-2.5 btn-outline-primary btn-sm"
+            >
+              Affecter Premier Comptage
+            </button>
+            <button
+              @click="handleAffecterDeuxiemeComptageClick"
+              class="btn px-6 py-2.5 btn-outline-secondary btn-sm"
+            >
+              Affecter Deuxième Comptage
+            </button>
+            <button
+              @click="handleActionRessourceClick"
+              class="btn px-6 py-2.5 btn-outline-primary btn-sm"
+            >
+              Ressource
             </button>
           </div>
-        </div>
-      </template>
+        </template>
+      </DataTable>
+    </div>
 
-      <!-- Étape 2 -->
-      <template #step-1>
-        <div class="panel bg-white shadow-lg rounded-lg p-6 mb-6">
-          <h3 class="text-xl font-semibold mb-4">Deuxième comptage</h3>
-
-          <FormBuilder v-model="counting2Form" :fields="formFields2" hide-submit />
-
-          <!-- Dual-list jobs Step 2 -->
-          <div class="grid grid-cols-1 gap-y-4 lg:grid-cols-[2fr_auto_2fr] lg:gap-x-4 mt-6">
-            <section class="rounded-xl shadow-sm p-4 flex flex-col">
-              <div class="flex justify-between items-center mb-2">
-                <h4 class="font-semibold">Jobs disponibles</h4>
-                <span class="inline-block bg-primary-light text-primary-600 text-xs font-medium px-2 py-0.5 rounded-full">
-                  {{ filteredAvailable2.length }}
-                </span>
-              </div>
-              <div class="relative mb-3 flex items-center">
-                <input v-model="filter2" type="search" placeholder="Rechercher un job..." class="w-full form-input px-4 py-2 border rounded-lg focus:border-primary transition" />
-                <button @click="filter2 = ''" class="absolute right-2 text-gray-400 hover:text-gray-600">×</button>
-              </div>
-              <ul class="flex-1 overflow-auto max-h-60 divide-y divide-gray-200 border border-gray-300 rounded">
-                <li v-for="job in filteredAvailable2" :key="job.id" @click="toggleAvailable2(job.id)"
-                  :class="['flex items-center px-3 py-2 cursor-pointer hover:bg-gray-100', selectedAvailable2.includes(job.id) ? 'bg-gray-100 font-medium' : '']">
-                  <input type="checkbox" :checked="selectedAvailable2.includes(job.id)" class="mr-2 form-checkbox" />
-                  <span>{{ job.locations.join(', ') }}</span>
-                </li>
-              </ul>
-              <div class="mt-2 text-center">
-                <button @click="addAll2" :disabled="!filteredAvailable2.length" class="text-xs text-gray-500 hover:underline disabled:text-gray-300 inline-flex items-center">
-                  Tout sélectionner <span class="ml-2 bg-gray-100 rounded-lg p-1">»</span>
-                </button>
-              </div>
-            </section>
-
-            <div class="flex flex-col items-center justify-center space-y-2">
-              <button @click="addSelected2" :disabled="!selectedAvailable2.length" class="p-2 bg-primary hover:bg-primary-dark text-white rounded-full disabled:opacity-50">&gt;</button>
-              <button @click="removeSelected2" :disabled="!selectedAdded2.length" class="p-2 bg-danger hover:bg-danger-dark text-white rounded-full disabled:opacity-50">&lt;</button>
-            </div>
-
-            <section class="bg-white rounded-xl shadow-sm p-4 flex flex-col">
-              <div class="flex justify-between items-center mb-2">
-                <h4 class="font-semibold">Jobs sélectionnés</h4>
-                <span class="inline-block bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">
-                  {{ addedJobs2.length }}
-                </span>
-              </div>
-              <ul class="flex-1 overflow-auto max-h-60 divide-y divide-gray-200 rounded">
-                <li v-for="job in addedJobs2" :key="job.id" @click="toggleAdded2(job.id)"
-                  :class="['flex items-center px-3 py-2.cursor-pointer hover:bg-gray-100', selectedAdded2.includes(job.id) ? 'bg-gray-100 font-medium' : '']">
-                  <input type="checkbox" :checked="selectedAdded2.includes(job.id)" class="mr-2 form-checkbox" />
-                  <span class="flex-1">{{ job.locations.join(', ') }}</span>
-                  <input v-model="dates2[job.id]" type="date" class="w-32 form-input px-2 py-1 border rounded ml-2" />
-                </li>
-              </ul>
-              <div class="mt-2 text-center">
-                <button @click="removeAll2" :disabled="!addedJobs2.length" class="text-xs text-gray-500 hover:underline disabled:text-gray-300 inline-flex items-center">
-                  Tout supprimer <span class="ml-2 bg-gray-100 rounded-lg p-1">«</span>
-                </button>
-              </div>
-            </section>
-          </div>
-
-          <!-- Bouton Affecter Step 2 -->
-          <div class="flex justify-end mt-4">
-            <button @click="handleTeamSelect2" class="bg-primary text-white px-4 py-2 rounded-lg shadow hover:bg-primary-dark transition">
-              Affecter
-            </button>
-          </div>
-        </div>
-      </template>
-
-    </Wizard>
+    <!-- Modal d’affectation d’équipe -->
+    <Modal v-model="showTeamModal" :title="modalTitle">
+      <div class="mt-4">
+        <FormBuilder
+          v-model="teamForm"
+          :fields="teamFields"
+          @submit="handleTeamSubmit"
+          submitLabel="Affecter"
+        />
+      </div>
+    </Modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import Wizard from '@/components/wizard/Wizard.vue';
+import DataTable from '@/components/DataTable/DataTable.vue';
+import Modal from '@/components/Modal.vue';
 import FormBuilder from '@/components/Form/FormBuilder.vue';
+import type {
+  ColDef,
+  CellClassParams,
+  ValueFormatterParams,
+  RowClickedEvent
+} from 'ag-grid-community';
+import type { ActionConfig } from '@/interfaces/dataTable';
+import type { FieldConfig } from '@/interfaces/form';
 import { useAffecter } from '@/composables/useAffecter';
 import { alertService } from '@/services/alertService';
-import { indexedDBService } from '@/services/indexedDBService';
 
 const router = useRouter();
-const isSubmitting = ref(false);
-
 const {
-  currentStep,
-  loaded,
-  counting1Form,
-  counting2Form,
-  formFields1,
-  formFields2,
-  filter1,
-  filter2,
-  filteredAvailable1,
-  filteredAvailable2,
-  selectedAvailable1,
-  selectedAvailable2,
-  selectedAdded1,
-  selectedAdded2,
-  addedJobs1,
-  addedJobs2,
-  dates1,
-  dates2,
-  toggleAvailable1,
-  toggleAvailable2,
-  toggleAdded1,
-  toggleAdded2,
-  addSelected1,
-  addSelected2,
-  removeSelected1,
-  removeSelected2,
-  addAll1,
-  addAll2,
-  removeAll1,
-  removeAll2,
-  handleTeamSelect1,
-  handleTeamSelect2,
-  validateStep,
+  rows,
+  affecterAuPremierComptage,
+  affecterAuDeuxiemeComptage,
   cancelAffecter,
-  saveState
+  PLANNING_DATE
 } = useAffecter();
 
-const steps = [
-  { title: 'Premier comptage', icon: '1' },
-  { title: 'Deuxième comptage', icon: '2' }
+// --- Interface explicite pour chaque ligne (row) de la grille ---
+interface RowNode {
+  id: string;
+  job: string;
+  team1: string;
+  date1: string;
+  team2: string;
+  date2: string;
+  locations?: string[];
+  isChild: boolean;
+  parentId: string | null;
+}
+
+// --- État pour garder les IDs des jobs “dépliés” ---
+const expandedJobIds = ref<Set<string>>(new Set());
+
+// --- Data “aplatie” qui sera envoyée à DataTable.vue ---
+const displayData = ref<RowNode[]>([]);
+
+/**
+ * Reconstruit displayData à partir de rows.value (parent only).
+ * Pour chaque parent, on l’ajoute. Puis si son ID est dans expandedJobIds,
+ * on insère autant de lignes enfant qu’il y a d’emplacements.
+ */
+function rebuildDisplayData() {
+  const newData: RowNode[] = [];
+  rows.value.forEach((parentRow) => {
+    // Ligne parent
+    newData.push({
+      id: parentRow.id,
+      job: parentRow.job,
+      team1: parentRow.team1,
+      date1: parentRow.date1,
+      team2: parentRow.team2,
+      date2: parentRow.date2,
+      locations: parentRow.locations,
+      isChild: false,
+      parentId: null
+    });
+
+    // Si on doit déplier ce job, on ajoute ses enfants
+    if (expandedJobIds.value.has(parentRow.id)) {
+      const locs = parentRow.locations || [];
+      locs.forEach((location) => {
+        newData.push({
+          id: `${parentRow.id}--${location}`,
+          job: location,
+          team1: parentRow.team1,
+          date1: parentRow.date1,
+          team2: parentRow.team2,
+          date2: parentRow.date2,
+          isChild: true,
+          parentId: parentRow.id
+        });
+      });
+    }
+  });
+  displayData.value = newData;
+}
+
+// Exécution initiale pour remplir displayData
+rebuildDisplayData();
+
+// --- Définition des colonnes avec typage explicite ColDef<RowNode> ---
+const columns: ColDef<RowNode>[] = [
+  {
+    headerName: 'Job',
+    field: 'job',
+    sortable: true,
+    filter: 'agTextColumnFilter',
+    flex: 2,
+    cellStyle: (params: CellClassParams<RowNode>) => {
+      if (!params.data) return undefined;
+      if (params.data.isChild) {
+        return { paddingLeft: '35px', color: '#555' };
+      }
+      return undefined;
+    },
+    cellRenderer: (params) => {
+      if (!params.data) return '';
+      if (!params.data.isChild) {
+        const jobId = params.data.id;
+        const isExpanded = expandedJobIds.value.has(jobId);
+        const arrow = isExpanded
+  ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+     </svg>`
+  : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 6 15 12 9 18"/>
+     </svg>`;
+        return `
+          <span style="cursor: pointer; display: inline-flex; align-items: center;">
+            <span style="width: 1rem; display: inline-block;">${arrow}</span>
+            <span>${params.value ?? ''}</span>
+          </span>`;
+      }
+      // Ligne enfant : on n’affiche que le texte
+      return `<span>${params.value ?? ''}</span>`;
+    }
+  },
+  {
+    headerName: 'Équipe Premier Comptage',
+    field: 'team1',
+    sortable: true,
+    filter: 'agTextColumnFilter',
+    flex: 1,
+    cellStyle: (params: CellClassParams<RowNode>) => {
+      if (!params.data) return undefined;
+      if (params.data.isChild) {
+        return { color: '#999' };
+      }
+      return undefined;
+    },
+    valueFormatter: (params: ValueFormatterParams<RowNode>) => {
+      if (!params.data) return '';
+      return params.data.isChild ? '' : (params.value as string ?? '');
+    }
+  },
+  {
+    headerName: 'Date Premier Comptage',
+    field: 'date1',
+    sortable: true,
+    filter: 'agDateColumnFilter',
+    flex: 1,
+    valueFormatter: (params: ValueFormatterParams<RowNode>) => {
+      if (!params.data) return '';
+      if (params.data.isChild) return '';
+      return params.value
+        ? new Date(params.value as string).toLocaleDateString()
+        : '';
+    }
+  },
+  {
+    headerName: 'Équipe Deuxième Comptage',
+    field: 'team2',
+    sortable: true,
+    filter: 'agTextColumnFilter',
+    flex: 1,
+    cellStyle: (params: CellClassParams<RowNode>) => {
+      if (!params.data) return undefined;
+      if (params.data.isChild) {
+        return { color: '#999' };
+      }
+      return undefined;
+    },
+    valueFormatter: (params: ValueFormatterParams<RowNode>) => {
+      if (!params.data) return '';
+      return params.data.isChild ? '' : (params.value as string ?? '');
+    }
+  },
+  {
+    headerName: 'Date Deuxième Comptage',
+    field: 'date2',
+    sortable: true,
+    filter: 'agDateColumnFilter',
+    flex: 1,
+    valueFormatter: (params: ValueFormatterParams<RowNode>) => {
+      if (!params.data) return '';
+      if (params.data.isChild) return '';
+      return params.value
+        ? new Date(params.value as string).toLocaleDateString()
+        : '';
+    }
+  }
 ];
 
-const isStepValid = computed(() => {
-  return (
-    (currentStep.value === 0 && addedJobs1.value.length > 0) ||
-    (currentStep.value === 1 && addedJobs2.value.length > 0)
-  );
-});
-
-async function handleComplete() {
-  if (isSubmitting.value) return;
-  isSubmitting.value = true;
-  try {
-    await saveState();
-    await indexedDBService.clearState('affecter');
-    await alertService.success({ title: 'Succès', text: 'Les affectations ont été enregistrées !' });
-    router.push({ name: 'planning-management' });
-  } catch {
-    await alertService.error({ title: 'Erreur', text: 'Erreur lors de l’enregistrement.' });
-  } finally {
-    isSubmitting.value = false;
+// --- Actions sur chaque ligne “parent” uniquement ---
+const rowActions: ActionConfig[] = [
+  {
+    label: 'Réaffecter Premier Comptage',
+    handler: (row: RowNode) => {
+      selectedRows.value = [row];
+      currentTeamType.value = 'premier';
+      showTeamModal.value = true;
+    }
+  },
+  {
+    label: 'Réaffecter Deuxième Comptage',
+    handler: (row: RowNode) => {
+      if (!row.team1) {
+        alertService.warning({ text: 'Le job doit d\'abord avoir un premier comptage.' });
+        return;
+      }
+      selectedRows.value = [row];
+      currentTeamType.value = 'deuxieme';
+      showTeamModal.value = true;
+    }
   }
+];
+
+const selectedRows = ref<RowNode[]>([]);
+
+/** 
+ * Lorsque l’utilisateur coche une checkbox, AG Grid renvoie un tableau complet
+ * (parents + enfants). On ne garde ici que les parents (isChild=false).
+ */
+function onSelectionChanged(rowsData: RowNode[]) {
+  selectedRows.value = rowsData.filter(r => !r.isChild);
+}
+
+/**
+ * Gestion du clic sur une ligne (parent uniquement).
+ * On bascule l’ID dans expandedJobIds puis on reconstruit displayData.
+ */
+function onRowClicked(event: RowClickedEvent<RowNode>) {
+  if (!event.data) return;
+  const data = event.data;
+  if (data.isChild) {
+    return;
+  }
+  const jobId = data.id;
+  if (expandedJobIds.value.has(jobId)) {
+    expandedJobIds.value.delete(jobId);
+  } else {
+    expandedJobIds.value.add(jobId);
+  }
+  rebuildDisplayData();
+}
+
+// --- Boutons « Affecter » (identique à votre logique initiale) ---
+const showTeamModal = ref(false);
+const currentTeamType = ref<'premier' | 'deuxieme'>('premier');
+const modalTitle = computed(() =>
+  `Affecter ${currentTeamType.value === 'premier' ? 'Premier' : 'Deuxième'} Comptage`
+);
+const teamForm = ref<Record<string, unknown>>({ team: '', date: '' });
+
+const teamFields: FieldConfig[] = [
+  {
+    key: 'team',
+    label: 'Équipe',
+    type: 'select',
+    searchable: true,
+    options: [
+      { label: 'Équipe A', value: 'Équipe A' },
+      { label: 'Équipe B', value: 'Équipe B' },
+      { label: 'Équipe C', value: 'Équipe C' }
+    ],
+    validators: [{ key: 'required', fn: v => !!v, msg: 'Équipe requise' }]
+  },
+  {
+    key: 'date',
+    label: 'Date',
+    type: 'date',
+    min: PLANNING_DATE,
+    validators: [{ key: 'required', fn: v => !!v, msg: 'Date requise' }]
+  }
+];
+
+function handleAffecterPremierComptageClick() {
+  if (!selectedRows.value.length) {
+    alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
+    return;
+  }
+  currentTeamType.value = 'premier';
+  showTeamModal.value = true;
+}
+
+function handleAffecterDeuxiemeComptageClick() {
+  if (!selectedRows.value.length) {
+    alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
+    return;
+  }
+  currentTeamType.value = 'deuxieme';
+  showTeamModal.value = true;
+}
+
+function handleActionRessourceClick() {
+  if (!selectedRows.value.length) {
+    alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
+    return;
+  }
+  alert('Action Ressource (non implémentée)');
+}
+
+async function handleTeamSubmit(data: Record<string, unknown>) {
+  const { team, date } = data as { team: string; date: string };
+  const jobIds = selectedRows.value.map(r => r.id);
+
+  if (currentTeamType.value === 'premier') {
+    await affecterAuPremierComptage(team, jobIds, date);
+  } else {
+    await affecterAuDeuxiemeComptage(team, jobIds, date);
+  }
+
+  showTeamModal.value = false;
+  teamForm.value = { team: '', date: '' };
 }
 </script>
 
 <style scoped>
-.form-input { border:1px solid #ccc; border-radius:.5rem; }
+/* Optionnel : style de fond pour les lignes enfants */
+.ag-theme-alpine .ag-row-child .ag-cell {
+  background-color: #f9f9f9;
+}
 </style>

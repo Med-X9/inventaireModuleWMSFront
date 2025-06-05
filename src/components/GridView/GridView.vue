@@ -133,11 +133,11 @@ const goToPage = (page: number) => { currentPage.value = page; };
                 v-for="(action, idx) in actions"
                 :key="idx"
                 @click.stop="action.handler(item)"
-                class="px-2 py-2 text-sm font-medium flex items-center justify-center gap-2 first:rounded-l-lg last:rounded-r-lg border"
+                class="btn-sm text-sm font-medium flex items-center justify-center gap-2 first:rounded-l-lg last:rounded-r-lg border"
                 :class="[
                   idx !== 0 ? '-ml-px' : '',
                   action.variant === 'primary' 
-                    ? ' text-white border-gray-200/10   bg-primary border-border-dark' 
+                    ? ' text-white  border-gray-200/10   bg-primary border-border-dark' 
                     : 'bg-white text-gray-600 hover:bg-gray-100 border-gray-300'
                 ]"
               >
