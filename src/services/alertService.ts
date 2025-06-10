@@ -1,3 +1,4 @@
+// src/services/alertService.ts
 import Swal from 'sweetalert2';
 
 const getCssVar = (name: string) =>
@@ -11,14 +12,23 @@ const Toast = Swal.mixin({
   showConfirmButton: false,
   timer: 3000,
   timerProgressBar: true,
+
   customClass: {
-    popup: 'sweet-alerts toast-alert',
+    popup: 'sweet-alerts toast-alert',    // vos classes existantes
     title: 'toast-title',
     htmlContainer: 'toast-message'
   },
+
+  // On ajoute ici showClass pour déclencher l'animation d'entrée
   showClass: {
-    popup: ''
+    popup: 'swal2-show toast-enter'
   },
+  // On peut ajouter hideClass pour la sortie (mais ce n'est pas obligatoire si on laisse 
+  // SweetAlert2 gérer par défaut la suppression ; on l'ajoute ici pour être complet) :
+  hideClass: {
+    popup: 'swal2-hide'
+  },
+
   didOpen: (toast) => {
     toast.addEventListener('mouseenter', Swal.stopTimer);
     toast.addEventListener('mouseleave', Swal.resumeTimer);
@@ -92,5 +102,5 @@ export const alertService = {
       background: getCssVar('--color-info'),
       iconColor: 'white',
     });
-  },
+  }
 };

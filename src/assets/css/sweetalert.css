@@ -355,33 +355,59 @@ body.swal2-toast-shown .swal2-container.toast {
 
 
 
-  
-  @keyframes slideIn {
-    from {
-      transform: translateX(100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
+/* 1) Définition de la keyframe « slideIn » (ou autre nom) */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
   }
-  
-/* Container toast */
-.sweet-alerts.toast-alert {
-  display: flex;               /* flex container */ 
-  align-items: flex-start;     /* align items at start vertical */
-  padding: 1rem;               /* p-4 = 16px si base 4px */
-  border-radius: 0.5rem;       /* rounded-lg = 8px */
-  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 
-              0 4px 6px -2px rgba(0,0,0,0.05); /* shadow-xl */
-  min-width: 350px;            /* min-w-[350px] */
-  max-width: 28rem;            /* max-w-md = 448px (28×16) */
-  
-  animation: slideIn 0.3s ease-out;     /* animation shorthand */
-  backdrop-filter: blur(8px); /* filtre de flou */
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
+/* 2) Quand le toast s’affiche (classe swal2-show) + notre classe toast-enter, on lance slideIn */
+.sweet-alerts.toast-alert.swal2-show.toast-enter {
+  /* On force display:flex uniquement à l’ouverture, en attendant swiper2-hide */
+  display: flex;
+  align-items: flex-start;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1),
+              0 4px 6px -2px rgba(0,0,0,0.05);
+  min-width: 350px;
+  max-width: 28rem;
+
+  /* Animation d’arrivée */
+  animation: slideIn 0.4s ease-out;
+  /* Vous pouvez ajuster durée (0.4s), easing, etc. */
+  backdrop-filter: blur(8px);
+}
+
+/* 3) Dès que SweetAlert2 ajoute swal2-hide, on masque le toast */
+.sweet-alerts.toast-alert.swal2-hide {
+  display: none !important;
+}
+
+/* 4) (Optionnel) Vous pouvez également animer la sortie, si vous le souhaitez.
+   Par exemple, un fade-out rapide : */
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Exemple d’animation de sortie : */
+.sweet-alerts.toast-alert.swal2-hide {
+  /* On déclenche fadeOut avant le display:none ;
+     SweetAlert2 va automatiquement retirer l’élément du DOM après */
+  animation: fadeOut 0.3s ease-in forwards;
+  /* Si vous mettez « forwards », l’élément restera transparent avant d’être supprimé */
+}
 /* Titre du toast */
 .toast-title {
   color: #fff;                

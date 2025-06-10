@@ -1,106 +1,136 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router';
 import { useAppStore } from '@/stores/index';
 import appSetting from '@/app-setting';
+import { getTokens } from '@/utils/cookieUtils';
 
 import HomeView from '../views/index.vue';
 
 const routes: RouteRecordRaw[] = [
-    // dashboard
-    { path: '/', name: 'home', component: HomeView },
+  // Dashboard
+  {
+    path: '/',
+    name: 'home',
+    component: HomeView,
+    meta: { requiresAuth: true },
+  },
 
-    // apps
   // Inventaire
   {
     path: '/inventory/creation',
     name: 'inventory-create',
     component: () =>
-      import(/* webpackChunkName: "inventory-create" */ '../views/Inventory/InventoryCreation.vue')
-},
-{
+      import(/* webpackChunkName: "inventory-create" */ '../views/Inventory/InventoryCreation.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/inventory/management',
     name: 'inventory-list',
     component: () =>
-      import(
-        /* webpackChunkName: "inventory-list" */ '../views/Inventory/Management/InventoryManagement.vue'
-      )
-  },  
+      import(/* webpackChunkName: "inventory-list" */ '../views/Inventory/Management/InventoryManagement.vue'),
+    meta: { requiresAuth: true },
+  },
   {
     path: '/inventory/results',
-    name: 'inventory-results', // Nom de la route
+    name: 'inventory-results',
     component: () =>
-      import(/* webpackChunkName: "inventory-results" */ '../views/Inventory/Results/InventoryResults.vue'), // Import de la page des résultats
+      import(/* webpackChunkName: "inventory-results" */ '../views/Inventory/Results/InventoryResults.vue'),
+    meta: { requiresAuth: true },
   },
-{
+  {
     path: '/inventory/planning',
     name: 'inventory-planning',
     component: () =>
-      import(/* webpackChunkName: "inventory-planning" */ '../views/Inventory/Planning.vue')
+      import(/* webpackChunkName: "inventory-planning" */ '../views/Inventory/Planning.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/inventory/affecter',
-    name: 'inventory-affecter',               // <— <-- nouvelle route
+    name: 'inventory-affecter',
     component: () =>
-      import(/* webpackChunkName: "inventory-affecter" */ '../views/Inventory/Affecter.vue')
+      import(/* webpackChunkName: "inventory-affecter" */ '../views/Inventory/Affecter.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/inventory/:id/edit',
     name: 'inventory-edit',
-    component: () => import('../views/Inventory/InventoryEdit.vue')
+    component: () => import('../views/Inventory/InventoryEdit.vue'),
+    meta: { requiresAuth: true },
   },
-    {
-      path: '/inventory/:id',
-      name: 'inventory-detail',
-      component: () => import('../views/Inventory/InventoryDetail.vue')
-    },
   {
-    path: '/inventory/planning-management',  // Chemin de la route
-    name: 'planning-management',  // Nom de la route
-    component: () =>
-      import(/* webpackChunkName: "planning-management" */ '../views/Inventory/PlanningManagement.vue')  // Charger le composant
+    path: '/inventory/:id',
+    name: 'inventory-detail',
+    component: () => import('../views/Inventory/InventoryDetail.vue'),
+    meta: { requiresAuth: true },
   },
-  
+  {
+    path: '/inventory/planning-management',
+    name: 'planning-management',
+    component: () =>
+      import(/* webpackChunkName: "planning-management" */ '../views/Inventory/PlanningManagement.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/inventory/launch-jobs',
+    name: 'jobs-launch',
+    component: () =>
+      import(/* webpackChunkName: "jobs-launch" */ '../views/Inventory/LaunchJobs.vue'),
+    meta: { requiresAuth: true },
+  },
 
+  // Auth (login)
   {
     path: '/auth/login',
     name: 'login',
     component: () => import(/* webpackChunkName: "auth-login" */ '../views/auth/login.vue'),
-    meta: { layout: 'auth' },
-},
-{
-  path: '/inventory/launch-jobs',
-  name: 'jobs-launch',
-  component: () =>
-    import(
-      /* webpackChunkName: "jobs-launch" */ '../views/Inventory/LaunchJobs.vue'
-    )
-},
-
+    meta: { requiresAuth: false, layout: 'auth' },
+  },
 ];
 
 const router = createRouter({
-    history: createWebHistory(),
-    linkExactActiveClass: 'active',
-    routes,
-    scrollBehavior(to, from, savedPosition) {
-        if (savedPosition) {
-            return savedPosition;
-        } else {
-            return { left: 0, top: 0 };
-        }
-    },
-});
-
-router.beforeEach((to, from, next) => {
-    const store = useAppStore();
-
-    if (to?.meta?.layout == 'auth') {
-        store.setMainLayout('auth');
+  history: createWebHistory(),
+  linkExactActiveClass: 'active',
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition;
     } else {
-        store.setMainLayout('app');
+      return { left: 0, top: 0 };
     }
-    next(true);
+  },
 });
-router.afterEach((to, from, next) => {
-    appSetting.changeAnimation();
+
+// Avant chaque navigation : gestion du layout (auth vs app) et auth guard
+router.beforeEach((to, from, next) => {
+  const store = useAppStore();
+
+  // Choix du layout (ex. « auth » pour la page de login)
+  if (to.meta.layout === 'auth') {
+    store.setMainLayout('auth');
+  } else {
+    store.setMainLayout('app');
+  }
+
+  // Vérification du token pour les routes protégées
+  const tokens = getTokens();
+  const isAuthenticated = !!tokens?.access;
+
+  if (to.matched.some((record) => record.meta.requiresAuth)) {
+    if (!isAuthenticated) {
+      return next({ name: 'login' });
+    }
+    return next();
+  } else {
+    // Si utilisateur est déjà loggé et essaie d'aller sur /auth/login, on le redirige vers '/'
+    if (isAuthenticated && to.name === 'login') {
+      return next({ path: '/' });
+    }
+    return next();
+  }
 });
+
+// Après chaque navigation : déclenchement de l'animation (optionnel)
+router.afterEach((to, from) => {
+  appSetting.changeAnimation();
+});
+
 export default router;

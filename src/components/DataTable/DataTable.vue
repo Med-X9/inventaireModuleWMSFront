@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="flex flex-col mb-3  md:flex-row justify-between items-end md:items-center gap-2">
+    <div class="flex flex-col mb-3 md:flex-row justify-between gap-2">
       <!-- Sélecteur de colonnes -->
       <div class="flex flex-wrap gap-2 items-center">
         <div
@@ -53,31 +53,58 @@
         </div>
       </div>
 
-      <!-- Boutons d'export -->
-      <div class="flex-shrink-0 gap-2 flex mb-4 md:mb-0">
+      <!-- Dropdown d’export -->
+      <div class="flex-shrink-0 flex gap-2 mb-4 md:mb-0">
         <slot name="table-actions" />
-        <div class="flex gap-2">
+        <div class="relative" ref="exportDropdownRef">
+          <!-- Bouton principal “Exporter” -->
           <button
-            @click="exportToCsv"
-            class="text-white btn btn-primary mb-4 btn-sm flex items-center gap-2"
+            @click="toggleExportDropdown"
+            class="flex items-center justify-between p-2 btn  text-gray-700 shadow-sm hover:border-gray-300 w-full md:w-auto"
           >
-            <IconFile class="w-4 h-4" />
-            CSV
+            <span class="flex items-center gap-2">
+              <IconDownload class="w-4 h-4" />
+              Exporter
+            </span>
+            <svg
+              class="w-4 h-4 ml-2 transition-transform"
+              :class="{ 'rotate-180': showExportDropdown }"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
           </button>
-          <button
-            @click="exportToExcel"
-            class="text-white btn btn-primary mb-4 btn-sm flex items-center gap-2"
+          <!-- Menu déroulant des exports -->
+          <div
+            v-if="showExportDropdown"
+            class="absolute right-0 mt-2 w-48 dark:bg-dark-bg dark:border-dark-border dark:text-white-dark bg-white border rounded shadow-md z-10 p-2"
+            @click.stop
           >
-            <IconFile class="w-4 h-4" />
-            Excel
-          </button>
-          <button
-            @click="exportToPdf"
-            class="text-white btn btn-primary mb-4 btn-sm flex items-center gap-2"
-          >
-            <IconDownload class="w-4 h-4" />
-            PDF
-          </button>
+            <button
+              @click="exportToCsv"
+              class="flex items-center gap-2 w-full text-sm px-2 py-1 hover:bg-gray-100 rounded"
+            >
+              <IconFile class="w-4 h-4" />
+              CSV
+            </button>
+            <button
+              @click="exportToExcel"
+              class="flex items-center gap-2 w-full text-sm px-2 py-1 hover:bg-gray-100 rounded"
+            >
+              <IconFile class="w-4 h-4" />
+              Excel
+            </button>
+            <button
+              @click="exportToPdf"
+              class="flex items-center gap-2 w-full text-sm px-2 py-1 hover:bg-gray-100 rounded"
+            >
+              <IconDownload class="w-4 h-4" />
+              PDF
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -123,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, computed, defineEmits } from 'vue';
+import { defineProps, computed, defineEmits, ref, onMounted, onUnmounted } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
 import type { PropType } from 'vue';
 import type { ColDef, CsvExportParams } from 'ag-grid-community';
@@ -181,6 +208,8 @@ const exportToCsv = () => {
     columnKeys: getExportableColumns().map(col => col.field!) as string[],
   };
   gridApi.value.exportDataAsCsv(params);
+  // Fermer le dropdown après export (optionnel)
+  showExportDropdown.value = false;
 };
 
 const exportToExcel = () => {
@@ -214,6 +243,9 @@ const exportToExcel = () => {
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   const blob = new Blob([wbout], { type: 'application/octet-stream' });
   saveAs(blob, 'export.xlsx');
+
+  // Fermer le dropdown après export (optionnel)
+  showExportDropdown.value = false;
 };
 
 const exportToPdf = () => {
@@ -261,8 +293,25 @@ const exportToPdf = () => {
   });
 
   doc.save('export.pdf');
+
+  // Fermer le dropdown après export (optionnel)
+  showExportDropdown.value = false;
 };
 
+// Variables pour le dropdown d’export
+const showExportDropdown = ref(false);
+const exportDropdownRef = ref<HTMLElement | null>(null);
+const toggleExportDropdown = () => {
+  showExportDropdown.value = !showExportDropdown.value;
+};
+function handleClickOutsideExport(e: MouseEvent) {
+  const wrap = exportDropdownRef.value;
+  if (wrap && !wrap.contains(e.target as Node)) {
+    showExportDropdown.value = false;
+  }
+}
+
+// Appel à useDataTable (inchangé)
 const {
   defaultColDef,
   rowData,
@@ -299,6 +348,14 @@ const computedVisibleColumnDefsWithIndex = computed<ColDef[]>(() => {
   const cols = [...computedVisibleColumnDefs.value];
   cols.unshift(rowNumberColumn);
   return cols;
+});
+
+// Écoute globale pour fermer le dropdown d’export si on clique à l’extérieur
+onMounted(() => {
+  document.addEventListener('click', handleClickOutsideExport);
+});
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutsideExport);
 });
 </script>
 

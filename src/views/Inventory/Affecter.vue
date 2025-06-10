@@ -372,7 +372,7 @@ function handleActionRessourceClick() {
     alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
     return;
   }
-  alert('Action Ressource (non implémentée)');
+  alert('Action Ressource ');
 }
 
 async function handleTeamSubmit(data: Record<string, unknown>) {
