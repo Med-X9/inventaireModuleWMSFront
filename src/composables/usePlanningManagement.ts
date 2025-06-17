@@ -9,7 +9,7 @@ import IconCalendar from '@/components/icon/icon-calendar.vue';
 
 export function usePlanningManagement() {
   const appStore = useAppStore();
-  const router = useRouter();                         // ← Création de l’instance du router
+  const router = useRouter();                         // ← Création de l'instance du router
 
   // viewMode dans Pinia (persisté en localStorage)
   const viewMode = computed<ViewModeType>({
@@ -23,6 +23,8 @@ export function usePlanningManagement() {
 
   const columns = [
     { headerName: 'Nom du magasin', field: 'store_name', sortable: true, filter: 'agTextColumnFilter' },
+    { headerName: 'Équipes', field: 'teams_count', sortable: true, filter: 'agNumberColumnFilter', },
+    { headerName: 'Jobs', field: 'jobs_count', sortable: true, filter: 'agNumberColumnFilter', },
   ];
 
   const actions: PlanningAction[] = [
@@ -30,7 +32,7 @@ export function usePlanningManagement() {
       label: 'Planifier',
       icon: IconCalendar,
       handler: (store: Store) => {
-        // ← Navigation vers ta page d’affectation
+        // ← Navigation vers ta page d'affectation
         router.push({
           name: 'inventory-planning',
           query: { storeId: store.id.toString() }
@@ -41,7 +43,7 @@ export function usePlanningManagement() {
       label: 'Affecter',
       icon: IconUser,
       handler: (store: Store) => {
-        // ← Navigation vers ta page d’affectation
+        // ← Navigation vers ta page d'affectation
         router.push({
           name: 'inventory-affecter',
           query: { storeId: store.id.toString() }

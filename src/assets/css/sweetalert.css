@@ -17,14 +17,24 @@ body.swal2-toast-shown .swal2-container.toast {
     color: #888ea8;
 }
 
+/* TITRE DES ALERTES MODALES - Taille réduite */
 .swal2-popup .swal2-title {
     display: block;
     margin: 0px !important;
     width: 100%;
     padding-left: 5%;
     color: #3b3f5c;
-    font-size: 20px;
+    font-size: 16px !important; /* Réduit de 20px à 16px */
+    font-weight: 500 !important; /* Optionnel: réduire le poids aussi */
     @apply ltr:!pr-10 rtl:!pl-10;
+}
+
+/* CONTENU/TEXTE DES ALERTES MODALES - Taille réduite */
+.swal2-popup .swal2-html-container {
+    color: #ef4444;
+    font-weight: 300;
+    font-size: 13px !important; /* Ajout d'une taille plus petite */
+    line-height: 1.4 !important; /* Améliore la lisibilité */
 }
 
 .swal2-popup .swal2-styled {
@@ -41,7 +51,6 @@ body.swal2-toast-shown .swal2-container.toast {
 
 .swal2-popup .swal2-styled.swal2-cancel {
     background-color: #fff !important;
-
     border: 1px solid #e8e8e8;
     box-shadow: none;
     padding: 7px 20px;
@@ -61,13 +70,6 @@ body.swal2-toast-shown .swal2-container.toast {
     box-shadow: none !important;
 }
 
-.swal2-popup .swal2-html-container {
-    
-    color: #ef4444;
-    font-weight: 300;
- 
-}
-
 .swal2-popup .swal2-close {
     position: absolute;
     top: 16px;
@@ -79,8 +81,6 @@ body.swal2-toast-shown .swal2-container.toast {
 .dark .swal2-popup .swal2-close {
     color: #888ea8;
 }
-
-
 
 .swal2-popup.swal2-toast.swal2-show {
     -webkit-animation: showSweetToast 0.5s;
@@ -244,7 +244,7 @@ body.swal2-toast-shown .swal2-container.toast {
 }
 
 .sweet-alerts .swal2-icon-content {
-    font-size: 5.75rem !important;
+    font-size: 2rem !important;
 }
 .swal2-icon-content {
     @apply !text-xl;
@@ -274,7 +274,7 @@ body.swal2-toast-shown .swal2-container.toast {
 }
 
 .sweet-alerts.swal2-popup .swal2-html-container {
-    @apply !mt-3 !px-0;
+    @apply !mt-2 !px-0;
 }
 
 .sweet-alerts.swal2-popup .swal2-title {
@@ -353,8 +353,6 @@ body.swal2-toast-shown .swal2-container.toast {
     border-radius: 0 2em 2em 0 !important;
 }
 
-
-
 /* 1) Définition de la keyframe « slideIn » (ou autre nom) */
 @keyframes slideIn {
   from {
@@ -367,9 +365,7 @@ body.swal2-toast-shown .swal2-container.toast {
   }
 }
 
-/* 2) Quand le toast s’affiche (classe swal2-show) + notre classe toast-enter, on lance slideIn */
 .sweet-alerts.toast-alert.swal2-show.toast-enter {
-  /* On force display:flex uniquement à l’ouverture, en attendant swiper2-hide */
   display: flex;
   align-items: flex-start;
   padding: 1rem;
@@ -379,19 +375,16 @@ body.swal2-toast-shown .swal2-container.toast {
   min-width: 350px;
   max-width: 28rem;
 
-  /* Animation d’arrivée */
+  /* Animation d'arrivée */
   animation: slideIn 0.4s ease-out;
   /* Vous pouvez ajuster durée (0.4s), easing, etc. */
   backdrop-filter: blur(8px);
 }
 
-/* 3) Dès que SweetAlert2 ajoute swal2-hide, on masque le toast */
 .sweet-alerts.toast-alert.swal2-hide {
   display: none !important;
 }
 
-/* 4) (Optionnel) Vous pouvez également animer la sortie, si vous le souhaitez.
-   Par exemple, un fade-out rapide : */
 @keyframes fadeOut {
   from {
     opacity: 1;
@@ -401,36 +394,33 @@ body.swal2-toast-shown .swal2-container.toast {
   }
 }
 
-/* Exemple d’animation de sortie : */
+/* Exemple d'animation de sortie : */
 .sweet-alerts.toast-alert.swal2-hide {
-  /* On déclenche fadeOut avant le display:none ;
-     SweetAlert2 va automatiquement retirer l’élément du DOM après */
   animation: fadeOut 0.3s ease-in forwards;
-  /* Si vous mettez « forwards », l’élément restera transparent avant d’être supprimé */
 }
-/* Titre du toast */
+
+/* TOAST - Titre plus petit */
 .toast-title {
   color: #fff;                
   font-weight: 600;            
-  font-size: 1rem;
-        
+  font-size: 0.85rem !important; /* Augmenté de 0.5rem à 0.85rem pour plus de lisibilité */
 }
 
-/* Message du toast */
+/* TOAST - Message plus petit */
 .toast-message {
-  color: rgba(255,255,255,0.9);/* text-white/90 */
-  font-size: 0.600rem;         /* text-sm = 14px */
+  color: rgba(255,255,255,0.9);
+  font-size: 0.75rem !important; /* Augmenté de 0.600rem à 0.75rem pour plus de lisibilité */
+  line-height: 1.3 !important; /* Améliore la lisibilité */
 }
-
 
 .sweet-alerts.toast-alert .swal2-icon .swal2-icon-content {
-  font-size: 1.5rem !important;
+  font-size: 1.2rem !important;
   line-height: 20px !important;
 }
 
 /* Adjust warning icon specifically */
 .sweet-alerts.toast-alert .swal2-icon.swal2-warning {
   font-size: 15px !important;
-  line-height: 20px !important;
+  line-height: 10px !important;
   margin: 0 8px 0 0 !important;
 }

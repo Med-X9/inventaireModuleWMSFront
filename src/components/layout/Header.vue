@@ -209,6 +209,11 @@
 
         <!-- Autres éléments de menu peuvent être ajoutés ici -->
       </ul>
+      
+      <!-- SubNavbar avec breadcrumb et étapes -->
+      <div v-if="shouldShowBreadcrumb || shouldShowSteps" class="bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+        <SubNavbar :items="breadcrumbItems" />
+      </div>
     </div>
   </header>
 </template>
@@ -218,7 +223,9 @@ import { ref, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAppStore } from '@/stores/index';
 import { useAuthStore } from '@/stores/auth';
-
+import { useBreadcrumb } from '@/composables/useBreadcrumb';
+import { useInventoryStatus } from '../../composables/useInventoryStatus';
+import SubNavbar from './SubNavbar.vue';
 import IconMenu from '@/components/icon/icon-menu.vue';
 import IconXCircle from '@/components/icon/icon-x-circle.vue';
 import IconSun from '@/components/icon/icon-sun.vue';
@@ -237,7 +244,8 @@ const store = useAppStore();
 const authStore = useAuthStore();
 const route = useRoute();
 const search = ref(false);
-
+const { breadcrumbItems, shouldShowBreadcrumb } = useBreadcrumb();
+const { shouldShowSteps } = useInventoryStatus();
 const activeDropdown = ref<string | null>(null);
 
 function toggleDropdown(name: string) {

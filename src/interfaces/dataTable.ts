@@ -6,7 +6,14 @@ export interface ActionConfig {
   class?: string                 
   handler: (row: any) => void | Promise<void>  
 }
+
 export interface TableRow {
   [key: string]: unknown
 }
-export type DataTableColumn = ColDef
+
+// Étendre ColDef pour ajouter la description
+export interface DataTableColumn extends ColDef {
+  description?: string // Description pour le tooltip
+}
+
+export type { DataTableColumn as default }

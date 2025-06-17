@@ -92,7 +92,7 @@ const goToPage = (page: number) => { currentPage.value = page; };
 </script>
 
 <template>
-  <div class="panel border border-white-dark/20">
+  <div>
     <slot name="header"></slot>
 
     <div :class="gridColsClass">

@@ -10,7 +10,7 @@
       <div
        class="inline-block p-6 align-bottom panel rounded-lg text-left shadow-xl transform transition-all
               sm:my-8 sm:align-middle sm:max-w-3xl max-w-3xl w-full
-               h-[72vh]   max-h-[80vh]"
+               h-[40vh]   max-h-[80vh]"
        role="dialog"
        aria-modal="true"
        aria-labelledby="modal-headline"

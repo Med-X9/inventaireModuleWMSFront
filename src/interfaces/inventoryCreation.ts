@@ -1,17 +1,26 @@
-export type ContageMode =
-  | 'etat de stock'
-  | 'liste emplacement'
-  | 'article + emplacement'
-  | 'hybride'
+export type ComptageMode =
+  | 'image de stock'
+  | 'en vrague'
+  | 'en vrague par article'
   | '';
 
-export interface ContageConfig {
-  mode: ContageMode;
-  isVariant: boolean;
+export interface ComptageConfig {
+  mode: ComptageMode;
+  // Options pour "en vrague" - maintenant comme string pour radio group
+  inputMethod?: 'saisie' | 'scanner' | ''; // Radio group pour saisie quantité vs scanner unitaire
+  guideQuantite: boolean;
+  // Options pour "en vrague par article"
+  isVariante: boolean;
+  guideArticle: boolean;
+  dlc: boolean;
+  guideArticleQuantite: boolean;
+  numeroLot: boolean;
+  // Legacy props (deprecated)
+  saisieQuantite: boolean;
+  scannerUnitaire: boolean;
   useScanner: boolean;
   useSaisie: boolean;
   stock: boolean;
-  inputMethod?: 'scanner' | 'manual';
 }
 
 export interface InventoryCreationStep1 {
@@ -19,18 +28,17 @@ export interface InventoryCreationStep1 {
   date: string;
   type: string;
   compte: string;
-  magasin: string[];
+  magasin: Array<{ magasin: string; date: string }>; // Changed to support dates per magasin
 }
 
 export interface InventoryCreationState {
   step1Data: InventoryCreationStep1;
-  contages: ContageConfig[];
+  comptages: ComptageConfig[];
   currentStep: number;
 }
 
-export const CONTAGE_MODES = {
-  ETAT_STOCK: 'etat de stock' as ContageMode,
-  LISTE_EMPLACEMENT: 'liste emplacement' as ContageMode,
-  ARTICLE_EMPLACEMENT: 'article + emplacement' as ContageMode,
-  HYBRIDE: 'hybride' as ContageMode,
+export const COMPTAGE_MODES = {
+  IMAGE_STOCK: 'image de stock' as ComptageMode,
+  EN_VRAGUE: 'en vrague' as ComptageMode,
+  EN_VRAGUE_PAR_ARTICLE: 'en vrague par article' as ComptageMode,
 } as const;

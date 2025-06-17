@@ -1,150 +1,147 @@
 <template>
-<div>
-  <!-- Fil d'Ariane et bouton Annuler -->
-  <div class="flex flex-col mb-4">
-    <ul class="flex space-x-2">
-      <li>
-        <router-link :to="{ name: 'inventory-list' }" class="text-primary hover:underline">
-          Gestion d'inventaire
-        </router-link>
-      </li>
-      <li class="before:content-['/'] ltr:before:mr-2">
-        <span>Création d'inventaire</span>
-      </li>
-    </ul>
-    <div class="flex justify-end mt-2">
-      <button 
-        @click="onCancelClick" 
-        class="px-4 py-2 dark:text-white-light text-black border border-secondary rounded-lg"
-      >
+  <div>
+    <div class="flex justify-end mb-2">
+      <button @click="onCancelClick" class="btn btn-outline-primary">
         Annuler
       </button>
     </div>
-  </div>
 
-  <!-- Récapitulatif - Version améliorée et compacte -->
-  <div class="mb-3 panel ">
-    <h3 class=" font-semibold mb-3 text-primary  border-b pb-2">
-      Récapitulatif
-    </h3>
-    
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <!-- Informations générales -->
-      <div class="space-y-2">
-        <h4 class="font-medium text-sm text-gray-600 dark:text-gray-400 mb-2">Informations générales</h4>
-        <div class="grid grid-cols-[120px,1fr] gap-2 text-sm">
-          <span class="text-gray-600 dark:text-gray-400">Libellé:</span>
-          <span>{{ state.step1Data.libelle || '-' }}</span>
-          
-          <span class="text-gray-600 dark:text-gray-400">Date:</span>
-          <span>{{ state.step1Data.date || '-' }}</span>
-          
-          <span class="text-gray-600 dark:text-gray-400">Type:</span>
-          <span>{{ state.step1Data.type || '-' }}</span>
-          
-          <span class="text-gray-600 dark:text-gray-400">Compte:</span>
-          <span>{{ state.step1Data.compte || '-' }}</span>
-          
-          <span class="text-gray-600 dark:text-gray-400">Magasins:</span>
-          <div class="flex flex-wrap gap-1">
+    <!-- Récapitulatif - Version améliorée et compacte -->
+    <div class="w-full mb-1 p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+      <!-- En-tête avec icône -->
+      <div class="flex items-center gap-2 px-1.5 mb-2">
+        <svg class="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        <span class="font-medium text-xs text-primary">Récapitulatif</span>
+      </div>
+      
+      <!-- Informations principales en grille responsive -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-1.5 px-2 text-xs">
+        <!-- Libellé -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-gray-500 dark:text-gray-400 font-medium">Libellé:</span>
+          <span class="text-gray-900 dark:text-white font-semibold">{{ state.step1Data.libelle || 'Sans libellé' }}</span>
+        </div>
+        
+        <!-- Date -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-gray-500 dark:text-gray-400 font-medium">Date:</span>
+          <span class="text-gray-900 dark:text-white font-semibold">{{ state.step1Data.date || 'Date non définie' }}</span>
+        </div>
+        
+        <!-- Type -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-gray-500 dark:text-gray-400 font-medium">Type:</span>
+          <span class="text-gray-900 dark:text-white font-semibold">{{ state.step1Data.type || 'Type' }}</span>
+        </div>
+        
+        <!-- Compte -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-gray-500 dark:text-gray-400 font-medium">Compte:</span>
+          <span class="text-gray-900 dark:text-white font-semibold">{{ state.step1Data.compte || 'Compte non défini' }}</span>
+        </div>
+        
+        <!-- Magasin -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-gray-500 dark:text-gray-400 font-medium">Magasin:</span>
+          <span class="text-gray-900 dark:text-white font-semibold">
             <template v-if="Array.isArray(state.step1Data.magasin) && state.step1Data.magasin.length">
-              <span v-for="mag in state.step1Data.magasin" 
-                    :key="mag"
-                    class="bg-gray-100 dark:bg-gray-700 text-xs px-2 py-0.5 rounded">
-                {{ mag }}
-              </span>
+              {{ state.step1Data.magasin.slice(0, 2).map(m => typeof m === 'string' ? m : m.magasin).join(', ') }}
+              <span v-if="state.step1Data.magasin.length > 2" class="text-gray-500 ml-1">(+{{ state.step1Data.magasin.length - 2 }})</span>
             </template>
-            <span v-else>-</span>
-          </div>
+            <template v-else>Non défini</template>
+          </span>
         </div>
       </div>
-
-      <!-- Paramètres de contage -->
-      <div class="space-y-2">
-        <h4 class="font-medium text-sm text-gray-600 dark:text-gray-400 mb-2">Paramètres de contage</h4>
-        <div class="space-y-2">
-          <div v-for="(contage, index) in state.contages" 
-               :key="index"
-              >
-            <div class="text-sm">
-              <div class="flex gap-2">
-                <div class="font-medium mb-1">Contage {{ index + 1 }} :</div>
-                <span class="text-gray-600 dark:text-gray-400">Mode:</span>
-
-                <span>{{ contage.mode || '-' }}</span>
-                
-                <template v-if="contage.mode">
-                  <span class="text-gray-600 dark:text-gray-400">Options:</span>
-                  <div class="flex flex-wrap gap-2">
-                    <span v-if="contage.isVariant" 
-                          class="text-xs bg-primary/5  text-primary-600  px-2 py-0.5 rounded-lg">
-                      Variantes
-                    </span>
-                    <span v-if="contage.useScanner" 
-                          class="text-xs bg-primary/5  text-primary-600  px-2 py-0.5 rounded-lg">
-                      Scanner
-                    </span>
-                    <span v-if="contage.useSaisie" 
-                          class="text-xs bg-primary/5  text-primary-600 px-2 py-0.5 rounded-lg">
-                      Saisie manuelle
-                    </span>
-                    <span v-if="contage.stock" 
-                          class="text-xs bg-primary/5  text-primary-600  px-2 py-0.5 rounded-lg">
-                      Stock
-                    </span>
-                    <span v-if="!contage.isVariant && !contage.useScanner && !contage.useSaisie && !contage.stock">
-                      -
-                    </span>
-                  </div>
-                </template>
-              </div>
-            </div>
+      
+      <!-- Comptages en grille responsive -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-2">
+        <div v-for="(comptage, index) in state.comptages" :key="index" class="px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700">
+          <!-- En-tête du comptage -->
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs text-gray-900 dark:text-white">Comptage {{ index + 1 }}</span>
+            <span v-if="comptage.mode" class="px-2 py-0.5 bg-gray-400/10 dark:bg-dark-light/10 dark:text-white-light hover:text-primary rounded-lg text-xs">
+              {{ comptage.mode }}
+            </span>
+            <span v-else class="text-gray-400 italic text-xs">Non configuré</span>
+          </div>
+          
+          <!-- Options -->
+          <div class="flex flex-wrap gap-1">
+            <template v-if="hasActiveOptions(comptage)">
+              <!-- Options "en vrague" -->
+              <span v-if="comptage.inputMethod === 'saisie'" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                Saisie quantité
+              </span>
+              <span v-if="comptage.inputMethod === 'scanner'" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                Scanner unitaire
+              </span>
+              <span v-if="comptage.guideQuantite" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                Guide quantité
+              </span>
+              
+              <!-- Options "en vrague par article" -->
+              <span v-if="comptage.isVariante" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                Is variante
+              </span>
+              <span v-if="comptage.guideArticle" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                Guide Article
+              </span>
+              <span v-if="comptage.dlc" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                DLC
+              </span>
+              <span v-if="comptage.guideArticleQuantite" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                Guide Article quantité
+              </span>
+              <span v-if="comptage.numeroLot" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                Numéro de lot
+              </span>
+            </template>
+            <span v-else class="text-gray-400 italic text-xs">Aucune option</span>
           </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Rest of the component remains unchanged -->
-  <div v-if="!loaded" class="text-center py-10">
-    Chargement de votre brouillon…
-  </div>
+    <div v-if="!loaded" class="text-center py-10">
+      Chargement de votre brouillon…
+    </div>
 
-  <DynamicWizard
-    v-else
-    :key="wizardKey"
-    :steps="wizardSteps"
-    v-model:current-step="currentStep"
-    :is-valid="isValid"
-    :beforeChange="validateAndSaveStep"
-    @complete="handleSubmit"
-    :finish-button-text="isSubmitting ? 'Création…' : 'Créer'"
-    color="#ffc107"
-  >
-    <template #step-0>
-      <FormBuilder
-        v-model:modelValue="state.step1Data"
-        :fields="formFields"
-        hide-submit
-        :columns="3"
-        
-      />
-    </template>
-
-    <template 
-      v-for="(_, idx) in state.contages" 
-      :key="idx" 
-      v-slot:[`step-${idx+1}`]
+    <DynamicWizard
+      v-else
+      :key="wizardKey"
+      :steps="wizardSteps"
+      v-model:current-step="currentStep"
+      :is-valid="isValid"
+      :beforeChange="validateAndSaveStep"
+      @complete="handleSubmit"
+      :finish-button-text="isSubmitting ? 'Création…' : 'Créer'"
+      color="#ffc107"
     >
-      <ParamStep
-        v-model="state.contages[idx]"
-        :step-index="idx"
-        :available-modes="availableModesForStep(idx)"
-        :prev-contages="state.contages"
-      />
-    </template>
-  </DynamicWizard>
-</div>
+      <template #step-0>
+        <FormBuilder
+          v-model:modelValue="state.step1Data"
+          :fields="formFields"
+          hide-submit
+          :columns="2"
+        />
+      </template>
+
+      <template
+        v-for="(_, idx) in state.comptages"
+        :key="idx"
+        v-slot:[`step-${idx+1}`]
+      >
+        <ParamStep
+          v-model="state.comptages[idx]"
+          :step-index="idx"
+          :available-modes="availableModesForStep(idx)"
+          :prev-comptages="state.comptages"
+        />
+      </template>
+    </DynamicWizard>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -155,6 +152,7 @@ import DynamicWizard from '@/components/wizard/Wizard.vue';
 import FormBuilder from '@/components/Form/FormBuilder.vue';
 import ParamStep from '@/components/ParamStep.vue';
 import type { FieldConfig } from '@/interfaces/form';
+import type { ComptageConfig } from '@/interfaces/inventoryCreation';
 import { required, date, selectRequired } from '@/utils/validate';
 import { alertService } from '@/services/alertService';
 
@@ -211,12 +209,10 @@ const formFields: FieldConfig[] = [
   {
     key: 'magasin',
     label: 'Magasin',
-    type: 'select',
-    options: ['Magasin A', 'Magasin B'],
-    multiple: true,
+    type: 'multi-select-with-dates',
+    options: ['Magasin A', 'Magasin B', 'Magasin C', 'Magasin D'],
     searchable: true,
     clearable: true,
-    props: { placeholder: 'Sélectionnez un ou plusieurs magasins' },
     validators: [{ key: 'magasin', ...selectRequired('Veuillez sélectionner au moins un magasin') }]
   }
 ];
@@ -224,16 +220,31 @@ const formFields: FieldConfig[] = [
 /* Définitions des étapes du wizard */
 const wizardSteps = [
   { title: 'Création' },
-  { title: 'Paramétrage 1/3' },
-  { title: 'Paramétrage 2/3' },
-  { title: 'Paramétrage 3/3' }
+  { title: 'comptage 1/3' },
+  { title: 'comptage 2/3' },
+  { title: 'comptage 3/3' }
 ];
+
+/* Fonction helper pour vérifier si un comptage a des options actives */
+function hasActiveOptions(comptage: ComptageConfig): boolean {
+  return comptage.inputMethod !== '' ||
+         comptage.guideQuantite ||
+         comptage.isVariante ||
+         comptage.guideArticle ||
+         comptage.dlc ||
+         comptage.guideArticleQuantite ||
+         comptage.numeroLot ||
+         // Legacy support
+         comptage.saisieQuantite ||
+         comptage.scannerUnitaire;
+}
 
 /* Valider et sauvegarder avant chaque changement d'étape */
 async function validateAndSaveStep(prev: number, next: number): Promise<boolean> {
   let data: any;
   if (prev === 0) data = state.step1Data;
-  else data = state.contages[prev - 1];
+  else data = state.comptages[prev - 1];
+
   return await onStepComplete(prev, data);
 }
 

@@ -1,271 +1,69 @@
 import type { InventoryManagement } from '@/interfaces/inventoryManagement';
 
-// Simulated API response
+// Mock data for demonstration
 const mockInventories: InventoryManagement[] = [
   {
     id: 1,
-    reference: 'INV-001',
-    inventory_date: '2025-04-18',
-    statut: 'En attente',
-    pending_status_date: '2025-04-18',
-    current_status_date: '2025-04-19',
-    date_status_launch: '2025-04-20',
-    date_status_end: '2025-04-21',
-    label: 'Inventaire Général Avril',
+    reference: 'INV-2024-001',
+    inventory_date: '2024-01-15',
+    statut: 'En cours',
+    date_status_launch: '2024-01-10',
+    date_status_end: '2024-01-20',
+    label: 'Inventaire mensuel janvier'
   },
   {
     id: 2,
-    reference: 'INV-002',
-    inventory_date: '2025-05-20',
-    statut: 'En cours',
-    pending_status_date: '2025-05-20',
-    current_status_date: '2025-05-21',
-    date_status_launch: '2025-05-22',
-    date_status_end: '2025-05-23',
-    label: 'Inventaire Général Mai',
+    reference: 'INV-2024-002',
+    inventory_date: '2024-02-15',
+    statut: 'Planifié',
+    date_status_launch: '2024-02-10',
+    date_status_end: '2024-02-20',
+    label: 'Inventaire mensuel février'
   },
   {
     id: 3,
-    reference: 'INV-003',
-    inventory_date: '2025-06-15',
+    reference: 'INV-2024-003',
+    inventory_date: '2024-03-15',
     statut: 'Terminé',
-    pending_status_date: '2025-06-15',
-    current_status_date: '2025-06-16',
-    date_status_launch: '2025-06-17',
-    date_status_end: '2025-06-18',
-    label: 'Inventaire Général Juin',
-  },
-  {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-  {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
- 
-    {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-    {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-    {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-    {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-    {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-    {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-    {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-    {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-    {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-   {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-   {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-   {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-   {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-   {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-   {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-   {
-    id: 4,
-    reference: 'INV-004',
-    inventory_date: '2025-07-10',
-    statut: 'Planifié',
-    pending_status_date: '2025-07-10',
-    current_status_date: '2025-07-11',
-    date_status_launch: '2025-07-12',
-    date_status_end: '2025-07-13',
-    label: 'Inventaire Général Juillet',
-  },
-  
-  
+    date_status_launch: '2024-03-10',
+    date_status_end: '2024-03-20',
+    label: 'Inventaire mensuel mars'
+  }
 ];
 
 export const inventoryManagementService = {
   async getInventories(): Promise<InventoryManagement[]> {
-    // Simulate API latency
+    // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 500));
-    return mockInventories;
-  },
-
-  async getInventoryById(id: number): Promise<InventoryManagement | undefined> {
-    // Simulate API latency
-    await new Promise(resolve => setTimeout(resolve, 300));
-    return mockInventories.find(inventory => inventory.id === id);
+    return [...mockInventories];
   },
 
   async deleteInventory(id: number): Promise<void> {
-    // Simulate API latency
-    await new Promise(resolve => setTimeout(resolve, 700));
-    console.log('Inventory deleted:', id);
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const index = mockInventories.findIndex(inv => inv.id === id);
+    if (index > -1) {
+      mockInventories.splice(index, 1);
+    }
   },
 
-  async updateInventory(id: number, data: Partial<InventoryManagement>): Promise<void> {
-    // Simulate API latency
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
+  async createInventory(inventory: Omit<InventoryManagement, 'id'>): Promise<InventoryManagement> {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const newInventory = {
+      ...inventory,
+      id: Math.max(...mockInventories.map(i => i.id)) + 1
+    };
+    mockInventories.push(newInventory);
+    return newInventory;
+  },
+
+  async updateInventory(id: number, inventory: Partial<InventoryManagement>): Promise<InventoryManagement> {
+    await new Promise(resolve => setTimeout(resolve, 300));
     const index = mockInventories.findIndex(inv => inv.id === id);
-    if (index !== -1) {
-      mockInventories[index] = { ...mockInventories[index], ...data };
+    if (index > -1) {
+      mockInventories[index] = { ...mockInventories[index], ...inventory };
+      return mockInventories[index];
     }
-    
-    console.log('Inventory updated:', id, data);
+    throw new Error('Inventory not found');
   }
 };

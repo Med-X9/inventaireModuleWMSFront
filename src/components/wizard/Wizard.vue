@@ -1,5 +1,5 @@
 <template>
-  <div class="mx-auto h-full panel px-6 py-4">
+  <div class="mx-auto h-full panel py-3">
     <FormWizard
       ref="wizard"
       :startIndex="internalStep"
@@ -39,10 +39,9 @@
         :key="idx"
         :title="step.title"
         :custom-icon="step.icon"
-        class="wizard-step md:px-6 py-1"
+        class="wizard-step md:px-4 py-1"
       >
-        <div class="shadow bg-gray-50 dark:bg-[#0e1726] rounded-md p-10 space-y-3">
-          <h2 class="text-xl font-semibold text-gray-800 dark:text-white-light mb-6">{{ step.title }}</h2>
+        <div class="shadow bg-gray-50 dark:bg-[#0e1726] rounded-md px-8 py-5 space-y-2">
           <slot :name="`step-${idx}`" />
         </div>
       </TabContent>

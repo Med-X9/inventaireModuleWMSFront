@@ -1,290 +1,112 @@
-<script setup lang="ts">
-import { ref, computed, watch } from 'vue';
-import { usePlanning } from '@/composables/usePlanning';
-import FormBuilder from '@/components/Form/FormBuilder.vue';
-import DataTable from '@/components/DataTable/DataTable.vue';
-import IconTrashLines from '@/components/icon/icon-trash-lines.vue';
-
-import type { ColDef } from 'ag-grid-community';
-import type { ActionConfig } from '@/interfaces/dataTable';
-import type { FieldConfig } from '@/interfaces/form';
-
-const {
-  selectedDate,
-  jobs,
-  zones,
-  subZones,
-  selectedZone,
-  selectedSubZone,
-  availableLocations,
-  tempSelectedLocations,
-  locationSearchQuery,
-  selectedAvailable,
-  selectedAdded,
-  isSubmitting,
-  canValidate,
-  addSelectedLocations,
-  addAllLocations,
-  removeSelectedLocations,
-  removeAllLocations,
-  createJob,
-  cancelJobCreation,
-  deleteJob,
-  validateAll,
-  cancelPlanning
-} = usePlanning();
-
-// Date form
-const dateForm = ref({ date: selectedDate.value });
-watch(() => dateForm.value.date, v => (selectedDate.value = v));
-const dateFields: FieldConfig[] = [
-  { key: 'date', label: 'Date', type: 'date', validators: [{ key: 'required', fn: v => !!v, msg: 'Date requise' }] }
-];
-
-// Zone form fields
-const zoneFields: FieldConfig[] = [
-  {
-    key: 'selectedZone',
-    label: 'Zone',
-    type: 'select',
-    options: [
-      { label: 'Toutes les zones', value: '' },
-      ...zones.value.map(zone => ({ label: zone, value: zone }))
-    ]
-  },
-  {
-    key: 'selectedSubZone',
-    label: 'Sous-zone',
-    type: 'select',
-    options: [
-      { label: 'Toutes les sous-zones', value: '' },
-      ...subZones.value.map(subZone => ({ label: subZone, value: subZone }))
-    ]
-  }
-];
-
-const zoneForm = ref({
-  selectedZone: selectedZone.value,
-  selectedSubZone: selectedSubZone.value
-});
-
-watch(() => zoneForm.value.selectedZone, (newVal) => {
-  selectedZone.value = newVal;
-});
-
-watch(() => zoneForm.value.selectedSubZone, (newVal) => {
-  selectedSubZone.value = newVal;
-});
-
-// Columns + actions
-const jobColumns: ColDef[] = [ { headerName: 'Emplacements', field: 'locations' } ];
-const jobActions: ActionConfig[] = [ { label: 'Supprimer', icon: IconTrashLines, handler: row => deleteJob(row.id) } ];
-
-const jobsMap = computed(() => jobs.value.map(j => ({ ...j, locations: j.locations.join(', ') })));
-</script>
-
 <template>
   <div>
-    <!-- Breadcrumbs -->
-    <ul class="flex space-x-2 mb-4">
-      <li>
-        <router-link :to="{ name: 'inventory-list' }" class="text-primary hover:underline">
-          Gestion d'inventaire
-        </router-link>
-      </li>
-      <li><router-link :to="{ name: 'planning-management' }" class="before:content-['/'] ltr:before:mr-2 text-primary hover:underline">Gestion des plannings</router-link></li>
-      <li class="before:content-['/'] ltr:before:mr-2"><span>Planifier</span></li>
-    </ul>
-
-    <div class="py-4">
-      <!-- Date + actions -->
-      <div class="mb-9 flex flex-col lg:flex-row justify-between gap-8">
-        <div class="flex-1 rounded-xl panel bg-white px-4 py-6">
-          <h2 class="text-lg mb-4">Date de planification</h2>
-          <FormBuilder v-model="dateForm" :fields="dateFields" :columns="1" hide-submit />
-        </div>
-        <div class="w-full lg:w-80 panel rounded-xl p-6 text-center space-y-4">
-          <p class="text-sm text-gray-600">Confirmez ou annulez</p>
-          <button @click="validateAll" :disabled="!canValidate || isSubmitting" class="w-full px-4 py-2 bg-primary text-white rounded-lg disabled:opacity-50">✓ Valider</button>
-          <button @click="cancelPlanning" class="w-full px-4 py-2 bg-danger text-white rounded-lg">✕ Annuler</button>
-        </div>
-      </div>
-
-      <!-- Jobs Section -->
-      <section class="panel rounded-xl p-4 md:p-6 space-y-6">
-        <h2 class="text-xl font-semibold mb-6">Les Jobs</h2>
-
-        <div class="grid grid-cols-1 gap-y-4 lg:grid-cols-[1fr_auto_1fr] lg:gap-x-2">
-          <!-- Available Locations -->
-          <section class="flex-1 flex flex-col min-w-0">
-            <div class=" rounded-lg shadow-sm border border-white-dark/20 min-h-[500px]">
-              <div class="p-4 border-b border-white-dark/20 flex justify-between items-center border-gray-200">
-                <h3 class="text-lg font-medium text-gray-800">Emplacements disponibles</h3>
-                <span class="inline-block bg-gray-400/10 dark:bg-dark-light/10  dark:text-white-light text-xs font-medium px-2 py-1 rounded-full">
-                  {{ availableLocations.length }}
-                </span>
-              </div>
-
-              <div class="relative mb-2 p-4">
-                <div class=" mb-3">
-                  <FormBuilder
-                    v-model="zoneForm"
-                    :fields="zoneFields"
-                    :columns="2"
-                    hide-submit
-                  />
+    <div>
+      <!-- Section Jobs -->
+      <section class="panel">
+        <h2 class="text-xl font-semibold mb-6">Création de jobs</h2>
+        
+        <!-- Table 1: Emplacements disponibles -->
+        <div>
+          <DataTable
+            :columns="availableLocationColumns"
+            :rowDataProp="availableLocationData"
+            :pagination="true"
+            :rowSelection="true"
+            @selection-changed="onAvailableSelectionChanged"
+            storageKey="available_locations"
+            :showColumnSelector="false"
+          >
+            <template #table-actions>
+              <div class="flex items-center gap-4 mb-4">
+                <div class="flex gap-2">
+                  <button
+                    @click="createSingleJob"
+                    class="btn btn-primary"
+                    :disabled="selectedAvailable.length === 0"
+                  >
+                    Créer Job ({{ selectedAvailable.length }})
+                  </button>
                 </div>
+              </div>
+            </template>
+            <template #contenu>
+              <div class="max-w-md">
                 <input
                   v-model="locationSearchQuery"
                   type="search"
                   placeholder="Rechercher un emplacement..."
-                  class="w-full px-4 py-2 border rounded-lg outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-10"
+                  class="w-60 md:w-70 max-w-xl px-2 py-2 border rounded-lg outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-10"
                 />
               </div>
+            </template>
+          </DataTable>
+        </div>
 
-              <ul class="w-full flex-1 py-2 max-h-[17rem] overflow-auto divide-y divide-gray-200 border-t border-gray-300">
-                <transition-group name="slide-fade" tag="div">
-                  <li
-                    v-for="loc in availableLocations"
-                    :key="loc"
-                    @click="selectedAvailable.includes(loc)
-                      ? selectedAvailable = selectedAvailable.filter(v => v !== loc)
-                      : selectedAvailable.push(loc)"
-                    :class="[
-                      'flex items-center px-3 py-2 cursor-pointer transition-colors hover:bg-gray-100',
-                      selectedAvailable.includes(loc) ? 'font-medium text-black' : 'text-gray-700'
-                    ]"
+        <!-- Table 2: Jobs créés -->
+        <div class="mt-8">
+          <h3 class="text-lg font-semibold mb-4">
+            Jobs créés
+            <span v-if="isValidated" class="ml-2 px-2 py-1 bg-green-100 text-green-800 text-sm rounded-full">
+              ✓ Validés
+            </span>
+            <span v-else-if="jobs.length > 0" class="ml-2 px-2 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
+              ⏳ En attente de validation
+            </span>
+          </h3>
+          <DataTable
+            v-if="jobs.length"
+            :columns="jobColumns"
+            :rowDataProp="displayJobsData"
+            :rowSelection="true"
+            @selection-changed="onJobSelectionChanged"
+            :showColumnSelector="false"
+            storageKey="planning_jobs"
+          >
+            <template #table-actions>
+              <div class="flex items-center justify-between gap-4 mb-4">
+                <div class="flex gap-2">
+                  <button
+                    @click="deleteSelectedJobs"
+                    class="btn btn-danger"
+                    :disabled="selectedJobs.length === 0"
                   >
-                    <input
-                      type="checkbox"
-                      :checked="selectedAvailable.includes(loc)"
-                      class="mr-2 h-4 w-4 form-checkbox"
-                    />
-                    <span class="flex-1">{{ loc }}</span>
-                  </li>
-                </transition-group>
-              </ul>
-            </div>
-            <div class="mt-2 text-center">
-              <button
-                @click="addAllLocations"
-                :disabled="!availableLocations.length"
-                class="text-xs text-gray-500 hover:underline disabled:text-gray-300 inline-flex items-center"
-              >
-                Tout sélectionner
-                <span class="ml-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 p-1 ml-2 rounded-lg bg-gray-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                  </svg>
-                </span>
-              </button>
-            </div>
-          </section>
-
-          <!-- Selection Arrows -->
-          <div class="flex md:flex-col gap-4 justify-center items-center">
+                    ✕ Annuler ({{ selectedJobs.length }})
+                  </button>
+                  <button
+                    @click="cancelPlanning"
+                    class="btn btn-outline-danger"
+                    :disabled="jobs.length === 0"
+                  >
+                    ✕ Annuler tout
+                  </button>
+                </div>
+              </div>
+            </template>
+          </DataTable>
+          
+          <!-- Bouton valider en dessous de la table -->
+          <div v-if="jobs.length" class="mt-4 flex justify-end">
             <button
-              @click="addSelectedLocations"
-              :disabled="!selectedAvailable.length"
-              class="p-2 bg-primary hover:bg-primary-600 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-shadow shadow-sm hover:shadow-md"
+              @click="validateJobs"
+              :disabled="isSubmitting || isValidated"
+              class="btn btn-primary"
+              :class="{ 'opacity-50 cursor-not-allowed': isSubmitting || isValidated }"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-            <button
-              @click="removeSelectedLocations"
-              :disabled="!selectedAdded.length"
-              class="p-2 bg-danger hover:bg-red-600 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-shadow shadow-sm hover:shadow-md"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
+              <span v-if="!isSubmitting && !isValidated">✓ Valider tous les jobs</span>
+              <span v-else-if="isValidated">✓ Jobs déjà validés</span>
+              <span v-else class="flex items-center">
+                <svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Validation en cours...
+              </span>
             </button>
           </div>
-
-          <!-- Selected Locations -->
-          <section class="flex flex-col">
-           <div class=" rounded-lg shadow-sm border border-white-dark/20 min-h-[500px]">
-              <div class="p-4 border-b border-white-dark/20 flex justify-between items-center border-gray-200">
-                <h3 class="text-lg font-medium text-gray-800">Emplacements disponibles</h3>
-                <span class="inline-block bg-gray-400/10 dark:bg-dark-light/10  dark:text-white-light text-xs font-medium px-2 py-1 rounded-full">
-                  {{  tempSelectedLocations.length  }}
-                </span>
-              </div>
-              
-              <ul class="flex-1 max-h-[26rem] py-2 overflow-auto">
-                <transition-group name="slide-fade" tag="div">
-                  <li
-                    v-for="loc in tempSelectedLocations"
-                    :key="loc"
-                    @click="selectedAdded.includes(loc)
-                      ? selectedAdded = selectedAdded.filter(v => v !== loc)
-                      : selectedAdded.push(loc)"
-                    :class="[
-                      'flex items-center px-3 py-2 cursor-pointer transition-colors hover:bg-gray-100',
-                      selectedAdded.includes(loc) ? 'font-medium text-black' : 'text-gray-700'
-                    ]"
-                  >
-                    <input
-                      type="checkbox"
-                      :checked="selectedAdded.includes(loc)"
-                      class="mr-2 h-4 w-4 form-checkbox"
-                    />
-                    <span class="flex-1">{{ loc }}</span>
-                  </li>
-                </transition-group>
-              </ul>
-            </div>
-            <div class="mt-2 text-center">
-              <button
-                @click="removeAllLocations"
-                :disabled="!tempSelectedLocations.length"
-                class="text-xs text-gray-500 hover:underline disabled:text-gray-300 inline-flex items-center"
-              >
-                <span class="mr-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 p-1 mr-2 rounded-lg bg-gray-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
-                  </svg>
-                </span>
-                Tout désélectionner
-              </button>
-            </div>
-          </section>
-        </div>
-
-        <div class="flex justify-end gap-4 mt-6">
-          <button
-            @click="cancelJobCreation"
-            class="btn py-1 btn-outline-primary"
-          >
-            Annuler
-          </button>
-          <button
-            @click="createJob"
-            :class="{ 'opacity-50 cursor-not-allowed': !tempSelectedLocations.length }"
-            class="btn btn-primary"
-          >
-            <span v-if="!isSubmitting">Créer le job</span>
-            <svg v-else class="animate-spin h-5 w-5 mx-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-          </button>
-        </div>
-
-        <DataTable
-          v-if="jobs.length"
-          :columns="jobColumns"
-          :rowDataProp="jobsMap"
-          :actions="jobActions"
-          actionsHeaderName="Actions"
-          :showColumnSelector="false"
-          storageKey="planning_jobs"
-        />
-        <div v-else>
-          <div class="text-center py-12 border-dashed border-2 rounded-lg">
-            <p>Aucun job</p>
+          
+          <div v-else class="text-center py-12 border-dashed border-2 rounded-lg">
+            <p class="text-gray-500">Aucun job créé</p>
+            <p class="text-sm text-gray-400 mt-2">Sélectionnez des emplacements dans la table ci-dessus pour créer un job</p>
           </div>
         </div>
       </section>
@@ -292,23 +114,252 @@ const jobsMap = computed(() => jobs.value.map(j => ({ ...j, locations: j.locatio
   </div>
 </template>
 
+<script setup lang="ts">
+import { ref, computed } from 'vue';
+import { usePlanning } from '@/composables/usePlanning';
+import { alertService } from '@/services/alertService';
+import DataTable from '@/components/DataTable/DataTable.vue';
+
+import type { ColDef, CellClassParams, ValueFormatterParams } from 'ag-grid-community';
+import type { TableRow } from '@/interfaces/dataTable';
+
+const {
+  jobs,
+  availableLocations,
+  locationSearchQuery,
+  selectedAvailable,
+  selectedJobs,
+  isSubmitting,
+  isValidated,
+  createJob,
+  deleteSelectedJobs,
+  validateJobs,
+  cancelPlanning,
+  clearSelections
+} = usePlanning();
+
+// État pour gérer l'expansion des jobs
+const expandedJobIds = ref<Set<string>>(new Set());
+
+// Colonnes pour la table des emplacements disponibles (sans colonne emplacement)
+const availableLocationColumns: ColDef[] = [
+  { 
+    headerName: 'Zone', 
+    field: 'zone',
+    width: 150,
+    sortable: true,
+    filter: 'agTextColumnFilter'
+  },
+  { 
+    headerName: 'Sous-zone', 
+    field: 'sousZone',
+    flex: 1,
+    sortable: true,
+    filter: 'agTextColumnFilter'
+  }
+];
+
+// Colonnes pour la table des jobs avec expansion (sans colonne emplacement)
+const jobColumns: ColDef[] = [
+  { 
+    headerName: 'Référence Job', 
+    field: 'reference',
+    flex: 2,
+    sortable: true,
+    cellStyle: (params: CellClassParams) => {
+      if (!params.data) return undefined;
+      if (params.data.isChild) {
+        return { 
+          paddingLeft: '35px', 
+          color: '#666',
+          fontStyle: 'italic'
+        };
+      }
+      return undefined;
+    },
+    cellRenderer: (params) => {
+      if (!params.data) return '';
+      
+      if (!params.data.isChild) {
+        const jobId = params.data.jobId;
+        const isExpanded = expandedJobIds.value.has(jobId);
+        const locationsCount = params.data.locationsCount || 0;
+        const isJobValidated = params.data.isValidated;
+        
+        const arrow = isExpanded 
+          ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+               <polyline points="6 9 12 15 18 9"/>
+             </svg>`
+          : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+               <polyline points="9 6 15 12 9 18"/>
+             </svg>`;
+        
+        const statusBadge = isJobValidated 
+          ? '<span style="margin-left: 8px; padding: 2px 6px; background-color: #10b981; color: white; font-size: 10px; border-radius: 4px;">✓ VALIDÉ</span>'
+          : '<span style="margin-left: 8px; padding: 2px 6px; background-color: #f59e0b; color: white; font-size: 10px; border-radius: 4px;">⏳ EN ATTENTE</span>';
+        
+        return `
+          <div style="display: flex; align-items: center; width: 100%;">
+            <span 
+              style="cursor: pointer; display: inline-flex; align-items: center; width: 20px; margin-right: 8px;" 
+              data-expand-toggle="${jobId}"
+            >
+              ${arrow}
+            </span>
+            <span><strong>${params.value ?? ''}</strong></span>
+          </div>`;
+      }
+      
+      // Ligne enfant : affichage de l'emplacement complet
+      return `<span style="color: #666;">${params.value ?? ''}</span>`;
+    },
+    onCellClicked: (params) => {
+      const target = params.event?.target as HTMLElement;
+      const expandToggle = target.closest('[data-expand-toggle]');
+      
+      if (expandToggle && !params.data?.isChild) {
+        const jobId = expandToggle.getAttribute('data-expand-toggle');
+        if (jobId) {
+          if (expandedJobIds.value.has(jobId)) {
+            expandedJobIds.value.delete(jobId);
+          } else {
+            expandedJobIds.value.add(jobId);
+          }
+        }
+      }
+    }
+  },
+  { 
+    headerName: 'Zone', 
+    field: 'zone',
+    width: 120,
+    sortable: true,
+    filter: 'agTextColumnFilter',
+    cellStyle: (params: CellClassParams) => {
+      if (!params.data) return undefined;
+      if (params.data.isChild) {
+        return { color: '#666' };
+      }
+      return undefined;
+    },
+    valueFormatter: (params: ValueFormatterParams) => {
+      if (!params.data) return '';
+      return params.data.isChild ? (params.value as string ?? '') : '';
+    }
+  },
+  { 
+    headerName: 'Sous-zone', 
+    field: 'sousZone',
+    width: 150,
+    sortable: true,
+    filter: 'agSelectColumnFilter',
+    cellStyle: (params: CellClassParams) => {
+      if (!params.data) return undefined;
+      if (params.data.isChild) {
+        return { color: '#666' };
+      }
+      return undefined;
+    },
+    valueFormatter: (params: ValueFormatterParams) => {
+      if (!params.data) return '';
+      return params.data.isChild ? (params.value as string ?? '') : '';
+    }
+  }
+];
+
+// Données formatées pour les tables
+const availableLocationData = computed(() => {
+  return availableLocations.value.map(location => {
+    const parsed = parseLocation(location);
+    return {
+      id: location,
+      zone: parsed.zone,
+      sousZone: parsed.sousZone,
+      emplacement: parsed.emplacement
+    };
+  });
+});
+
+// Données des jobs avec support pour l'expansion
+const displayJobsData = computed(() => {
+  const result: any[] = [];
+  
+  jobs.value.forEach((job, jobIndex) => {
+    // Ligne parent (job principal)
+    result.push({
+      id: job.id,
+      jobId: job.id,
+      reference: job.reference || `JOB-${job.id.substring(0, 8)}`,
+      locationsCount: job.locations.length,
+      isChild: false,
+      parentId: null,
+      isValidated: job.isValidated || false
+    });
+
+    // Si ce job est étendu, ajouter ses emplacements
+    if (expandedJobIds.value.has(job.id)) {
+      job.locations.forEach((location, locationIndex) => {
+        const parsed = parseLocation(location);
+        result.push({
+          id: `${job.id}-${locationIndex}`,
+          jobId: job.id,
+          reference: parsed.emplacement,
+          zone: parsed.zone,
+          sousZone: parsed.sousZone,
+          isChild: true,
+          parentId: job.id
+        });
+      });
+    }
+  });
+  
+  return result;
+});
+
+// Fonction utilitaire pour parser les emplacements
+function parseLocation(location: string) {
+  const [emplacement, zone, sousZone] = location.split(' | ');
+  return { emplacement, zone, sousZone };
+}
+
+// Gestion des sélections avec typage correct
+function onAvailableSelectionChanged(selectedRows: TableRow[]) {
+  selectedAvailable.value = selectedRows.map(row => String(row.id));
+}
+
+function onJobSelectionChanged(selectedRows: TableRow[]) {
+  // Filtrer pour ne garder que les lignes parent (jobs principaux)
+  const parentRows = selectedRows.filter(row => !row.isChild);
+  selectedJobs.value = parentRows.map(row => String(row.id));
+}
+
+// Create a single job with all selected locations
+async function createSingleJob() {
+  if (selectedAvailable.value.length === 0) {
+    await alertService.error({
+      text: 'Attention ! Vous n\'avez rien sélectionné.'
+    });
+    return;
+  }
+  
+  await createJob(selectedAvailable.value);
+}
+</script>
+
 <style scoped>
-.slide-fade-enter-active,
-.slide-fade-leave-active {
-  transition: all 0.2s ease;
+/* Style pour les lignes enfants */
+:deep(.ag-row[data-is-child="true"]) {
+  background-color: #f8f9fa;
 }
-.slide-fade-enter-from,
-.slide-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-5px);
+
+:deep(.ag-row[data-is-child="true"] .ag-cell) {
+  border-bottom: 1px solid #e9ecef;
 }
+
 @media (max-width: 1024px) {
   .grid {
     grid-template-columns: 1fr;
     gap: 1rem;
-  }
-  section {
-    min-height: auto;
   }
 }
 </style>

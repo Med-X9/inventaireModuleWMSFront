@@ -1,5 +1,3 @@
-
-
 <template>
   <div class="container mx-auto">
     <h2 v-if="title" class="text-xl font-bold text-gray-800 mb-6">
@@ -7,11 +5,9 @@
     </h2>
 
     <form :class="formGridClass" @submit.prevent="handleSubmit">
-      <div
-        v-for="field in fields"
-        :key="field.key"
-        class="w-full"
-      >
+      <div v-for="field in fields" :key="field.key" class="w-full"
+        :class="getFieldClass(field)">
+        
         <!-- Label for all except checkbox -->
         <label
           v-if="field.type !== 'checkbox'"
@@ -37,7 +33,7 @@
         <flat-pickr
           v-else-if="field.type === 'date'"
           v-model="formData[field.key] as DateOption"
-           :config="{
+          :config="{
             ...dateConfig,
             minDate: field.min,
             disable: [
@@ -49,55 +45,88 @@
               }
             ]
           }"
-
           placeholder="jj/mm/aaaa"
           class="w-full form-input px-4 py-3 bg-white border border-gray-200 rounded-lg transition-all duration-200 focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-10 outline-none"
           :class="{'border-red-500': errors[field.key] && submitted}"
         />
-        
-        
+
+        <!-- Radio Group (for saisie/scanner selection) -->
+        <div v-else-if="field.type === 'radio-group'" class="flex gap-6">
+          <div v-for="opt in formattedOptions(field.radioOptions || field.options)" :key="opt.value" class="flex items-center space-x-2">
+            <input
+              :id="`${field.key}-${opt.value}`"
+              v-model="formData[field.key]"
+              :value="opt.value"
+              type="radio"
+              :name="field.key"
+              class="form-radio text-primary focus:ring-primary"
+            />
+            <label :for="`${field.key}-${opt.value}`" class="text-sm mt-2 text-gray-700 dark:text-white">
+              {{ opt.label }}
+            </label>
+          </div>
+        </div>
+
         <!-- Checkbox -->
-        <div
-          v-else-if="field.type === 'checkbox'"
-          class="inline-flex"
-        >
+        <div v-else-if="field.type === 'checkbox'" class="inline-flex">
           <input
             :id="field.key"
             v-model="formData[field.key]"
             type="checkbox"
             class="form-checkbox"
           />
-          <label
-            :for="field.key"
-            class="text-sm text-gray-700"
-          >
+          <label :for="field.key" class="text-sm text-gray-700">
             {{ field.label }}
           </label>
         </div>
 
         <!-- Radio -->
-        <div
-          v-else-if="field.type === 'radio'"
-          class="space-y-2"
-        >
-          <div
-            v-for="opt in formattedOptions(field.options)"
-            :key="opt.value"
-            class="flex items-center space-x-2"
-          >
+        <div v-else-if="field.type === 'radio'" class="space-y-2">
+          <div v-for="opt in formattedOptions(field.options)" :key="opt.value" class="flex items-center space-x-2">
             <input
               :id="`${field.key}-${opt.value}`"
               v-model="formData[field.key]"
               :value="opt.value"
               type="radio"
-              name="default_radio" class="form-radio"
+              name="default_radio"
+              class="form-radio"
             />
-            <label
-              :for="`${field.key}-${opt.value}`"
-              class="text-sm mt-2 text-gray-700 dark:text-white"
-            >
+            <label :for="`${field.key}-${opt.value}`" class="text-sm mt-2 text-gray-700 dark:text-white">
               {{ opt.label }}
             </label>
+          </div>
+        </div>
+
+        <!-- Multi-select with dates -->
+        <div v-else-if="field.type === 'multi-select-with-dates'" class="space-y-3">
+          <v-select
+            :id="field.key"
+            v-model="selectedMagasins"
+            :options="formattedOptions(field.options)"
+            multiple
+            :searchable="field.searchable ?? true"
+            :clearable="field.clearable ?? true"
+            placeholder="Sélectionnez des magasins"
+            label="label"
+            :reduce="opt => opt.value"
+            class="vs-custom dark"
+            :class="{'vs-error': errors[field.key] && submitted}"
+            @update:modelValue="onMagasinSelectionChange"
+          />
+          
+          <!-- Date inputs for selected magasins -->
+          <div v-if="selectedMagasins.length > 0" class="space-y-2 mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Dates par magasin :</h4>
+            <div v-for="magasin in selectedMagasins" :key="magasin" class="flex items-center gap-3">
+              <span class="text-sm text-gray-600 dark:text-gray-400 min-w-[120px]">{{ getLabelForMagasin(magasin) }} :</span>
+              <flat-pickr
+                v-model="magasinDates[magasin]"
+                :config="dateConfig"
+                placeholder="jj/mm/aaaa"
+                class="flex-1 form-input px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm"
+                @input="updateMagasinWithDates"
+              />
+            </div>
           </div>
         </div>
 
@@ -126,7 +155,8 @@
               :key="opt.value"
               type="button"
               @click="toggleValue(field.key, opt.value)"
-              :class="[ 'px-4 py-2 rounded-lg text-sm transition-all duration-200',
+              :class="[
+                'px-4 py-2 rounded-lg text-sm transition-all duration-200',
                 isSelected(field.key, opt.value)
                   ? 'bg-primary text-white '
                   : 'bg-gray-50 dark:text-white-dark dark:bg-[#121e32] text-gray-700 hover:bg-gray-100'
@@ -186,7 +216,6 @@ const dateConfig: Options = {
   allowInput: true,
   enableTime: false,
   monthSelectorType: 'static' as const,
-  
   nextArrow: '<svg class="fill-current" width="7" height="11" viewBox="0 0 7 11"><path d="M1 1l4 4.5L1 10" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   prevArrow: '<svg class="fill-current" width="7" height="11" viewBox="0 0 7 11"><path d="M6 1L2 5.5 6 10" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
@@ -202,15 +231,77 @@ const submitted = ref(false);
 const formData = reactive<Record<string, unknown>>(props.modelValue);
 const errors = reactive<Record<string, string | null>>({});
 
+// For multi-select with dates
+const selectedMagasins = ref<string[]>([]);
+const magasinDates = reactive<Record<string, string>>({});
+
+// Initialize multi-select with dates if exists
+const initMultiSelectWithDates = () => {
+  const magasinField = props.fields.find(f => f.type === 'multi-select-with-dates');
+  if (magasinField && Array.isArray(formData[magasinField.key])) {
+    const magasinData = formData[magasinField.key] as Array<{ magasin: string; date: string }>;
+    selectedMagasins.value = magasinData.map(item => item.magasin);
+    magasinData.forEach(item => {
+      magasinDates[item.magasin] = item.date;
+    });
+  }
+};
+
+// Watch for initialization
+watch(() => props.modelValue, () => {
+  Object.assign(formData, props.modelValue);
+  initMultiSelectWithDates();
+}, { immediate: true });
+
+// Update magasin selection
+const onMagasinSelectionChange = (selected: string[]) => {
+  selectedMagasins.value = selected;
+  // Remove dates for unselected magasins
+  Object.keys(magasinDates).forEach(magasin => {
+    if (!selected.includes(magasin)) {
+      delete magasinDates[magasin];
+    }
+  });
+  updateMagasinWithDates();
+};
+
+// Update the form data with magasin and dates
+const updateMagasinWithDates = () => {
+  const magasinField = props.fields.find(f => f.type === 'multi-select-with-dates');
+  if (magasinField) {
+    const magasinWithDates = selectedMagasins.value.map(magasin => ({
+      magasin,
+      date: magasinDates[magasin] || ''
+    }));
+    formData[magasinField.key] = magasinWithDates;
+    emit('update:modelValue', { ...formData });
+  }
+};
+
+// Get label for magasin
+const getLabelForMagasin = (magasinValue: string) => {
+  const magasinField = props.fields.find(f => f.type === 'multi-select-with-dates');
+  if (magasinField) {
+    const option = formattedOptions(magasinField.options).find(opt => opt.value === magasinValue);
+    return option?.label || magasinValue;
+  }
+  return magasinValue;
+};
+
+// Get field CSS class based on grid configuration
+const getFieldClass = (field: FieldConfig) => {
+  if (field.gridCols) {
+    return `col-span-${field.gridCols}`;
+  }
+  return '';
+};
+
 // Validation
 const isValid = computed(() => {
-  return Object.keys(errors).length === 0 && 
-    props.fields.every(field => {
-      const value = formData[field.key];
-      return field.validators
-        ? field.validators.every(v => v.fn(value))
-        : true;
-    });
+  return Object.keys(errors).length === 0 && props.fields.every(field => {
+    const value = formData[field.key];
+    return field.validators ? field.validators.every(v => v.fn(value)) : true;
+  });
 });
 
 function validateField(field: FieldConfig) {
@@ -274,6 +365,7 @@ async function handleSubmit() {
   submitted.value = true;
   props.fields.forEach(field => validateField(field));
   if (!isValid.value) return;
+
   isSubmitting.value = true;
   await emit('submit', { ...formData });
   isSubmitting.value = false;
@@ -307,15 +399,12 @@ defineExpose({ validate });
   --vs-colors-light: rgba(60, 60, 60, 0.5);
   --vs-colors-dark: #333;
   --vs-colors-darkest: rgba(197, 51, 51, 0.15);
-
   --vs-border-color: #e2e8f0;
   --vs-border-width: 1px;
   --vs-border-style: solid;
   --vs-border-radius: 0.5rem;
-
   --vs-dropdown-bg: #fff;
   --vs-dropdown-z-index: 1000;
-
   --vs-actions-padding: 4px 6px 0 3px;
 }
 
@@ -358,8 +447,7 @@ defineExpose({ validate });
   border: 1px solid var(--vs-border-color);
   border-radius: var(--vs-border-radius);
   background: white;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-              0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .vs-custom .vs__dropdown-option {
@@ -417,11 +505,10 @@ defineExpose({ validate });
 /* Flatpickr custom styles */
 .flatpickr-calendar {
   background: #fff;
-  border-radius: 0.70rem;
+  border-radius: 0.75rem;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   border: 1px solid #e2e8f0;
   font-family: inherit;
-  
 }
 
 .flatpickr-month {
@@ -445,7 +532,7 @@ defineExpose({ validate });
 }
 
 .flatpickr-weekday {
-  font-size: 0.500rem;
+  font-size: 0.5rem;
   color: #64748b;
   font-weight: 500;
 }
@@ -478,14 +565,14 @@ defineExpose({ validate });
   border-color: var(--color-primary);
 }
 
-.flatpickr-months .flatpickr-prev-month, 
+.flatpickr-months .flatpickr-prev-month,
 .flatpickr-months .flatpickr-next-month {
   top: 0;
   padding: 0.5rem;
   height: auto;
 }
 
-.flatpickr-months .flatpickr-prev-month svg, 
+.flatpickr-months .flatpickr-prev-month svg,
 .flatpickr-months .flatpickr-next-month svg {
   width: 7px;
   height: 11px;
@@ -520,7 +607,7 @@ defineExpose({ validate });
   color: #e2e8f0;
 }
 
-.dark .flatpickr-months .flatpickr-prev-month, 
+.dark .flatpickr-months .flatpickr-prev-month,
 .dark .flatpickr-months .flatpickr-next-month {
   color: #e2e8f0;
 }

@@ -62,6 +62,7 @@ import {
   EventApiModule,
   CellStyleModule,
   CsvExportModule,
+  TooltipModule
 } from 'ag-grid-community'
 
 ModuleRegistry.registerModules([
@@ -76,6 +77,7 @@ ModuleRegistry.registerModules([
   EventApiModule,
   CellStyleModule,
   CsvExportModule,
+  TooltipModule 
 ])
 
 // montez l'app après avoir enregistré vos modules

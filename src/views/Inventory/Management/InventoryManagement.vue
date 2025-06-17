@@ -12,11 +12,11 @@
         <template #table-actions>
           <div class="flex items-center flex-wrap gap-2">
             <button
-              class=" btn btn-primary p-2 mb-4 btn-sm "
+              class=" btn btn-primary p-2 px-3 mb-4 btn-sm "
               @click="redirectToAdd"
             >
               <icon-plus class="w-5 h-5 ltr:mr-1 rtl:ml-1 " />
-              Create
+              créer
             </button>
             
           </div>

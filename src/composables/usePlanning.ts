@@ -1,245 +1,332 @@
-import { ref, computed, watch, onMounted, nextTick } from 'vue';
-import { format } from 'date-fns';
-import type { Team, Job } from '@/interfaces/planning';
+import { ref, computed, watch, onMounted } from 'vue';
+import type { Job } from '@/interfaces/planning';
 import { planningService } from '@/services/planningService';
 import { alertService } from '@/services/alertService';
 import { indexedDBService } from '@/services/indexedDBService';
-import { useAppStore } from '@/stores';
 
-const STORAGE_KEY = 'planningState';
+const STORAGE_KEY = 'planningJobs';
+const SELECTIONS_KEY = 'planningSelections';
+const STATE_KEY = 'planningState';
 
 export function usePlanning() {
-  const appStore = useAppStore();
-
-  const selectedDate = ref<string>(format(new Date(), 'yyyy-MM-dd'));
-  const teams = ref<Team[]>([]);
   const jobs = ref<Job[]>([]);
-  const selectedZone = ref<string>('');
-  const selectedSubZone = ref<string>('');
   const locationSearchQuery = ref('');
   const isSubmitting = ref(false);
-  const tempSelectedLocations = ref<string[]>([]);
   const selectedAvailable = ref<string[]>([]);
-  const selectedAdded = ref<string[]>([]);
+  const selectedJobs = ref<string[]>([]);
+  const isValidated = ref(false);
   
   const allLocations = planningService.getLocations();
-
-  // Get unique zones and subzones
-  const zones = computed(() => {
-    const uniqueZones = new Set(allLocations.map(loc => planningService.parseLocation(loc).zone));
-    return Array.from(uniqueZones);
-  });
-
-  const subZones = computed(() => {
-    const uniqueSubZones = new Set(
-      allLocations
-        .filter(loc => !selectedZone.value || planningService.parseLocation(loc).zone === selectedZone.value)
-        .map(loc => planningService.parseLocation(loc).sousZone)
-    );
-    return Array.from(uniqueSubZones);
-  });
 
   // Available locations (excluding already selected ones)
   const availableLocations = computed(() => {
     let filtered = allLocations;
     const query = locationSearchQuery.value.toLowerCase().trim();
 
-    if (selectedZone.value) {
-      filtered = filtered.filter(loc => planningService.parseLocation(loc).zone === selectedZone.value);
-    }
-
-    if (selectedSubZone.value) {
-      filtered = filtered.filter(loc => planningService.parseLocation(loc).sousZone === selectedSubZone.value);
-    }
-
     if (query) {
       filtered = filtered.filter(loc => loc.toLowerCase().includes(query));
     }
 
-    // Exclude locations that are already in jobs or temporarily selected
-    const usedLocations = new Set([
-      ...jobs.value.flatMap(job => job.locations),
-      ...tempSelectedLocations.value
-    ]);
+    // Exclude locations that are already in jobs
+    const usedLocations = new Set(jobs.value.flatMap(job => job.locations));
     return filtered.filter(loc => !usedLocations.has(loc));
   });
 
-  const canValidate = computed(() => 
-    !!selectedDate.value && 
-    teams.value.length > 0 && 
-    jobs.value.length > 0 && 
-    !isSubmitting.value
-  );
-
-  // Job creation methods
-  function addSelectedLocations() {
-    const toAdd = availableLocations.value.filter(loc => selectedAvailable.value.includes(loc));
-    if (toAdd.length) {
-      tempSelectedLocations.value.push(...toAdd);
-    }
-    selectedAvailable.value = [];
-  }
-
-  function addAllLocations() {
-    if (availableLocations.value.length) {
-      tempSelectedLocations.value.push(...availableLocations.value);
-    }
-  }
-
-  function removeSelectedLocations() {
-    tempSelectedLocations.value = tempSelectedLocations.value.filter(
-      loc => !selectedAdded.value.includes(loc)
-    );
-    selectedAdded.value = [];
-  }
-
-  function removeAllLocations() {
-    tempSelectedLocations.value = [];
-  }
-
-  async function createJob() {
-    if (tempSelectedLocations.value.length) {
-      await addJob(tempSelectedLocations.value);
-      tempSelectedLocations.value = [];
-    }
-  }
-
-  function cancelJobCreation() {
-    tempSelectedLocations.value = [];
-    selectedAvailable.value = [];
-    selectedAdded.value = [];
-  }
-
+  // Save complete state to IndexedDB (jobs + validatedState)
   async function saveState() {
-    const state = {
-      selectedDate: selectedDate.value,
-      teams: teams.value,
-      jobs: jobs.value,
-      tempSelectedLocations: tempSelectedLocations.value
+    const state = { 
+      jobs: jobs.value, 
+      isValidated: isValidated.value 
     };
     try {
-      await indexedDBService.saveState(JSON.parse(JSON.stringify(state)), STORAGE_KEY);
+      await indexedDBService.saveState(JSON.parse(JSON.stringify(state)), STATE_KEY);
     } catch (error) {
-      await alertService.error({
-        title: 'Erreur',
-        text: 'Impossible de sauvegarder l\'état'
-      });
+      console.error('Error saving state:', error);
     }
   }
 
-  async function loadState() {
+  // Save selections to IndexedDB
+  async function saveSelections() {
+    const selections = {
+      selectedAvailable: selectedAvailable.value,
+      selectedJobs: selectedJobs.value
+    };
     try {
-      const saved = await indexedDBService.getState(STORAGE_KEY);
+      await indexedDBService.saveState(JSON.parse(JSON.stringify(selections)), SELECTIONS_KEY);
+    } catch (error) {
+      console.error('Error saving selections:', error);
+    }
+  }
+
+  // Load selections from IndexedDB
+  async function loadSelections() {
+    try {
+      const saved = await indexedDBService.getState(SELECTIONS_KEY);
       if (saved) {
-        const state: any = saved;
-        selectedDate.value = state.selectedDate;
-        teams.value = state.teams || [];
-        jobs.value = state.jobs || [];
-        tempSelectedLocations.value = state.tempSelectedLocations || [];
+        const selections: any = saved;
+        selectedAvailable.value = selections.selectedAvailable || [];
+        selectedJobs.value = selections.selectedJobs || [];
       }
     } catch (error) {
-      await alertService.error({
-        title: 'Erreur',
-        text: 'Impossible de charger l\'état'
-      });
+      console.error('Error loading selections:', error);
     }
   }
 
+  // Clear selections from IndexedDB
+  async function clearSelections() {
+    try {
+      await indexedDBService.clearState(SELECTIONS_KEY);
+      selectedAvailable.value = [];
+      selectedJobs.value = [];
+    } catch (error) {
+      console.error('Error clearing selections:', error);
+    }
+  }
+
+  // Load state from IndexedDB
+  async function loadState() {
+    try {
+      const saved = await indexedDBService.getState(STATE_KEY);
+      if (saved) {
+        const state: any = saved;
+        jobs.value = state.jobs || [];
+        isValidated.value = state.isValidated || false;
+        
+        if (isValidated.value && jobs.value.length > 0) {
+          console.log('Jobs validés chargés depuis IndexedDB (en attente de l\'API backend)');
+        }
+      }
+    } catch (error) {
+      console.error('Error loading state:', error);
+    }
+  }
+
+  // Initialize
   onMounted(async () => {
     await indexedDBService.init();
     await loadState();
+    await loadSelections();
   });
 
-  watch(
-    [
-      () => selectedDate.value,
-      () => teams.value,
-      () => jobs.value,
-      () => tempSelectedLocations.value
-    ],
-    saveState,
-    { deep: true }
-  );
+  // Watch for changes and save
+  watch(() => [jobs.value, isValidated.value], saveState, { deep: true });
+  
+  // Watch selections and save them
+  watch(() => [selectedAvailable.value, selectedJobs.value], saveSelections, { deep: true });
 
-  async function cancelPlanning() {
-    const res = await alertService.confirm({
-      title: 'Annuler',
-      text: 'Effacer le planning ?'
-    });
-    if (!res.isConfirmed) return;
+  // Generate professional job reference
+  function generateJobReference(): string {
+    const today = new Date();
+    const year = today.getFullYear().toString().slice(-2);
+    const month = (today.getMonth() + 1).toString().padStart(2, '0');
+    const day = today.getDate().toString().padStart(2, '0');
+    const jobNumber = (jobs.value.length + 1).toString().padStart(3, '0');
     
-    try {
-      await indexedDBService.clearState(STORAGE_KEY);
-    } catch {}
-    
-    selectedDate.value = format(new Date(), 'yyyy-MM-dd');
-    teams.value = [];
-    jobs.value = [];
-    tempSelectedLocations.value = [];
-    selectedAvailable.value = [];
-    selectedAdded.value = [];
+    return `JOB-${year}${month}${day}-${jobNumber}`;
   }
 
-  async function validateAll() {
-    if (!canValidate.value) return;
+  // Create a single job with all selected locations
+  async function createJob(selectedLocations: string[]) {
+    if (selectedLocations.length === 0) {
+      return false;
+    }
+
+    // Create ONE job with ALL selected locations
+    const newJob: Job = {
+      id: crypto.randomUUID(),
+      reference: generateJobReference(),
+      locations: [...selectedLocations],
+      isValidated: false,
+      createdAt: new Date().toISOString()
+    };
+
+    jobs.value.push(newJob);
+
+    // Clear the selection after creating the job
+    selectedAvailable.value = [];
+    await saveSelections();
+
+    await alertService.success({
+      text: `Job ${newJob.reference} créé avec ${newJob.locations.length} emplacement(s)`
+    });
+
+    return true;
+  }
+
+  // Delete selected jobs with validation check and return locations to available
+  async function deleteSelectedJobs() {
+    if (selectedJobs.value.length === 0) {
+      await alertService.error({
+        text: 'Attention ! Vous n\'avez rien sélectionné.'
+      });
+      return;
+    }
+
+    // Check if ANY of the selected jobs are validated
+    const selectedJobIds = new Set<string>();
+    selectedJobs.value.forEach(selectedId => {
+      const jobId = selectedId.includes('-') ? selectedId.split('-')[0] : selectedId;
+      selectedJobIds.add(jobId);
+    });
+
+    const hasValidatedJobs = jobs.value.some(job => 
+      selectedJobIds.has(job.id) && (job.isValidated || isValidated.value)
+    );
+
+    if (hasValidatedJobs) {
+      await alertService.error({
+        title: 'Jobs validés',
+        text: 'Attention ! Ces jobs sont validés. Vous devez d\'abord les effacer dans la table d\'affectation pour permettre l\'annulation.'
+      });
+      return;
+    }
+
+    // Collect locations from jobs that will be deleted
+    const locationsToRestore: string[] = [];
+    const jobReferencesToDelete: string[] = [];
+
+    jobs.value.forEach(job => {
+      if (selectedJobIds.has(job.id)) {
+        locationsToRestore.push(...job.locations);
+        jobReferencesToDelete.push(job.reference || job.id);
+      }
+    });
+
+    // Remove jobs
+    const jobsCountBefore = jobs.value.length;
+    jobs.value = jobs.value.filter(job => !selectedJobIds.has(job.id));
+    
+    // Clear job selections
+    selectedJobs.value = [];
+    await saveSelections();
+    
+    const deletedCount = jobsCountBefore - jobs.value.length;
+    await alertService.success({
+      text: `${deletedCount} job(s) annulé(s) (${jobReferencesToDelete.join(', ')}). ${locationsToRestore.length} emplacement(s) remis en disponible.`
+    });
+  }
+
+  // Validate jobs with confirmation
+  async function validateJobs() {
+    if (jobs.value.length === 0) {
+      await alertService.error({
+        text: 'Aucun job à valider. Créez d\'abord des jobs.'
+      });
+      return;
+    }
+
+    const result = await alertService.confirm({
+      text: `Voulez-vous vraiment valider ${jobs.value.length} job(s) ?`
+    });
+    
+    if (!result.isConfirmed) {
+      await alertService.info({
+        text: 'Validation annulée.'
+      });
+      return;
+    }
+    
     isSubmitting.value = true;
     try {
-      await planningService.savePlanning({
-        selectedDate: selectedDate.value,
-        teams: teams.value,
-        jobs: jobs.value,
-        isSubmitting: false
+      // Mark individual jobs as validated
+      jobs.value.forEach(job => {
+        job.isValidated = true;
+        job.validatedAt = new Date().toISOString();
       });
-      await indexedDBService.clearState(STORAGE_KEY);
-    } catch {
-      await alertService.error({ text: 'Erreur lors de la validation' });
+
+      await planningService.saveJobs(jobs.value);
+      isValidated.value = true;
+      
+      // Clear selections after validation
+      await clearSelections();
+      
+      await alertService.success({
+        title: 'Succès',
+        text: `${jobs.value.length} job(s) validé(s) avec succès.`
+      });
+      
+    } catch (error) {
+      // Revert validation status on error
+      jobs.value.forEach(job => {
+        job.isValidated = false;
+        delete job.validatedAt;
+      });
+      
+      await alertService.error({ 
+        text: 'Erreur lors de la validation des jobs' 
+      });
     } finally {
       isSubmitting.value = false;
     }
   }
 
-  async function addJob(locations: string[]) {
-    jobs.value.push({
-      id: crypto.randomUUID(),
-      locations
+  // Cancel all planning
+  async function cancelPlanning() {
+    if (jobs.value.length === 0) {
+      await alertService.error({
+        title: 'Aucun job à annuler',
+        text: 'Il n\'y a aucun job créé à annuler.'
+      });
+      return;
+    }
+    
+    // Check if jobs are validated
+    if (isValidated.value || jobs.value.some(job => job.isValidated)) {
+      await alertService.error({
+        title: 'Jobs validés',
+        text: 'Attention ! Ces jobs sont validés. Vous devez d\'abord les effacer dans la table d\'affectation pour permettre l\'annulation.'
+      });
+      return;
+    }
+    
+    const result = await alertService.confirm({
+      text: 'Voulez-vous vraiment annuler tous les jobs non validés ?'
     });
-    await nextTick();
+    
+    if (!result.isConfirmed) {
+      return;
+    }
+    
+    try {
+      await indexedDBService.clearState(STATE_KEY);
+      await clearSelections();
+    } catch (error) {
+      console.error('Error clearing state:', error);
+    }
+    
+    const jobCount = jobs.value.length;
+    jobs.value = [];
+    isValidated.value = false;
+    
+    await alertService.success({
+      text: `${jobCount} job(s) annulé(s) avec succès`
+    });
   }
 
-  async function deleteJob(id: string) {
-    const res = await alertService.confirm({
-      title: 'Confirmer la suppression',
-      text: 'Voulez-vous vraiment supprimer ce job ?'
-    });
-    if (res.isConfirmed) {
-      jobs.value = jobs.value.filter(j => j.id !== id);
+  // Load validated jobs from API
+  async function loadValidatedJobsFromAPI() {
+    if (!isValidated.value) return;
+    
+    try {
+      console.log('Chargement des jobs validés depuis l\'API (à implémenter)');
+    } catch (error) {
+      console.error('Error loading validated jobs from API:', error);
     }
   }
 
   return {
-    selectedDate,
-    teams,
     jobs,
-    zones,
-    subZones,
-    selectedZone,
-    selectedSubZone,
     availableLocations,
-    tempSelectedLocations,
     locationSearchQuery,
     selectedAvailable,
-    selectedAdded,
+    selectedJobs,
     isSubmitting,
-    canValidate,
-    addJob,
-    deleteJob,
-    validateAll,
-    cancelPlanning,
-    addSelectedLocations,
-    addAllLocations,
-    removeSelectedLocations,
-    removeAllLocations,
+    isValidated,
     createJob,
-    cancelJobCreation
+    deleteSelectedJobs,
+    validateJobs,
+    cancelPlanning,
+    loadValidatedJobsFromAPI,
+    clearSelections
   };
 }

@@ -144,16 +144,6 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <ul class="flex space-x-2 rtl:space-x-reverse">
-      <li>
-        <router-link :to="{ name: 'inventory-list' }" class="text-primary hover:underline">
-          Gestion d'inventaire
-        </router-link>
-      </li>
-      <li class="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
-        <span>gestion-des-plannings</span>
-      </li>
-    </ul>
 
     <div class="flex justify-start md:justify-end mb-6 mt-4 md:mt-0">
       <ToggleButtons v-model="viewMode" :options="viewOptions" />
@@ -212,7 +202,7 @@ onUnmounted(() => {
         @actionsClick="handleActionsClick"
         :itemsPerPage="6"
         :enablePagination="true"
-        class="animate-fade-in"
+        class="animate-fade-in panel border border-white-dark/20"
       >
         <template #header>
           <h2 class="text-xl font-semibold mb-6 text-gray-800 flex items-center">

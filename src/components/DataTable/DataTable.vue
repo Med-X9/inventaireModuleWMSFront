@@ -35,32 +35,54 @@
             >
               Réinitialiser
             </button>
-            <label
+            
+            <!-- Amélioration: Utiliser Tooltip pour chaque colonne -->
+            <div
               v-for="col in columns"
               :key="col.field!"
-              class="flex items-center gap-2 mb-2 text-sm"
+              class="mb-2"
             >
-              <input
-                type="checkbox"
-                :value="col.field!"
-                v-model="visibleFields"
-                :disabled="visibleFields.length <= minVisibleColumns && visibleFields.includes(col.field!)"
-                class="form-checkbox accent-primary focus:ring-primary"
-              />
-              {{ col.headerName || col.field }}
-            </label>
+              <Tooltip 
+                :text="(col as DataTableColumn).description" 
+                position="right"
+                :delay="300"
+              >
+                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-light/10 p-1 rounded">
+                  <input
+                    type="checkbox"
+                    :value="col.field!"
+                    v-model="visibleFields"
+                    :disabled="visibleFields.length <= minVisibleColumns && visibleFields.includes(col.field!)"
+                    class="form-checkbox accent-primary focus:ring-primary"
+                  />
+                  <span class="flex items-center gap-1">
+                    {{ col.headerName || col.field }}
+                    <svg
+                      v-if="(col as DataTableColumn).description"
+                      class="w-3 h-3 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                  </span>
+                </label>
+              </Tooltip>
+            </div>
           </div>
         </div>
+        <slot name="contenu" />
       </div>
 
-      <!-- Dropdown d’export -->
+      <!-- Dropdown d'export -->
       <div class="flex-shrink-0 flex gap-2 mb-4 md:mb-0">
         <slot name="table-actions" />
         <div class="relative" ref="exportDropdownRef">
-          <!-- Bouton principal “Exporter” -->
+          <!-- Bouton principal "Exporter" -->
           <button
             @click="toggleExportDropdown"
-            class="flex items-center justify-between p-2 btn  text-gray-700 shadow-sm hover:border-gray-300 w-full md:w-auto"
+            class="flex items-center justify-between p-2 btn text-gray-700 shadow-sm hover:border-gray-300 w-full md:w-auto"
           >
             <span class="flex items-center gap-2">
               <IconDownload class="w-4 h-4" />
@@ -111,7 +133,6 @@
 
     <!-- Grille AG Grid -->
     <div v-if="rowData !== undefined">
-      <!-- Émission de l’événement row-clicked vers le parent -->
       <ag-grid-vue
         class="ag-theme-alpine auto-height-grid"
         style="width: 100%;"
@@ -126,20 +147,23 @@
         :rowData="rowData"
         :pagination="pagination"
         :paginationPageSize="pageSize"
+        :paginationPageSizeSelector="[5, 10, 20, 50, 100]"
         :rowSelection="
           rowSelection
             ? {
-                mode:           'multiRow',
-                checkboxes:     true,
+                mode: 'multiRow',
+                checkboxes: true,
                 headerCheckbox: true,
               }
             : undefined
         "
         :selectionColumnDef="{
-          minWidth:  65,
-          maxWidth:  70,
-          cellClass: 'text-left'
+          minWidth: 65,
+          maxWidth: 70,
+          cellClass: 'text-left',
+          cellStyle: (params) => params.data?.isChild ? { display: 'none' } : undefined
         }"
+        :isRowSelectable="isRowSelectable"
       />
     </div>
 
@@ -153,8 +177,8 @@
 import { defineProps, computed, defineEmits, ref, onMounted, onUnmounted } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
 import type { PropType } from 'vue';
-import type { ColDef, CsvExportParams } from 'ag-grid-community';
-import type { ActionConfig, TableRow } from '@/interfaces/dataTable';
+import type { ColDef, CsvExportParams, SelectionChangedEvent } from 'ag-grid-community';
+import type { ActionConfig, TableRow, DataTableColumn } from '@/interfaces/dataTable';
 import { useDataTable } from '@/composables/useDataTable';
 import { useAppStore } from '@/stores/index';
 import { themeQuartz, colorSchemeLightWarm, colorSchemeDarkBlue } from 'ag-grid-community';
@@ -164,11 +188,12 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import IconFile from '@/components/icon/icon-file.vue';
 import IconDownload from '@/components/icon/icon-download.vue';
+import Tooltip from '@/components/Tooltip.vue';
 
 const emit = defineEmits(['selection-changed', 'row-clicked']);
 
 const props = defineProps({
-  columns: { type: Array as PropType<ColDef[]>, required: true },
+  columns: { type: Array as PropType<DataTableColumn[]>, required: true },
   rowDataProp: { type: Array as PropType<TableRow[]>, default: () => [] },
   dataUrl: String,
   enableFiltering: { type: Boolean, default: true },
@@ -182,7 +207,6 @@ const props = defineProps({
 });
 
 const themeStore = useAppStore();
-
 const themeLight = themeQuartz.withPart(colorSchemeLightWarm);
 const themeDark = themeQuartz.withPart(colorSchemeDarkBlue);
 
@@ -190,7 +214,13 @@ const gridTheme = computed(() =>
   themeStore.theme === 'dark' ? themeDark : themeLight
 );
 
-const onSelectionChanged = () => {
+// Fonction pour déterminer si une ligne peut être sélectionnée
+const isRowSelectable = (params: { data?: TableRow }) => {
+  // Ne permettre la sélection que des lignes parent (pas les détails)
+  return !params.data?.isChild;
+};
+
+const onSelectionChanged = (event: SelectionChangedEvent) => {
   if (!gridApi.value) return;
   const selectedRows = gridApi.value.getSelectedRows();
   emit('selection-changed', selectedRows);
@@ -208,22 +238,20 @@ const exportToCsv = () => {
     columnKeys: getExportableColumns().map(col => col.field!) as string[],
   };
   gridApi.value.exportDataAsCsv(params);
-  // Fermer le dropdown après export (optionnel)
   showExportDropdown.value = false;
 };
 
 const exportToExcel = () => {
   if (!gridApi.value) return;
-
   const allData: Record<string, unknown>[] = [];
   gridApi.value.forEachNodeAfterFilterAndSort(node => {
     if (node.data) allData.push(node.data);
   });
+
   if (!allData.length) return;
 
   const visibleCols = getExportableColumns();
   const headers = visibleCols.map(col => col.headerName || col.field);
-
   const dataForSheet = allData.map(row => {
     const obj: Record<string, unknown> = {};
     visibleCols.forEach(col => {
@@ -239,12 +267,10 @@ const exportToExcel = () => {
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Données');
-
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   const blob = new Blob([wbout], { type: 'application/octet-stream' });
   saveAs(blob, 'export.xlsx');
 
-  // Fermer le dropdown après export (optionnel)
   showExportDropdown.value = false;
 };
 
@@ -253,29 +279,36 @@ const exportToPdf = () => {
   const doc = new jsPDF();
 
   // Titre
-  doc.setFontSize(16);
+  doc.setFontSize(12);
   doc.setTextColor(44, 62, 80);
   doc.text(props.exportTitle, 14, 15);
 
-  const columns = getExportableColumns()
-    .map(col => col.headerName || col.field || '')
-    .filter(Boolean);
+  // Colonnes exportables (sans 'actions')
+  const visibleCols = getExportableColumns();
 
-  const csvData = gridApi.value.getDataAsCsv({
-    columnKeys: getExportableColumns().map(col => col.field) as string[],
+  // En-têtes à afficher dans le PDF
+  const headers = visibleCols.map(col => col.headerName || col.field || '');
+
+  // Corps du tableau : on précise le type pour éviter le `never[]`
+  const body: (string | number)[][] = [];
+
+  // Remplissage des lignes
+  gridApi.value.forEachNodeAfterFilterAndSort(node => {
+    if (!node.data) return;
+    const row: (string | number)[] = [];
+    visibleCols.forEach(col => {
+      const val = node.data[col.field!] ?? '';
+      row.push(val);
+    });
+    body.push(row);
   });
-  if (!csvData) return;
 
-  const data = csvData
-    .split('\n')
-    .slice(1)
-    .map(row => row.split(','));
-
+  // Génère le tableau dans le PDF
   autoTable(doc, {
-    head: [columns],
-    body: data,
+    head: [headers],
+    body,
     startY: 25,
-    headStyles: { fillColor: [41, 128, 185] },
+    headStyles: { fillColor: [255, 204, 17] },
     didDrawPage: () => {
       const pageCount = doc.getNumberOfPages();
       doc.setFontSize(10);
@@ -293,25 +326,26 @@ const exportToPdf = () => {
   });
 
   doc.save('export.pdf');
-
-  // Fermer le dropdown après export (optionnel)
   showExportDropdown.value = false;
 };
 
-// Variables pour le dropdown d’export
+// Variables pour le dropdown d'export
 const showExportDropdown = ref(false);
 const exportDropdownRef = ref<HTMLElement | null>(null);
+
 const toggleExportDropdown = () => {
   showExportDropdown.value = !showExportDropdown.value;
 };
-function handleClickOutsideExport(e: MouseEvent) {
+
+// Événement pour fermer le dropdown d'export si on clique à l'extérieur
+const handleClickOutsideExport = (event: MouseEvent) => {
   const wrap = exportDropdownRef.value;
-  if (wrap && !wrap.contains(e.target as Node)) {
+  if (wrap && !wrap.contains(event.target as Node)) {
     showExportDropdown.value = false;
   }
-}
+};
 
-// Appel à useDataTable (inchangé)
+// Appel à useDataTable
 const {
   defaultColDef,
   rowData,
@@ -328,20 +362,29 @@ const {
   gridApi,
 } = useDataTable(props);
 
+// Colonne de numérotation conditionnelle
 const rowNumberColumn: ColDef = {
   headerName: 'N°',
-  valueGetter: params =>
-    params.node?.rowIndex != null
-      ? (params.node.rowIndex + 1).toString()
-      : '',
+  valueGetter: params => {
+    // Ne pas afficher le numéro pour les lignes enfants
+    if (params.data?.isChild) return '';
+    return params.node?.rowIndex != null ? (params.node.rowIndex + 1).toString() : '';
+  },
   width: 70,
   minWidth: 70,
   maxWidth: 80,
   suppressSizeToFit: true,
   menuTabs: [],
   sortable: false,
-  filter: true,
+  filter: false,
   cellClass: 'text-left',
+  cellStyle: params => {
+    // Masquer complètement la cellule pour les lignes enfants
+    if (params.data?.isChild) {
+      return { display: 'none' };
+    }
+    return undefined;
+  }
 };
 
 const computedVisibleColumnDefsWithIndex = computed<ColDef[]>(() => {
@@ -350,50 +393,75 @@ const computedVisibleColumnDefsWithIndex = computed<ColDef[]>(() => {
   return cols;
 });
 
-// Écoute globale pour fermer le dropdown d’export si on clique à l’extérieur
+// Écoute globale pour fermer le dropdown d'export si on clique à l'extérieur
 onMounted(() => {
   document.addEventListener('click', handleClickOutsideExport);
 });
+
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutsideExport);
 });
 </script>
 
 <style scoped>
-.auto-height-grid ::v-deep .ag-root-wrapper-body,
-.auto-height-grid ::v-deep .ag-center-cols-viewport,
-.auto-height-grid ::v-deep .ag-body-viewport-wrapper {
+.auto-height-grid :deep(.ag-root-wrapper-body),
+.auto-height-grid :deep(.ag-center-cols-viewport),
+.auto-height-grid :deep(.ag-body-viewport-wrapper) {
   max-height: 430px !important;
   height: auto !important;
   overflow-y: auto !important;
 }
-.auto-height-grid ::v-deep .ag-header-cell-text,
-.auto-height-grid ::v-deep .ag-header-cell-label {
+
+.auto-height-grid :deep(.ag-header-cell-text),
+.auto-height-grid :deep(.ag-header-cell-label) {
   font-size: 13.5px;
 }
-.auto-height-grid ::v-deep .ag-cell {
+
+.auto-height-grid :deep(.ag-cell) {
   font-size: 12.5px;
 }
-.auto-height-grid ::v-deep .ag-paging-panel,
-.auto-height-grid ::v-deep .ag-pagination-button,
-.auto-height-grid ::v-deep .ag-page-size-panel,
-.auto-height-grid ::v-deep .ag-page-size,
-.auto-height-grid ::v-deep .ag-input-field-input {
+
+.auto-height-grid :deep(.ag-paging-panel),
+.auto-height-grid :deep(.ag-pagination-button),
+.auto-height-grid :deep(.ag-page-size-panel),
+.auto-height-grid :deep(.ag-page-size),
+.auto-height-grid :deep(.ag-input-field-input) {
   font-size: 13.5px;
 }
+
+/* Masquer les checkboxes pour les lignes enfants */
+.auto-height-grid :deep(.ag-row .ag-selection-checkbox) {
+  visibility: visible;
+}
+
+.auto-height-grid :deep(.ag-row[data-is-child="true"] .ag-selection-checkbox) {
+  display: none !important;
+}
+
 @media (max-width: 640px) {
-  ::v-deep .ag-pagination-button {
+  :deep(.ag-pagination-button) {
     min-width: 1.2rem;
     height: 1.2rem;
     padding: 0.15rem;
   }
-  .auto-height-grid ::v-deep .ag-paging-panel,
-  .auto-height-grid ::v-deep .ag-pagination-button,
-  .auto-height-grid ::v-deep .ag-page-size-panel,
-  .auto-height-grid ::v-deep .ag-page-size,
-  .auto-height-grid ::v-deep .ag-input-field-input {
+  
+  .auto-height-grid :deep(.ag-paging-panel),
+  .auto-height-grid :deep(.ag-pagination-button),
+  .auto-height-grid :deep(.ag-page-size-panel),
+  .auto-height-grid :deep(.ag-page-size),
+  .auto-height-grid :deep(.ag-input-field-input) {
     font-size: 6.5px;
     padding: 0.3rem;
   }
+  /* in your global styles (e.g. main.css) */
+.ag-tooltip {
+  /* Use your Tailwind primary background + white text */
+  background-color: rgb(233, 52, 52) !important;
+  color: white !important;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
 }
 </style>

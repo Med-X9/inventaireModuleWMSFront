@@ -28,9 +28,9 @@ export function useInventoryDetail(inventoryId: number) {
 
   const tabs = [
     { id: 'general', label: 'Informations générales' },
-    { id: 'contage1', label: 'Premier comptage' },
-    { id: 'contage2', label: 'Deuxième comptage' },
-    { id: 'contage3', label: 'Troisième comptage' },
+    { id: 'comptage1', label: 'Premier comptage' },
+    { id: 'comptage2', label: 'Deuxième comptage' },
+    { id: 'comptage3', label: 'Troisième comptage' },
   ];
 
   const jobColumns = [
@@ -52,6 +52,48 @@ export function useInventoryDetail(inventoryId: number) {
       cellRenderer: (params: any) => {
         return params.data.status.toLowerCase() === 'terminé' ? params.data.operator : '';
       }
+    }
+  ];
+
+  // Formatage des données pour GridView - Équipes
+  const teamsGridData = computed(() => {
+    return detailData.value.inventory.teams?.map(team => ({
+      id: team.id,
+      name: team.name,
+      initial: team.name.charAt(0),
+      type: 'Équipe'
+    })) || [];
+  });
+
+  // Formatage des données pour GridView - Magasins
+  const magasinsGridData = computed(() => {
+    return detailData.value.magasins.map((magasin, index) => ({
+      id: index + 1,
+      name: magasin,
+      type: 'Magasin',
+      status: 'Actif'
+    }));
+  });
+
+  // Actions pour les équipes
+  const teamActions = [
+    {
+      label: 'Voir détails',
+      handler: (item: any) => {
+        console.log('Voir détails équipe:', item);
+      },
+      variant: 'primary' as const
+    }
+  ];
+
+  // Actions pour les magasins
+  const magasinActions = [
+    {
+      label: 'Configurer',
+      handler: (item: any) => {
+        console.log('Configurer magasin:', item);
+      },
+      variant: 'primary' as const
     }
   ];
 
@@ -148,6 +190,10 @@ export function useInventoryDetail(inventoryId: number) {
     viewMode,
     inventory: computed(() => detailData.value.inventory),
     magasins: computed(() => detailData.value.magasins),
+    teamsGridData,
+    magasinsGridData,
+    teamActions,
+    magasinActions,
     tabs,
     jobColumns,
     launchInventory,

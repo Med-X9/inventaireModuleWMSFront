@@ -1,19 +1,6 @@
 <template>
   <div>
-    <div class="flex justify-between mb-2">
-      <ul class="flex space-x-2 rtl:space-x-reverse">
-        <li>
-          <router-link
-            :to="{ name: 'inventory-list' }"
-            class="text-primary hover:underline"
-          >
-            Gestion d’inventaire
-          </router-link>
-        </li>
-        <li class="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
-          <span>Modification d’inventaire</span>
-        </li>
-      </ul>
+    <div class="flex justify-end mb-3">
       <button
         @click="onCancelClick"
         class="px-4 py-2 text-black dark:text-white-light  border border-secondary font-medium rounded-lg transition-colors"

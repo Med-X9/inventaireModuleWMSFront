@@ -1,26 +1,5 @@
 <template>
-  <div class="container mx-auto ">
-    <!-- Fil d’Ariane + Bouton Annuler -->
-    <div class="flex flex-col mb-6">
-      <ul class="flex space-x-2 rtl:space-x-reverse">
-        <li>
-          <router-link :to="{ name: 'inventory-list' }" class="text-primary hover:underline">
-            Gestion d'inventaire
-          </router-link>
-        </li>
-        <li>
-          <router-link
-            :to="{ name: 'planning-management' }"
-            class="before:content-['/'] ltr:before:mr-2 text-primary hover:underline"
-          >
-            Gestion des plannings
-          </router-link>
-        </li>
-        <li class="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2 text-gray-500">
-          <span>Affectation des équipes</span>
-        </li>
-      </ul>
-    </div>
+  <div class="container mx-auto">
 
     <!-- DataTable (master) -->
     <div class="panel datatable">
@@ -60,13 +39,24 @@
       </DataTable>
     </div>
 
-    <!-- Modal d’affectation d’équipe -->
+    <!-- Modal d'affectation d'équipe -->
     <Modal v-model="showTeamModal" :title="modalTitle">
       <div class="mt-4">
         <FormBuilder
           v-model="teamForm"
           :fields="teamFields"
           @submit="handleTeamSubmit"
+          submitLabel="Affecter"
+        />
+      </div>
+    </Modal>
+      <!-- Modal d'affectation de ressources -->
+    <Modal v-model="showResourceModal" title="Affecter Ressources">
+      <div class="mt-4">
+        <FormBuilder
+          v-model="resourceForm"
+          :fields="resourceFields"
+          @submit="handleResourceSubmit"
           submitLabel="Affecter"
         />
       </div>
@@ -80,52 +70,42 @@ import { useRouter } from 'vue-router';
 import DataTable from '@/components/DataTable/DataTable.vue';
 import Modal from '@/components/Modal.vue';
 import FormBuilder from '@/components/Form/FormBuilder.vue';
-import type {
-  ColDef,
-  CellClassParams,
-  ValueFormatterParams,
-  RowClickedEvent
-} from 'ag-grid-community';
-import type { ActionConfig } from '@/interfaces/dataTable';
+import type { ColDef, CellClassParams, ValueFormatterParams, RowClickedEvent } from 'ag-grid-community';
+import type { ActionConfig, TableRow } from '@/interfaces/dataTable';
 import type { FieldConfig } from '@/interfaces/form';
 import { useAffecter } from '@/composables/useAffecter';
 import { alertService } from '@/services/alertService';
 
 const router = useRouter();
-const {
-  rows,
-  affecterAuPremierComptage,
-  affecterAuDeuxiemeComptage,
-  cancelAffecter,
-  PLANNING_DATE
-} = useAffecter();
+const { rows, affecterAuPremierComptage, affecterAuDeuxiemeComptage, affecterRessources, cancelAffecter, PLANNING_DATE } = useAffecter();
 
 // --- Interface explicite pour chaque ligne (row) de la grille ---
-interface RowNode {
+interface RowNode extends TableRow {
   id: string;
   job: string;
   team1: string;
   date1: string;
   team2: string;
   date2: string;
+  resources: string;
   locations?: string[];
-  isChild: boolean;
-  parentId: string | null;
 }
 
-// --- État pour garder les IDs des jobs “dépliés” ---
+
+// --- État pour garder les IDs des jobs "dépliés" ---
 const expandedJobIds = ref<Set<string>>(new Set());
 
-// --- Data “aplatie” qui sera envoyée à DataTable.vue ---
+// --- Data "aplatie" qui sera envoyée à DataTable.vue ---
 const displayData = ref<RowNode[]>([]);
 
 /**
  * Reconstruit displayData à partir de rows.value (parent only).
- * Pour chaque parent, on l’ajoute. Puis si son ID est dans expandedJobIds,
- * on insère autant de lignes enfant qu’il y a d’emplacements.
+ * Pour chaque parent, on l'ajoute. Puis si son ID est dans expandedJobIds,
+ * on insère autant de lignes enfant qu'il y a d'emplacements.
  */
 function rebuildDisplayData() {
   const newData: RowNode[] = [];
+  
   rows.value.forEach((parentRow) => {
     // Ligne parent
     newData.push({
@@ -135,6 +115,7 @@ function rebuildDisplayData() {
       date1: parentRow.date1,
       team2: parentRow.team2,
       date2: parentRow.date2,
+      resources: parentRow.resources,
       locations: parentRow.locations,
       isChild: false,
       parentId: null
@@ -143,61 +124,122 @@ function rebuildDisplayData() {
     // Si on doit déplier ce job, on ajoute ses enfants
     if (expandedJobIds.value.has(parentRow.id)) {
       const locs = parentRow.locations || [];
-      locs.forEach((location) => {
+      locs.forEach((location, index) => {
         newData.push({
           id: `${parentRow.id}--${location}`,
-          job: location,
-          team1: parentRow.team1,
-          date1: parentRow.date1,
-          team2: parentRow.team2,
-          date2: parentRow.date2,
+          job: `└─ ${location}`, // Affichage indenté pour les emplacements
+          team1: '',
+          date1: '',
+          team2: '',
+          date2: '',
+          resources: '',
           isChild: true,
           parentId: parentRow.id
         });
       });
     }
   });
+  
   displayData.value = newData;
 }
 
 // Exécution initiale pour remplir displayData
 rebuildDisplayData();
 
-// --- Définition des colonnes avec typage explicite ColDef<RowNode> ---
-const columns: ColDef<RowNode>[] = [
+// --- Définition des colonnes avec typage explicite ColDef ---
+const columns: ColDef[] = [
   {
     headerName: 'Job',
     field: 'job',
     sortable: true,
     filter: 'agTextColumnFilter',
     flex: 2,
-    cellStyle: (params: CellClassParams<RowNode>) => {
+    cellStyle: (params: CellClassParams) => {
       if (!params.data) return undefined;
       if (params.data.isChild) {
-        return { paddingLeft: '35px', color: '#555' };
+        return { 
+          paddingLeft: '20px', 
+          color: '#666',
+          fontStyle: 'italic',
+          fontSize: '12px'
+        };
       }
       return undefined;
     },
     cellRenderer: (params) => {
       if (!params.data) return '';
+      
       if (!params.data.isChild) {
         const jobId = params.data.id;
         const isExpanded = expandedJobIds.value.has(jobId);
-        const arrow = isExpanded
-  ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="6 9 12 15 18 9"/>
-     </svg>`
-  : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="9 6 15 12 9 18"/>
-     </svg>`;
+        const hasLocations = params.data.locations && params.data.locations.length > 0;
+        
+        if (!hasLocations) {
+          return `<span style="font-weight: 500;">${params.value ?? ''}</span>`;
+        }
+        
+        const arrow = isExpanded 
+          ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+               <polyline points="6 9 12 15 18 9"/>
+             </svg>`
+          : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+               <polyline points="9 6 15 12 9 18"/>
+             </svg>`;
+        
         return `
-          <span style="cursor: pointer; display: inline-flex; align-items: center;">
-            <span style="width: 1rem; display: inline-block;">${arrow}</span>
-            <span>${params.value ?? ''}</span>
-          </span>`;
+          <div style="display: flex; align-items: center; width: 100%;">
+            <span 
+              style="cursor: pointer; display: inline-flex; align-items: center; width: 20px; margin-right: 8px;" 
+              data-expand-toggle="${jobId}"
+              title="Cliquer pour afficher/masquer les emplacements"
+            >
+              ${arrow}
+            </span>
+            <span style="font-weight: 500;">${params.value ?? ''}</span>
+            <span style="color: #666; font-size: 11px; margin-left: 8px;">(${params.data.locations.length} emplacements)</span>
+          </div>`;
       }
-      // Ligne enfant : on n’affiche que le texte
-      return `<span>${params.value ?? ''}</span>`;
+      
+      // Ligne enfant : affichage avec style différent
+      return `<span style="color: #666; font-size: 12px;">${params.value ?? ''}</span>`;
+    },
+    onCellClicked: (params) => {
+      const target = params.event?.target as HTMLElement;
+      const expandToggle = target.closest('[data-expand-toggle]');
+      
+      if (expandToggle && !params.data?.isChild) {
+        const jobId = expandToggle.getAttribute('data-expand-toggle');
+        if (jobId) {
+          if (expandedJobIds.value.has(jobId)) {
+            expandedJobIds.value.delete(jobId);
+          } else {
+            expandedJobIds.value.add(jobId);
+          }
+          rebuildDisplayData();
+        }
+      }
+    }
+  },
+  {
+    headerName: 'Ressources',
+    field: 'resources',
+    sortable: true,
+    filter: 'agTextColumnFilter',
+    flex: 1.5,
+    cellStyle: (params: CellClassParams) => {
+      if (!params.data) return undefined;
+      if (params.data.isChild) {
+        return { 
+          color: '#ccc', 
+          fontSize: '11px' 
+        };
+      }
+      return undefined;
+    },
+    valueFormatter: (params: ValueFormatterParams) => {
+      if (!params.data) return '';
+      if (params.data.isChild) return '';
+      return params.value || '';
     }
   },
   {
@@ -205,17 +247,21 @@ const columns: ColDef<RowNode>[] = [
     field: 'team1',
     sortable: true,
     filter: 'agTextColumnFilter',
-    flex: 1,
-    cellStyle: (params: CellClassParams<RowNode>) => {
+    flex: 1.2,
+    cellStyle: (params: CellClassParams) => {
       if (!params.data) return undefined;
       if (params.data.isChild) {
-        return { color: '#999' };
+        return { 
+          color: '#ccc', 
+          fontSize: '11px' 
+        };
       }
       return undefined;
     },
-    valueFormatter: (params: ValueFormatterParams<RowNode>) => {
+    valueFormatter: (params: ValueFormatterParams) => {
       if (!params.data) return '';
-      return params.data.isChild ? '' : (params.value as string ?? '');
+      if (params.data.isChild) return '';
+      return (params.value as string) || '';
     }
   },
   {
@@ -224,12 +270,20 @@ const columns: ColDef<RowNode>[] = [
     sortable: true,
     filter: 'agDateColumnFilter',
     flex: 1,
-    valueFormatter: (params: ValueFormatterParams<RowNode>) => {
+    cellStyle: (params: CellClassParams) => {
+      if (!params.data) return undefined;
+      if (params.data.isChild) {
+        return { 
+          color: '#ccc', 
+          fontSize: '11px' 
+        };
+      }
+      return undefined;
+    },
+    valueFormatter: (params: ValueFormatterParams) => {
       if (!params.data) return '';
       if (params.data.isChild) return '';
-      return params.value
-        ? new Date(params.value as string).toLocaleDateString()
-        : '';
+      return params.value ? new Date(params.value as string).toLocaleDateString('fr-FR') : '';
     }
   },
   {
@@ -237,17 +291,21 @@ const columns: ColDef<RowNode>[] = [
     field: 'team2',
     sortable: true,
     filter: 'agTextColumnFilter',
-    flex: 1,
-    cellStyle: (params: CellClassParams<RowNode>) => {
+    flex: 1.2,
+    cellStyle: (params: CellClassParams) => {
       if (!params.data) return undefined;
       if (params.data.isChild) {
-        return { color: '#999' };
+        return { 
+          color: '#ccc', 
+          fontSize: '11px' 
+        };
       }
       return undefined;
     },
-    valueFormatter: (params: ValueFormatterParams<RowNode>) => {
+    valueFormatter: (params: ValueFormatterParams) => {
       if (!params.data) return '';
-      return params.data.isChild ? '' : (params.value as string ?? '');
+      if (params.data.isChild) return '';
+      return (params.value as string) || '';
     }
   },
   {
@@ -256,34 +314,55 @@ const columns: ColDef<RowNode>[] = [
     sortable: true,
     filter: 'agDateColumnFilter',
     flex: 1,
-    valueFormatter: (params: ValueFormatterParams<RowNode>) => {
+    cellStyle: (params: CellClassParams) => {
+      if (!params.data) return undefined;
+      if (params.data.isChild) {
+        return { 
+          color: '#ccc', 
+          fontSize: '11px' 
+        };
+      }
+      return undefined;
+    },
+    valueFormatter: (params: ValueFormatterParams) => {
       if (!params.data) return '';
       if (params.data.isChild) return '';
-      return params.value
-        ? new Date(params.value as string).toLocaleDateString()
-        : '';
+      return params.value ? new Date(params.value as string).toLocaleDateString('fr-FR') : '';
     }
   }
 ];
 
-// --- Actions sur chaque ligne “parent” uniquement ---
+// --- Actions sur chaque ligne "parent" uniquement ---
 const rowActions: ActionConfig[] = [
   {
+    label: 'Affecter Ressources',
+    handler: (row: TableRow) => {
+      const rowNode = row as RowNode;
+      if (rowNode.isChild) return;
+      selectedRows.value = [rowNode];
+      showResourceModal.value = true;
+    }
+  },
+  {
     label: 'Réaffecter Premier Comptage',
-    handler: (row: RowNode) => {
-      selectedRows.value = [row];
+    handler: (row: TableRow) => {
+      const rowNode = row as RowNode;
+      if (rowNode.isChild) return;
+      selectedRows.value = [rowNode];
       currentTeamType.value = 'premier';
       showTeamModal.value = true;
     }
   },
   {
     label: 'Réaffecter Deuxième Comptage',
-    handler: (row: RowNode) => {
-      if (!row.team1) {
+    handler: (row: TableRow) => {
+      const rowNode = row as RowNode;
+      if (rowNode.isChild) return;
+      if (!rowNode.team1) {
         alertService.warning({ text: 'Le job doit d\'abord avoir un premier comptage.' });
         return;
       }
-      selectedRows.value = [row];
+      selectedRows.value = [rowNode];
       currentTeamType.value = 'deuxieme';
       showTeamModal.value = true;
     }
@@ -292,40 +371,33 @@ const rowActions: ActionConfig[] = [
 
 const selectedRows = ref<RowNode[]>([]);
 
-/** 
- * Lorsque l’utilisateur coche une checkbox, AG Grid renvoie un tableau complet
+/**
+ * Lorsque l'utilisateur coche une checkbox, AG Grid renvoie un tableau complet
  * (parents + enfants). On ne garde ici que les parents (isChild=false).
  */
-function onSelectionChanged(rowsData: RowNode[]) {
-  selectedRows.value = rowsData.filter(r => !r.isChild);
+function onSelectionChanged(rowsData: TableRow[]) {
+  selectedRows.value = rowsData.filter((r): r is RowNode => !r.isChild) as RowNode[];
 }
 
 /**
- * Gestion du clic sur une ligne (parent uniquement).
- * On bascule l’ID dans expandedJobIds puis on reconstruit displayData.
+ * Gestion du clic sur une ligne - désactivée car on gère maintenant via onCellClicked
  */
-function onRowClicked(event: RowClickedEvent<RowNode>) {
-  if (!event.data) return;
-  const data = event.data;
-  if (data.isChild) {
-    return;
-  }
-  const jobId = data.id;
-  if (expandedJobIds.value.has(jobId)) {
-    expandedJobIds.value.delete(jobId);
-  } else {
-    expandedJobIds.value.add(jobId);
-  }
-  rebuildDisplayData();
+function onRowClicked(event: RowClickedEvent) {
+  // Ne rien faire ici, la logique est dans onCellClicked de la colonne job
 }
 
 // --- Boutons « Affecter » (identique à votre logique initiale) ---
 const showTeamModal = ref(false);
 const currentTeamType = ref<'premier' | 'deuxieme'>('premier');
+
 const modalTitle = computed(() =>
   `Affecter ${currentTeamType.value === 'premier' ? 'Premier' : 'Deuxième'} Comptage`
 );
-const teamForm = ref<Record<string, unknown>>({ team: '', date: '' });
+
+const teamForm = ref<Record<string, unknown>>({
+  team: '',
+  date: ''
+});
 
 const teamFields: FieldConfig[] = [
   {
@@ -367,12 +439,46 @@ function handleAffecterDeuxiemeComptageClick() {
   showTeamModal.value = true;
 }
 
+// État modal ressources
+const showResourceModal = ref(false);
+const resourceForm = ref({ resources: [] });
+const resourceFields: FieldConfig[] = [
+  {
+    key: 'resources',
+    label: 'Ressources',
+    type: 'select',
+    options: [
+      { label: 'Scanner Zebra MC9300', value: 'Scanner Zebra MC9300' },
+      { label: 'Terminal Honeywell CT60', value: 'Terminal Honeywell CT60' },
+      { label: 'Imprimante Mobile Zebra ZQ630', value: 'Imprimante Mobile Zebra ZQ630' },
+      { label: 'Tablette Samsung Galaxy Tab A8', value: 'Tablette Samsung Galaxy Tab A8' },
+      { label: 'Pistolet de Comptage Datalogic', value: 'Pistolet de Comptage Datalogic' }
+    ],
+    multiple: true,
+    searchable: true,
+    clearable: true,
+    props: { placeholder: 'Sélectionnez une ou plusieurs ressources' },
+    validators: [{ key: 'required', fn: v => Array.isArray(v) && v.length > 0, msg: 'Sélectionnez au moins une ressource' }]
+  }
+];
+
 function handleActionRessourceClick() {
   if (!selectedRows.value.length) {
     alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
     return;
   }
-  alert('Action Ressource ');
+  showResourceModal.value = true;
+}
+
+async function handleResourceSubmit(data: Record<string, unknown>) {
+  const { resources } = data as { resources: string[] };
+  const jobIds = selectedRows.value.map(r => r.id);
+  
+  await affecterRessources(jobIds, resources);
+  
+  showResourceModal.value = false;
+  resourceForm.value = { resources: [] };
+  rebuildDisplayData();
 }
 
 async function handleTeamSubmit(data: Record<string, unknown>) {
@@ -387,12 +493,10 @@ async function handleTeamSubmit(data: Record<string, unknown>) {
 
   showTeamModal.value = false;
   teamForm.value = { team: '', date: '' };
+  rebuildDisplayData(); // Reconstruire les données après modification
 }
 </script>
 
 <style scoped>
-/* Optionnel : style de fond pour les lignes enfants */
-.ag-theme-alpine .ag-row-child .ag-cell {
-  background-color: #f9f9f9;
-}
+/* Style pour les lignes enfants */
 </style>

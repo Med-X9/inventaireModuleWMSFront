@@ -1,130 +1,125 @@
 import { format, isValid, parse } from 'date-fns';
-import type { ContageConfig, InventoryCreationState } from '@/interfaces/inventoryCreation';
+import type { ComptageConfig, InventoryCreationState } from '@/interfaces/inventoryCreation';
 
 export interface Validator {
-  fn: (value: unknown) => boolean;
-  msg: string;
+fn: (value: unknown) => boolean;
+msg: string;
 }
 
 export const required = (msg = 'Ce champ est requis'): Validator => ({
-  fn: (value: unknown) => {
-    if (Array.isArray(value)) return value.length > 0;
-    if (typeof value === 'string') return value.trim() !== '';
-    return value !== null && value !== undefined;
-  },
-  msg
+fn: (value: unknown) => {
+if (Array.isArray(value)) return value.length > 0;
+if (typeof value === 'string') return value.trim() !== '';
+return value !== null && value !== undefined;
+},
+msg
 });
 
 export const selectRequired = (msg = 'Veuillez sélectionner une option'): Validator => ({
-  fn: (value: unknown) => {
-    if (Array.isArray(value)) return value.length > 0;
-    return value !== null && value !== undefined && value !== '';
-  },
-  msg
+fn: (value: unknown) => {
+if (Array.isArray(value)) return value.length > 0;
+return value !== null && value !== undefined && value !== '';
+},
+msg
 });
 
 export const date = (msg = 'Format de date invalide'): Validator => ({
-  fn: (value: unknown) => {
-    if (!value || typeof value !== 'string') return false;
-    const parsed = parse(value, 'yyyy-MM-dd', new Date());
-    return isValid(parsed);
-  },
-  msg
+fn: (value: unknown) => {
+if (!value || typeof value !== 'string') return false;
+const parsed = parse(value, 'yyyy-MM-dd', new Date());
+return isValid(parsed);
+},
+msg
 });
 
 export const futureDate = (msg = 'La date doit être dans le futur'): Validator => ({
-  fn: (value: unknown) => {
-    if (!value || typeof value !== 'string') return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const parsed = parse(value, 'yyyy-MM-dd', new Date());
-    return isValid(parsed) && parsed >= today;
-  },
-  msg
+fn: (value: unknown) => {
+if (!value || typeof value !== 'string') return false;
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+const parsed = parse(value, 'yyyy-MM-dd', new Date());
+return isValid(parsed) && parsed >= today;
+},
+msg
 });
 
 export const minLength = (min: number, msg = `Minimum ${min} caractères`): Validator => ({
-  fn: (value: unknown) => typeof value === 'string' && value.length >= min,
-  msg
+fn: (value: unknown) => typeof value === 'string' && value.length >= min,
+msg
 });
 
 export const maxLength = (max: number, msg = `Maximum ${max} caractères`): Validator => ({
-  fn: (value: unknown) => typeof value === 'string' && value.length <= max,
-  msg
+fn: (value: unknown) => typeof value === 'string' && value.length <= max,
+msg
 });
 
 export const email = (msg = 'Adresse email invalide'): Validator => ({
-  fn: (value: unknown) => {
-    if (typeof value !== 'string') return false;
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  },
-  msg
+fn: (value: unknown) => {
+if (typeof value !== 'string') return false;
+return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+},
+msg
 });
 
 export const number = (msg = 'Valeur numérique invalide'): Validator => ({
-  fn: (value: unknown) => !isNaN(Number(value)),
-  msg
+fn: (value: unknown) => !isNaN(Number(value)),
+msg
 });
 
-export interface ContageValidationResult {
-  isValid: boolean;
-  errors: string[];
-  fieldErrors: Record<string, string[]>;
+export interface ComptageValidationResult {
+isValid: boolean;
+errors: string[];
+fieldErrors: Record<string, string[]>;
 }
 
-export const validateContages = (contages: ContageConfig[]): ContageValidationResult => {
-  const errors: string[] = [];
-  const fieldErrors: Record<string, string[]> = {
-    mode: [],
-    isVariant: [],
-    useScanner: [],
-    useSaisie: []
-  };
+export const validateComptages = (comptages: ComptageConfig[]): ComptageValidationResult => {
+const errors: string[] = [];
+const fieldErrors: Record<string, string[]> = {
+mode: [],
+};
 
-  if (!Array.isArray(contages) || contages.length !== 3) {
-    errors.push('Configuration des contages invalide');
-    return { isValid: false, errors, fieldErrors };
-  }
+if (!Array.isArray(comptages) || comptages.length !== 3) {
+errors.push('Configuration des comptages invalide');
+return { isValid: false, errors, fieldErrors };
+}
 
-  contages.forEach((contage, index) => {
-    if (!contage.mode) {
-      fieldErrors.mode[index] = `Le mode du contage ${index + 1} est requis`;
-    }
+comptages.forEach((comptage, index) => {
+if (!comptage.mode) {
+fieldErrors.mode[index] = `Le mode du comptage ${index + 1} est requis`;
+}
+});
 
-   
-  });
+const isValidOverall = errors.length === 0 &&
+Object.values(fieldErrors).every(arr => arr.every(error => !error));
 
-  const isValidOverall = errors.length === 0 &&
-    Object.values(fieldErrors).every(arr => arr.every(error => !error));
-
-  return { isValid: isValidOverall, errors, fieldErrors };
+return { isValid: isValidOverall, errors, fieldErrors };
 };
 
 export interface CreationValidationResult {
-  isValid: boolean;
-  step1Errors: Record<string, string>;
-  contageResult: ContageValidationResult;
+isValid: boolean;
+step1Errors: Record<string, string>;
+comptageResult: ComptageValidationResult;
 }
 
 export const validateCreation = (state: InventoryCreationState): CreationValidationResult => {
-  const step1Errors: Record<string, string> = {};
+const step1Errors: Record<string, string> = {};
 
-  if (!required().fn(state.step1Data.libelle)) {
-    step1Errors.libelle = required().msg;
-  }
-  if (!date().fn(state.step1Data.date)) {
-    step1Errors.date = date().msg;
-  }
-  if (!selectRequired().fn(state.step1Data.compte)) {
-    step1Errors.compte = selectRequired().msg;
-  }
-  if (!selectRequired().fn(state.step1Data.magasin)) {
-    step1Errors.magasin = selectRequired().msg;
-  }
+if (!required().fn(state.step1Data.libelle)) {
+step1Errors.libelle = required().msg;
+}
+if (!date().fn(state.step1Data.date)) {
+step1Errors.date = date().msg;
+}
+if (!selectRequired().fn(state.step1Data.compte)) {
+step1Errors.compte = selectRequired().msg;
+}
+if (!selectRequired().fn(state.step1Data.magasin)) {
+step1Errors.magasin = selectRequired().msg;
+}
 
-  const contageResult = validateContages(state.contages);
+const comptageResult = validateComptages(state.comptages);
 
-  const isValid = Object.keys(step1Errors).length === 0 && contageResult.isValid;
+const isValid = Object.keys(step1Errors).length === 0 && comptageResult.isValid;
 
-  return { isValid, step1Errors, contageResult };
+return { isValid, step1Errors, comptageResult };
 };

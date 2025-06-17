@@ -26,45 +26,57 @@ class InventoryDetailService {
             isVariant: false,
             useScanner: true,
             useSaisie: false,
-            stock: false,           // added stock
+            stock: false,
           } as ContageConfig,
           {
             mode: 'article + emplacement',
             isVariant: true,
             useScanner: false,
             useSaisie: false,
-            stock: true,            // added stock
+            stock: false,
           } as ContageConfig,
           {
             mode: 'liste emplacement',
             isVariant: false,
             useScanner: false,
             useSaisie: true,
-            stock: false,           // added stock
+            stock: false,
           } as ContageConfig
         ],
         teams: [
-          { id: 1, name: 'Équipe Scanner' },
-          { id: 2, name: 'Équipe Contrôle' },
-          { id: 3, name: 'Équipe Saisie' }
+          { id: 1, name: 'Équipe 1' },
+          { id: 2, name: 'Équipe 2' },
+          { id: 3, name: 'Équipe 3' },
+          { id: 4, name: 'Équipe 4' },
+          { id: 5, name: 'Équipe 5' },
+           { id: 6, name: 'Équipe 6' },
+          { id: 7, name: 'Équipe 7' },
+          { id: 8, name: 'Équipe 8' },
+          { id: 9, name: 'Équipe 9' },
+          { id: 10, name: 'Équipe 10' }
         ]
       },
       magasins: [
-        'Magasin Central',
-        'Dépôt Nord',
-        'Entrepôt Sud'
+        'Magasin 1',
+        'Magasin 2',
+        'Magasin 3',
+        'Magasin 4',
+        'Magasin 5',
+        'Magasin 6',
+         'Magasin 7',
+        'Magasin 8'
       ],
       jobsData: {
-        contage1: [
+        comptage1: [
           { name: 'Préparation zone', status: 'Terminé', date: '2025-04-30', operator: 'Jean D.' },
           { name: 'Scan emplacements', status: 'En cours', date: '2025-04-30', operator: 'Marie L.' },
           { name: 'Vérification', status: 'En attente', date: '2025-04-30', operator: 'Pierre M.' }
         ],
-        contage2: [
+        comptage2: [
           { name: 'Scan articles', status: 'En attente', date: '2025-05-01', operator: 'Sophie R.' },
           { name: 'Contrôle quantités', status: 'En attente', date: '2025-05-01', operator: 'Luc B.' }
         ],
-        contage3: [
+        comptage3: [
           { name: 'Validation finale', status: 'En attente', date: '2025-05-02', operator: 'Anne C.' }
         ]
       }

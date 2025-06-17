@@ -1,17 +1,4 @@
 <template>
-   <div class="flex flex-col mb-4">
-      <ul class="flex space-x-2">
-        <li>
-          <router-link :to="{ name: 'inventory-list' }" class="text-primary hover:underline">
-            Gestion d'inventaire
-          </router-link>
-        </li>
-        <li class="before:content-['/'] ltr:before:mr-2">
-          <span>Résultats d'Inventaire</span>
-        </li>
-      </ul>
-    </div>
-
   <div class="panel">
 
     <!-- Tabs Navigation -->
