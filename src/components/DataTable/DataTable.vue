@@ -1,12 +1,12 @@
 <template>
   <div>
-    <div class="flex flex-col mb-3 md:flex-row justify-between gap-2">
+    <div class="flex flex-col mb-3 md:flex-row justify-between gap-4">
       <!-- Sélecteur de colonnes -->
-      <div class="flex flex-wrap gap-2 items-center">
+      <div class="flex flex-col mb-4 md:flex-row gap-4 w-full">
         <div
           v-if="showColumnSelector"
           ref="dropdownRef"
-          class="relative mb-4 w-full md:w-72 select-wrapper"
+          class="relative w-full md:w-72 select-wrapper"
         >
           <button
             @click="toggleDropdown"
@@ -24,6 +24,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
             </svg>
           </button>
+
           <div
             v-if="showDropdown"
             class="absolute top-full left-0 w-full dark:bg-dark-bg dark:border-dark-border dark:text-white-dark bg-white border rounded shadow-md z-10 p-2 max-h-64 overflow-y-auto"
@@ -35,7 +36,7 @@
             >
               Réinitialiser
             </button>
-            
+
             <!-- Amélioration: Utiliser Tooltip pour chaque colonne -->
             <div
               v-for="col in columns"
@@ -131,17 +132,19 @@
       </div>
     </div>
 
-    <!-- Grille AG Grid -->
-    <div v-if="rowData !== undefined">
+    <!-- Grille AG Grid avec hauteur dynamique -->
+    <div v-if="rowData !== undefined" class="table-container">
       <ag-grid-vue
-        class="ag-theme-alpine auto-height-grid"
-        style="width: 100%;"
-        domLayout="autoHeight"
+        class="ag-theme-alpine"
+        :style="dynamicGridStyle"
+        domLayout="normal"
         :theme="gridTheme"
         @grid-ready="onGridReady"
         @first-data-rendered="onFirstDataRendered"
         @selection-changed="onSelectionChanged"
         @row-clicked="$emit('row-clicked', $event)"
+        @model-updated="onModelUpdated"
+        @cell-value-changed="onCellValueChanged"
         :columnDefs="computedVisibleColumnDefsWithIndex"
         :defaultColDef="defaultColDef"
         :rowData="rowData"
@@ -163,7 +166,11 @@
           cellClass: 'text-left',
           cellStyle: (params) => params.data?.isChild ? { display: 'none' } : undefined
         }"
-        :isRowSelectable="isRowSelectable"
+        :selectionOptions="{ isRowSelectable }"
+        :singleClickEdit="inlineEditing"
+        :stopEditingWhenCellsLoseFocus="false"
+        @cellKeyDown="onCellKeyDown"
+        @cellEditingStopped="onCellEditingStopped"
       />
     </div>
 
@@ -174,10 +181,11 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, computed, defineEmits, ref, onMounted, onUnmounted } from 'vue';
+import { defineProps, computed, defineEmits, ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
 import type { PropType } from 'vue';
-import type { ColDef, CsvExportParams, SelectionChangedEvent } from 'ag-grid-community';
+import type { ColDef, CsvExportParams, SelectionChangedEvent, CellKeyDownEvent, CellEditingStoppedEvent, ModelUpdatedEvent, CellValueChangedEvent } from 'ag-grid-community';
+import { alertService } from '@/services/alertService';
 import type { ActionConfig, TableRow, DataTableColumn } from '@/interfaces/dataTable';
 import { useDataTable } from '@/composables/useDataTable';
 import { useAppStore } from '@/stores/index';
@@ -190,7 +198,7 @@ import IconFile from '@/components/icon/icon-file.vue';
 import IconDownload from '@/components/icon/icon-download.vue';
 import Tooltip from '@/components/Tooltip.vue';
 
-const emit = defineEmits(['selection-changed', 'row-clicked']);
+const emit = defineEmits(['selection-changed', 'row-clicked', 'cell-value-changed']);
 
 const props = defineProps({
   columns: { type: Array as PropType<DataTableColumn[]>, required: true },
@@ -204,6 +212,8 @@ const props = defineProps({
   actionsHeaderName: { type: String, default: 'Actions' },
   rowSelection: { type: Boolean, default: false },
   exportTitle: { type: String, default: 'Export de données' },
+  inlineEditing: { type: Boolean, default: false },
+  maxRowsForDynamicHeight: { type: Number, default: 10 }, // Seuil pour hauteur dynamique
 });
 
 const themeStore = useAppStore();
@@ -214,15 +224,53 @@ const gridTheme = computed(() =>
   themeStore.theme === 'dark' ? themeDark : themeLight
 );
 
+// État pour la hauteur dynamique
+const calculatedHeight = ref(470); // Hauteur par défaut
+
+// Calcul de la hauteur dynamique
+const dynamicGridStyle = computed(() => {
+  return {
+    width: '100%',
+    height: `${calculatedHeight.value}px`
+  };
+});
+
+// Fonction pour calculer la hauteur optimale
+const calculateOptimalHeight = () => {
+  if (!isGridValid()) return;
+
+  const displayedRowCount = gridApi.value!.getDisplayedRowCount();
+  const headerHeight = 48; // Hauteur approximative de l'en-tête
+  const rowHeight = 42; // Hauteur approximative d'une ligne
+  const paginationHeight = props.pagination ? 52 : 0; // Hauteur de la pagination
+  const scrollbarBuffer = 20; // Buffer pour les scrollbars
+
+  // Si peu de lignes, calculer la hauteur exacte
+  if (displayedRowCount <= props.maxRowsForDynamicHeight) {
+    const contentHeight = headerHeight + (displayedRowCount * rowHeight) + paginationHeight + scrollbarBuffer;
+    calculatedHeight.value = Math.max(contentHeight, 200); // Hauteur minimum de 200px
+  } else {
+    // Pour beaucoup de lignes, utiliser la hauteur fixe
+    calculatedHeight.value = 470;
+  }
+};
+
+// Événement quand le modèle de données est mis à jour
+const onModelUpdated = (event: ModelUpdatedEvent) => {
+  // Recalculer la hauteur après mise à jour des données
+  nextTick(() => {
+    calculateOptimalHeight();
+  });
+};
+
 // Fonction pour déterminer si une ligne peut être sélectionnée
 const isRowSelectable = (params: { data?: TableRow }) => {
-  // Ne permettre la sélection que des lignes parent (pas les détails)
   return !params.data?.isChild;
 };
 
 const onSelectionChanged = (event: SelectionChangedEvent) => {
-  if (!gridApi.value) return;
-  const selectedRows = gridApi.value.getSelectedRows();
+  if (!isGridValid()) return;
+  const selectedRows = gridApi.value!.getSelectedRows();
   emit('selection-changed', selectedRows);
 };
 
@@ -231,20 +279,84 @@ const getExportableColumns = () => {
     .filter(col => col.field !== 'actions' && col.field !== undefined);
 };
 
+const onCellKeyDown = (e: CellKeyDownEvent) => {
+  if (e.event instanceof KeyboardEvent && e.event.key === 'Enter' && isGridValid()) {
+    gridApi.value!.stopEditing()
+  }
+}
+
+// Fonction pour gérer la confirmation de modification de cellule
+const onCellEditingStopped = async (e: CellEditingStoppedEvent) => {
+  const field = e.colDef.field!;
+  const oldVal = e.oldValue;
+  const newVal = e.value;
+
+  if (newVal === oldVal) return;
+
+  await nextTick();
+
+  // Formater les valeurs pour l'affichage dans la confirmation
+  let displayOldVal = oldVal;
+  let displayNewVal = newVal;
+
+  // Si c'est une date, formater pour l'affichage
+  if (field === 'date1' || field === 'date2') {
+    try {
+      if (oldVal) {
+        displayOldVal = new Date(oldVal).toLocaleDateString('fr-FR');
+      }
+      if (newVal) {
+        displayNewVal = new Date(newVal).toLocaleDateString('fr-FR');
+      }
+    } catch {
+      // Garder les valeurs originales si erreur de format
+    }
+  }
+
+  const result = await alertService.confirm({
+    title: 'Confirmation de modification',
+    text: `Vous êtes sur le point de modifier le champ « ${e.colDef.headerName || field} » de « ${displayOldVal || 'vide'} » à « ${displayNewVal || 'vide'} ». Voulez-vous poursuivre ?`
+  });
+
+  if (!result.isConfirmed) {
+    // Annuler la modification
+    e.node.setDataValue(field, oldVal);
+  } else {
+    // Émettre l'événement de changement
+    emit('cell-value-changed', {
+      data: e.data,
+      colDef: e.colDef,
+      newValue: newVal,
+      oldValue: oldVal
+    });
+    
+    await alertService.success({ text: 'Modification confirmée.' });
+  }
+};
+
+// Gestion de l'événement de changement de valeur de cellule
+const onCellValueChanged = (event: CellValueChangedEvent) => {
+  // Transmettre l'événement au parent
+  emit('cell-value-changed', event);
+};
+
 const exportToCsv = () => {
-  if (!gridApi.value) return;
+  if (!isGridValid()) return;
+
   const params: CsvExportParams = {
     columnSeparator: ',',
     columnKeys: getExportableColumns().map(col => col.field!) as string[],
   };
-  gridApi.value.exportDataAsCsv(params);
+  
+  gridApi.value!.exportDataAsCsv(params);
   showExportDropdown.value = false;
 };
 
 const exportToExcel = () => {
-  if (!gridApi.value) return;
+  if (!isGridValid()) return;
+
   const allData: Record<string, unknown>[] = [];
-  gridApi.value.forEachNodeAfterFilterAndSort(node => {
+  gridApi.value!.forEachNodeAfterFilterAndSort(node => {
     if (node.data) allData.push(node.data);
   });
 
@@ -252,6 +364,7 @@ const exportToExcel = () => {
 
   const visibleCols = getExportableColumns();
   const headers = visibleCols.map(col => col.headerName || col.field);
+
   const dataForSheet = allData.map(row => {
     const obj: Record<string, unknown> = {};
     visibleCols.forEach(col => {
@@ -263,10 +376,12 @@ const exportToExcel = () => {
   const ws = XLSX.utils.json_to_sheet(dataForSheet, {
     header: visibleCols.map(c => c.field as string).filter(Boolean)
   });
+
   XLSX.utils.sheet_add_aoa(ws, [headers], { origin: 'A1' });
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Données');
+
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   const blob = new Blob([wbout], { type: 'application/octet-stream' });
   saveAs(blob, 'export.xlsx');
@@ -275,25 +390,18 @@ const exportToExcel = () => {
 };
 
 const exportToPdf = () => {
-  if (!gridApi.value) return;
-  const doc = new jsPDF();
+  if (!isGridValid()) return;
 
-  // Titre
+  const doc = new jsPDF();
   doc.setFontSize(12);
   doc.setTextColor(44, 62, 80);
   doc.text(props.exportTitle, 14, 15);
 
-  // Colonnes exportables (sans 'actions')
   const visibleCols = getExportableColumns();
-
-  // En-têtes à afficher dans le PDF
   const headers = visibleCols.map(col => col.headerName || col.field || '');
 
-  // Corps du tableau : on précise le type pour éviter le `never[]`
   const body: (string | number)[][] = [];
-
-  // Remplissage des lignes
-  gridApi.value.forEachNodeAfterFilterAndSort(node => {
+  gridApi.value!.forEachNodeAfterFilterAndSort(node => {
     if (!node.data) return;
     const row: (string | number)[] = [];
     visibleCols.forEach(col => {
@@ -303,7 +411,6 @@ const exportToPdf = () => {
     body.push(row);
   });
 
-  // Génère le tableau dans le PDF
   autoTable(doc, {
     head: [headers],
     body,
@@ -337,7 +444,6 @@ const toggleExportDropdown = () => {
   showExportDropdown.value = !showExportDropdown.value;
 };
 
-// Événement pour fermer le dropdown d'export si on clique à l'extérieur
 const handleClickOutsideExport = (event: MouseEvent) => {
   const wrap = exportDropdownRef.value;
   if (wrap && !wrap.contains(event.target as Node)) {
@@ -350,8 +456,8 @@ const {
   defaultColDef,
   rowData,
   pageSize,
-  onGridReady,
-  onFirstDataRendered,
+  onGridReady: originalOnGridReady,
+  onFirstDataRendered: originalOnFirstDataRendered,
   computedVisibleColumnDefs,
   visibleFields,
   showDropdown,
@@ -360,13 +466,45 @@ const {
   minVisibleColumns,
   dropdownRef,
   gridApi,
+  isGridValid,
 } = useDataTable(props);
+
+// Wrapper pour onGridReady avec calcul de hauteur
+const onGridReady = (event: any) => {
+  originalOnGridReady(event);
+  // Calculer la hauteur après l'initialisation
+  nextTick(() => {
+    calculateOptimalHeight();
+  });
+};
+
+// Wrapper pour onFirstDataRendered avec calcul de hauteur
+const onFirstDataRendered = (event: any) => {
+  originalOnFirstDataRendered(event);
+  // Calculer la hauteur après le premier rendu
+  nextTick(() => {
+    calculateOptimalHeight();
+  });
+};
+
+// Watcher pour recalculer la hauteur quand les données changent
+watch(() => rowData.value, () => {
+  nextTick(() => {
+    calculateOptimalHeight();
+  });
+}, { deep: true });
+
+// Watcher pour recalculer la hauteur quand la pagination change
+watch(() => pageSize.value, () => {
+  nextTick(() => {
+    calculateOptimalHeight();
+  });
+});
 
 // Colonne de numérotation conditionnelle
 const rowNumberColumn: ColDef = {
   headerName: 'N°',
   valueGetter: params => {
-    // Ne pas afficher le numéro pour les lignes enfants
     if (params.data?.isChild) return '';
     return params.node?.rowIndex != null ? (params.node.rowIndex + 1).toString() : '';
   },
@@ -376,10 +514,9 @@ const rowNumberColumn: ColDef = {
   suppressSizeToFit: true,
   menuTabs: [],
   sortable: false,
-  filter: false,
+  filter: 'agTextColumnFilter',
   cellClass: 'text-left',
   cellStyle: params => {
-    // Masquer complètement la cellule pour les lignes enfants
     if (params.data?.isChild) {
       return { display: 'none' };
     }
@@ -393,7 +530,6 @@ const computedVisibleColumnDefsWithIndex = computed<ColDef[]>(() => {
   return cols;
 });
 
-// Écoute globale pour fermer le dropdown d'export si on clique à l'extérieur
 onMounted(() => {
   document.addEventListener('click', handleClickOutsideExport);
 });
@@ -404,38 +540,72 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.auto-height-grid :deep(.ag-root-wrapper-body),
-.auto-height-grid :deep(.ag-center-cols-viewport),
-.auto-height-grid :deep(.ag-body-viewport-wrapper) {
-  max-height: 430px !important;
-  height: auto !important;
-  overflow-y: auto !important;
+.table-container {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
 }
 
-.auto-height-grid :deep(.ag-header-cell-text),
-.auto-height-grid :deep(.ag-header-cell-label) {
+.dark .table-container {
+  border-color: #374151;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+}
+
+.table-container :deep(.ag-root-wrapper) {
+  border: none !important;
+}
+
+.table-container :deep(.ag-header) {
+  border-top: none !important;
+}
+
+:deep(.ag-header-cell-text),
+:deep(.ag-header-cell-label) {
   font-size: 13.5px;
 }
 
-.auto-height-grid :deep(.ag-cell) {
+:deep(.ag-cell) {
   font-size: 12.5px;
 }
 
-.auto-height-grid :deep(.ag-paging-panel),
-.auto-height-grid :deep(.ag-pagination-button),
-.auto-height-grid :deep(.ag-page-size-panel),
-.auto-height-grid :deep(.ag-page-size),
-.auto-height-grid :deep(.ag-input-field-input) {
+:deep(.ag-paging-panel),
+:deep(.ag-pagination-button),
+:deep(.ag-page-size-panel),
+:deep(.ag-page-size),
+:deep(.ag-input-field-input) {
   font-size: 13.5px;
 }
 
 /* Masquer les checkboxes pour les lignes enfants */
-.auto-height-grid :deep(.ag-row .ag-selection-checkbox) {
+:deep(.ag-row .ag-selection-checkbox) {
   visibility: visible;
 }
 
-.auto-height-grid :deep(.ag-row[data-is-child="true"] .ag-selection-checkbox) {
+:deep(.ag-row[data-is-child="true"] .ag-selection-checkbox) {
   display: none !important;
+}
+
+/* Force les tooltips AG Grid à être toujours sombres */
+:deep(.ag-tooltip) {
+  background-color: var(--color-primary) !important;
+  border: 1px solid var(--color-primary) !important;
+  color: white !important;
+  font-size: 12px !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  z-index: 9999 !important;
+}
+
+.dark :deep(.ag-tooltip) {
+  background-color: #374151 !important;
+  color: white !important;
+  border: 1px solid #4B5563 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  font-size: 12px !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  z-index: 9999 !important;
 }
 
 @media (max-width: 640px) {
@@ -444,24 +614,14 @@ onUnmounted(() => {
     height: 1.2rem;
     padding: 0.15rem;
   }
-  
-  .auto-height-grid :deep(.ag-paging-panel),
-  .auto-height-grid :deep(.ag-pagination-button),
-  .auto-height-grid :deep(.ag-page-size-panel),
-  .auto-height-grid :deep(.ag-page-size),
-  .auto-height-grid :deep(.ag-input-field-input) {
+
+  :deep(.ag-paging-panel),
+  :deep(.ag-pagination-button),
+  :deep(.ag-page-size-panel),
+  :deep(.ag-page-size),
+  :deep(.ag-input-field-input) {
     font-size: 6.5px;
     padding: 0.3rem;
   }
-  /* in your global styles (e.g. main.css) */
-.ag-tooltip {
-  /* Use your Tailwind primary background + white text */
-  background-color: rgb(233, 52, 52) !important;
-  color: white !important;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-}
-
 }
 </style>

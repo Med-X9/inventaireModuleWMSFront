@@ -30,12 +30,13 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
-    path: '/inventory/results',
-    name: 'inventory-results',
-    component: () =>
-      import(/* webpackChunkName: "inventory-results" */ '../views/Inventory/Results/InventoryResults.vue'),
-    meta: { requiresAuth: true },
-  },
+  path: '/inventory/:reference/results',
+  name: 'inventory-results',
+  component: () => import('@/views/Inventory/Results/InventoryResults.vue'),
+  props: route => ({ reference: route.params.reference as string }),
+  meta: { requiresAuth: true },
+},
+
   {
     path: '/inventory/planning',
     name: 'inventory-planning',

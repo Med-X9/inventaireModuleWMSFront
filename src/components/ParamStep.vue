@@ -1,13 +1,27 @@
 <template>
   <div>
-    <FormBuilder
-      :modelValue="local"
-      :fields="formFields"
-      :columns="local.mode === 'en vrague par article' ? 3 : 1"
-      hide-submit
-      @update:modelValue="onFormBuilderUpdate"
-      @validation-change="onValidationChange"
-    />
+    <!-- Mode de comptage avec FormBuilder -->
+    <div class="mb-6">
+      <FormBuilder
+        :modelValue="{ mode: local.mode }"
+        :fields="modeFields"
+        :columns="1"
+        hide-submit
+        @update:modelValue="onModeChange"
+        @validation-change="onValidationChange"
+      />
+    </div>
+
+    <!-- Options avec FormBuilder -->
+    <div v-if="availableFields.length > 0">
+      <FormBuilder
+        :modelValue="getFieldValues()"
+        :fields="availableFields"
+        :columns="1"
+        hide-submit
+        @update:modelValue="onOptionsChange"
+      />
+    </div>
   </div>
 </template>
 
@@ -31,124 +45,286 @@ const emit = defineEmits<{
   (e: 'validation-change', isValid: boolean): void;
 }>();
 
-// copie locale pour réactivité
 const local = reactive<ComptageConfig>({ ...props.modelValue });
 
-// Construction du schéma de champs
-const formFields = computed<FieldConfig[]>(() => {
-  const fields: FieldConfig[] = [
-    {
-      key: 'mode',
-      label: 'Mode de comptage',
-      type: 'select',
-      options: props.availableModes.map(m => ({ label: m, value: m })),
-      validators: [{ key: 'mode', ...selectRequired('Mode de comptage requis') }]
-    }
-  ];
+// Définition des tooltips pour chaque mode de comptage
+const modeTooltips: Record<string, string> = {
+  'image de stock': 'Mode basé sur une photo de référence du stock existant',
+  'en vrac': 'Comptage par quantité globale sans détail par article',
+  'par article': 'Comptage détaillé article par article avec toutes les options'
+};
 
-  const options = inventoryCreationService.getOptionsForMode(local.mode);
+// Définition des tooltips pour chaque option
+const tooltips: Record<string, string> = {
+  guideQuantite: 'Affichage d\'un guide pour faciliter la saisie des quantités',
+  isVariante: 'Gestion des variantes de produits (taille, couleur, etc.)',
+  guideArticle: 'Affichage d\'un guide pour faciliter l\'identification des articles',
+  dlc: 'Gestion des dates limites de consommation des produits',
+  numeroSerie: 'Gestion des numéros de série pour la traçabilité des produits',
+  numeroLot: 'Gestion des numéros de lot pour la traçabilité des produits'
+};
 
-  // si "en vrague"
-  if (options.hasEnVragueOptions) {
-    let radioOptions = [
-      { label: 'Saisie quantité', value: 'saisie' },
-      { label: 'Scanner unitaire', value: 'scanner' }
-    ];
+// Tooltips spécifiques pour les options radio
+const radioTooltips: Record<string, string> = {
+  saisie: 'Saisie manuelle des quantités avec le clavier',
+  scanner: 'Utilisation du scanner pour saisir les quantités automatiquement'
+};
 
-    if (props.stepIndex === 2) {
-      const constraints = inventoryCreationService.getComptage3Constraints({
-        step1Data: {} as any,
-        comptages: props.prevComptages.slice(0, 2).concat([local]),
-        currentStep: 0
-      });
+// Champs pour le mode de comptage avec options enrichies de tooltips
+const modeFields = computed<FieldConfig[]>(() => [
+  {
+    key: 'mode',
+    label: 'Mode de comptage',
+    type: 'select',
+    options: props.availableModes.map(m => ({ 
+      label: m, 
+      value: m,
+      tooltip: modeTooltips[m] || ''
+    })),
+    validators: [{ key: 'mode', ...selectRequired('Mode de comptage requis') }]
+  }
+]);
 
-      if (constraints.restrictedToSaisie) {
-        radioOptions = [{ label: 'Saisie quantité', value: 'saisie' }];
-        local.inputMethod = 'saisie';
-      } else if (constraints.restrictedToScanner) {
-        radioOptions = [{ label: 'Scanner unitaire', value: 'scanner' }];
-        local.inputMethod = 'scanner';
-      }
-    }
+// Calculer les options disponibles selon le mode
+const options = computed(() => inventoryCreationService.getOptionsForMode(local.mode));
 
+// Calculer les champs disponibles pour les options
+const availableFields = computed<FieldConfig[]>(() => {
+  const fields: FieldConfig[] = [];
+
+  if (options.value.hasEnVracOptions) {
+    // Options radio pour "en vrac"
+    const radioOptions = getRadioOptions();
+    
+    fields.push({
+      key: 'inputMethod',
+      label: 'Méthode opératoire',
+      type: 'radio-group',
+      radioOptions: radioOptions.map(opt => ({
+        label: opt.label,
+        value: opt.value,
+        tooltip: radioTooltips[opt.value] || ''
+      })),
+      validators: []
+    });
+
+    // Guide quantité pour "en vrac"
+    fields.push({
+      key: 'guideQuantite',
+      label: 'Guide quantité',
+      type: 'checkbox',
+      tooltip: tooltips.guideQuantite,
+      validators: []
+    });
+  }
+
+  if (options.value.hasParArticleOptions) {
+    // Options pour "par article"
     fields.push(
-      {
-        key: 'inputMethod',
-        label: 'Méthode opératoire',
-        type: 'radio-group',
-        radioOptions
-      },
       {
         key: 'guideQuantite',
         label: 'Guide quantité',
-        type: 'checkbox'
+        type: 'checkbox',
+        tooltip: tooltips.guideQuantite,
+        validators: []
+      },
+      {
+        key: 'guideArticle',
+        label: 'Guide Article',
+        type: 'checkbox',
+        tooltip: tooltips.guideArticle,
+        validators: []
+      },
+      {
+        key: 'isVariante',
+        label: 'Variante',
+        type: 'checkbox',
+        tooltip: tooltips.isVariante,
+        validators: []
+      },
+      {
+        key: 'dlc',
+        label: 'DLC',
+        type: 'checkbox',
+        tooltip: tooltips.dlc,
+        props: { disabled: local.numeroSerie },
+        validators: []
+      },
+      {
+        key: 'numeroSerie',
+        label: 'Numéro de série',
+        type: 'checkbox',
+        tooltip: tooltips.numeroSerie,
+        props: { disabled: local.dlc || local.numeroLot },
+        validators: []
+      },
+      {
+        key: 'numeroLot',
+        label: 'Numéro de lot',
+        type: 'checkbox',
+        tooltip: tooltips.numeroLot,
+        props: { disabled: local.numeroSerie },
+        validators: []
       }
     );
   }
 
-  // si "en vrague par article" on ajoute les 6 cases
-  if (options.hasEnVragueParArticleOptions) {
-    fields.push(
-      { key: 'isVariante',            label: 'Is variante',              type: 'checkbox' },
-      { key: 'guideQuantite',         label: 'Guide quantité',            type: 'checkbox' },
-      { key: 'guideArticle',          label: 'Guide Article',             type: 'checkbox' },
-      { key: 'dlc',                   label: 'DLC',                       type: 'checkbox' },
-      { key: 'guideArticleQuantite',  label: 'Guide Article quantité',    type: 'checkbox' },
-      { key: 'numeroLot',             label: 'Numéro de lot',             type: 'checkbox' }
-    );
+  return fields;
+});
+
+// Obtenir les options radio pour la méthode opératoire
+function getRadioOptions() {
+  let options = [
+    { label: 'Saisie quantité', value: 'saisie' },
+    { label: 'Scanner unitaire', value: 'scanner' }
+  ];
+
+  if (props.stepIndex === 2) {
+    const constraints = inventoryCreationService.getComptage3Constraints({
+      step1Data: {} as any,
+      comptages: props.prevComptages.slice(0, 2).concat([local]),
+      currentStep: 0
+    });
+
+    // Appliquer les contraintes
+    if (constraints.restrictedToSaisie) {
+      options = [{ label: 'Saisie quantité', value: 'saisie' }];
+      if (local.inputMethod !== 'saisie') {
+        local.inputMethod = 'saisie';
+        syncLegacyOptions();
+      }
+    } else if (constraints.restrictedToScanner) {
+      options = [{ label: 'Scanner unitaire', value: 'scanner' }];
+      if (local.inputMethod !== 'scanner') {
+        local.inputMethod = 'scanner';
+        syncLegacyOptions();
+      }
+    }
   }
 
-  // héritage pour comptage 3
+  return options;
+}
+
+// Fonction pour synchroniser les propriétés legacy avec inputMethod
+function syncLegacyOptions() {
+  if (local.mode === 'en vrac') {
+    local.saisieQuantite = local.inputMethod === 'saisie';
+    local.scannerUnitaire = local.inputMethod === 'scanner';
+  } else {
+    // Pour les autres modes, reset les options "en vrac"
+    local.saisieQuantite = false;
+    local.scannerUnitaire = false;
+    local.inputMethod = '';
+  }
+}
+
+// Obtenir les valeurs actuelles pour les champs
+function getFieldValues() {
+  const values: Record<string, unknown> = {};
+  availableFields.value.forEach(field => {
+    values[field.key] = local[field.key as keyof ComptageConfig];
+  });
+  return values;
+}
+
+function onModeChange(data: Record<string, unknown>) {
+  const newMode = data.mode as string;
+  
+  // Reset toutes les options selon le mode sélectionné
+  if (newMode === 'image de stock') {
+    // Aucune option pour "image de stock"
+    resetAllOptions();
+  } else if (newMode === 'en vrac') {
+    // Reset options "par article"
+    local.isVariante = false;
+    local.guideArticle = false;
+    local.dlc = false;
+    local.numeroSerie = false;
+    local.numeroLot = false;
+    
+    // Valeur par défaut pour "en vrac" si pas encore définie
+    if (!local.inputMethod) {
+      local.inputMethod = 'scanner';
+    }
+    syncLegacyOptions();
+  } else if (newMode === 'par article') {
+    // Reset options "en vrac"
+    local.inputMethod = '';
+    local.saisieQuantite = false;
+    local.scannerUnitaire = false;
+  }
+
+  // Assigner le nouveau mode
+  local.mode = newMode as any;
+  
+  // Pour Comptage 3, hériter des options des comptages précédents si nécessaire
   if (props.stepIndex === 2) {
     const inheritedOptions = inventoryCreationService.getInheritedOptionsForComptage3({
       step1Data: {} as any,
       comptages: props.prevComptages.slice(0, 2).concat([local]),
       currentStep: 0
     });
+
+    // Appliquer les options héritées
     Object.assign(local, inheritedOptions);
+    syncLegacyOptions();
   }
 
-  return fields;
-});
-
-// Quand le FormBuilder émet un update, on nettoie et on propage
-function onFormBuilderUpdate(data: Record<string, unknown>) {
-  const merged = { ...local, ...(data as Partial<ComptageConfig>) };
-
-  // nettoyage selon le mode sélectionné
-  if (merged.mode === 'image de stock') {
-    merged.inputMethod = '';
-    merged.guideQuantite = false;
-    merged.isVariante = false;
-    merged.guideArticle = false;
-    merged.dlc = false;
-    merged.guideArticleQuantite = false;
-    merged.numeroLot = false;
-    merged.saisieQuantite = false;
-    merged.scannerUnitaire = false;
-  } else if (merged.mode === 'en vrague') {
-    merged.isVariante = false;
-    merged.guideArticle = false;
-    merged.dlc = false;
-    merged.guideArticleQuantite = false;
-    merged.numeroLot = false;
-    merged.saisieQuantite = merged.inputMethod === 'saisie';
-    merged.scannerUnitaire = merged.inputMethod === 'scanner';
-  } else if (merged.mode === 'en vrague par article') {
-    merged.inputMethod = '';
-    merged.saisieQuantite = false;
-    merged.scannerUnitaire = false;
-  }
-
-  Object.assign(local, merged);
-  emit('update:modelValue', { ...merged });
+  emit('update:modelValue', { ...local });
 }
 
-// Propagation de la validation
+function resetAllOptions() {
+  local.inputMethod = '';
+  local.guideQuantite = false;
+  local.isVariante = false;
+  local.guideArticle = false;
+  local.dlc = false;
+  local.numeroSerie = false;
+  local.numeroLot = false;
+  local.saisieQuantite = false;
+  local.scannerUnitaire = false;
+}
+
+function onOptionsChange(data: Record<string, unknown>) {
+  // Mise à jour des options
+  Object.assign(local, data);
+
+  // Logique de désactivation pour "par article"
+  if (local.mode === 'par article') {
+    if (data.numeroSerie && local.numeroSerie) {
+      // Si numéro de série est coché, désactiver DLC et numéro de lot
+      local.dlc = false;
+      local.numeroLot = false;
+    } else if ((data.dlc && local.dlc) || (data.numeroLot && local.numeroLot)) {
+      // Si DLC ou numéro de lot est coché, désactiver numéro de série
+      local.numeroSerie = false;
+    }
+  }
+
+  // Synchroniser les propriétés legacy
+  syncLegacyOptions();
+
+  emit('update:modelValue', { ...local });
+}
+
 function onValidationChange(isValid: boolean) {
   emit('validation-change', isValid);
 }
 
-// Si la prop modelValue change à l'extérieur, on met à jour local
-watch(() => props.modelValue, val => Object.assign(local, val), { deep: true });
+// Watch pour synchroniser avec les props
+watch(() => props.modelValue, val => {
+  Object.assign(local, val);
+  
+  // Valeur par défaut pour "en vrac" si pas encore définie
+  if (local.mode === 'en vrac' && !local.inputMethod) {
+    local.inputMethod = 'scanner';
+    syncLegacyOptions();
+    emit('update:modelValue', { ...local });
+  }
+}, { deep: true, immediate: true });
+
+// Watch pour synchroniser inputMethod avec les legacy props
+watch(() => local.inputMethod, () => {
+  syncLegacyOptions();
+});
 </script>

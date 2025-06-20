@@ -78,11 +78,8 @@ const store = useAppStore();
 
 // Fonction pour fermer la sidebar en mode mobile
 function toggleMobileMenu() {
-  if (window.innerWidth < 1024) {
-    store.toggleSidebar();
-  }
+  store.toggleSidebar();
 }
-
 // Activation du lien courant lors du montage du composant
 onMounted(() => {
   const selector = document.querySelector('.sidebar ul a[href="' + window.location.pathname + '"]');

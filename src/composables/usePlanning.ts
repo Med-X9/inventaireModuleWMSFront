@@ -1,12 +1,10 @@
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import type { Job } from '@/interfaces/planning';
 import { planningService } from '@/services/planningService';
 import { alertService } from '@/services/alertService';
 import { indexedDBService } from '@/services/indexedDBService';
 
-const STORAGE_KEY = 'planningJobs';
-const SELECTIONS_KEY = 'planningSelections';
-const STATE_KEY = 'planningState';
+const JOBS_KEY = 'planningJobs';
 
 export function usePlanning() {
   const jobs = ref<Job[]>([]);
@@ -14,11 +12,11 @@ export function usePlanning() {
   const isSubmitting = ref(false);
   const selectedAvailable = ref<string[]>([]);
   const selectedJobs = ref<string[]>([]);
-  const isValidated = ref(false);
+  const selectedJobToAddLocation = ref<string>('');
+  const showJobDropdown = ref(false);
   
   const allLocations = planningService.getLocations();
 
-  // Available locations (excluding already selected ones)
   const availableLocations = computed(() => {
     let filtered = allLocations;
     const query = locationSearchQuery.value.toLowerCase().trim();
@@ -27,111 +25,68 @@ export function usePlanning() {
       filtered = filtered.filter(loc => loc.toLowerCase().includes(query));
     }
 
-    // Exclude locations that are already in jobs
-    const usedLocations = new Set(jobs.value.flatMap(job => job.locations));
+    const currentJobs = Array.isArray(jobs.value) ? jobs.value : [];
+    const usedLocations = new Set(currentJobs.flatMap(job => job.locations || []));
     return filtered.filter(loc => !usedLocations.has(loc));
   });
 
-  // Save complete state to IndexedDB (jobs + validatedState)
-  async function saveState() {
-    const state = { 
-      jobs: jobs.value, 
-      isValidated: isValidated.value 
-    };
-    try {
-      await indexedDBService.saveState(JSON.parse(JSON.stringify(state)), STATE_KEY);
-    } catch (error) {
-      console.error('Error saving state:', error);
-    }
-  }
-
-  // Save selections to IndexedDB
-  async function saveSelections() {
-    const selections = {
-      selectedAvailable: selectedAvailable.value,
-      selectedJobs: selectedJobs.value
-    };
-    try {
-      await indexedDBService.saveState(JSON.parse(JSON.stringify(selections)), SELECTIONS_KEY);
-    } catch (error) {
-      console.error('Error saving selections:', error);
-    }
-  }
-
-  // Load selections from IndexedDB
-  async function loadSelections() {
-    try {
-      const saved = await indexedDBService.getState(SELECTIONS_KEY);
-      if (saved) {
-        const selections: any = saved;
-        selectedAvailable.value = selections.selectedAvailable || [];
-        selectedJobs.value = selections.selectedJobs || [];
-      }
-    } catch (error) {
-      console.error('Error loading selections:', error);
-    }
-  }
-
-  // Clear selections from IndexedDB
-  async function clearSelections() {
-    try {
-      await indexedDBService.clearState(SELECTIONS_KEY);
-      selectedAvailable.value = [];
-      selectedJobs.value = [];
-    } catch (error) {
-      console.error('Error clearing selections:', error);
-    }
-  }
-
-  // Load state from IndexedDB
-  async function loadState() {
-    try {
-      const saved = await indexedDBService.getState(STATE_KEY);
-      if (saved) {
-        const state: any = saved;
-        jobs.value = state.jobs || [];
-        isValidated.value = state.isValidated || false;
-        
-        if (isValidated.value && jobs.value.length > 0) {
-          console.log('Jobs validés chargés depuis IndexedDB (en attente de l\'API backend)');
-        }
-      }
-    } catch (error) {
-      console.error('Error loading state:', error);
-    }
-  }
-
-  // Initialize
-  onMounted(async () => {
-    await indexedDBService.init();
-    await loadState();
-    await loadSelections();
+  // Computed pour les jobs non validés disponibles pour ajouter des emplacements
+  const availableJobsForLocation = computed(() => {
+    return jobs.value.filter(job => !job.isValidated);
   });
 
-  // Watch for changes and save
-  watch(() => [jobs.value, isValidated.value], saveState, { deep: true });
-  
-  // Watch selections and save them
-  watch(() => [selectedAvailable.value, selectedJobs.value], saveSelections, { deep: true });
+  // Persist only base job data (without validation flags)
+  async function saveJobs() {
+    try {
+      const jobsToSave = jobs.value.map(({ id, reference, locations, createdAt, isValidated, validatedAt }) => 
+        ({ id, reference, locations, createdAt, isValidated, validatedAt }));
+      await indexedDBService.saveState(JSON.parse(JSON.stringify(jobsToSave)), JOBS_KEY);
+    } catch (error) {
+      console.error('Error saving jobs:', error);
+    }
+  }
 
-  // Generate professional job reference
+  async function loadJobs() {
+    try {
+      const saved = await indexedDBService.getState(JOBS_KEY);
+      if (saved && Array.isArray(saved)) {
+        jobs.value = (saved as Job[]).map(j => ({ 
+          ...j, 
+          isValidated: j.isValidated || false,
+          validatedAt: j.validatedAt
+        }));
+        console.log('Jobs chargés depuis IndexedDB');
+      } else {
+        jobs.value = [];
+      }
+    } catch (error) {
+      console.error('Error loading jobs:', error);
+      jobs.value = [];
+    }
+  }
+
+  onMounted(async () => {
+    await indexedDBService.init();
+    await loadJobs();
+  });
+
+  watch(() => jobs.value, saveJobs, { deep: true, immediate: false });
+
   function generateJobReference(): string {
     const today = new Date();
     const year = today.getFullYear().toString().slice(-2);
     const month = (today.getMonth() + 1).toString().padStart(2, '0');
     const day = today.getDate().toString().padStart(2, '0');
     const jobNumber = (jobs.value.length + 1).toString().padStart(3, '0');
-    
     return `JOB-${year}${month}${day}-${jobNumber}`;
   }
 
-  // Create a single job with all selected locations
   async function createJob(selectedLocations: string[]) {
-    if (selectedLocations.length === 0) {
+    if (!selectedLocations.length) {
+      await alertService.error({ text: 'Veuillez sélectionner au moins un emplacement.' });
       return false;
     }
-
-    // Create ONE job with ALL selected locations
+    
     const newJob: Job = {
       id: crypto.randomUUID(),
       reference: generateJobReference(),
@@ -141,10 +96,8 @@ export function usePlanning() {
     };
 
     jobs.value.push(newJob);
-
-    // Clear the selection after creating the job
+    await nextTick();
     selectedAvailable.value = [];
-    await saveSelections();
 
     await alertService.success({
       text: `Job ${newJob.reference} créé avec ${newJob.locations.length} emplacement(s)`
@@ -153,180 +106,207 @@ export function usePlanning() {
     return true;
   }
 
-  // Delete selected jobs with validation check and return locations to available
-  async function deleteSelectedJobs() {
-    if (selectedJobs.value.length === 0) {
-      await alertService.error({
-        text: 'Attention ! Vous n\'avez rien sélectionné.'
-      });
-      return;
+  async function addLocationToJob(jobId: string, selectedLocations: string[]) {
+    if (!selectedLocations.length) {
+      await alertService.error({ text: 'Veuillez sélectionner au moins un emplacement.' });
+      return false;
     }
 
-    // Check if ANY of the selected jobs are validated
-    const selectedJobIds = new Set<string>();
-    selectedJobs.value.forEach(selectedId => {
-      const jobId = selectedId.includes('-') ? selectedId.split('-')[0] : selectedId;
-      selectedJobIds.add(jobId);
+    if (!jobId) {
+      await alertService.error({ text: 'Veuillez sélectionner un job.' });
+      return false;
+    }
+
+    const job = jobs.value.find(j => j.id === jobId);
+    if (!job) {
+      await alertService.error({ text: 'Job introuvable.' });
+      return false;
+    }
+
+    if (job.isValidated) {
+      await alertService.error({ 
+        title: 'Job validé',
+        text: 'Impossible d\'ajouter des emplacements à un job validé.' 
+      });
+      return false;
+    }
+
+    // Ajouter les nouveaux emplacements
+    job.locations.push(...selectedLocations);
+    
+    await nextTick();
+    selectedAvailable.value = [];
+    selectedJobToAddLocation.value = '';
+    showJobDropdown.value = false;
+
+    await alertService.success({
+      text: `${selectedLocations.length} emplacement(s) ajouté(s) au job ${job.reference}`
     });
 
-    const hasValidatedJobs = jobs.value.some(job => 
-      selectedJobIds.has(job.id) && (job.isValidated || isValidated.value)
-    );
+    return true;
+  }
 
-    if (hasValidatedJobs) {
+  // Fonction améliorée pour supprimer un emplacement d'un job
+  async function removeLocationFromJob(jobId: string, location: string) {
+    console.log('removeLocationFromJob appelée avec:', { jobId, location });
+    
+    const job = jobs.value.find(j => j.id === jobId);
+    if (!job) {
+      console.error('Job introuvable:', jobId);
+      await alertService.error({ text: 'Job introuvable.' });
+      return false;
+    }
+
+    console.log('Job trouvé:', job);
+    console.log('Job validé?', job.isValidated);
+
+    if (job.isValidated) {
+      await alertService.error({
+        title: 'Permission requise',
+        text: 'Tu as besoin de permission pour cette action dans l\'affectation.'
+      });
+      return false;
+    }
+
+    // Vérifier que l'emplacement existe dans le job
+    const locationIndex = job.locations.findIndex(loc => loc === location);
+    console.log('Index de l\'emplacement:', locationIndex);
+    console.log('Emplacements du job:', job.locations);
+
+    if (locationIndex === -1) {
+      console.error('Emplacement non trouvé dans le job:', location);
+      await alertService.error({ text: 'Emplacement non trouvé dans ce job.' });
+      return false;
+    }
+
+    // Confirmation avant suppression
+    const result = await alertService.confirm({
+      text: `Êtes-vous sûr de vouloir supprimer cet emplacement du job ${job.reference} ?`
+    });
+
+    if (!result.isConfirmed) {
+      await alertService.info({ text: 'Suppression annulée.' });
+      return false;
+    }
+
+    try {
+      // Supprimer l'emplacement
+      job.locations.splice(locationIndex, 1);
+      console.log('Emplacement supprimé. Emplacements restants:', job.locations.length);
+      
+      // Si le job n'a plus d'emplacements, le supprimer complètement
+      if (job.locations.length === 0) {
+        const jobIndex = jobs.value.findIndex(j => j.id === jobId);
+        if (jobIndex > -1) {
+          jobs.value.splice(jobIndex, 1);
+          console.log('Job supprimé car plus d\'emplacements');
+          await alertService.success({
+            text: `Emplacement supprimé. Le job ${job.reference} a été supprimé car il n'avait plus d'emplacements.`
+          });
+        }
+      } else {
+        await alertService.success({
+          text: `Emplacement supprimé du job ${job.reference}.`
+        });
+      }
+      
+      await nextTick();
+      return true;
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
+      await alertService.error({ text: 'Erreur lors de la suppression de l\'emplacement.' });
+      return false;
+    }
+  }
+
+  // Fonction pour retourner les jobs sélectionnés
+  async function returnSelectedJobs() {
+    if (!selectedJobs.value.length) {
+      await alertService.error({ text: 'Veuillez sélectionner au moins un job.' });
+      return;
+    }
+
+    const selectedJobIds = new Set(selectedJobs.value);
+    const hasValidated = jobs.value.some(job => selectedJobIds.has(job.id) && job.isValidated);
+    
+    if (hasValidated) {
       await alertService.error({
         title: 'Jobs validés',
-        text: 'Attention ! Ces jobs sont validés. Vous devez d\'abord les effacer dans la table d\'affectation pour permettre l\'annulation.'
+        text: 'Impossible de retourner un job validé. Vous avez besoin de permission pour cette action dans l\'affectation.'
       });
       return;
     }
 
-    // Collect locations from jobs that will be deleted
     const locationsToRestore: string[] = [];
-    const jobReferencesToDelete: string[] = [];
-
     jobs.value.forEach(job => {
       if (selectedJobIds.has(job.id)) {
         locationsToRestore.push(...job.locations);
-        jobReferencesToDelete.push(job.reference || job.id);
       }
     });
 
-    // Remove jobs
-    const jobsCountBefore = jobs.value.length;
     jobs.value = jobs.value.filter(job => !selectedJobIds.has(job.id));
-    
-    // Clear job selections
     selectedJobs.value = [];
-    await saveSelections();
-    
-    const deletedCount = jobsCountBefore - jobs.value.length;
+
+    await nextTick();
+
     await alertService.success({
-      text: `${deletedCount} job(s) annulé(s) (${jobReferencesToDelete.join(', ')}). ${locationsToRestore.length} emplacement(s) remis en disponible.`
+      text: `${selectedJobIds.size} job(s) retourné(s). ${locationsToRestore.length} emplacement(s) remis en disponible.`
     });
   }
 
-  // Validate jobs with confirmation
-  async function validateJobs() {
-    if (jobs.value.length === 0) {
-      await alertService.error({
-        text: 'Aucun job à valider. Créez d\'abord des jobs.'
-      });
+  async function validateJob(jobId: string) {
+    const job = jobs.value.find(j => j.id === jobId);
+    if (!job) {
+      await alertService.error({ text: 'Job introuvable.' });
       return;
     }
 
-    const result = await alertService.confirm({
-      text: `Voulez-vous vraiment valider ${jobs.value.length} job(s) ?`
+    if (job.isValidated) {
+      await alertService.info({ text: 'Ce job est déjà validé.' });
+      return;
+    }
+
+    const result = await alertService.confirm({ 
+      text: `Voulez-vous vraiment valider le job ${job.reference} ?` 
     });
     
     if (!result.isConfirmed) {
-      await alertService.info({
-        text: 'Validation annulée.'
-      });
+      await alertService.info({ text: 'Validation annulée.' });
       return;
     }
-    
+
     isSubmitting.value = true;
     try {
-      // Mark individual jobs as validated
-      jobs.value.forEach(job => {
-        job.isValidated = true;
-        job.validatedAt = new Date().toISOString();
+      job.isValidated = true;
+      job.validatedAt = new Date().toISOString();
+      
+      await alertService.success({ 
+        title: 'Succès', 
+        text: `Job ${job.reference} validé avec succès.` 
       });
-
-      await planningService.saveJobs(jobs.value);
-      isValidated.value = true;
-      
-      // Clear selections after validation
-      await clearSelections();
-      
-      await alertService.success({
-        title: 'Succès',
-        text: `${jobs.value.length} job(s) validé(s) avec succès.`
-      });
-      
     } catch (error) {
-      // Revert validation status on error
-      jobs.value.forEach(job => {
-        job.isValidated = false;
-        delete job.validatedAt;
-      });
-      
-      await alertService.error({ 
-        text: 'Erreur lors de la validation des jobs' 
-      });
+      job.isValidated = false;
+      delete job.validatedAt;
+      await alertService.error({ text: 'Erreur lors de la validation du job' });
     } finally {
       isSubmitting.value = false;
-    }
-  }
-
-  // Cancel all planning
-  async function cancelPlanning() {
-    if (jobs.value.length === 0) {
-      await alertService.error({
-        title: 'Aucun job à annuler',
-        text: 'Il n\'y a aucun job créé à annuler.'
-      });
-      return;
-    }
-    
-    // Check if jobs are validated
-    if (isValidated.value || jobs.value.some(job => job.isValidated)) {
-      await alertService.error({
-        title: 'Jobs validés',
-        text: 'Attention ! Ces jobs sont validés. Vous devez d\'abord les effacer dans la table d\'affectation pour permettre l\'annulation.'
-      });
-      return;
-    }
-    
-    const result = await alertService.confirm({
-      text: 'Voulez-vous vraiment annuler tous les jobs non validés ?'
-    });
-    
-    if (!result.isConfirmed) {
-      return;
-    }
-    
-    try {
-      await indexedDBService.clearState(STATE_KEY);
-      await clearSelections();
-    } catch (error) {
-      console.error('Error clearing state:', error);
-    }
-    
-    const jobCount = jobs.value.length;
-    jobs.value = [];
-    isValidated.value = false;
-    
-    await alertService.success({
-      text: `${jobCount} job(s) annulé(s) avec succès`
-    });
-  }
-
-  // Load validated jobs from API
-  async function loadValidatedJobsFromAPI() {
-    if (!isValidated.value) return;
-    
-    try {
-      console.log('Chargement des jobs validés depuis l\'API (à implémenter)');
-    } catch (error) {
-      console.error('Error loading validated jobs from API:', error);
     }
   }
 
   return {
     jobs,
     availableLocations,
+    availableJobsForLocation,
     locationSearchQuery,
     selectedAvailable,
     selectedJobs,
+    selectedJobToAddLocation,
+    showJobDropdown,
     isSubmitting,
-    isValidated,
     createJob,
-    deleteSelectedJobs,
-    validateJobs,
-    cancelPlanning,
-    loadValidatedJobsFromAPI,
-    clearSelections
+    addLocationToJob,
+    removeLocationFromJob,
+    returnSelectedJobs,
+    validateJob
   };
 }

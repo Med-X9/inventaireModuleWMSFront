@@ -1,26 +1,23 @@
 export type ComptageMode =
   | 'image de stock'
-  | 'en vrague'
-  | 'en vrague par article'
+  | 'en vrac'
+  | 'par article'
   | '';
 
 export interface ComptageConfig {
   mode: ComptageMode;
-  // Options pour "en vrague" - maintenant comme string pour radio group
+  // Options pour "en vrac" - maintenant comme string pour radio group
   inputMethod?: 'saisie' | 'scanner' | ''; // Radio group pour saisie quantité vs scanner unitaire
   guideQuantite: boolean;
-  // Options pour "en vrague par article"
+  // Options pour "par article"
   isVariante: boolean;
   guideArticle: boolean;
   dlc: boolean;
-  guideArticleQuantite: boolean;
+  numeroSerie: boolean;
   numeroLot: boolean;
-  // Legacy props (deprecated)
+  // Legacy props (deprecated mais nécessaires pour la synchronisation)
   saisieQuantite: boolean;
   scannerUnitaire: boolean;
-  useScanner: boolean;
-  useSaisie: boolean;
-  stock: boolean;
 }
 
 export interface InventoryCreationStep1 {
@@ -39,6 +36,6 @@ export interface InventoryCreationState {
 
 export const COMPTAGE_MODES = {
   IMAGE_STOCK: 'image de stock' as ComptageMode,
-  EN_VRAGUE: 'en vrague' as ComptageMode,
-  EN_VRAGUE_PAR_ARTICLE: 'en vrague par article' as ComptageMode,
+  EN_VRAC: 'en vrac' as ComptageMode,
+  PAR_ARTICLE: 'par article' as ComptageMode,
 } as const;

@@ -23,6 +23,24 @@ return value !== null && value !== undefined && value !== '';
 msg
 });
 
+// Validation pour magasins avec dates obligatoires
+export const magasinWithDatesRequired = (msg = 'Veuillez sélectionner au moins un magasin et renseigner toutes les dates'): Validator => ({
+fn: (value: unknown) => {
+if (!Array.isArray(value)) return false;
+if (value.length === 0) return false;
+
+// Vérifier que chaque magasin a une date renseignée
+return value.every(item => {
+  if (typeof item === 'object' && item !== null) {
+    const magasinItem = item as { magasin: string; date: string };
+    return magasinItem.magasin && magasinItem.date && magasinItem.date.trim() !== '';
+  }
+  return false;
+});
+},
+msg
+});
+
 export const date = (msg = 'Format de date invalide'): Validator => ({
 fn: (value: unknown) => {
 if (!value || typeof value !== 'string') return false;
@@ -113,8 +131,9 @@ step1Errors.date = date().msg;
 if (!selectRequired().fn(state.step1Data.compte)) {
 step1Errors.compte = selectRequired().msg;
 }
-if (!selectRequired().fn(state.step1Data.magasin)) {
-step1Errors.magasin = selectRequired().msg;
+// Utiliser la validation avec dates obligatoires pour magasins
+if (!magasinWithDatesRequired().fn(state.step1Data.magasin)) {
+step1Errors.magasin = magasinWithDatesRequired().msg;
 }
 
 const comptageResult = validateComptages(state.comptages);
