@@ -1,40 +1,20 @@
-import type { InventoryCreationState, ContageMode } from '../interfaces/inventoryCreation';
+import type { InventoryCreationState, ComptageMode } from '../interfaces/inventoryCreation';
 import type { InventoryManagement } from '../interfaces/inventoryManagement';
+import { inventoryCreationService } from './inventoryCreationService';
 
 class InventoryEditService {
   private mockInventoryMap: Map<number, InventoryManagement> = new Map([
     [1, {
       id: 1,
-      reference: 'INV-001',
-      inventory_date: '2025-04-18',
-      statut: 'En attente',
-      pending_status_date: '2025-04-18',
-      current_status_date: '2025-04-19',
-      date_status_launch: '2025-04-20',
-      date_status_end: '2025-04-21',
-      label: 'Inventaire Général Avril',
-    }],
-    [2, {
-      id: 2,
-      reference: 'INV-002',
-      inventory_date: '2025-05-20',
-      statut: 'En cours',
-      pending_status_date: '2025-05-20',
-      current_status_date: '2025-05-21',
-      date_status_launch: '2025-05-22',
-      date_status_end: '2025-05-23',
-      label: 'Inventaire Général Mai',
-    }],
-    [3, {
-      id: 3,
-      reference: 'INV-003',
-      inventory_date: '2025-06-15',
-      statut: 'Terminé',
-      pending_status_date: '2025-06-15',
-      current_status_date: '2025-06-16',
-      date_status_launch: '2025-06-17',
-      date_status_end: '2025-06-18',
-      label: 'Inventaire Général Juin',
+      reference: 'INV-2025-001',
+      inventory_date: '2025-12-20',
+      statut: 'En préparation',
+      date_creation: '2025-06-24',
+      date_lancement: '',
+      date_echeance: '',
+      date_cloture: '',
+      label: 'Inventaire général 2025',
+      type: 'Inventaire Général',
     }]
   ]);
 
@@ -61,21 +41,22 @@ class InventoryEditService {
     } catch (error) {
       console.error('Error updating inventory:', error);
       throw new Error('Erreur lors de la mise à jour de l\'inventaire');
+    
     }
   }
 
-  validateContages(state: InventoryCreationState): boolean {
-    const [c1, c2, c3] = state.contages;
-    
-    // First contage must have a mode
+  validateComptages(state: InventoryCreationState): boolean {
+    const [c1, c2, c3] = state.comptages;
+
+    // First comptage must have a mode
     if (!c1.mode) return false;
-    
-    // Second contage must have a mode and can't be 'etat de stock'
-    if (!c2.mode || c2.mode === 'etat de stock') return false;
-    
-    // Third contage validation
-    if (c1.mode === 'etat de stock') {
-      // If first is 'etat de stock', third must match second
+
+    // Second comptage must have a mode and can't be 'image de stock'
+    if (!c2.mode || c2.mode === 'image de stock') return false;
+
+    // Third comptage validation
+    if (c1.mode === 'image de stock') {
+      // If first is 'image de stock', third must match second
       return c3.mode === c2.mode;
     } else {
       // Third must match either first or second
@@ -83,71 +64,21 @@ class InventoryEditService {
     }
   }
 
-  getOptionsForMode(mode: ContageMode): { hasVariant: boolean; hasScanner: boolean; hasQuantite: boolean; } {
-    switch (mode) {
-      case 'liste emplacement':
-        return {
-          hasVariant: false,
-          hasScanner: true,
-          hasQuantite: false
-        };
-      case 'article + emplacement':
-        return {
-          hasVariant: true,
-          hasScanner: false,
-          hasQuantite: true
-        };
-      case 'hybride':
-        return {
-          hasVariant: true,
-          hasScanner: false,
-          hasQuantite: false
-        };
-      default:
-        return {
-          hasVariant: false,
-          hasScanner: false,
-          hasQuantite: false
-        };
-    }
+  // Réutilise la logique du service de création
+  getOptionsForMode(mode: ComptageMode) {
+    return inventoryCreationService.getOptionsForMode(mode);
   }
 
-  getAvailableModesForStep(state: InventoryCreationState, stepIndex: number): ContageMode[] {
-    // First contage - all options available
-    if (stepIndex === 0) {
-      return [
-        'etat de stock',
-        'liste emplacement',
-        'article + emplacement',
-        'hybride'
-      ];
-    }
+  getAvailableModesForStep(state: InventoryCreationState, stepIndex: number): ComptageMode[] {
+    return inventoryCreationService.getAvailableModesForStep(state, stepIndex);
+  }
 
-    // Second contage - always three options (no 'etat de stock')
-    if (stepIndex === 1) {
-      return [
-        'liste emplacement',
-        'article + emplacement',
-        'hybride'
-      ];
-    }
+  getInheritedOptionsForComptage3(state: InventoryCreationState) {
+    return inventoryCreationService.getInheritedOptionsForComptage3(state);
+  }
 
-    // Third contage - depends on previous selections
-    if (stepIndex === 2) {
-      const firstContage = state.contages[0];
-      const secondContage = state.contages[1];
-
-      // If first contage is 'etat de stock', only show second contage's mode
-      if (firstContage.mode === 'etat de stock') {
-        return [secondContage.mode];
-      }
-
-      // Otherwise, show unique values from first and second contage
-      const uniqueModes = new Set([firstContage.mode, secondContage.mode]);
-      return Array.from(uniqueModes) as ContageMode[];
-    }
-
-    return [];
+  getComptage3Constraints(state: InventoryCreationState) {
+    return inventoryCreationService.getComptage3Constraints(state);
   }
 }
 

@@ -1,55 +1,166 @@
-.custom-multiselect.multiselect {
-    @apply !text-inherit !min-h-max;
+
+/* Vue-select styles */
+:root {
+  --vs-colors-lightest: rgba(60, 60, 60, 0.26);
+  --vs-colors-light: rgba(60, 60, 60, 0.5);
+  --vs-colors-dark: #333;
+  --vs-colors-darkest: rgba(197, 51, 51, 0.15);
+  --vs-border-color: #e2e8f0;
+  --vs-border-width: 1px;
+  --vs-border-style: solid;
+  --vs-border-radius: 0.5rem;
+  --vs-dropdown-bg: #fff;
+  --vs-dropdown-z-index: 1000;
+  --vs-actions-padding: 4px 6px 0 3px;
 }
 
-.custom-multiselect.multiselect,
-.custom-multiselect .multiselect__input,
-.custom-multiselect .multiselect__single {
-    @apply !text-sm;
+.vs-custom {
+  font-family: inherit;
+  width: 100%;
 }
 
-.custom-multiselect.multiselect .multiselect__tags {
-    @apply ltr:pl-4.5 rtl:pr-4.5 !py-2  !min-h-max;
+.vs-custom .vs__dropdown-toggle {
+  padding: 0.5rem;
+  background: white;
+  border: var(--vs-border-width) var(--vs-border-style) var(--vs-border-color);
+  border-radius: var(--vs-border-radius);
+  transition: all 0.2s;
 }
 
-.custom-multiselect.multiselect .multiselect__tags,
-.custom-multiselect .multiselect__content-wrapper,
-.custom-multiselect .multiselect--above .multiselect__content-wrapper {
-    @apply bg-white dark:bg-[#1b2e4b] border-[rgb(224,230,237)] dark:border-[#253b5c];
+.vs-custom .vs__dropdown-toggle:hover {
+  border-color: var(--color-primary);
 }
 
-.custom-multiselect .multiselect__single,
-.custom-multiselect .multiselect__placeholder,
-.custom-multiselect .multiselect__input {
-    @apply !mb-0 !pl-0 dark:bg-[#1b2e4b];
+.vs-custom .vs__dropdown-toggle:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(255, 204, 17, 0.1);
+  outline: none;
 }
 
-.custom-multiselect .multiselect__option--highlight,
-.custom-multiselect .multiselect__option--selected.multiselect__option--highlight,
-.custom-multiselect .multiselect__option.multiselect__option--selected {
-    @apply !bg-[#f6f6f6] dark:!bg-[#132136] !text-inherit;
+.vs-custom .vs__search {
+  padding: 0 7px;
+  margin: 4px 0 0 0;
+  font-size: 0.875rem;
+  border: none;
 }
 
-.custom-multiselect .multiselect__option.multiselect__option--disabled {
-    @apply !bg-transparent !text-[#999];
+.vs-custom .vs__search::placeholder {
+  color: #94a3b8;
 }
 
-.custom-multiselect.multiselect--active .multiselect__placeholder {
-    @apply !inline-block;
+.vs-custom .vs__dropdown-menu {
+  padding: 0.5rem 0;
+  border: 1px solid var(--vs-border-color);
+  border-radius: var(--vs-border-radius);
+  background: white;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
-.custom-multiselect .multiselect__placeholder {
-    @apply !pt-0 text-black dark:text-white-dark;
+.vs-custom .vs__dropdown-option {
+  padding: 0.5rem 1rem;
+  color: #64748b;
 }
 
-.custom-multiselect .multiselect__tag {
-    @apply !mb-0 !py-[3px] !bg-success;
+.vs-custom .vs__dropdown-option--highlight {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
 }
 
-.custom-multiselect .multiselect__tags-wrap {
-    @apply !flex;
+.dark .vs-custom .vs__dropdown-toggle {
+  background-color: #121e32;
+  border-color: #17263c;
+  color: var(--color-primary);
 }
 
-.custom-multiselect .multiselect__tag-icon {
-    @apply !top-auto;
+.vs-custom .vs__selected {
+  color: var(--color-white-light);
 }
+
+.dark .vs-custom .vs__dropdown-toggle:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(255, 204, 17, 0.1);
+  outline: none;
+}
+
+.vs-custom .vs__search::placeholder {
+  color: #94a3b8;
+}
+
+.dark .vs-custom .vs__dropdown-toggle:hover {
+  border-color: var(--color-primary);
+}
+
+.dark .vs-custom .vs__search {
+  background-color: #121e32;
+  color: #e2e8f0;
+}
+
+.dark .vs-custom .vs__dropdown-menu {
+  background-color: #121e32;
+  border-color: #17263c;
+}
+
+.dark .vs-custom .vs__dropdown-option {
+  color: var(--color-white-light);
+}
+
+
+.dark .vs-custom .vs__dropdown-option--highlight {
+  color: #ffcc11;
+}
+
+/* Flatpickr custom styles */
+.flatpickr-calendar {
+  background: #fff;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+  font-family: inherit;
+}
+
+.flatpickr-month {
+  height: 36px;
+}
+
+.flatpickr-current-month {
+  padding-top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flatpickr-monthDropdown-months {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.flatpickr-weekdays {
+  margin-top: 0.1rem;
+}
+
+.flatpickr-weekday {
+  font-size: 0.5rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.flatpickr-day {
+  border-radius: 0.5rem;
+  margin: 2.5px;
+  height: 34px;
+  line-height: 32px;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.flatpickr-day.selected {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.flatpickr-day.selected:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+
+

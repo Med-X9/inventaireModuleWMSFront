@@ -28,12 +28,11 @@ guideQuantite: false,
 isVariante: false,
 guideArticle: false,
 dlc: false,
-guideArticleQuantite: false,
+numeroSerie: false,
 numeroLot: false,
 // Legacy props
 useScanner: false,
-useSaisie: false,
-stock: false
+useSaisie: false
 })),
 currentStep: 0,
 });
@@ -55,12 +54,11 @@ guideQuantite: false,
 isVariante: false,
 guideArticle: false,
 dlc: false,
-guideArticleQuantite: false,
+numeroSerie: false,
 numeroLot: false,
 // Legacy props
 useScanner: false,
-useSaisie: false,
-stock: false
+useSaisie: false
 }))
 );
 currentStep.value = 0;

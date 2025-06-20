@@ -13,18 +13,12 @@
         v-if="visible && text"
         ref="tooltipElement"
         :style="tooltipStyle"
-        class="fixed z-50 px-2 py-1 text-xs text-white rounded shadow-lg pointer-events-none max-w-xs break-words"
-        :class="[
-          themeStore.theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-primary text-white'
-        ]"
+        class="fixed z-50 px-2 py-1 text-xs text-white bg-primary rounded shadow-lg pointer-events-none max-w-xs break-words"
       >
         {{ text }}
         <div
-          class="absolute w-2 h-2 transform rotate-45"
-          :class="[
-            themeStore.theme === 'dark' ? 'bg-gray-700' : 'bg-primary',
-            arrowClass
-          ]"
+          class="absolute w-2 h-2 bg-primary transform rotate-45"
+          :class="arrowClass"
         ></div>
       </div>
     </Teleport>
@@ -33,7 +27,6 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
-import { useAppStore } from '@/stores/index'
 
 interface Props {
   text?: string
@@ -46,7 +39,6 @@ const props = withDefaults(defineProps<Props>(), {
   delay: 500
 })
 
-const themeStore = useAppStore()
 const visible = ref(false)
 const tooltipContainer = ref<HTMLElement>()
 const tooltipElement = ref<HTMLElement>()
@@ -131,3 +123,17 @@ const positionTooltip = () => {
   }
 }
 </script>
+<style scoped>
+.ag-tooltip {
+  background-color:  var(--color-primary) !important; /* Tailwind bg-gray-700 */
+  color: white !important;
+  border: 1px solid #4B5563 !important; /* Tailwind border-gray-600 */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  font-size: 12px !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  z-index: 9999 !important;
+  max-width: 250px !important;
+  word-wrap: break-word !important;
+}
+</style>

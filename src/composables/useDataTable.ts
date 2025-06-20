@@ -5,69 +5,91 @@ import type {
   FirstDataRenderedEvent,
   GridApi
 } from 'ag-grid-community'
-import { fetchData } from '@/services/dataTableService'
 import type { ActionConfig, TableRow, DataTableColumn } from '@/interfaces/dataTable'
 import ActionMenu from '@/components/DataTable/ActionMenu.vue'
 
-export interface UseDataTableProps {
+export interface UseDataTableProps<T = Record<string, unknown>> {
   columns: DataTableColumn[]
-  rowDataProp: TableRow[]
+  rowDataProp: T[]
   dataUrl?: string
   enableFiltering: boolean
   pagination: boolean
   storageKey: string
-  actions: ActionConfig[]
+  actions: ActionConfig<T>[]
   actionsHeaderName: string
 }
 
-export function useDataTable(props: UseDataTableProps) {
+export function useDataTable<T extends Record<string, unknown> = Record<string, unknown>>(
+  props: UseDataTableProps<T>
+) {
   const gridApi = ref<GridApi | null>(null)
-  const rowData = ref(props.rowDataProp.slice())
-  watch(() => props.rowDataProp, v => (rowData.value = v.slice()), { immediate: true })
+  const rowData = ref(props.rowDataProp.slice() as T[])
+  
+  watch(() => props.rowDataProp, v => (rowData.value = v.slice() as T[]), { immediate: true })
 
   const pageSize = ref(50)
   const paginationStorageKey = `${props.storageKey}_paginationState`
 
+  // Check if grid is valid and not destroyed
+  const isGridValid = (): boolean => {
+    return !!(gridApi.value && !gridApi.value.isDestroyed())
+  }
+
   const savePaginationState = () => {
-    if (!gridApi.value || !props.pagination) return
+    if (!isGridValid() || !props.pagination) return
+
     try {
+      const currentPage = gridApi.value!.paginationGetCurrentPage()
+      const currentPageSize = gridApi.value!.paginationGetPageSize()
+
       const state = {
-        currentPage: gridApi.value.paginationGetCurrentPage(),
-        pageSize: gridApi.value.paginationGetPageSize(),
+        currentPage,
+        pageSize: currentPageSize,
         timestamp: Date.now()
       }
+      
       localStorage.setItem(paginationStorageKey, JSON.stringify(state))
     } catch (err) {
-      console.warn('Erreur sauvegarde pagination:', err)
+      console.warn('Error saving pagination:', err)
     }
   }
 
   const restorePaginationState = () => {
-    if (!gridApi.value || !props.pagination) return
+    if (!isGridValid() || !props.pagination) return
+
     try {
       const saved = localStorage.getItem(paginationStorageKey)
       if (!saved) return
+
       const state = JSON.parse(saved)
-      const maxAge = 24 * 60 * 60 * 1000
+      const maxAge = 24 * 60 * 60 * 1000 // 24h
+      
       if (state.timestamp && Date.now() - state.timestamp > maxAge) {
         localStorage.removeItem(paginationStorageKey)
         return
       }
+
+      // Restore page size first
       if (typeof state.pageSize === 'number' && state.pageSize > 0) {
         pageSize.value = state.pageSize
-        gridApi.value.setGridOption('paginationPageSize', state.pageSize)
+        gridApi.value!.setGridOption('paginationPageSize', state.pageSize)
       }
+
+      // Then restore current page after a delay
       if (typeof state.currentPage === 'number' && state.currentPage >= 0) {
         setTimeout(() => {
-          if (gridApi.value) {
-            const total = gridApi.value.paginationGetTotalPages()
-            const target = Math.min(state.currentPage, total - 1)
-            if (target >= 0) gridApi.value.paginationGoToPage(target)
+          if (isGridValid()) {
+            const totalPages = gridApi.value!.paginationGetTotalPages()
+            const targetPage = Math.min(state.currentPage, Math.max(0, totalPages - 1))
+            
+            if (targetPage >= 0 && totalPages > 0) {
+              gridApi.value!.paginationGoToPage(targetPage)
+            }
           }
-        }, 100)
+        }, 300)
       }
     } catch (err) {
-      console.warn('Erreur restauration pagination:', err)
+      console.warn('Error restoring pagination:', err)
       localStorage.removeItem(paginationStorageKey)
     }
   }
@@ -93,6 +115,7 @@ export function useDataTable(props: UseDataTableProps) {
     const stored = localStorage.getItem(props.storageKey)
     const allFields = allAvailableFields.value
     if (!stored) return allFields
+
     try {
       const parsed = JSON.parse(stored) as string[]
       const newOnes = allFields.filter(f => !parsed.includes(f))
@@ -109,7 +132,9 @@ export function useDataTable(props: UseDataTableProps) {
   }
 
   const visibleFields = ref<string[]>(getInitialVisibleFields())
+  
   watch(visibleFields, vf => localStorage.setItem(props.storageKey, JSON.stringify(vf)), { deep: true })
+  
   watch(allAvailableFields, (newF, oldF) => {
     if (oldF && newF.length !== oldF.length) {
       const added = newF.filter(f => !oldF.includes(f))
@@ -120,78 +145,130 @@ export function useDataTable(props: UseDataTableProps) {
 
   const showDropdown = ref(false)
   const dropdownRef = ref<HTMLElement | null>(null)
-  const toggleDropdown = () => { showDropdown.value = !showDropdown.value }
+  
+  const toggleDropdown = () => { 
+    showDropdown.value = !showDropdown.value 
+  }
+  
   const resetVisibleFields = () => {
     visibleFields.value = allAvailableFields.value
     localStorage.removeItem(props.storageKey)
   }
+
   const handleClickOutside = (e: Event) => {
     const wrap = dropdownRef.value
     if (wrap && !wrap.contains((e as MouseEvent).target as Node)) {
       showDropdown.value = false
     }
   }
+
+  // Handle pagination changes
+  const handlePaginationChanged = () => {
+    if (!isGridValid() || !props.pagination) return
+
+    const newPageSize = gridApi.value!.paginationGetPageSize()
+    if (newPageSize !== pageSize.value) {
+      pageSize.value = newPageSize
+    }
+
+    // Save state with slight delay to avoid multiple calls
+    setTimeout(() => {
+      if (isGridValid()) {
+        savePaginationState()
+      }
+    }, 100)
+  }
+
+  // Variable to track if we should save on destroy
+  let shouldSaveOnDestroy = true
+
+  // Cleanup before component destruction
+  const cleanupBeforeDestroy = () => {
+    if (shouldSaveOnDestroy && props.pagination && isGridValid()) {
+      savePaginationState()
+    }
+    // Clean up the API reference
+    gridApi.value = null
+    shouldSaveOnDestroy = false
+  }
+
   onMounted(() => {
     document.addEventListener('click', handleClickOutside, { passive: true })
-    if (props.dataUrl) fetchData(props.dataUrl).then(data => rowData.value = data).catch(err => console.error('fetchData error', err))
+
+    if (props.dataUrl) {
+      // Fetch data from URL if provided
+      fetch(props.dataUrl)
+        .then(response => response.json())
+        .then(data => {
+          rowData.value = data
+          // Restore state after data load
+          setTimeout(() => {
+            if (isGridValid() && props.pagination) {
+              restorePaginationState()
+            }
+          }, 500)
+        })
+        .catch(err => console.error('fetchData error', err))
+    }
   })
-  onUnmounted(() => document.removeEventListener('click', handleClickOutside))
+
+  onUnmounted(() => {
+    document.removeEventListener('click', handleClickOutside)
+    // Save before component destruction
+    cleanupBeforeDestroy()
+  })
 
   function onGridReady(e: GridReadyEvent) {
     gridApi.value = e.api
-    const saved = localStorage.getItem(paginationStorageKey)
-    if (saved) {
-      try {
-        const state = JSON.parse(saved)
-        if (typeof state.pageSize === 'number') {
-          pageSize.value = state.pageSize
-          gridApi.value.setGridOption('paginationPageSize', state.pageSize)
-        }
-      } catch {}
-    }
+
     if (props.pagination) {
-      gridApi.value.addEventListener('paginationChanged', savePaginationState)
-      gridApi.value.addEventListener('paginationChanged', () => {
-        if (!gridApi.value) return
-        const ps = gridApi.value.paginationGetPageSize()
-        if (ps !== pageSize.value) pageSize.value = ps
-        savePaginationState()
-      })
-      setTimeout(restorePaginationState, 50)
+      // Restore page size from localStorage
+      const saved = localStorage.getItem(paginationStorageKey)
+      if (saved) {
+        try {
+          const state = JSON.parse(saved)
+          if (typeof state.pageSize === 'number' && state.pageSize > 0) {
+            pageSize.value = state.pageSize
+            gridApi.value.setGridOption('paginationPageSize', state.pageSize)
+          }
+        } catch (err) {
+          console.warn('Error reading pageSize:', err)
+        }
+      }
+
+      // Listen to pagination events
+      gridApi.value.addEventListener('paginationChanged', handlePaginationChanged)
+      
+      // Restore state after initialization
+      setTimeout(() => {
+        if (isGridValid()) {
+          restorePaginationState()
+        }
+      }, 200)
     }
   }
 
   function onFirstDataRendered(_: FirstDataRenderedEvent) {
-    if (props.pagination) setTimeout(restorePaginationState, 100)
+    if (props.pagination && isGridValid()) {
+      // Restore after first render
+      setTimeout(() => {
+        if (isGridValid()) {
+          restorePaginationState()
+        }
+      }, 300)
+    }
   }
 
   const computedVisibleColumnDefs = computed<ColDef[]>(() => {
- 
     const defs = props.columns.map(col => {
       const { description, ...colDef } = col
       return {
         ...colDef,
         filter: props.enableFiltering ? (col.filter || 'agTextColumnFilter') : false,
         headerTooltip: description || col.headerName
-      
       }
     })
-    if (props.actions.length) {
-      defs.push({
-        headerName: props.actionsHeaderName,
-        field: 'actions',
-        colId: 'actions',
-        sortable: false,
-        filter: false,
-        minWidth: 80,
-        maxWidth: 80,
-        cellRenderer: ActionMenu,
-        cellRendererParams: { actions: props.actions },
-        cellStyle: params => params.data?.isChild ? null : { overflow: 'visible' },
-        suppressSizeToFit: true,
-        headerTooltip: props.actionsHeaderName
-      })
-    }
+
     return defs.filter(d => visibleFields.value.includes(d.field!) || d.field === 'actions')
   })
 
@@ -208,6 +285,8 @@ export function useDataTable(props: UseDataTableProps) {
     resetVisibleFields,
     minVisibleColumns,
     dropdownRef,
-    gridApi
+    gridApi,
+    savePaginationState,
+    isGridValid
   }
 }

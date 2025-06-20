@@ -35,19 +35,19 @@ export function useInventoryDetail(inventoryId: number) {
 
   const jobColumns = [
     { headerName: 'Nom', field: 'name', sortable: true },
-    { 
-      headerName: 'Statut', 
-      field: 'status', 
+    {
+      headerName: 'Statut',
+      field: 'status',
       sortable: true,
       cellRenderer: (params: any) => {
         const statusClass = getStatusClass(params.data.status);
-        return `<span class="px-3 py-1 rounded-full text-sm  ${statusClass}">${params.data.status}</span>`;
+        return `<span class="px-3 py-1 rounded-full text-sm ${statusClass}">${params.data.status}</span>`;
       }
     },
     { headerName: 'Date', field: 'date', sortable: true },
-    { 
-      headerName: 'Opérateur', 
-      field: 'operator', 
+    {
+      headerName: 'Opérateur',
+      field: 'operator',
       sortable: true,
       cellRenderer: (params: any) => {
         return params.data.status.toLowerCase() === 'terminé' ? params.data.operator : '';
@@ -99,13 +99,14 @@ export function useInventoryDetail(inventoryId: number) {
 
   const getStatusClass = (status: string | undefined): string => {
     if (!status) return 'bg-secondary';
-    
+
     switch (status.toLowerCase()) {
       case 'en attente': return 'bg-warning-light text-warning';
       case 'en cours': return 'bg-info-light text-info';
       case 'terminé': return 'bg-success-light text-success';
-      case 'planifié': return 'bg-secondary-light text-secondary';
       case 'en préparation': return 'bg-warning-light text-warning';
+      case 'en réalisation': return 'bg-info-light text-info';
+      case 'clôturé': return 'bg-secondary-light text-secondary';
       default: return 'bg-secondary-light text-secondary';
     }
   };
@@ -133,7 +134,7 @@ export function useInventoryDetail(inventoryId: number) {
   const launchInventory = async () => {
     const success = await inventoryDetailService.launchInventory(detailData.value.inventory);
     if (success) {
-      detailData.value.inventory.statut = 'En cours';
+      detailData.value.inventory.statut = 'En réalisation';
     }
   };
 
@@ -144,11 +145,26 @@ export function useInventoryDetail(inventoryId: number) {
   const cancelInventory = async () => {
     const success = await inventoryDetailService.cancelInventory();
     if (success) {
-      detailData.value.inventory.statut = 'En attente';
+      detailData.value.inventory.statut = 'En préparation';
+    }
+  };
+
+  const terminateInventory = async () => {
+    const success = await inventoryDetailService.terminateInventory(detailData.value.inventory);
+    if (success) {
+      detailData.value.inventory.statut = 'Terminé';
+    }
+  };
+
+  const closeInventory = async () => {
+    const success = await inventoryDetailService.closeInventory(detailData.value.inventory);
+    if (success) {
+      detailData.value.inventory.statut = 'Clôturé';
     }
   };
 
   const formatDate = (dateString: string): string => {
+    if (!dateString) return 'Non définie';
     const date = new Date(dateString);
     return date.toLocaleDateString('fr-FR', {
       day: '2-digit', month: '2-digit', year: 'numeric'
@@ -199,6 +215,8 @@ export function useInventoryDetail(inventoryId: number) {
     launchInventory,
     editInventory,
     cancelInventory,
+    terminateInventory,
+    closeInventory,
     formatDate,
     getStatusClass,
     getJobsForTab,
