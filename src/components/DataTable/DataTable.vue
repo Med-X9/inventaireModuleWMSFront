@@ -438,6 +438,28 @@ onUnmounted(() => {
   display: none !important;
 }
 
+/* Force les tooltips AG Grid à être toujours sombres */
+:deep(.ag-tooltip) {
+  background-color:  var(--color-primary)!important; 
+  border: 1px solid var(--color-primary) !important; 
+  color: white !important;
+  font-size: 12px !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  z-index: 9999 !important;
+}
+/* Style global pour tous les tooltips AG Grid dans l'application */
+.dark :deep(.ag-tooltip) {
+  background-color: #374151 !important; 
+  color: white !important;
+  border: 1px solid #4B5563 !important; 
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  font-size: 12px !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  z-index: 9999 !important;
+}
+
 @media (max-width: 640px) {
   :deep(.ag-pagination-button) {
     min-width: 1.2rem;
@@ -453,15 +475,5 @@ onUnmounted(() => {
     font-size: 6.5px;
     padding: 0.3rem;
   }
-  /* in your global styles (e.g. main.css) */
-.ag-tooltip {
-  /* Use your Tailwind primary background + white text */
-  background-color: rgb(233, 52, 52) !important;
-  color: white !important;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-}
-
 }
 </style>

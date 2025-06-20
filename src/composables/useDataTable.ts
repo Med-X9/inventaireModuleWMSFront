@@ -166,16 +166,15 @@ export function useDataTable(props: UseDataTableProps) {
   }
 
   const computedVisibleColumnDefs = computed<ColDef[]>(() => {
- 
     const defs = props.columns.map(col => {
       const { description, ...colDef } = col
       return {
         ...colDef,
         filter: props.enableFiltering ? (col.filter || 'agTextColumnFilter') : false,
         headerTooltip: description || col.headerName
-      
       }
     })
+
     if (props.actions.length) {
       defs.push({
         headerName: props.actionsHeaderName,
@@ -187,11 +186,15 @@ export function useDataTable(props: UseDataTableProps) {
         maxWidth: 80,
         cellRenderer: ActionMenu,
         cellRendererParams: { actions: props.actions },
-        cellStyle: params => params.data?.isChild ? null : { overflow: 'visible' },
+        // Fully hide for child rows, and provide both display and overflow keys
+        cellStyle: params => params.data?.isChild
+          ? { display: 'none', overflow: 'hidden' }
+          : { display: 'block', overflow: 'visible' },
         suppressSizeToFit: true,
         headerTooltip: props.actionsHeaderName
       })
     }
+
     return defs.filter(d => visibleFields.value.includes(d.field!) || d.field === 'actions')
   })
 

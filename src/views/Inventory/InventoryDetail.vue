@@ -127,7 +127,7 @@
               {{ i + 1 }}{{ i === 0 ? 'er' : 'ème' }} comptage
             </h4>
           </div>
-          <div class="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+         
         </div>
         
         <!-- Mode de comptage avec style amélioré -->

@@ -8,6 +8,7 @@ export interface InventoryManagement {
   date_status_launch: string;
   date_status_end: string;
   label: string;
+  type?: string; // Add type property
 }
 
 export type InventoryAction = ActionConfig;

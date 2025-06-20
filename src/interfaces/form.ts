@@ -15,14 +15,20 @@ export interface FieldConfig {
   dateFormat?: string;
   gridCols?: number; // For controlling grid layout
   radioOptions?: Array<SelectOption>; // For radio-group type
+  // Generic multi-select with dates configuration
+  itemKey?: string; // Key name for the item in the data structure (default: 'item')
+  dateLabel?: string; // Label for the dates section (default: 'Dates par élément')
+  tooltip?: string;
+  optionTooltips?: Record<string, string>; // Tooltips for individual options
 }
 
 export interface SelectOption {
   label: string;
   value: string | number;
+  tooltip?: string; // Tooltip for individual option
 }
 
-export interface MagasinWithDate {
-  magasin: string;
+export interface ItemWithDate {
+  [key: string]: string; // Generic item key with string value
   date: string;
 }

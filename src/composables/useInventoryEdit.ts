@@ -1,6 +1,6 @@
 import { ref, reactive, computed, onMounted, watch, toRaw } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import type { InventoryCreationState, ContageConfig } from '@/interfaces/inventoryCreation';
+import type { InventoryCreationState, ComptageConfig } from '@/interfaces/inventoryCreation';
 import { indexedDBService } from '@/services/indexedDBService';
 import { alertService } from '@/services/alertService';
 import { inventoryEditService } from '@/services/inventoryEditService';
@@ -17,15 +17,25 @@ export function useInventoryEdit() {
   const isSubmitting = ref<boolean>(false);
 
   const state = reactive<InventoryCreationState>({
-    step1Data: { libelle: '', date: '', type: 'Inventaire Général' },
-    step2Data: { compte: '', magasin: [] },
-    contages: Array(3).fill(null).map<ContageConfig>(() => ({
+    step1Data: {
+      libelle: '',
+      date: '',
+      type: 'Inventaire Général',
+      compte: '',
+      magasin: []
+    },
+    comptages: Array(3).fill(null).map<ComptageConfig>(() => ({
       mode: '',
-      isVariant: false,
-      useScanner: false,
-      useSaisie: false,
-      quantite: false,
-      inputMethod: undefined
+      inputMethod: '',
+      guideQuantite: false,
+      isVariante: false,
+      guideArticle: false,
+      dlc: false,
+      numeroSerie: false,
+      numeroLot: false,
+      // Legacy props
+      saisieQuantite: false,
+      scannerUnitaire: false
     })),
     currentStep: 0
   });
@@ -35,15 +45,25 @@ export function useInventoryEdit() {
 
   async function clearState() {
     await indexedDBService.clearState(storageKey.value);
-    state.step1Data = { libelle: '', date: '', type: 'Inventaire Général' };
-    state.step2Data = { compte: '', magasin: [] };
-    state.contages = Array(3).fill(null).map<ContageConfig>(() => ({
+    state.step1Data = {
+      libelle: '',
+      date: '',
+      type: 'Inventaire Général',
+      compte: '',
+      magasin: []
+    };
+    state.comptages = Array(3).fill(null).map<ComptageConfig>(() => ({
       mode: '',
-      isVariant: false,
-      useScanner: false,
-      useSaisie: false,
-      quantite: false,
-      inputMethod: undefined
+      inputMethod: '',
+      guideQuantite: false,
+      isVariante: false,
+      guideArticle: false,
+      dlc: false,
+      numeroSerie: false,
+      numeroLot: false,
+      // Legacy props
+      saisieQuantite: false,
+      scannerUnitaire: false
     }));
     currentStep.value = 0;
   }
@@ -60,17 +80,24 @@ export function useInventoryEdit() {
         state.step1Data = {
           libelle: inventoryData.label,
           date: inventoryData.inventory_date,
-          type: 'Inventaire Général'
+          type: 'Inventaire Général',
+          compte: 'Compte 1',
+          magasin: [{ magasin: 'Magasin A', date: inventoryData.inventory_date }]
         };
-        state.step2Data = { compte: 'Compte 1', magasin: ['Magasin A'] };
 
-        // Set default first contage to 'etat de stock'
-        state.contages[0] = {
-          mode: 'etat de stock',
-          isVariant: false,
-          useScanner: false,
-          useSaisie: false,
-          quantite: false
+        // Set default first comptage to 'image de stock'
+        state.comptages[0] = {
+          mode: 'image de stock',
+          inputMethod: '',
+          guideQuantite: false,
+          isVariante: false,
+          guideArticle: false,
+          dlc: false,
+          numeroSerie: false,
+          numeroLot: false,
+          // Legacy props
+          saisieQuantite: false,
+          scannerUnitaire: false
         };
 
         await saveState();
@@ -111,36 +138,52 @@ export function useInventoryEdit() {
 
   const isValid = computed(() => {
     const validation = validateCreation(state);
-    switch (currentStep.value) {
-      case 0:
-        return Object.keys(validation.step1Errors).length === 0;
-      case 1:
-        return Object.keys(validation.step2Errors).length === 0;
-      default:
-        const idx = currentStep.value - 2;
-        return !validation.contageResult.fieldErrors.mode[idx];
-    }
+    const { isValid: stepOk } = getCurrentStepValidation(validation);
+    return stepOk;
   });
 
+  function getCurrentStepValidation(validation: ReturnType<typeof validateCreation>) {
+    if (currentStep.value === 0) {
+      return {
+        isValid: Object.keys(validation.step1Errors).length === 0,
+        errors: Object.values(validation.step1Errors)
+      };
+    } else {
+      const idx = currentStep.value - 1;
+      const err = validation.comptageResult.fieldErrors.mode[idx];
+      return {
+        isValid: !err,
+        errors: err ? [err] : []
+      };
+    }
+  }
+
   async function handleStepChange(prev: number, next: number): Promise<boolean> {
-    if (!isValid.value) {
-      await alertService.error({ title: 'Validation', text: 'Veuillez corriger les erreurs avant de continuer.' });
+    const validation = validateCreation(state);
+    const { isValid: stepOk, errors } = getCurrentStepValidation(validation);
+    
+    if (!stepOk) {
+      await alertService.error({ 
+        title: 'Validation', 
+        text: errors.join('\n') || 'Veuillez corriger les erreurs avant de continuer.' 
+      });
       return false;
     }
 
     let data: any;
     if (prev === 0) data = state.step1Data;
-    else if (prev === 1) data = state.step2Data;
-    else data = state.contages[prev - 2];
+    else data = state.comptages[prev - 1];
 
     await onStepComplete(prev, data);
     return true;
   }
 
   async function onStepComplete(step: number, data: any) {
-    if (step === 0) state.step1Data = { ...data };
-    else if (step === 1) state.step2Data = { ...data };
-    else state.contages[step - 2] = { ...data };
+    if (step === 0) {
+      state.step1Data = { ...data };
+    } else {
+      state.comptages[step - 1] = { ...data };
+    }
 
     currentStep.value = step + 1;
     await saveState();
@@ -152,8 +195,8 @@ export function useInventoryEdit() {
     try {
       isSubmitting.value = true;
 
-      if (!inventoryEditService.validateContages(state)) {
-        await alertService.error({ text: 'Configuration des contages invalide.' });
+      if (!inventoryEditService.validateComptages(state)) {
+        await alertService.error({ text: 'Configuration des comptages invalide.' });
         return;
       }
 

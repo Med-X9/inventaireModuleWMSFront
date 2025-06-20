@@ -1,6 +1,6 @@
 <!-- src/components/Modal.vue -->
 <template>
-  <div v-if="modelValue" class="fixed inset-0 z-50 overflow-y-auto">
+  <div v-if="modelValue" class="fixed  inset-0 z-50 overflow-y-auto">
     <div class="flex items-center justify-center  px-4 pt-4 pb-20 text-center sm:block sm:p-0">
       <!-- Overlay semi-transparent -->
       <div class="fixed inset-0 transition-opacity" @click="close">
@@ -9,8 +9,8 @@
 
       <div
        class="inline-block p-6 align-bottom panel rounded-lg text-left shadow-xl transform transition-all
-              sm:my-8 sm:align-middle sm:max-w-3xl max-w-3xl w-full
-               h-[40vh]   max-h-[80vh]"
+              sm:my-8 sm:align-middle sm:max-w-3xl max-w-3xl w-full 
+              "
        role="dialog"
        aria-modal="true"
        aria-labelledby="modal-headline"
@@ -42,8 +42,6 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, defineEmits } from 'vue'
-
 /**
  * Cette modal expose :
  *  - Une prop `modelValue: boolean` pour le v-model.
@@ -60,7 +58,7 @@ const emit = defineEmits<{
 }>()
 
 function close() {
-  // Quand on clique sur l’overlay, on ferme la modal
+  // Quand on clique sur l'overlay, on ferme la modal
   emit('update:modelValue', false)
 }
 </script>

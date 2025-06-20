@@ -2,12 +2,64 @@
   <div>
     <div>
       <!-- Section Jobs -->
-      <section class="panel">
-        <h2 class="text-xl font-semibold mb-6">Création de jobs</h2>
-        
-        <!-- Table 1: Emplacements disponibles -->
-        <div>
+      <section>
+       
+         <!-- Table 2: Jobs créés -->
+        <div class="panel">
+          <h3 class="text-lg font-semibold mb-2">Jobs créés</h3>
           <DataTable
+            v-if="jobs.length"
+            :key="jobsKey"
+            :columns="jobColumns"
+            :rowDataProp="displayJobsData"
+            :rowSelection="true"
+            @selection-changed="onJobSelectionChanged"
+            :showColumnSelector="false"
+            storageKey="planning_jobs"
+          >
+            <template #table-actions>
+              <div class="flex items-center justify-between gap-4 mb-4">
+                <button
+                  @click="onReturnSelectedJobs"
+                  class="btn btn-primary"
+                >
+                  ↩ Retourner ({{ selectedJobs.length }})
+                </button>
+
+                <button
+                  @click="onBulkValidate"
+                  class="btn btn-primary flex items-center"
+                >
+                  <span v-if="!isSubmitting">
+                    ✓ Valider ({{ selectedJobs.length }})
+                  </span>
+                  <span v-else class="flex items-center">
+                    <svg
+                      class="animate-spin w-4 h-4 mr-2"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none" viewBox="0 0 24 24"
+                    >
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                      <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+                    </svg>
+                    Valider...
+                  </span>
+                </button>
+              </div>
+            </template>
+          </DataTable>
+          
+          <div v-else class="text-center py-12 border-dashed border-2 rounded-lg">
+            <p class="text-gray-500">Aucun job créé</p>
+            <p class="text-sm text-gray-400 mt-2">Sélectionnez des emplacements dans la table ci-dessus pour créer un job</p>
+          </div>
+        </div>
+        <!-- Table 2: Emplacements disponibles -->
+        <div class="mt-6 panel">
+           <h3 class="text-lg font-semibold mb-2">Emplacements disponibles</h3>
+          <DataTable
+            :key="availableLocationsKey"
             :columns="availableLocationColumns"
             :rowDataProp="availableLocationData"
             :pagination="true"
@@ -18,14 +70,41 @@
           >
             <template #table-actions>
               <div class="flex items-center gap-4 mb-4">
-                <div class="flex gap-2">
+                <div class="flex gap-2 items-center">
                   <button
                     @click="createSingleJob"
                     class="btn btn-primary"
-                    :disabled="selectedAvailable.length === 0"
                   >
                     Créer Job ({{ selectedAvailable.length }})
                   </button>
+
+                  <!-- Dropdown pour ajouter à un job existant -->
+                  <div class="relative" v-if="availableJobsForLocation.length > 0">
+                    <button
+                      @click="showJobDropdown = !showJobDropdown"
+                      class="btn btn-primary"
+                    >
+                      Ajouter à Job ({{ selectedAvailable.length }})
+                      <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    </button>
+                    
+                    <!-- Dropdown menu -->
+                    <div v-if="showJobDropdown" class="absolute z-50 mt-1 w-64 bg-white border border-gray-300 rounded-md shadow-lg">
+                      <div class="py-1 max-h-60 overflow-y-auto">
+                        <button
+                          v-for="job in availableJobsForLocation"
+                          :key="job.id"
+                          @click="onSelectJobForLocation(job.id)"
+                          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center justify-between"
+                        >
+                          <span>{{ job.reference }}</span>
+                          <span class="text-xs text-gray-500">({{ job.locations.length }} emp.)</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </template>
@@ -42,80 +121,14 @@
           </DataTable>
         </div>
 
-        <!-- Table 2: Jobs créés -->
-        <div class="mt-8">
-          <h3 class="text-lg font-semibold mb-4">
-            Jobs créés
-            <span v-if="isValidated" class="ml-2 px-2 py-1 bg-green-100 text-green-800 text-sm rounded-full">
-              ✓ Validés
-            </span>
-            <span v-else-if="jobs.length > 0" class="ml-2 px-2 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
-              ⏳ En attente de validation
-            </span>
-          </h3>
-          <DataTable
-            v-if="jobs.length"
-            :columns="jobColumns"
-            :rowDataProp="displayJobsData"
-            :rowSelection="true"
-            @selection-changed="onJobSelectionChanged"
-            :showColumnSelector="false"
-            storageKey="planning_jobs"
-          >
-            <template #table-actions>
-              <div class="flex items-center justify-between gap-4 mb-4">
-                <div class="flex gap-2">
-                  <button
-                    @click="deleteSelectedJobs"
-                    class="btn btn-danger"
-                    :disabled="selectedJobs.length === 0"
-                  >
-                    ✕ Annuler ({{ selectedJobs.length }})
-                  </button>
-                  <button
-                    @click="cancelPlanning"
-                    class="btn btn-outline-danger"
-                    :disabled="jobs.length === 0"
-                  >
-                    ✕ Annuler tout
-                  </button>
-                </div>
-              </div>
-            </template>
-          </DataTable>
-          
-          <!-- Bouton valider en dessous de la table -->
-          <div v-if="jobs.length" class="mt-4 flex justify-end">
-            <button
-              @click="validateJobs"
-              :disabled="isSubmitting || isValidated"
-              class="btn btn-primary"
-              :class="{ 'opacity-50 cursor-not-allowed': isSubmitting || isValidated }"
-            >
-              <span v-if="!isSubmitting && !isValidated">✓ Valider tous les jobs</span>
-              <span v-else-if="isValidated">✓ Jobs déjà validés</span>
-              <span v-else class="flex items-center">
-                <svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Validation en cours...
-              </span>
-            </button>
-          </div>
-          
-          <div v-else class="text-center py-12 border-dashed border-2 rounded-lg">
-            <p class="text-gray-500">Aucun job créé</p>
-            <p class="text-sm text-gray-400 mt-2">Sélectionnez des emplacements dans la table ci-dessus pour créer un job</p>
-          </div>
-        </div>
+       
       </section>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { usePlanning } from '@/composables/usePlanning';
 import { alertService } from '@/services/alertService';
 import DataTable from '@/components/DataTable/DataTable.vue';
@@ -126,107 +139,99 @@ import type { TableRow } from '@/interfaces/dataTable';
 const {
   jobs,
   availableLocations,
+  availableJobsForLocation,
   locationSearchQuery,
   selectedAvailable,
   selectedJobs,
+  showJobDropdown,
   isSubmitting,
-  isValidated,
   createJob,
-  deleteSelectedJobs,
-  validateJobs,
-  cancelPlanning,
-  clearSelections
+  addLocationToJob,
+  returnSelectedJobs,
+  validateJob
 } = usePlanning();
+
+// Keys pour forcer le re-render des tables
+const availableLocationsKey = ref(0);
+const jobsKey = ref(0);
+
+// Watcher pour mettre à jour les keys quand les données changent
+watch(() => availableLocations.value.length, () => {
+  availableLocationsKey.value++;
+}, { immediate: true });
+
+watch(() => jobs.value.length, () => {
+  jobsKey.value++;
+}, { immediate: true });
 
 // État pour gérer l'expansion des jobs
 const expandedJobIds = ref<Set<string>>(new Set());
 
-// Colonnes pour la table des emplacements disponibles (sans colonne emplacement)
-const availableLocationColumns: ColDef[] = [
-  { 
-    headerName: 'Zone', 
-    field: 'zone',
-    width: 150,
-    sortable: true,
-    filter: 'agTextColumnFilter'
-  },
-  { 
-    headerName: 'Sous-zone', 
-    field: 'sousZone',
-    flex: 1,
-    sortable: true,
-    filter: 'agTextColumnFilter'
+// Fermer le dropdown quand on clique ailleurs
+function handleClickOutside(event: Event) {
+  const target = event.target as HTMLElement;
+  if (!target.closest('.relative')) {
+    showJobDropdown.value = false;
   }
+}
+document.addEventListener('click', handleClickOutside);
+
+// Colonnes pour la table des emplacements disponibles
+const availableLocationColumns: ColDef[] = [
+  { headerName: 'Emplacement', field: 'emplacement', flex: 2, sortable: true, filter: 'agTextColumnFilter' },
+  { headerName: 'Zone',        field: 'zone',        width: 150, sortable: true, filter: 'agTextColumnFilter' },
+  { headerName: 'Sous-zone',   field: 'sousZone',    flex: 1, sortable: true, filter: 'agTextColumnFilter' }
 ];
 
-// Colonnes pour la table des jobs avec expansion (sans colonne emplacement)
+// Colonnes pour la table des jobs (sans "Actions")
 const jobColumns: ColDef[] = [
   { 
-    headerName: 'Référence Job', 
+    headerName: 'Job', 
     field: 'reference',
     flex: 2,
     sortable: true,
     cellStyle: (params: CellClassParams) => {
       if (!params.data) return undefined;
       if (params.data.isChild) {
-        return { 
-          paddingLeft: '35px', 
-          color: '#666',
-          fontStyle: 'italic'
-        };
+        return { paddingLeft: '35px', fontStyle: 'italic' };
       }
       return undefined;
     },
     cellRenderer: (params) => {
       if (!params.data) return '';
-      
       if (!params.data.isChild) {
         const jobId = params.data.jobId;
         const isExpanded = expandedJobIds.value.has(jobId);
-        const locationsCount = params.data.locationsCount || 0;
-        const isJobValidated = params.data.isValidated;
-        
         const arrow = isExpanded 
-          ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-               <polyline points="6 9 12 15 18 9"/>
-             </svg>`
-          : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-               <polyline points="9 6 15 12 9 18"/>
-             </svg>`;
-        
-        const statusBadge = isJobValidated 
-          ? '<span style="margin-left: 8px; padding: 2px 6px; background-color: #10b981; color: white; font-size: 10px; border-radius: 4px;">✓ VALIDÉ</span>'
-          : '<span style="margin-left: 8px; padding: 2px 6px; background-color: #f59e0b; color: white; font-size: 10px; border-radius: 4px;">⏳ EN ATTENTE</span>';
-        
-        return `
-          <div style="display: flex; align-items: center; width: 100%;">
-            <span 
-              style="cursor: pointer; display: inline-flex; align-items: center; width: 20px; margin-right: 8px;" 
-              data-expand-toggle="${jobId}"
-            >
-              ${arrow}
-            </span>
-            <span><strong>${params.value ?? ''}</strong></span>
-          </div>`;
+          ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`
+          : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>`;
+        return `<div style="display: flex; align-items: center; width: 100%;">
+                  <span style="cursor: pointer; display: inline-flex; align-items: center; width: 20px; margin-right: 8px;" data-expand-toggle="${jobId}">${arrow}</span>
+                  <span>${params.value ?? ''}</span>
+                </div>`;
       }
-      
-      // Ligne enfant : affichage de l'emplacement complet
-      return `<span style="color: #666;">${params.value ?? ''}</span>`;
+      return `${params.value ?? ''}`;
     },
     onCellClicked: (params) => {
       const target = params.event?.target as HTMLElement;
       const expandToggle = target.closest('[data-expand-toggle]');
-      
       if (expandToggle && !params.data?.isChild) {
-        const jobId = expandToggle.getAttribute('data-expand-toggle');
-        if (jobId) {
-          if (expandedJobIds.value.has(jobId)) {
-            expandedJobIds.value.delete(jobId);
-          } else {
-            expandedJobIds.value.add(jobId);
-          }
-        }
+        const jobId = expandToggle.getAttribute('data-expand-toggle')!;
+        if (expandedJobIds.value.has(jobId)) expandedJobIds.value.delete(jobId);
+        else expandedJobIds.value.add(jobId);
       }
+    }
+  },
+  { 
+    headerName: 'Statut', 
+    field: 'status',
+    width: 120,
+    sortable: true,
+    cellRenderer: (params) => {
+      if (!params.data || params.data.isChild) return '';
+      return params.data.isValidated
+        ? '<span style="padding:2px 8px;background-color:#10b981;color:white;font-size:11px;border-radius:12px;font-weight:500;">✓ VALIDÉ</span>'
+        : '<span style="padding:2px 8px;background-color:#f59e0b;color:white;font-size:11px;border-radius:12px;font-weight:500;">EN ATTENTE</span>';
     }
   },
   { 
@@ -235,17 +240,7 @@ const jobColumns: ColDef[] = [
     width: 120,
     sortable: true,
     filter: 'agTextColumnFilter',
-    cellStyle: (params: CellClassParams) => {
-      if (!params.data) return undefined;
-      if (params.data.isChild) {
-        return { color: '#666' };
-      }
-      return undefined;
-    },
-    valueFormatter: (params: ValueFormatterParams) => {
-      if (!params.data) return '';
-      return params.data.isChild ? (params.value as string ?? '') : '';
-    }
+    valueFormatter: (params: ValueFormatterParams) => params.data?.isChild ? (params.value as string) : ''
   },
   { 
     headerName: 'Sous-zone', 
@@ -253,113 +248,144 @@ const jobColumns: ColDef[] = [
     width: 150,
     sortable: true,
     filter: 'agSelectColumnFilter',
-    cellStyle: (params: CellClassParams) => {
-      if (!params.data) return undefined;
-      if (params.data.isChild) {
-        return { color: '#666' };
-      }
-      return undefined;
-    },
-    valueFormatter: (params: ValueFormatterParams) => {
-      if (!params.data) return '';
-      return params.data.isChild ? (params.value as string ?? '') : '';
-    }
+    valueFormatter: (params: ValueFormatterParams) => params.data?.isChild ? (params.value as string) : ''
   }
 ];
 
 // Données formatées pour les tables
-const availableLocationData = computed(() => {
-  return availableLocations.value.map(location => {
-    const parsed = parseLocation(location);
-    return {
-      id: location,
-      zone: parsed.zone,
-      sousZone: parsed.sousZone,
-      emplacement: parsed.emplacement
-    };
-  });
-});
+const availableLocationData = computed(() =>
+  availableLocations.value.map(location => {
+    const [emplacement, zone, sousZone] = location.split(' | ');
+    return { id: location, emplacement, zone, sousZone };
+  })
+);
 
-// Données des jobs avec support pour l'expansion
 const displayJobsData = computed(() => {
-  const result: any[] = [];
-  
-  jobs.value.forEach((job, jobIndex) => {
-    // Ligne parent (job principal)
-    result.push({
+  const rows: any[] = [];
+  jobs.value.forEach((job, idx) => {
+    rows.push({
       id: job.id,
       jobId: job.id,
-      reference: job.reference || `JOB-${job.id.substring(0, 8)}`,
-      locationsCount: job.locations.length,
+      reference: job.reference,
       isChild: false,
-      parentId: null,
-      isValidated: job.isValidated || false
+      isValidated: job.isValidated,
+      status: job.isValidated ? 'VALIDÉ' : 'EN ATTENTE'
     });
-
-    // Si ce job est étendu, ajouter ses emplacements
     if (expandedJobIds.value.has(job.id)) {
-      job.locations.forEach((location, locationIndex) => {
-        const parsed = parseLocation(location);
-        result.push({
-          id: `${job.id}-${locationIndex}`,
-          jobId: job.id,
-          reference: parsed.emplacement,
-          zone: parsed.zone,
-          sousZone: parsed.sousZone,
-          isChild: true,
-          parentId: job.id
-        });
+      job.locations.forEach((loc, i) => {
+        const [emp, z, sz] = loc.split(' | ');
+        rows.push({ id: `${job.id}-${i}`, jobId: job.id, reference: emp, zone: z, sousZone: sz, isChild: true });
       });
     }
   });
-  
-  return result;
+  return rows;
 });
 
-// Fonction utilitaire pour parser les emplacements
-function parseLocation(location: string) {
-  const [emplacement, zone, sousZone] = location.split(' | ');
-  return { emplacement, zone, sousZone };
+// Sélections
+function onAvailableSelectionChanged(rows: TableRow[]) {
+  selectedAvailable.value = rows.map(r => String(r.id));
+}
+function onJobSelectionChanged(rows: TableRow[]) {
+  selectedJobs.value = rows.filter(r => !r.isChild).map(r => String(r.id));
 }
 
-// Gestion des sélections avec typage correct
-function onAvailableSelectionChanged(selectedRows: TableRow[]) {
-  selectedAvailable.value = selectedRows.map(row => String(row.id));
-}
-
-function onJobSelectionChanged(selectedRows: TableRow[]) {
-  // Filtrer pour ne garder que les lignes parent (jobs principaux)
-  const parentRows = selectedRows.filter(row => !row.isChild);
-  selectedJobs.value = parentRows.map(row => String(row.id));
-}
-
-// Create a single job with all selected locations
+// Création / ajout
 async function createSingleJob() {
-  if (selectedAvailable.value.length === 0) {
-    await alertService.error({
-      text: 'Attention ! Vous n\'avez rien sélectionné.'
-    });
+  if (!selectedAvailable.value.length) {
+    return alertService.error({ text: 'Veuillez sélectionner au moins un emplacement.' });
+  }
+  const ok = await createJob(selectedAvailable.value);
+  if (ok) { availableLocationsKey.value++; jobsKey.value++; }
+}
+
+// Fonction avec confirmation pour retourner les jobs sélectionnés
+async function onReturnSelectedJobs() {
+  if (!selectedJobs.value.length) {
+    return alertService.error({ text: 'Veuillez sélectionner au moins un job.' });
+  }
+  
+  const result = await alertService.confirm({ 
+    text: `Êtes-vous sûr de vouloir retourner ${selectedJobs.value.length} job(s) ? Cette action ne peut pas être annulée.` 
+  });
+  
+  if (!result.isConfirmed) {
+    return alertService.info({ text: 'Retour annulé.' });
+  }
+  
+  try {
+    await returnSelectedJobs();
+    availableLocationsKey.value++;
+    jobsKey.value++;
+  } catch (error) {
+    console.error('Erreur lors du retour des jobs:', error);
+    await alertService.error({ text: 'Erreur lors du retour des jobs.' });
+  }
+}
+
+// Fonction avec confirmation pour ajouter à un job existant
+async function onSelectJobForLocation(jobId: string) {
+  if (!selectedAvailable.value.length) {
+    await alertService.error({ text: 'Veuillez sélectionner au moins un emplacement.' });
+    showJobDropdown.value = false;
     return;
   }
   
-  await createJob(selectedAvailable.value);
+  // Trouver le job sélectionné pour afficher sa référence
+  const selectedJob = availableJobsForLocation.value.find(job => job.id === jobId);
+  const jobReference = selectedJob ? selectedJob.reference : 'ce job';
+  
+  const result = await alertService.confirm({ 
+    text: `Ajouter ${selectedAvailable.value.length} emplacement(s) au job "${jobReference}" ?` 
+  });
+  
+  if (!result.isConfirmed) {
+    showJobDropdown.value = false;
+    return alertService.info({ text: 'Ajout annulé.' });
+  }
+  
+  try {
+    await addLocationToJob(jobId, selectedAvailable.value);
+    availableLocationsKey.value++;
+    jobsKey.value++;
+  } catch (error) {
+    console.error('Erreur lors de l\'ajout au job:', error);
+    await alertService.error({ text: 'Erreur lors de l\'ajout au job.' });
+  } finally {
+    showJobDropdown.value = false;
+  }
+}
+
+// Fonction de validation en masse (déjà avec confirmation)
+async function onBulkValidate() {
+  if (!selectedJobs.value.length) {
+    return alertService.error({ text: 'Veuillez sélectionner au moins un job.' });
+  }
+  
+  const result = await alertService.confirm({ text: `Valider ${selectedJobs.value.length} job(s) ?` });
+  if (!result.isConfirmed) {
+    return alertService.info({ text: 'Validation annulée.' });
+  }
+  
+  isSubmitting.value = true;
+  try {
+    selectedJobs.value.forEach(id => {
+      const j = jobs.value.find(x => x.id === id);
+      if (j && !j.isValidated) {
+        j.isValidated = true;
+        j.validatedAt = new Date().toISOString();
+      }
+    });
+    await alertService.success({ text: `${selectedJobs.value.length} job(s) validé(s).` });
+    selectedJobs.value = [];
+  } catch {
+    await alertService.error({ text: 'Erreur durant la validation en masse.' });
+  } finally {
+    isSubmitting.value = false;
+    jobsKey.value++;
+  }
 }
 </script>
 
 <style scoped>
-/* Style pour les lignes enfants */
-:deep(.ag-row[data-is-child="true"]) {
-  background-color: #f8f9fa;
-}
 
-:deep(.ag-row[data-is-child="true"] .ag-cell) {
-  border-bottom: 1px solid #e9ecef;
-}
-
-@media (max-width: 1024px) {
-  .grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-}
 </style>

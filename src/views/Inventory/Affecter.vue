@@ -58,6 +58,7 @@
           :fields="resourceFields"
           @submit="handleResourceSubmit"
           submitLabel="Affecter"
+          :columns="1"
         />
       </div>
     </Modal>
@@ -77,7 +78,7 @@ import { useAffecter } from '@/composables/useAffecter';
 import { alertService } from '@/services/alertService';
 
 const router = useRouter();
-const { rows, affecterAuPremierComptage, affecterAuDeuxiemeComptage, affecterRessources, cancelAffecter, PLANNING_DATE } = useAffecter();
+const { rows, affecterAuPremierComptage, affecterAuDeuxiemeComptage, affecterRessources, PLANNING_DATE } = useAffecter();
 
 // --- Interface explicite pour chaque ligne (row) de la grille ---
 interface RowNode extends TableRow {
@@ -175,7 +176,7 @@ const columns: ColDef[] = [
         const hasLocations = params.data.locations && params.data.locations.length > 0;
         
         if (!hasLocations) {
-          return `<span style="font-weight: 500;">${params.value ?? ''}</span>`;
+          return `<span>${params.value ?? ''}</span>`;
         }
         
         const arrow = isExpanded 
@@ -195,13 +196,13 @@ const columns: ColDef[] = [
             >
               ${arrow}
             </span>
-            <span style="font-weight: 500;">${params.value ?? ''}</span>
+            <span>${params.value ?? ''}</span>
             <span style="color: #666; font-size: 11px; margin-left: 8px;">(${params.data.locations.length} emplacements)</span>
           </div>`;
       }
       
       // Ligne enfant : affichage avec style différent
-      return `<span style="color: #666; font-size: 12px;">${params.value ?? ''}</span>`;
+      return `${params.value ?? ''}`;
     },
     onCellClicked: (params) => {
       const target = params.event?.target as HTMLElement;
@@ -453,6 +454,7 @@ const resourceFields: FieldConfig[] = [
       { label: 'Imprimante Mobile Zebra ZQ630', value: 'Imprimante Mobile Zebra ZQ630' },
       { label: 'Tablette Samsung Galaxy Tab A8', value: 'Tablette Samsung Galaxy Tab A8' },
       { label: 'Pistolet de Comptage Datalogic', value: 'Pistolet de Comptage Datalogic' }
+      
     ],
     multiple: true,
     searchable: true,

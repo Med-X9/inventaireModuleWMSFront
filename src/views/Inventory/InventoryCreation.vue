@@ -70,33 +70,40 @@
           <!-- Options -->
           <div class="flex flex-wrap gap-1">
             <template v-if="hasActiveOptions(comptage)">
-              <!-- Options "en vrague" -->
-              <span v-if="comptage.inputMethod === 'saisie'" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
-                Saisie quantité
-              </span>
-              <span v-if="comptage.inputMethod === 'scanner'" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
-                Scanner unitaire
-              </span>
-              <span v-if="comptage.guideQuantite" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
-                Guide quantité
-              </span>
+              <!-- Options "en vrac" uniquement -->
+              <template v-if="comptage.mode === 'en vrac'">
+                <span v-if="comptage.inputMethod === 'saisie' || comptage.saisieQuantite" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                  Saisie quantité
+                </span>
+                <span v-if="comptage.inputMethod === 'scanner' || comptage.scannerUnitaire" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                  Scanner unitaire
+                </span>
+                <span v-if="comptage.guideQuantite" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                  Guide quantité
+                </span>
+              </template>
               
-              <!-- Options "en vrague par article" -->
-              <span v-if="comptage.isVariante" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
-                Is variante
-              </span>
-              <span v-if="comptage.guideArticle" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
-                Guide Article
-              </span>
-              <span v-if="comptage.dlc" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
-                DLC
-              </span>
-              <span v-if="comptage.guideArticleQuantite" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
-                Guide Article quantité
-              </span>
-              <span v-if="comptage.numeroLot" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
-                Numéro de lot
-              </span>
+              <!-- Options "par article" uniquement -->
+              <template v-if="comptage.mode === 'par article'">
+                <span v-if="comptage.guideQuantite" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                  Guide quantité
+                </span>
+                <span v-if="comptage.isVariante" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                  Variante
+                </span>
+                <span v-if="comptage.guideArticle" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                  Guide Article
+                </span>
+                <span v-if="comptage.dlc" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                  DLC
+                </span>
+                <span v-if="comptage.numeroSerie" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                  Numéro de série
+                </span>
+                <span v-if="comptage.numeroLot" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                  Numéro de lot
+                </span>
+              </template>
             </template>
             <span v-else class="text-gray-400 italic text-xs">Aucune option</span>
           </div>
@@ -124,7 +131,7 @@
           v-model:modelValue="state.step1Data"
           :fields="formFields"
           hide-submit
-          :columns="2"
+          :columns="4"
         />
       </template>
 
@@ -210,9 +217,12 @@ const formFields: FieldConfig[] = [
     key: 'magasin',
     label: 'Magasin',
     type: 'multi-select-with-dates',
-    options: ['Magasin A', 'Magasin B', 'Magasin C', 'Magasin D'],
+    options: ['Magasin A', 'Magasin B', 'Magasin C', 'Magasin D', 'Magasin e', 'Magasin f', 'Magasin g', 'Magasin h'],
     searchable: true,
     clearable: true,
+    props: { placeholder: 'Sélectionnez des magasins' },
+    itemKey: 'magasin', // Specify the key name for magasin items
+    dateLabel: 'Dates par magasin', // Custom label for the dates section
     validators: [{ key: 'magasin', ...selectRequired('Veuillez sélectionner au moins un magasin') }]
   }
 ];
@@ -225,18 +235,25 @@ const wizardSteps = [
   { title: 'comptage 3/3' }
 ];
 
-/* Fonction helper pour vérifier si un comptage a des options actives */
+/* Fonction helper pour vérifier si un comptage a des options actives selon son mode */
 function hasActiveOptions(comptage: ComptageConfig): boolean {
-  return comptage.inputMethod !== '' ||
-         comptage.guideQuantite ||
-         comptage.isVariante ||
-         comptage.guideArticle ||
-         comptage.dlc ||
-         comptage.guideArticleQuantite ||
-         comptage.numeroLot ||
-         // Legacy support
-         comptage.saisieQuantite ||
-         comptage.scannerUnitaire;
+  if (comptage.mode === 'en vrac') {
+    return comptage.inputMethod !== '' ||
+           comptage.guideQuantite ||
+           comptage.saisieQuantite ||
+           comptage.scannerUnitaire;
+  } else if (comptage.mode === 'par article') {
+    return comptage.guideQuantite ||
+           comptage.isVariante ||
+           comptage.guideArticle ||
+           comptage.dlc ||
+           comptage.numeroSerie ||
+           comptage.numeroLot;
+  } else if (comptage.mode === 'image de stock') {
+    return false; // Aucune option pour "image de stock"
+  }
+  
+  return false;
 }
 
 /* Valider et sauvegarder avant chaque changement d'étape */
