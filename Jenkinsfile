@@ -24,6 +24,15 @@ pipeline {
             }
         }
 
+        stage('Prepare nginx.conf') {
+            steps {
+                sh '''
+                cp /tmp/backend/nginx/nginx.conf /tmp/frontend/nginx.conf
+                '''
+            }
+        }
+
+
         stage('Build Frontend Docker Image') {
             steps {
                 dir('/tmp/frontend') {
