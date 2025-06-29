@@ -813,7 +813,9 @@
             Swal.fire({
                 title: 'Saved succesfully',
                 padding: '2em',
-                customClass: 'sweet-alerts',
+                customClass: {
+                    popup: 'sweet-alerts'
+                },
             });
         } else if (type === 2) {
             Swal.fire({
@@ -821,7 +823,9 @@
                 title: 'Good job!',
                 text: 'You clicked the!',
                 padding: '2em',
-                customClass: 'sweet-alerts',
+                customClass: {
+                    popup: 'sweet-alerts'
+                },
             });
         } else if (type === 3) {
             const ipAPI = 'https://api.ipify.org?format=json';
@@ -830,7 +834,9 @@
                 confirmButtonText: 'Show my public IP',
                 text: 'Your public IP will be received ' + 'via AJAX request',
                 showLoaderOnConfirm: true,
-                customClass: 'sweet-alerts',
+                customClass: {
+                    popup: 'sweet-alerts'
+                },
                 preConfirm: () => {
                     return fetch(ipAPI)
                         .then((response) => {
@@ -839,14 +845,18 @@
                         .then((data) => {
                             Swal.fire({
                                 title: data.ip,
-                                customClass: 'sweet-alerts',
+                                customClass: {
+                                    popup: 'sweet-alerts'
+                                },
                             });
                         })
                         .catch(() => {
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Unable to get your public IP',
-                                customClass: 'sweet-alerts',
+                                customClass: {
+                                    popup: 'sweet-alerts'
+                                },
                             });
                         });
                 },
@@ -857,7 +867,9 @@
                 title: 'The Internet?',
                 text: 'That thing is still around?',
                 padding: '2em',
-                customClass: 'sweet-alerts',
+                customClass: {
+                    popup: 'sweet-alerts'
+                },
             });
         } else if (type === 5) {
             const steps = ['1', '2', '3'];
@@ -871,7 +883,9 @@
                 },
                 validationMessage: 'This field is required',
                 padding: '2em',
-                customClass: 'sweet-alerts',
+                customClass: {
+                    popup: 'sweet-alerts'
+                },
             });
 
             const values: any = [];
@@ -884,7 +898,9 @@
                     inputValue: values[currentStep] || '',
                     showCancelButton: currentStep > 0,
                     currentProgressStep: currentStep,
-                    customClass: 'sweet-alerts',
+                    customClass: {
+                        popup: 'sweet-alerts'
+                    },
                 });
                 if (result.value) {
                     values[currentStep] = result.value;
@@ -902,7 +918,9 @@
                     padding: '2em',
                     html: 'Your answers: <pre>' + JSON.stringify(values) + '</pre>',
                     confirmButtonText: 'Lovely!',
-                    customClass: 'sweet-alerts',
+                    customClass: {
+                        popup: 'sweet-alerts'
+                    },
                 });
             }
         } else if (type === 6) {
@@ -915,7 +933,9 @@
                     popup: 'animate__animated animate__fadeOutUp',
                 },
                 padding: '2em',
-                customClass: 'sweet-alerts',
+                customClass: {
+                    popup: 'sweet-alerts'
+                },
             });
         } else if (type === 7) {
             let timerInterval;
@@ -925,7 +945,9 @@
                 html: 'I will close in <b></b> milliseconds.',
                 timer: 2000,
                 timerProgressBar: true,
-                customClass: 'sweet-alerts',
+                customClass: {
+                    popup: 'sweet-alerts'
+                },
                 didOpen: () => {
                     Swal.showLoading();
                     const b: any = Swal.getHtmlContainer()?.querySelector('b');
@@ -950,7 +972,9 @@
                 imageHeight: 'auto',
                 imageAlt: 'Custom image',
                 padding: '2em',
-                customClass: 'sweet-alerts',
+                customClass: {
+                    popup: 'sweet-alerts'
+                },
             });
         } else if (type === 9) {
             Swal.fire({
@@ -965,7 +989,9 @@
                 cancelButtonText: '<i class="flaticon-cancel-circle"></i> Cancel',
                 cancelButtonAriaLabel: 'Thumbs down',
                 padding: '2em',
-                customClass: 'sweet-alerts',
+                customClass: {
+                    popup: 'sweet-alerts'
+                },
             });
         } else if (type === 10) {
             Swal.fire({
@@ -975,10 +1001,12 @@
                 showCancelButton: true,
                 confirmButtonText: 'Delete',
                 padding: '2em',
-                customClass: 'sweet-alerts',
+                customClass: {
+                    popup: 'sweet-alerts'
+                },
             }).then((result) => {
                 if (result.value) {
-                    Swal.fire({ title: 'Deleted!', text: 'Your file has been deleted.', icon: 'success', customClass: 'sweet-alerts' });
+                    Swal.fire({ title: 'Deleted!', text: 'Your file has been deleted.', icon: 'success', customClass: { popup: 'sweet-alerts' } });
                 }
             });
         } else if (type === 11) {
@@ -1013,7 +1041,9 @@
                 title: 'Custom width, padding, background.',
                 width: 600,
                 padding: '7em',
-                customClass: 'background-modal sweet-alerts',
+                customClass: {
+                    popup: 'background-modal sweet-alerts'
+                },
                 background: '#fff url(' + '/assets/images/sweet-bg.jpg' + ') no-repeat 100% 100%',
             });
         } else if (type === 13) {
@@ -1023,7 +1053,9 @@
                 text: 'Something went wrong!',
                 footer: '<a href="javascript:;">Why do I have this issue?</a>',
                 padding: '2em',
-                customClass: 'sweet-alerts',
+                customClass: {
+                    popup: 'sweet-alerts'
+                },
             });
         } else if (type === 14) {
             Swal.fire({
@@ -1033,7 +1065,9 @@
                 showCancelButton: true,
                 showCloseButton: true,
                 padding: '2em',
-                customClass: 'sweet-alerts',
+                customClass: {
+                    popup: 'sweet-alerts'
+                },
             });
         } else if (type === 15) {
             const toast = Swal.mixin({
