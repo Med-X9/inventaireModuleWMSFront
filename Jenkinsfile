@@ -87,6 +87,7 @@ pipeline {
                             echo 'Starting new container...'
                             docker run -d \\
                                 --name $CONTAINER_NAME \\
+                                --network inventaire-net \\
                                 -p $HOST_PORT:$CONTAINER_PORT \\
                                 --restart unless-stopped \\
                                 $FRONTEND_IMAGE:$IMAGE_TAG
