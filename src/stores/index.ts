@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import i18n from '@/i18n';
 import appSetting from '@/app-setting';
 import type { ViewModeType } from '@/interfaces/planningManagement';
+
 export const useAppStore = defineStore('app', {
     state: () => ({
         viewMode: (localStorage.getItem('viewMode') as ViewModeType) || 'table',
@@ -149,3 +150,8 @@ export const useAppStore = defineStore('app', {
     },
     getters: {},
 });
+
+// Export des stores
+export { useInventoryStore } from './inventory';
+export { useCountStore } from './count';
+export { useAppStore as useGlobalStore } from './app';

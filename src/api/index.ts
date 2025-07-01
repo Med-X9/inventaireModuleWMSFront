@@ -1,6 +1,6 @@
 // API base configuration
 const API = {
-  baseURL: 'http://44.212.20.168',
+  baseURL: 'http://192.168.11.116:8000',
   endpoints: {
     auth: {
       login: '/api/auth/login/',

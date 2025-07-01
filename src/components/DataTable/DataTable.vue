@@ -35,15 +35,15 @@
             >
               Réinitialiser
             </button>
-            
+
             <!-- Amélioration: Utiliser Tooltip pour chaque colonne -->
             <div
               v-for="col in columns"
               :key="col.field!"
               class="mb-2"
             >
-              <Tooltip 
-                :text="(col as DataTableColumn).description" 
+              <Tooltip
+                :text="(col as DataTableColumn).description"
                 position="right"
                 :delay="300"
               >
@@ -174,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, computed, defineEmits, ref, onMounted, onUnmounted } from 'vue';
+import { defineProps, computed, defineEmits, ref, onMounted, onUnmounted, watch } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
 import type { PropType } from 'vue';
 import type { ColDef, CsvExportParams, SelectionChangedEvent } from 'ag-grid-community';
@@ -205,6 +205,20 @@ const props = defineProps({
   rowSelection: { type: Boolean, default: false },
   exportTitle: { type: String, default: 'Export de données' },
 });
+
+// Debug: Afficher les props reçues
+console.log('🔍 DataTable - Props reçues:', {
+  columns: props.columns,
+  rowDataProp: props.rowDataProp,
+  rowDataPropLength: props.rowDataProp?.length || 0,
+  actions: props.actions
+});
+
+// Watcher pour surveiller les changements de rowDataProp
+watch(() => props.rowDataProp, (newRowData) => {
+  console.log('📊 DataTable - rowDataProp mis à jour:', newRowData);
+  console.log('📈 Nombre de lignes:', newRowData?.length || 0);
+}, { immediate: true });
 
 const themeStore = useAppStore();
 const themeLight = themeQuartz.withPart(colorSchemeLightWarm);
@@ -440,8 +454,8 @@ onUnmounted(() => {
 
 /* Force les tooltips AG Grid à être toujours sombres */
 :deep(.ag-tooltip) {
-  background-color:  var(--color-primary)!important; 
-  border: 1px solid var(--color-primary) !important; 
+  background-color:  var(--color-primary)!important;
+  border: 1px solid var(--color-primary) !important;
   color: white !important;
   font-size: 12px !important;
   padding: 4px 8px !important;
@@ -450,9 +464,9 @@ onUnmounted(() => {
 }
 /* Style global pour tous les tooltips AG Grid dans l'application */
 .dark :deep(.ag-tooltip) {
-  background-color: #374151 !important; 
+  background-color: #374151 !important;
   color: white !important;
-  border: 1px solid #4B5563 !important; 
+  border: 1px solid #4B5563 !important;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
   font-size: 12px !important;
   padding: 4px 8px !important;
@@ -466,7 +480,7 @@ onUnmounted(() => {
     height: 1.2rem;
     padding: 0.15rem;
   }
-  
+
   .auto-height-grid :deep(.ag-paging-panel),
   .auto-height-grid :deep(.ag-pagination-button),
   .auto-height-grid :deep(.ag-page-size-panel),
