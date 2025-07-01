@@ -193,13 +193,13 @@ const columns: ColDef[] = [
 
 const actions: ActionConfig[] = [
   {
-    label: 'Lancer Job',
+    label: 'Transfer',
     handler: async (row) => {
       if (!row.isChild) {
         try {
           const result = await alertService.confirm({
-            title: 'Lancer le job',
-            text: `Voulez-vous vraiment lancer le job "${row.name}" ?`
+            title: 'Transfer le job',
+            text: `Voulez-vous vraiment Transfer le job "${row.name}" ?`
           });
           
           if (result.isConfirmed) {

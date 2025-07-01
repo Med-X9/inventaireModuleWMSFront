@@ -1,20 +1,15 @@
 <template>
     <div class="datatable panel py-7">
-        <DataTable
-            :columns="columns"
-            :rowDataProp="inventories"
-            :actions="actions"
-            :pagination="true"
-            :enableRowSelection="true"
-            :enableFiltering="true"
-            storageKey="inventory_management_table"
-        >
+
+        <DataTable :columns="columns" :rowDataProp="inventories" :actions="actions" :pagination="true"
+            :enableRowSelection="true" :enableFiltering="true" storageKey="inventory_management_table" inlineEditing>
             <template #table-actions>
                 <div class="flex items-center flex-wrap gap-2">
-                    <button class="btn btn-primary p-2 px-3 mb-4 btn-sm" @click="redirectToAdd">
-                        <icon-plus class="w-5 h-5 ltr:mr-1 rtl:ml-1" />
-                        créer
+                    <button class=" btn btn-primary p-2 px-4 mb-4 btn-sm " @click="redirectToAdd">
+                        <icon-plus class="w-5 h-5 ltr:mr-2 rtl:ml-2 " />
+                        Créer
                     </button>
+
                 </div>
             </template>
         </DataTable>

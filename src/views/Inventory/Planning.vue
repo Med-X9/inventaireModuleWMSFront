@@ -29,6 +29,7 @@
                 <button
                   @click="onBulkValidate"
                   class="btn btn-primary flex items-center"
+                  :disabled="isSubmitting"
                 >
                   <span v-if="!isSubmitting">
                     ✓ Valider ({{ selectedJobs.length }})
@@ -52,7 +53,7 @@
           
           <div v-else class="text-center py-12 border-dashed border-2 rounded-lg">
             <p class="text-gray-500">Aucun job créé</p>
-            <p class="text-sm text-gray-400 mt-2">Sélectionnez des emplacements dans la table ci-dessus pour créer un job</p>
+            <p class="text-sm text-gray-400 mt-2">Sélectionnez des emplacements dans la table ci-dessous pour créer un job</p>
           </div>
         </div>
         <!-- Table 2: Emplacements disponibles -->
@@ -78,32 +79,19 @@
                     Créer Job ({{ selectedAvailable.length }})
                   </button>
 
-                  <!-- Dropdown pour ajouter à un job existant -->
-                  <div class="relative" v-if="availableJobsForLocation.length > 0">
-                    <button
-                      @click="showJobDropdown = !showJobDropdown"
-                      class="btn btn-primary"
-                    >
-                      Ajouter à Job ({{ selectedAvailable.length }})
-                      <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                      </svg>
-                    </button>
-                    
-                    <!-- Dropdown menu -->
-                    <div v-if="showJobDropdown" class="absolute z-50 mt-1 w-64 bg-white border border-gray-300 rounded-md shadow-lg">
-                      <div class="py-1 max-h-60 overflow-y-auto">
-                        <button
-                          v-for="job in availableJobsForLocation"
-                          :key="job.id"
-                          @click="onSelectJobForLocation(job.id)"
-                          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center justify-between"
-                        >
-                          <span>{{ job.reference }}</span>
-                          <span class="text-xs text-gray-500">({{ job.locations.length }} emp.)</span>
-                        </button>
-                      </div>
-                    </div>
+                  <!-- SelectField pour ajouter à un job existant avec v-if et key pour forcer re-render -->
+                  <div v-if="hasAvailableJobs" class="min-w-[250px]">
+                    <SelectField
+                      :key="`job-select-${selectFieldKey}`"
+                      v-model="selectedJobId"
+                      :options="jobSelectOptions"
+                      :searchable="true"
+                      :clearable="true"
+                      :compact="true"
+                      placeholder="Ajouter à un job existant..."
+                      no-options-text="Aucun job trouvé"
+                      @update:modelValue="onSelectJobForLocation"
+                    />
                   </div>
                 </div>
               </div>
@@ -114,27 +102,30 @@
                   v-model="locationSearchQuery"
                   type="search"
                   placeholder="Rechercher un emplacement..."
-                  class="w-60 md:w-70 max-w-xl px-2 py-2 border rounded-lg outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-10"
+                  class="w-60 md:w-70 max-w-xl px-3 py-2 border rounded-lg outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-10 transition-all duration-200"
                 />
               </div>
             </template>
           </DataTable>
         </div>
-
-       
       </section>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { usePlanning } from '@/composables/usePlanning';
 import { alertService } from '@/services/alertService';
 import DataTable from '@/components/DataTable/DataTable.vue';
+import SelectField from '@/components/Form/SelectField.vue';
+
+// Import CSS pour vue-select
+import '@/assets/css/select2.css';
 
 import type { ColDef, CellClassParams, ValueFormatterParams } from 'ag-grid-community';
 import type { TableRow } from '@/interfaces/dataTable';
+import type { SelectOption } from '@/interfaces/form';
 
 const {
   jobs,
@@ -143,10 +134,10 @@ const {
   locationSearchQuery,
   selectedAvailable,
   selectedJobs,
-  showJobDropdown,
   isSubmitting,
   createJob,
   addLocationToJob,
+  removeLocationFromJob,
   returnSelectedJobs,
   validateJob
 } = usePlanning();
@@ -154,6 +145,31 @@ const {
 // Keys pour forcer le re-render des tables
 const availableLocationsKey = ref(0);
 const jobsKey = ref(0);
+const selectFieldKey = ref(0);
+
+// État pour le SelectField
+const selectedJobId = ref<string | null>(null);
+
+// Computed pour vérifier si on a des jobs disponibles
+const hasAvailableJobs = computed(() => {
+  return availableJobsForLocation.value && availableJobsForLocation.value.length > 0;
+});
+
+// Options pour le SelectField avec protection renforcée
+const jobSelectOptions = computed((): SelectOption[] => {
+  console.log('Computing jobSelectOptions:', availableJobsForLocation.value);
+  
+  if (!availableJobsForLocation.value || !Array.isArray(availableJobsForLocation.value)) {
+    return [];
+  }
+  
+  return availableJobsForLocation.value
+    .filter(job => job && typeof job === 'object' && job.id && job.reference)
+    .map(job => ({
+      value: job.id,
+      label: job.reference || `Job ${job.id}`
+    }));
+});
 
 // Watcher pour mettre à jour les keys quand les données changent
 watch(() => availableLocations.value.length, () => {
@@ -164,17 +180,67 @@ watch(() => jobs.value.length, () => {
   jobsKey.value++;
 }, { immediate: true });
 
+// Watcher principal pour le SelectField - surveille les changements dans availableJobsForLocation
+watch(
+  () => availableJobsForLocation.value,
+  (newJobs, oldJobs) => {
+    console.log('availableJobsForLocation changed:', { newJobs, oldJobs });
+    
+    // Force le re-render du SelectField
+    nextTick(() => {
+      selectFieldKey.value++;
+      // Reset la sélection quand les options changent
+      selectedJobId.value = null;
+    });
+  },
+  { 
+    immediate: true,
+    deep: true
+  }
+);
+
+// Watcher supplémentaire pour surveiller les changements dans les options calculées
+watch(
+  () => jobSelectOptions.value,
+  (newOptions, oldOptions) => {
+    console.log('jobSelectOptions changed:', { newOptions, oldOptions });
+    
+    // Si les options ont vraiment changé, forcer le re-render
+    if (JSON.stringify(newOptions) !== JSON.stringify(oldOptions)) {
+      nextTick(() => {
+        selectFieldKey.value++;
+        selectedJobId.value = null;
+      });
+    }
+  },
+  { 
+    immediate: true,
+    deep: true
+  }
+);
+
 // État pour gérer l'expansion des jobs
 const expandedJobIds = ref<Set<string>>(new Set());
 
-// Fermer le dropdown quand on clique ailleurs
-function handleClickOutside(event: Event) {
-  const target = event.target as HTMLElement;
-  if (!target.closest('.relative')) {
-    showJobDropdown.value = false;
+// Fonction pour supprimer un emplacement d'un job - SIMPLIFIÉE
+async function onRemoveLocationFromJob(jobId: string, location: string) {
+  console.log('Tentative de suppression:', { jobId, location });
+  
+  try {
+    const success = await removeLocationFromJob(jobId, location);
+    if (success) {
+      // Forcer le re-render des tables
+      availableLocationsKey.value++;
+      jobsKey.value++;
+      
+      // Réinitialiser les sélections
+      selectedJobs.value = [];
+    }
+  } catch (error) {
+    console.error('Erreur lors de la suppression:', error);
+    await alertService.error({ text: 'Erreur lors de la suppression de l\'emplacement.' });
   }
 }
-document.addEventListener('click', handleClickOutside);
 
 // Colonnes pour la table des emplacements disponibles
 const availableLocationColumns: ColDef[] = [
@@ -183,7 +249,7 @@ const availableLocationColumns: ColDef[] = [
   { headerName: 'Sous-zone',   field: 'sousZone',    flex: 1, sortable: true, filter: 'agTextColumnFilter' }
 ];
 
-// Colonnes pour la table des jobs (sans "Actions")
+// Colonnes pour la table des jobs avec colonne Actions améliorée
 const jobColumns: ColDef[] = [
   { 
     headerName: 'Job', 
@@ -230,8 +296,8 @@ const jobColumns: ColDef[] = [
     cellRenderer: (params) => {
       if (!params.data || params.data.isChild) return '';
       return params.data.isValidated
-        ? '<span style="padding:2px 8px;background-color:#10b981;color:white;font-size:11px;border-radius:12px;font-weight:500;">✓ VALIDÉ</span>'
-        : '<span style="padding:2px 8px;background-color:#f59e0b;color:white;font-size:11px;border-radius:12px;font-weight:500;">EN ATTENTE</span>';
+        ? '<span class="bg-success-light text-success rounded-lg px-2 py-1 text-xs font-medium">VALIDÉ</span>'
+        : '<span class="bg-warning-light text-warning rounded-lg px-2 py-1 text-xs font-medium">EN ATTENTE</span>';
     }
   },
   { 
@@ -249,6 +315,68 @@ const jobColumns: ColDef[] = [
     sortable: true,
     filter: 'agSelectColumnFilter',
     valueFormatter: (params: ValueFormatterParams) => params.data?.isChild ? (params.value as string) : ''
+  },
+  {
+    headerName: 'Actions',
+    field: 'actions',
+    width: 100,
+    sortable: false,
+    cellStyle: { 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center',
+      height: '100%'
+    },
+    cellRenderer: (params) => {
+      if (!params.data || !params.data.isChild) return '';
+      
+      const location = params.data.originalLocation;
+      
+      return `
+        <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
+          <button 
+            type="button"
+            class="delete-location-btn"
+            data-job-id="${params.data.jobId}"
+            data-location="${location}"
+            style="
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              width: 28px;
+              height: 28px;
+              border: none;
+              background: none;
+              cursor: pointer;
+              border-radius: 6px;
+              transition: all 0.2s ease;
+            "
+            title="Supprimer cet emplacement du job"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="m19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+          </button>
+        </div>
+      `;
+    },
+    onCellClicked: async (params) => {
+      const target = params.event?.target as HTMLElement;
+      const deleteButton = target.closest('.delete-location-btn') as HTMLButtonElement;
+      
+      if (deleteButton) {
+        const jobId = deleteButton.getAttribute('data-job-id');
+        const location = deleteButton.getAttribute('data-location');
+        
+        if (jobId && location) {
+          console.log('Button clicked:', { jobId, location });
+          await onRemoveLocationFromJob(jobId, location);
+        }
+      }
+    }
   }
 ];
 
@@ -274,7 +402,16 @@ const displayJobsData = computed(() => {
     if (expandedJobIds.value.has(job.id)) {
       job.locations.forEach((loc, i) => {
         const [emp, z, sz] = loc.split(' | ');
-        rows.push({ id: `${job.id}-${i}`, jobId: job.id, reference: emp, zone: z, sousZone: sz, isChild: true });
+        rows.push({ 
+          id: `${job.id}-${i}`, 
+          jobId: job.id, 
+          reference: emp, 
+          zone: z, 
+          sousZone: sz, 
+          isChild: true,
+          originalLocation: loc,
+          parentJobValidated: job.isValidated
+        });
       });
     }
   });
@@ -289,21 +426,17 @@ function onJobSelectionChanged(rows: TableRow[]) {
   selectedJobs.value = rows.filter(r => !r.isChild).map(r => String(r.id));
 }
 
-// Création / ajout
+// Création / ajout - PLUS DE VÉRIFICATION ICI, elle se fait dans la fonction
 async function createSingleJob() {
-  if (!selectedAvailable.value.length) {
-    return alertService.error({ text: 'Veuillez sélectionner au moins un emplacement.' });
-  }
   const ok = await createJob(selectedAvailable.value);
-  if (ok) { availableLocationsKey.value++; jobsKey.value++; }
+  if (ok) { 
+    availableLocationsKey.value++; 
+    jobsKey.value++; 
+  }
 }
 
-// Fonction avec confirmation pour retourner les jobs sélectionnés
+// Fonction SANS vérification préalable - elle se fait dans returnSelectedJobs
 async function onReturnSelectedJobs() {
-  if (!selectedJobs.value.length) {
-    return alertService.error({ text: 'Veuillez sélectionner au moins un job.' });
-  }
-  
   const result = await alertService.confirm({ 
     text: `Êtes-vous sûr de vouloir retourner ${selectedJobs.value.length} job(s) ? Cette action ne peut pas être annulée.` 
   });
@@ -322,24 +455,46 @@ async function onReturnSelectedJobs() {
   }
 }
 
-// Fonction avec confirmation pour ajouter à un job existant
-async function onSelectJobForLocation(jobId: string) {
-  if (!selectedAvailable.value.length) {
-    await alertService.error({ text: 'Veuillez sélectionner au moins un emplacement.' });
-    showJobDropdown.value = false;
+// Function for adding locations to jobs with improved validation and debugging
+async function onSelectJobForLocation(value: string | number | string[] | number[] | null) {
+  console.log('onSelectJobForLocation called with:', value);
+  console.log('Available jobs:', availableJobsForLocation.value);
+  console.log('Selected available:', selectedAvailable.value);
+  
+  // Enhanced type guard with additional validation
+  if (!value || typeof value !== 'string' || value.trim() === '') {
+    console.log('Invalid value, resetting selection');
+    selectedJobId.value = null;
     return;
   }
   
-  // Trouver le job sélectionné pour afficher sa référence
-  const selectedJob = availableJobsForLocation.value.find(job => job.id === jobId);
-  const jobReference = selectedJob ? selectedJob.reference : 'ce job';
+  const jobId = value as string;
+  
+  // Validate that the job still exists in the available jobs
+  const selectedJob = availableJobsForLocation.value?.find(job => job && job.id === jobId);
+  if (!selectedJob) {
+    console.error('Selected job not found:', jobId);
+    await alertService.error({ text: 'Job sélectionné introuvable. Veuillez actualiser la page.' });
+    selectedJobId.value = null;
+    return;
+  }
+  
+  const jobReference = selectedJob.reference || `Job ${selectedJob.id}`;
+  
+  // Validate that we have locations selected
+  if (!selectedAvailable.value || selectedAvailable.value.length === 0) {
+    await alertService.warning({ text: 'Veuillez sélectionner des emplacements avant d\'ajouter au job.' });
+    selectedJobId.value = null;
+    return;
+  }
   
   const result = await alertService.confirm({ 
-    text: `Ajouter ${selectedAvailable.value.length} emplacement(s) au job "${jobReference}" ?` 
+    title: 'Confirmer l\'ajout',
+    text: `Ajouter ${selectedAvailable.value.length} emplacement(s) au job "${jobReference}" ?`
   });
   
   if (!result.isConfirmed) {
-    showJobDropdown.value = false;
+    selectedJobId.value = null; // Reset the select
     return alertService.info({ text: 'Ajout annulé.' });
   }
   
@@ -347,21 +502,25 @@ async function onSelectJobForLocation(jobId: string) {
     await addLocationToJob(jobId, selectedAvailable.value);
     availableLocationsKey.value++;
     jobsKey.value++;
+    selectedJobId.value = null; // Reset the select
+    
+    await alertService.success({ 
+      text: `${selectedAvailable.value.length} emplacement(s) ajouté(s) au job "${jobReference}" avec succès.` 
+    });
   } catch (error) {
     console.error('Erreur lors de l\'ajout au job:', error);
     await alertService.error({ text: 'Erreur lors de l\'ajout au job.' });
-  } finally {
-    showJobDropdown.value = false;
+    selectedJobId.value = null; // Reset the select on error
   }
 }
 
-// Fonction de validation en masse (déjà avec confirmation)
+// Fonction SANS vérification préalable - elle se fait dans la fonction
 async function onBulkValidate() {
-  if (!selectedJobs.value.length) {
-    return alertService.error({ text: 'Veuillez sélectionner au moins un job.' });
-  }
+  const result = await alertService.confirm({ 
+    title: 'Confirmer la validation',
+    text: `Valider ${selectedJobs.value.length} job(s) ?`
+  });
   
-  const result = await alertService.confirm({ text: `Valider ${selectedJobs.value.length} job(s) ?` });
   if (!result.isConfirmed) {
     return alertService.info({ text: 'Validation annulée.' });
   }
@@ -375,7 +534,7 @@ async function onBulkValidate() {
         j.validatedAt = new Date().toISOString();
       }
     });
-    await alertService.success({ text: `${selectedJobs.value.length} job(s) validé(s).` });
+    await alertService.success({ text: `${selectedJobs.value.length} job(s) validé(s) avec succès.` });
     selectedJobs.value = [];
   } catch {
     await alertService.error({ text: 'Erreur durant la validation en masse.' });
@@ -387,5 +546,26 @@ async function onBulkValidate() {
 </script>
 
 <style scoped>
+.delete-location-btn:hover {
+  background-color: #fee2e2 !important;
+  transform: scale(1.05);
+}
+
+.delete-location-btn:active {
+  transform: scale(0.95);
+}
+
+/* Enhanced search input styling */
+input[type="search"] {
+  background-image: none;
+}
+
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-results-button,
+input[type="search"]::-webkit-search-results-decoration {
+  display: none;
+}
+
 
 </style>

@@ -1,258 +1,14 @@
-<template>
-  <div class="container mx-auto">
-    <h2 v-if="title" class="text-xl font-bold text-gray-800 mb-6">
-      {{ title }}
-    </h2>
-
-    <form @submit.prevent="handleSubmit">
-      <!-- Champs non-checkbox avec grille -->
-      <div :class="formGridClass">
-         <div
-    v-for="(field, idx) in nonCheckboxFields"
-    :key="field.key"
-    :class="['w-full', getFieldClass(field, idx)]"
-  >
-          
-          <!-- Label -->
-          <label
-            :for="field.key"
-            class="block text-sm font-medium dark:text-gray-400 text-gray-700 mb-2"
-          >
-            <span class="flex items-center gap-1">
-              {{ field.label }}
-              <span v-if="field.validators?.some(v => v.fn === required().fn)" class="text-red-500">*</span>
-              <Tooltip v-if="field.tooltip" :text="field.tooltip" position="top" :delay="300">
-                <svg
-                  class="w-3 h-3 text-gray-400 cursor-help"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-              </Tooltip>
-            </span>
-          </label>
-
-        <!-- Text/email input -->
-        <input
-          v-if="['text', 'email'].includes(field.type)"
-          :id="field.key"
-          v-model="formData[field.key]"
-          :type="field.type"
-          v-bind="field.props"
-          class="w-full form-input px-4 py-3 bg-white border border-gray-200 rounded-lg transition-all duration-200 focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-10 outline-none"
-          :class="{'border-red-500': errors[field.key] && submitted}"
-        />
-
-        <!-- Date Picker -->
-        <flat-pickr
-          v-else-if="field.type === 'date'"
-          v-model="formData[field.key] as DateOption"
-          :config="getDateConfig(field)"
-          placeholder="jj/mm/aaaa"
-          class="w-full form-input px-4 py-3 bg-white border border-gray-200 rounded-lg transition-all duration-200 focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-10 outline-none"
-          :class="{'border-red-500': errors[field.key] && submitted}"
-        />
-
-        <!-- Radio Group (for saisie/scanner selection) -->
-        <div v-else-if="field.type === 'radio-group'" class="flex gap-6">
-          <div v-for="opt in formattedOptions(field.radioOptions || field.options)" :key="opt.value" class="flex items-center space-x-2">
-            <input
-              :id="`${field.key}-${opt.value}`"
-              v-model="formData[field.key]"
-              :value="opt.value"
-              type="radio"
-              :name="field.key"
-              class="form-radio text-primary focus:ring-primary"
-              :disabled="getFieldDisabled(field)"
-            />
-            <label :for="`${field.key}-${opt.value}`" class="text-sm mt-2 text-gray-700 dark:text-white flex items-center gap-1">
-              {{ opt.label }}
-              <Tooltip v-if="opt.tooltip" :text="opt.tooltip" position="top" :delay="300">
-                <svg
-                  class="w-3 h-3 text-gray-400 cursor-help"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-              </Tooltip>
-            </label>
-          </div>
-        </div>
-
-        <!-- Radio -->
-        <div v-else-if="field.type === 'radio'" class="space-y-2">
-          <div v-for="opt in formattedOptions(field.options)" :key="opt.value" class="flex items-center space-x-2">
-            <input
-              :id="`${field.key}-${opt.value}`"
-              v-model="formData[field.key]"
-              :value="opt.value"
-              type="radio"
-              name="default_radio"
-              class="form-radio"
-              :disabled="getFieldDisabled(field)"
-            />
-            <label :for="`${field.key}-${opt.value}`" class="text-sm mt-2 text-gray-700 dark:text-white">
-              {{ opt.label }}
-            </label>
-          </div>
-        </div>
-
-        <!-- Multi-select with dates - Generic version -->
-        <div v-else-if="field.type === 'multi-select-with-dates'" class="space-y-3">
-          <v-select
-            :id="field.key"
-            v-model="selectedItems[field.key]"
-            :options="getFilteredOptions(field)"
-            multiple
-            :searchable="field.searchable ?? true"
-            :clearable="field.clearable ?? true"
-            :placeholder="field.props?.placeholder || 'Sélectionnez des éléments'"
-            label="label"
-            :reduce="(opt: SelectOption) => opt?.value || opt"
-            class="vs-custom dark"
-            :class="{'vs-error': errors[field.key] && submitted}"
-            @update:modelValue="onItemSelectionChange(field)"
-          />
-          
-          <!-- Date inputs for selected items -->
-          <div v-if="selectedItems[field.key]?.length > 0" class="space-y-2 mt-3 py-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {{ field.dateLabel || 'Dates par élément' }} :
-            </h4>
-           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div v-for="itemValue in selectedItems[field.key]" :key="itemValue" class="flex flex-col gap-3">
-              
-              <span class="text-sm text-gray-600 dark:text-gray-400 min-w-[120px]">
-                {{ getLabelForItem(field, itemValue) }} :
-              </span>
-              <flat-pickr
-                v-model="itemDates[field.key][itemValue]"
-                :config="getDateConfig(field)"
-                placeholder="jj/mm/aaaa"
-                class="w-full form-input px-4 py-3 bg-white border border-gray-200 rounded-lg transition-all duration-200 focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-10 outline-none"
-                @input="updateItemsWithDates(field)"
-              />
-            </div>
-          </div></div>
-        </div>
-
-        <!-- Select avec tooltips pour les options -->
-        <div v-else-if="field.type === 'select'">
-          <v-select
-            :id="field.key"
-            v-model="formData[field.key]"
-            :options="getSelectOptions(field)"
-            :multiple="field.multiple || false"
-            :searchable="field.searchable ?? false"
-            :clearable="field.clearable ?? true"
-            :placeholder="(field.props?.placeholder as string) || '-- Sélectionner --'"
-            label="label"
-            :reduce="(opt: SelectOption) => opt?.value || opt"
-            class="vs-custom vs-multi dark"
-            :class="{'vs-error': errors[field.key] && submitted}"
-          >
-            <!-- Template pour afficher les options avec tooltips -->
-            <template #option="{ label, tooltip }">
-              <div class="flex items-center justify-between w-full">
-                <span>{{ label }}</span>
-                <Tooltip v-if="tooltip" :text="tooltip" position="left" :delay="300">
-                  <svg
-                    class="w-3 h-3 text-gray-400 cursor-help ml-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                </Tooltip>
-              </div>
-            </template>
-          </v-select>
-        </div>
-
-        <!-- Button-group -->
-        <div v-else-if="field.type === 'button-group'">
-          <div class="flex flex-wrap max-h-[200px] overflow-x-auto gap-2 dark:border-dark-border dark:bg-[#0e1726] bg-white p-4 rounded-lg border border-gray-200">
-            <button
-              v-for="opt in formattedOptions(field.options)"
-              :key="opt.value"
-              type="button"
-              @click="toggleValue(field.key, opt.value)"
-              :class="[
-                'px-4 py-2 rounded-lg text-sm transition-all duration-200',
-                isSelected(field.key, opt.value)
-                  ? 'bg-primary text-white '
-                  : 'bg-gray-50 dark:text-white-dark dark:bg-[#121e32] text-gray-700 hover:bg-gray-100'
-              ]"
-            >
-              {{ opt.label }}
-            </button>
-          </div>
-        </div>
-
-          <!-- Error message -->
-          <p v-if="errors[field.key] && submitted" class="text-sm text-red-500 mt-1">
-            {{ errors[field.key] }}
-          </p>
-        </div>
-      </div>
-
-      <!-- Section des checkboxes séparée -->
-      <div v-if="checkboxFields.length > 0" class="mt-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div v-for="field in checkboxFields" :key="field.key" class="flex items-center space-x-2">
-            <input
-              :id="field.key"
-              v-model="formData[field.key]"
-              type="checkbox"
-              class="form-checkbox text-primary focus:ring-primary"
-              :disabled="getFieldDisabled(field)"
-            />
-            <label :for="field.key" class="text-sm mt-2 text-gray-700 dark:text-white flex items-center gap-1">
-              {{ field.label }}
-              <Tooltip v-if="field.tooltip" :text="field.tooltip" position="top" :delay="300">
-                <svg
-                  class="w-3 h-3 text-gray-400 cursor-help"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-              </Tooltip>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <!-- Submit button -->
-      <div v-if="!hideSubmit" class="col-span-full mt-3 flex justify-end">
-        <SubmitButton
-          type="button"
-          :loading="isSubmitting"
-          :disabled="submitted && !isValid"
-          :label="submitLabel || 'Enregistrer'"
-          @click="handleSubmit"
-        />
-      </div>
-    </form>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { reactive, computed, watch, ref } from 'vue';
-import vSelect from 'vue-select';
 import SubmitButton from './SubmitButton.vue';
+import SelectField from './SelectField.vue';
 import Tooltip from '@/components/Tooltip.vue';
 import type { FieldConfig, SelectOption } from '@/interfaces/form';
 import { required } from '@/utils/validate';
 import flatPickr from 'vue-flatpickr-component';
 import 'flatpickr/dist/flatpickr.css';
 import 'vue-select/dist/vue-select.css';
+import '@/assets/css/select2.css';
 import { French } from 'flatpickr/dist/l10n/fr.js';
 import type { Options, DateOption } from 'flatpickr/dist/types/options';
 
@@ -300,6 +56,21 @@ const getDateConfig = (field: FieldConfig): Options => {
 // Helper function to safely get disabled state
 const getFieldDisabled = (field: FieldConfig): boolean => {
   return Boolean(field.props?.disabled);
+};
+
+// Helper function to safely cast formData values for SelectField
+const getSelectFieldValue = (key: string): string | number | string[] | number[] | null => {
+  const value = formData[key];
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value as string[] | number[];
+  }
+  return null;
 };
 
 const emit = defineEmits<{
@@ -367,12 +138,17 @@ watch(() => props.modelValue, () => {
   initMultiSelectWithDates();
 }, { immediate: true });
 
-// Update item selection
-const onItemSelectionChange = (field: FieldConfig) => {
-  const selected = selectedItems[field.key] || [];
+// Update item selection for multi-select with dates
+const onItemSelectionChange = (field: FieldConfig, value: string | number | string[] | number[] | null) => {
+  if (Array.isArray(value)) {
+    selectedItems[field.key] = value as string[];
+  } else {
+    selectedItems[field.key] = [];
+  }
+  
   // Remove dates for unselected items
   Object.keys(itemDates[field.key] || {}).forEach(itemValue => {
-    if (!selected.includes(itemValue)) {
+    if (!selectedItems[field.key].includes(itemValue)) {
       delete itemDates[field.key][itemValue];
     }
   });
@@ -543,11 +319,234 @@ function validate(): boolean {
 defineExpose({ validate });
 </script>
 
-<style>
-.vs-error {
-  --vs-border-color: #ef4444;
-}
+<template>
+  <div class="container mx-auto">
+    <h2 v-if="title" class="text-xl font-bold text-gray-800 mb-6">
+      {{ title }}
+    </h2>
 
+    <form @submit.prevent="handleSubmit">
+      <!-- Champs non-checkbox avec grille -->
+      <div :class="formGridClass">
+         <div
+    v-for="(field, idx) in nonCheckboxFields"
+    :key="field.key"
+    :class="['w-full', getFieldClass(field, idx)]"
+  >
+          
+          <!-- Label -->
+          <label
+            :for="field.key"
+            class="block text-sm font-medium dark:text-gray-400 text-gray-700 mb-2"
+          >
+            <span class="flex items-center gap-1">
+              {{ field.label }}
+              <span v-if="field.validators?.some(v => v.fn === required().fn)" class="text-red-500">*</span>
+              <Tooltip v-if="field.tooltip" :text="field.tooltip" position="top" :delay="300">
+                <svg
+                  class="w-3 h-3 text-gray-400 cursor-help"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </Tooltip>
+            </span>
+          </label>
+
+        <!-- Text/email input -->
+        <input
+          v-if="['text', 'email'].includes(field.type)"
+          :id="field.key"
+          v-model="formData[field.key]"
+          :type="field.type"
+          v-bind="field.props"
+          class="w-full form-input px-4 py-3 bg-white border border-gray-200 rounded-lg transition-all duration-200 focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-10 outline-none"
+          :class="{'border-red-500': errors[field.key] && submitted}"
+        />
+
+        <!-- Date Picker -->
+        <flat-pickr
+          v-else-if="field.type === 'date'"
+          v-model="formData[field.key] as DateOption"
+          :config="getDateConfig(field)"
+          placeholder="jj/mm/aaaa"
+          class="w-full form-input px-4 py-3 bg-white border border-gray-200 rounded-lg transition-all duration-200 focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-10 outline-none"
+          :class="{'border-red-500': errors[field.key] && submitted}"
+        />
+
+        <!-- Radio Group (for saisie/scanner selection) -->
+        <div v-else-if="field.type === 'radio-group'" class="flex gap-6">
+          <div v-for="opt in formattedOptions(field.radioOptions || field.options)" :key="opt.value" class="flex items-center space-x-2">
+            <input
+              :id="`${field.key}-${opt.value}`"
+              v-model="formData[field.key]"
+              :value="opt.value"
+              type="radio"
+              :name="field.key"
+              class="form-radio text-primary focus:ring-primary"
+              :disabled="getFieldDisabled(field)"
+            />
+            <label :for="`${field.key}-${opt.value}`" class="text-sm mt-2 text-gray-700 dark:text-white flex items-center gap-1">
+              {{ opt.label }}
+              <Tooltip v-if="opt.tooltip" :text="opt.tooltip" position="top" :delay="300">
+                <svg
+                  class="w-3 h-3 text-gray-400 cursor-help"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </Tooltip>
+            </label>
+          </div>
+        </div>
+
+        <!-- Radio -->
+        <div v-else-if="field.type === 'radio'" class="space-y-2">
+          <div v-for="opt in formattedOptions(field.options)" :key="opt.value" class="flex items-center space-x-2">
+            <input
+              :id="`${field.key}-${opt.value}`"
+              v-model="formData[field.key]"
+              :value="opt.value"
+              type="radio"
+              name="default_radio"
+              class="form-radio"
+              :disabled="getFieldDisabled(field)"
+            />
+            <label :for="`${field.key}-${opt.value}`" class="text-sm mt-2 text-gray-700 dark:text-white">
+              {{ opt.label }}
+            </label>
+          </div>
+        </div>
+
+        <!-- Multi-select with dates - Using SelectField -->
+        <div v-else-if="field.type === 'multi-select-with-dates'" class="space-y-3">
+          <SelectField
+            :model-value="selectedItems[field.key]"
+            :options="getFilteredOptions(field)"
+            :multiple="true"
+            :searchable="field.searchable ?? true"
+            :clearable="field.clearable ?? true"
+            :placeholder="(field.props?.placeholder as string) || 'Sélectionnez des éléments'"
+            :disabled="getFieldDisabled(field)"
+            :error="!!(errors[field.key] && submitted)"
+            :error-message="errors[field.key] || undefined"
+            @update:modelValue="(value) => onItemSelectionChange(field, value)"
+          />
+          
+          <!-- Date inputs for selected items -->
+          <div v-if="selectedItems[field.key]?.length > 0" class="space-y-2 mt-3 py-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              {{ field.dateLabel || 'Dates par élément' }} :
+            </h4>
+           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div v-for="itemValue in selectedItems[field.key]" :key="itemValue" class="flex flex-col gap-3">
+              
+              <span class="text-sm text-gray-600 dark:text-gray-400 min-w-[120px]">
+                {{ getLabelForItem(field, itemValue) }} :
+              </span>
+              <flat-pickr
+                v-model="itemDates[field.key][itemValue]"
+                :config="getDateConfig(field)"
+                placeholder="jj/mm/aaaa"
+                class="w-full form-input px-4 py-3 bg-white border border-gray-200 rounded-lg transition-all duration-200 focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-10 outline-none"
+                @input="updateItemsWithDates(field)"
+              />
+            </div>
+          </div></div>
+        </div>
+
+        <!-- Select avec SelectField component -->
+        <SelectField
+          v-else-if="field.type === 'select'"
+          :model-value="getSelectFieldValue(field.key)"
+          :options="getSelectOptions(field)"
+          :multiple="field.multiple || false"
+          :searchable="field.searchable ?? false"
+          :clearable="field.clearable ?? true"
+          :placeholder="(field.props?.placeholder as string) || '-- Sélectionner --'"
+          :disabled="getFieldDisabled(field)"
+          :error="!!(errors[field.key] && submitted)"
+          :error-message="errors[field.key] || undefined"
+          @update:modelValue="(value) => {
+            formData[field.key] = value;
+            onFieldChange(field);
+          }"
+        />
+
+        <!-- Button-group -->
+        <div v-else-if="field.type === 'button-group'">
+          <div class="flex flex-wrap max-h-[200px] overflow-x-auto gap-2 dark:border-dark-border dark:bg-[#0e1726] bg-white p-4 rounded-lg border border-gray-200">
+            <button
+              v-for="opt in formattedOptions(field.options)"
+              :key="opt.value"
+              type="button"
+              @click="toggleValue(field.key, opt.value)"
+              :class="[
+                'px-4 py-2 rounded-lg text-sm transition-all duration-200',
+                isSelected(field.key, opt.value)
+                  ? 'bg-primary text-white '
+                  : 'bg-gray-50 dark:text-white-dark dark:bg-[#121e32] text-gray-700 hover:bg-gray-100'
+              ]"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+        </div>
+
+          <!-- Error message pour les autres types de champs -->
+          <p v-if="errors[field.key] && submitted && !['select', 'multi-select-with-dates'].includes(field.type)" class="text-sm text-red-500 mt-1">
+            {{ errors[field.key] }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Section des checkboxes séparée -->
+      <div v-if="checkboxFields.length > 0" class="mt-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div v-for="field in checkboxFields" :key="field.key" class="flex items-center space-x-2">
+            <input
+              :id="field.key"
+              v-model="formData[field.key]"
+              type="checkbox"
+              class="form-checkbox text-primary focus:ring-primary"
+              :disabled="getFieldDisabled(field)"
+            />
+            <label :for="field.key" class="text-sm mt-2 text-gray-700 dark:text-white flex items-center gap-1">
+              {{ field.label }}
+              <Tooltip v-if="field.tooltip" :text="field.tooltip" position="top" :delay="300">
+                <svg
+                  class="w-3 h-3 text-gray-400 cursor-help"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </Tooltip>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit button -->
+      <div v-if="!hideSubmit" class="col-span-full mt-3 flex justify-end">
+        <SubmitButton
+          type="button"
+          :loading="isSubmitting"
+          :disabled="submitted && !isValid"
+          :label="submitLabel || 'Enregistrer'"
+          @click="handleSubmit"
+        />
+      </div>
+    </form>
+  </div>
+</template>
+
+<style>
 /* Vue-select styles */
 :root {
   --vs-colors-lightest: rgba(60, 60, 60, 0.26);
@@ -711,9 +710,6 @@ defineExpose({ validate });
   border-color: var(--color-primary);
   background: var(--color-primary);
 }
-
-
-
 
 .flatpickr-day:hover {
   background: #f1f5f9;

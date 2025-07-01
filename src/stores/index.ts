@@ -20,7 +20,7 @@ export const useAppStore = defineStore('app', {
         animation: '',
         navbar: 'navbar-sticky',
         locale: 'fr',
-        sidebar: false,
+        sidebar: true,
         languageList: [
             { code: 'zh', name: 'Chinese' },
             { code: 'da', name: 'Danish' },
@@ -138,9 +138,9 @@ export const useAppStore = defineStore('app', {
                 this.toggleRTL('ltr');
             }
         },
-        toggleSidebar(state: boolean = false) {
-            this.sidebar = !this.sidebar;
-        },
+       toggleSidebar() {
+    this.sidebar = !this.sidebar;
+},
         toggleMainLoader(state: boolean = false) {
             this.isShowMainLoader = true;
             setTimeout(() => {

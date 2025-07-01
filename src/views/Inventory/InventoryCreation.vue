@@ -9,55 +9,59 @@
     <!-- Récapitulatif - Version améliorée et compacte -->
     <div class="w-full mb-1 p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
       <!-- En-tête avec icône -->
-      <div class="flex items-center gap-2 px-1.5 mb-2">
+      <div class="flex items-center gap-2  mb-2.5">
         <svg class="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
         </svg>
-        <span class="font-medium text-xs text-primary">Récapitulatif</span>
+        <span class="font-semibold text-xs text-primary">Récapitulatif</span>
       </div>
       
       <!-- Informations principales en grille responsive -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-1.5 px-2 text-xs">
-        <!-- Libellé -->
-        <div class="flex items-center gap-1.5">
-          <span class="text-gray-500 dark:text-gray-400 font-medium">Libellé:</span>
-          <span class="text-gray-900 dark:text-white font-semibold">{{ state.step1Data.libelle || 'Sans libellé' }}</span>
+      <div class="grid grid-cols-1 gap-3 w-full p-2 mb-1.5 text-md border border-gray-200 dark:border-gray-600 rounded-md dark:bg-gray-700">
+        <!-- Première ligne : Libellé, Date, Type, Compte -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+          <!-- Libellé -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-gray-500 dark:text-gray-400">Libellé:</span>
+            <span class="text-gray-900 dark:text-white-light ">{{ state.step1Data.libelle || 'Sans libellé' }}</span>
+          </div>
+          
+          <!-- Date -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-gray-500 dark:text-gray-400">Date:</span>
+            <span class="text-gray-900 dark:text-white-light">{{ state.step1Data.date || 'Date non définie' }}</span>
+          </div>
+          
+          <!-- Type -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-gray-500 dark:text-gray-400">Type:</span>
+            <span class="text-gray-900 dark:text-white-light">{{ state.step1Data.type || 'Type' }}</span>
+          </div>
+          
+          <!-- Compte -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-gray-500 dark:text-gray-400">Compte:</span>
+            <span class="text-gray-900 dark:text-white-light">{{ state.step1Data.compte || 'Compte non défini' }}</span>
+          </div>
         </div>
         
-        <!-- Date -->
-        <div class="flex items-center gap-1.5">
-          <span class="text-gray-500 dark:text-gray-400 font-medium">Date:</span>
-          <span class="text-gray-900 dark:text-white font-semibold">{{ state.step1Data.date || 'Date non définie' }}</span>
-        </div>
-        
-        <!-- Type -->
-        <div class="flex items-center gap-1.5">
-          <span class="text-gray-500 dark:text-gray-400 font-medium">Type:</span>
-          <span class="text-gray-900 dark:text-white font-semibold">{{ state.step1Data.type || 'Type' }}</span>
-        </div>
-        
-        <!-- Compte -->
-        <div class="flex items-center gap-1.5">
-          <span class="text-gray-500 dark:text-gray-400 font-medium">Compte:</span>
-          <span class="text-gray-900 dark:text-white font-semibold">{{ state.step1Data.compte || 'Compte non défini' }}</span>
-        </div>
-        
-        <!-- Magasin -->
-        <div class="flex items-center gap-1.5">
-          <span class="text-gray-500 dark:text-gray-400 font-medium">Magasin:</span>
-          <span class="text-gray-900 dark:text-white font-semibold">
-            <template v-if="Array.isArray(state.step1Data.magasin) && state.step1Data.magasin.length">
-              {{ state.step1Data.magasin.slice(0, 2).map(m => typeof m === 'string' ? m : m.magasin).join(', ') }}
-              <span v-if="state.step1Data.magasin.length > 2" class="text-gray-500 ml-1">(+{{ state.step1Data.magasin.length - 2 }})</span>
-            </template>
-            <template v-else>Non défini</template>
-          </span>
+        <!-- Deuxième ligne : Magasins -->
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-gray-500 dark:text-gray-400 flex-shrink-0">Magasin:</span>
+          <template v-if="Array.isArray(state.step1Data.magasin) && state.step1Data.magasin.length">
+            <span class="text-gray-900 dark:text-white-light">
+              {{ state.step1Data.magasin.map(m => typeof m === 'string' ? m : m.magasin).join(', ') }}
+            </span>
+          </template>
+          <template v-else>
+            <span class="text-gray-900 dark:text-white-light">Non défini</span>
+          </template>
         </div>
       </div>
       
       <!-- Comptages en grille responsive -->
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-2">
-        <div v-for="(comptage, index) in state.comptages" :key="index" class="px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700">
+        <div v-for="(comptage, index) in state.comptages" :key="index" class="px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-md  dark:bg-gray-700">
           <!-- En-tête du comptage -->
           <div class="flex items-center justify-between mb-1">
             <span class="text-xs text-gray-900 dark:text-white">Comptage {{ index + 1 }}</span>
@@ -72,35 +76,35 @@
             <template v-if="hasActiveOptions(comptage)">
               <!-- Options "en vrac" uniquement -->
               <template v-if="comptage.mode === 'en vrac'">
-                <span v-if="comptage.inputMethod === 'saisie' || comptage.saisieQuantite" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.inputMethod === 'saisie' || comptage.saisieQuantite" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Saisie quantité
                 </span>
-                <span v-if="comptage.inputMethod === 'scanner' || comptage.scannerUnitaire" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.inputMethod === 'scanner' || comptage.scannerUnitaire" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Scanner unitaire
                 </span>
-                <span v-if="comptage.guideQuantite" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.guideQuantite" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Guide quantité
                 </span>
               </template>
               
               <!-- Options "par article" uniquement -->
               <template v-if="comptage.mode === 'par article'">
-                <span v-if="comptage.guideQuantite" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.guideQuantite" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Guide quantité
                 </span>
-                <span v-if="comptage.isVariante" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.isVariante" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Variante
                 </span>
-                <span v-if="comptage.guideArticle" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.guideArticle" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Guide Article
                 </span>
-                <span v-if="comptage.dlc" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.dlc" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   DLC
                 </span>
-                <span v-if="comptage.numeroSerie" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.numeroSerie" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Numéro de série
                 </span>
-                <span v-if="comptage.numeroLot" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.numeroLot" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Numéro de lot
                 </span>
               </template>
@@ -160,7 +164,7 @@ import FormBuilder from '@/components/Form/FormBuilder.vue';
 import ParamStep from '@/components/ParamStep.vue';
 import type { FieldConfig } from '@/interfaces/form';
 import type { ComptageConfig } from '@/interfaces/inventoryCreation';
-import { required, date, selectRequired } from '@/utils/validate';
+import { required, date, magasinWithDatesRequired } from '@/utils/validate';
 import { alertService } from '@/services/alertService';
 
 const router = useRouter();
@@ -201,7 +205,7 @@ const formFields: FieldConfig[] = [
     label: 'Type',
     type: 'select',
     options: ['Inventaire Général'],
-    props: { disabled: true },
+    props: { disabled: false },
     searchable: false,
     clearable: false,
     validators: []
@@ -211,7 +215,7 @@ const formFields: FieldConfig[] = [
     label: 'Compte',
     type: 'select',
     options: ['Compte 1', 'Compte 2'],
-    validators: [{ key: 'compte', ...selectRequired('Veuillez sélectionner un compte') }]
+    validators: [{ key: 'compte', ...required('Veuillez sélectionner un compte') }]
   },
   {
     key: 'magasin',
@@ -222,8 +226,8 @@ const formFields: FieldConfig[] = [
     clearable: true,
     props: { placeholder: 'Sélectionnez des magasins' },
     itemKey: 'magasin', // Specify the key name for magasin items
-    dateLabel: 'Dates par magasin', // Custom label for the dates section
-    validators: [{ key: 'magasin', ...selectRequired('Veuillez sélectionner au moins un magasin') }]
+    dateLabel: 'Dates par magasin', // Label indicating dates are required
+    validators: [{ key: 'magasin', ...magasinWithDatesRequired('Veuillez sélectionner au moins un magasin et renseigner toutes les dates') }]
   }
 ];
 

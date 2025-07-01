@@ -32,3 +32,33 @@ export interface ItemWithDate {
   [key: string]: string; // Generic item key with string value
   date: string;
 }
+
+// SelectField component interfaces
+export interface SelectFieldProps {
+  modelValue?: string | number | string[] | number[] | null;
+  options: Array<string | SelectOption>;
+  label?: string;
+  placeholder?: string;
+  searchable?: boolean;
+  clearable?: boolean;
+  multiple?: boolean;
+  disabled?: boolean;
+  loading?: boolean;
+  required?: boolean;
+  error?: boolean;
+  errorMessage?: string;
+  helperText?: string;
+  tooltip?: string;
+  compact?: boolean;
+  enhancedSearch?: boolean;
+  searchPlaceholder?: string;
+  noOptionsText?: string;
+  customFilter?: (option: SelectOption, label: string, search: string) => boolean;
+}
+
+export interface SelectFieldEmits {
+  'update:modelValue': [value: string | number | string[] | number[] | null];
+  'search': [query: string];
+  'open': [];
+  'close': [];
+}

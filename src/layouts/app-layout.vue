@@ -48,7 +48,7 @@
         </div>
 
         <!-- BEGIN APP SETTING LAUNCHER -->
-        <Setting />
+     
         <!-- END APP SETTING LAUNCHER -->
 
         <div class="main-container text-black dark:text-white-dark min-h-screen" :class="[store.navbar]">

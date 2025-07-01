@@ -19,7 +19,7 @@
       "allowJs": true,
       "types": ["vite/client", "vue"]  // Retirer ou ajuster les types si nécessaire
     },
-    "include": ["src/**/*.js", "src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
+    "include": ["src/**/*.js", "src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx","src/**/*.vue"],
     "references": [
       {
         "path": "./tsconfig.node.json"

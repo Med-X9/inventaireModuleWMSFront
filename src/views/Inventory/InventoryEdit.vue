@@ -20,7 +20,7 @@
       </div>
       
       <!-- Informations principales en grille responsive -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-1.5 px-2 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 w-full p-2 mb-1.5  text-md border border-gray-200 dark:border-gray-600 rounded-md  dark:bg-gray-700">
         <!-- Libellé -->
         <div class="flex items-center gap-1.5">
           <span class="text-gray-500 dark:text-gray-400 font-medium">Libellé:</span>
@@ -75,35 +75,35 @@
             <template v-if="hasActiveOptions(comptage)">
               <!-- Options "en vrac" uniquement -->
               <template v-if="comptage.mode === 'en vrac'">
-                <span v-if="comptage.inputMethod === 'saisie' || comptage.saisieQuantite" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.inputMethod === 'saisie' || comptage.saisieQuantite" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Saisie quantité
                 </span>
-                <span v-if="comptage.inputMethod === 'scanner' || comptage.scannerUnitaire" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.inputMethod === 'scanner' || comptage.scannerUnitaire" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Scanner unitaire
                 </span>
-                <span v-if="comptage.guideQuantite" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.guideQuantite" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Guide quantité
                 </span>
               </template>
               
               <!-- Options "par article" uniquement -->
               <template v-if="comptage.mode === 'par article'">
-                <span v-if="comptage.guideQuantite" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.guideQuantite" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Guide quantité
                 </span>
-                <span v-if="comptage.isVariante" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.isVariante" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Variante
                 </span>
-                <span v-if="comptage.guideArticle" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.guideArticle" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Guide Article
                 </span>
-                <span v-if="comptage.dlc" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.dlc" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   DLC
                 </span>
-                <span v-if="comptage.numeroSerie" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.numeroSerie" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Numéro de série
                 </span>
-                <span v-if="comptage.numeroLot" class="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary rounded-lg text-xs">
+                <span v-if="comptage.numeroLot" class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
                   Numéro de lot
                 </span>
               </template>
