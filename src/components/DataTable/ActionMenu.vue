@@ -1,10 +1,10 @@
 <template>
-  <div ref="menuRef" class="relative flex items-center">
+  <div ref="menuRef" class="relative flex items-center justify-center text-center mt-1">
     <!-- Bouton de déclenchement -->
     <button 
       @click="toggleMenu" 
       :class="[
-        'group relative p-1.5 rounded-lg transition-all duration-200 ease-in-out',
+        'group relative p-1.5  rounded-lg transition-all duration-200 ease-in-out',
         'hover:bg-gray-100 dark:hover:bg-gray-800/50',
         'focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-gray-100 dark:focus:bg-gray-800/50',
         'active:scale-95',
@@ -41,28 +41,29 @@
                 <!-- Séparateur si spécifié -->
                 <div 
                   v-if="action.separator && i > 0" 
-                  class="h-px bg-gray-200 dark:bg-gray-700  mx-2"
+                  class="h-px bg-gray-200 dark:bg-gray-700 mx-2 my-1"
                 ></div>
 
                 <!-- Item d'action -->
                 <button
                   @click="handleActionClick(action)"
                   :class="[
-                    'group w-full flex items-center gap-2 px-3 py-2.5 text-left transition-all duration-200',
-                    'hover:bg-gray-50 dark:hover:bg-gray-800/60',
-                    'focus:outline-none',
+                    'action-item group w-full flex items-center gap-3 px-3 py-2.5 text-left transition-all duration-150',
+                    'hover:bg-gray-100 dark:hover:bg-gray-800/60',
                     'active:bg-gray-100 dark:active:bg-gray-800',
                     action.disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer',
                     action.class || ''
                   ]"
                   :disabled="action.disabled"
+                  tabindex="-1"
                 >
                   <!-- Icône de l'action -->
                   <div 
                     :class="[
-                      'flex items-center justify-center w-6 h-6 rounded flex-shrink-0 transition-colors duration-200',
+                      'flex items-center justify-center w-4 h-4 flex-shrink-0 transition-colors duration-150',
                       'text-gray-500 dark:text-gray-400',
-                      'group-hover:text-gray-700 dark:group-hover:text-gray-200'
+                      'group-hover:text-gray-700 dark:group-hover:text-gray-200',
+                      action.disabled ? '' : 'group-hover:scale-105'
                     ]"
                   >
                     <component 
@@ -75,7 +76,7 @@
                   <div class="flex-1 min-w-0">
                     <div 
                       :class="[
-                        'font-medium text-sm truncate transition-colors duration-200',
+                        'font-medium text-sm truncate transition-colors duration-150',
                         'text-gray-700 dark:text-gray-200',
                         'group-hover:text-gray-900 dark:group-hover:text-gray-50'
                       ]"
@@ -83,6 +84,12 @@
                       {{ action.label }}
                     </div>
                   </div>
+
+                  <!-- Indicateur visuel pour les actions importantes (optionnel) -->
+                  <div 
+                    v-if="action.important"
+                    class="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity duration-150"
+                  ></div>
                 </button>
               </template>
 
@@ -91,7 +98,7 @@
                 v-if="filteredActions.length === 0" 
                 class="px-3 py-4 text-center text-gray-500 dark:text-gray-400"
               >
-                <div class="w-6 h-6 mx-auto mb-1 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                <div class="w-6 h-6 mx-auto mb-2 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                   <IconHorizontalDots class="w-3 h-3" />
                 </div>
                 <p class="text-xs">Aucune action disponible</p>
@@ -105,7 +112,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, markRaw, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import type { InventoryAction, InventoryManagement } from '@/interfaces/inventoryManagement'
 import IconHorizontalDots from '../icon/icon-horizontal-dots.vue'
 
@@ -113,6 +120,7 @@ import IconHorizontalDots from '../icon/icon-horizontal-dots.vue'
 interface SimplifiedInventoryAction extends InventoryAction {
   disabled?: boolean
   separator?: boolean
+  important?: boolean // Nouvel indicateur pour les actions importantes
 }
 
 const props = defineProps<{ 
@@ -134,7 +142,6 @@ const filteredActions = computed(() => {
   return props.params.actions
     .filter(a => a.showWhen ? a.showWhen(inv) : true)
     .map(a => {
-      // ici on génère toujours un string
       const labelText = typeof a.label === 'function'
         ? (a.label as Function)(inv)
         : a.label as string
@@ -142,7 +149,7 @@ const filteredActions = computed(() => {
       return {
         ...a,
         label: labelText,     
-        icon: a.icon ? markRaw(a.icon) : undefined
+        icon: a.icon
       }
     })
 })
@@ -161,7 +168,7 @@ const calculatePosition = async () => {
     scrollY: window.scrollY
   }
 
-  // Position initiale
+  // Position initiale (alignement à droite du bouton)
   let top = button.bottom + viewport.scrollY + 4
   let left = button.right + viewport.scrollX - dropdown.offsetWidth
 
@@ -197,7 +204,6 @@ const toggleMenu = async () => {
   isOpen.value = !isOpen.value
   if (isOpen.value) {
     await calculatePosition()
-    // Supprimé le focus automatique sur le premier bouton
   }
 }
 
@@ -251,15 +257,37 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* Animations */
+/* Suppression complète des focus et outline sur les boutons d'action */
+.action-item {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.action-item:focus,
+.action-item:focus-visible,
+.action-item:focus-within {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.action-item:active {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Amélioration des transitions et animations */
 .dropdown-transition-enter-active {
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  transform-origin: top left;
+  transform-origin: top right;
 }
 
 .dropdown-transition-leave-active {
   transition: all 0.15s cubic-bezier(0.4, 0, 1, 1);
-  transform-origin: top left;
+  transform-origin: top right;
 }
 
 .dropdown-transition-enter-from {
@@ -287,20 +315,41 @@ onUnmounted(() => {
   animation: animate-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .dropdown-transition-enter-active,
-  .dropdown-transition-leave-active {
-    transition-duration: 0.05s;
+/* Suppression des effets de hover sur les appareils tactiles */
+@media (hover: none) {
+  .action-item:hover {
+    background-color: transparent !important;
   }
   
-  .animate-in {
-    animation-duration: 0.05s;
+  .action-item:focus {
+    background-color: transparent !important;
   }
 }
 
-@media (hover: none) {
-  button:hover {
-    background-color: transparent;
+/* Suppression des styles de focus pour tous les navigateurs */
+.action-item::-moz-focus-inner {
+  border: 0 !important;
+  outline: none !important;
+}
+
+.action-item::-webkit-focus-ring {
+  outline: none !important;
+}
+
+/* Performance pour les animations */
+@media (prefers-reduced-motion: reduce) {
+  .dropdown-transition-enter-active,
+  .dropdown-transition-leave-active,
+  .animate-in,
+  .action-item {
+    transition-duration: 0.05s !important;
+    animation-duration: 0.05s !important;
   }
 }
+
+/* Amélioration de la lisibilité */
+.action-item .text-sm {
+  line-height: 1.3;
+}
+
 </style>

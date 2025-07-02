@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, markRaw } from 'vue'
 import { useRouter } from 'vue-router'
 import type { InventoryManagement, InventoryAction } from '../interfaces/inventoryManagement'
 import type { DataTableColumn } from '@/interfaces/dataTable'
@@ -37,15 +37,15 @@ export function useInventoryManagement() {
         switch (s) {
           case 'en préparation': 
             cls = 'bg-gradient-to-r from-amber-50 to-primary/20'
-            textCls = 'text-amber-800 font-medium'
+            textCls = 'text-amber-700 font-medium'
             break
           case 'en réalisation': 
             cls = 'bg-gradient-to-r from-blue-50 to-info/20 '
-            textCls = 'text-blue-800 font-medium'
+            textCls = 'text-blue-700 font-medium'
             break
           case 'terminé': 
             cls = 'bg-gradient-to-r from-emerald-50 to-success/20'
-            textCls = 'text-emerald-800 font-medium'
+            textCls = 'text-emerald-700 font-medium'
             break
           case 'clôturé': 
             cls = 'bg-gradient-to-r from-slate-50 to-gray-200'
@@ -96,42 +96,42 @@ export function useInventoryManagement() {
   const actions: InventoryAction[] = [
     {
       label: 'Détail',
-      icon: IconEye,
+      icon: markRaw(IconEye),
       class: 'flex items-center gap-1 px-2 py-1 text-blue-600 hover:text-blue-800 text-md',
       handler: inv => { void router.push({ name: 'inventory-detail', params: { id: inv.id } }) },
       showWhen: () => true,
     },
     {
       label: 'Importer stock',
-      icon: IconUpload,
+      icon: markRaw(IconUpload),
       class: 'flex items-center gap-1 px-2 py-1 text-purple-600 hover:text-purple-800 text-md',
       handler: inv => { void router.push({ name: 'stock-import', params: { id: inv.id } }) },
       showWhen: inv => inv.statut === 'En préparation',
     },
     {
       label: inv => inv.statut === 'En réalisation' ? 'Transférer' : 'Préparer',
-      icon: IconCalendar,
+      icon: markRaw(IconCalendar),
       class: 'flex items-center gap-1 px-2 py-1 text-orange-600 hover:text-orange-800 text-md',
       handler: inv => { void router.push({ name: 'planning-management', params: { id: inv.id } }) },
       showWhen: inv => ['En préparation', 'En réalisation'].includes(inv.statut),
     },
     {
       label: 'Modifier',
-      icon: IconEdit,
+      icon: markRaw(IconEdit),
       class: 'flex items-center gap-1 px-2 py-1 text-green-600 hover:text-green-800 text-md',
       handler: inv => { void router.push({ name: 'inventory-edit', params: { id: inv.id } }) },
       showWhen: inv => inv.statut === 'En préparation',
     },
     {
       label: 'Résultats',
-      icon: IconSquareCheck,
+      icon: markRaw(IconSquareCheck),
       class: 'flex items-center gap-1 px-2 py-1 text-emerald-600 hover:text-emerald-800 text-md',
       handler: inv => { void router.push({ name: 'inventory-results', params: { reference: inv.reference } }) },
       showWhen: inv => ['En réalisation', 'Terminé', 'Clôturé'].includes(inv.statut),
     },
     {
       label: 'Supprimer',
-      icon: IconTrashLines,
+      icon: markRaw(IconTrashLines),
       class: 'flex items-center gap-1 px-2 py-1 text-red-600 hover:text-red-800 text-md',
       handler: handleDelete,
       showWhen: inv => inv.statut === 'En préparation',

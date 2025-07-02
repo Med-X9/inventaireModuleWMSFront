@@ -1,11 +1,5 @@
 <template>
   <div>
-    <div class="flex justify-end mb-2">
-      <button @click="onCancelClick" class="btn btn-outline-primary">
-        Annuler
-      </button>
-    </div>
-
     <!-- Récapitulatif - Version améliorée et compacte -->
     <div class="w-full mb-1 p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
       <!-- En-tête avec icône -->
@@ -177,7 +171,6 @@ const {
   availableModesForStep,
   onStepComplete,
   onComplete,
-  cancelCreation,
   loaded,
   isValid,
 } = useInventoryCreation();
@@ -267,12 +260,6 @@ async function validateAndSaveStep(prev: number, next: number): Promise<boolean>
   else data = state.comptages[prev - 1];
 
   return await onStepComplete(prev, data);
-}
-
-/* Annuler la création */
-async function onCancelClick() {
-  await cancelCreation();
-  wizardKey.value = Date.now();
 }
 
 /* Soumission finale */

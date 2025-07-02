@@ -2,10 +2,10 @@
   <div>
     <div class="flex justify-end mb-2">
       <button
-        @click="onCancelClick"
+        @click="redirectToManagement"
         class="btn btn-outline-primary"
       >
-        Annuler
+        Retour
       </button>
     </div>
 
@@ -156,6 +156,7 @@
 </template>
 
 <script setup lang="ts">
+import { useRouter } from 'vue-router';
 import { useInventoryEdit } from '@/composables/useInventoryEdit';
 import DynamicWizard from '@/components/wizard/Wizard.vue';
 import FormBuilder from '@/components/Form/FormBuilder.vue';
@@ -163,6 +164,8 @@ import ParamStep from '@/components/ParamStep.vue';
 import type { FieldConfig } from '@/interfaces/form';
 import type { ComptageConfig } from '@/interfaces/inventoryCreation';
 import { required, date, selectRequired } from '@/utils/validate';
+
+const router = useRouter();
 
 const {
   state,
@@ -172,7 +175,6 @@ const {
   handleStepChange,
   isValid,
   onComplete,
-  cancelEdit,
   isSubmitting
 } = useInventoryEdit();
 
@@ -254,8 +256,8 @@ function hasActiveOptions(comptage: ComptageConfig): boolean {
   return false;
 }
 
-// Appel de l'annulation
-function onCancelClick() {
-  cancelEdit();
+// Simple redirect to management
+function redirectToManagement() {
+  router.push({ name: 'inventory-list' });
 }
 </script>

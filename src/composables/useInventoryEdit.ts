@@ -100,7 +100,7 @@ export function useInventoryEdit() {
           scannerUnitaire: false
         };
 
-        await saveState();
+        // Removed automatic save after loading
       }
     } catch (error) {
       await alertService.error({ text: "Erreur lors du chargement de l'inventaire" });
@@ -110,7 +110,7 @@ export function useInventoryEdit() {
     }
   };
 
-  const saveState = async () => {
+  async function saveState() {
     try {
       const raw = toRaw(state);
       const snapshot = {
@@ -123,7 +123,7 @@ export function useInventoryEdit() {
     } catch (err) {
       console.error('Error saving state:', err);
     }
-  };
+  }
 
   const cancelEdit = async () => {
     const result = await alertService.confirm({
@@ -186,7 +186,7 @@ export function useInventoryEdit() {
     }
 
     currentStep.value = step + 1;
-    await saveState();
+    // Removed automatic save after step completion
   }
 
   const onComplete = async () => {
@@ -211,8 +211,9 @@ export function useInventoryEdit() {
     }
   };
 
-  watch(state, saveState, { deep: true });
-  watch(currentStep, saveState);
+  // Removed watchers that automatically save state
+  // watch(state, saveState, { deep: true });
+  // watch(currentStep, saveState);
 
   onMounted(loadInventoryData);
 

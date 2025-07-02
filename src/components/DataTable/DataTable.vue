@@ -3,22 +3,22 @@
     <div class="flex flex-col mb-3 md:flex-row justify-between gap-4">
       <!-- Column Selector -->
       <div class="flex flex-col mb-4 md:flex-row gap-4 w-full">
-        <div 
-          v-if="showColumnSelector" 
-          ref="dropdownRef" 
+        <div
+          v-if="showColumnSelector"
+          ref="dropdownRef"
           class="relative w-full md:w-72 select-wrapper"
         >
-          <button 
-            @click="toggleDropdown" 
+          <button
+            @click="toggleDropdown"
             class="flex items-center justify-between p-2 dark:bg-dark-bg dark:border-dark-border dark:text-white-dark bg-white border rounded text-sm text-gray-700 shadow-sm hover:border-gray-300 w-full"
           >
             <span>Sélectionner colonnes</span>
-            <svg 
-              class="w-4 h-4 ml-2 transition-transform" 
-              :class="{ 'rotate-180': showDropdown }" 
-              xmlns="http://www.w3.org/2000/svg" 
-              fill="none" 
-              viewBox="0 0 24 24" 
+            <svg
+              class="w-4 h-4 ml-2 transition-transform"
+              :class="{ 'rotate-180': showDropdown }"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
               stroke="currentColor"
             >
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -37,28 +37,38 @@
               Réinitialiser
             </button>
 
-            <div v-for="col in columns" :key="col.field!" class="mb-2">
-              <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-light/10 p-1 rounded">
-                <input
-                  type="checkbox"
-                  :value="col.field!"
-                  v-model="visibleFields"
-                  :disabled="visibleFields.length <= minVisibleColumns && visibleFields.includes(col.field!)"
-                  class="form-checkbox accent-primary focus:ring-primary"
-                />
-                <span class="flex items-center gap-1">
-                  {{ col.headerName || col.field }}
-                  <svg
-                    v-if="(col as DataTableColumn).description"
-                    class="w-3 h-3 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                </span>
-              </label>
+            <div
+              v-for="col in columns"
+              :key="col.field!"
+              class="mb-2"
+            >
+              <Tooltip 
+                :text="(col as DataTableColumn).description" 
+                position="right"
+                :delay="300"
+              >
+                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-light/10 p-1 rounded">
+                  <input
+                    type="checkbox"
+                    :value="col.field!"
+                    v-model="visibleFields"
+                    :disabled="visibleFields.length <= minVisibleColumns && visibleFields.includes(col.field!)"
+                    class="form-checkbox accent-primary focus:ring-primary"
+                  />
+                  <span class="flex items-center gap-1">
+                    {{ col.headerName || col.field }}
+                    <svg
+                      v-if="(col as DataTableColumn).description"
+                      class="w-3 h-3 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                  </span>
+                </label>
+              </Tooltip>
             </div>
           </div>
         </div>
@@ -134,12 +144,12 @@
         class="ag-theme-alpine"
         :style="dynamicGridStyle"
         domLayout="normal"
-        @grid-ready="onGridReady"
-        @first-data-rendered="onFirstDataRendered"
-        @selection-changed="onSelectionChanged"
+        @grid-ready="handleGridReady"
+        @first-data-rendered="handleFirstDataRendered"
+        @selection-changed="handleSelectionChanged"
         @row-clicked="$emit('row-clicked', $event)"
-        @model-updated="onModelUpdated"
-        @cell-value-changed="onCellValueChanged"
+        @model-updated="handleModelUpdated"
+        @cell-value-changed="handleCellValueChanged"
         :columnDefs="computedVisibleColumnDefsWithIndex"
         :defaultColDef="defaultColDef"
         :rowData="rowData"
@@ -162,8 +172,9 @@
         }"
         :singleClickEdit="inlineEditing"
         :stopEditingWhenCellsLoseFocus="false"
-        @cellKeyDown="onCellKeyDown"
-        @cellEditingStopped="onCellEditingStopped"
+        @cellKeyDown="handleCellKeyDown"
+        @cellEditingStopped="handleCellEditingStopped"
+        :components="{ ActionMenu }"
       />
     </div>
 
@@ -174,25 +185,14 @@
 </template>
 
 <script setup lang="ts" generic="T extends Record<string, unknown> = Record<string, unknown>">
-import { computed, defineEmits, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { defineEmits } from 'vue'
 import { AgGridVue } from 'ag-grid-vue3'
 import type { PropType } from 'vue'
-import type { 
-  ColDef, 
-  CsvExportParams, 
-  SelectionChangedEvent, 
-  CellKeyDownEvent, 
-  CellEditingStoppedEvent, 
-  ModelUpdatedEvent, 
-  CellValueChangedEvent 
-} from 'ag-grid-community'
-import type { ActionConfig, TableRow, DataTableColumn } from '@/interfaces/dataTable'
+import type { SelectionChangedEvent, CellKeyDownEvent, CellEditingStoppedEvent, ModelUpdatedEvent, CellValueChangedEvent } from 'ag-grid-community'
+import type { ActionConfig, DataTableColumn } from '@/interfaces/dataTable'
 import { useDataTable } from '@/composables/useDataTable'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
-import { saveAs } from 'file-saver'
 import ActionMenu from './ActionMenu.vue'
+import Tooltip from '../Tooltip.vue'
 
 const emit = defineEmits<{
   'selection-changed': [selectedRows: T[]]
@@ -201,326 +201,87 @@ const emit = defineEmits<{
 }>()
 
 const props = defineProps({
-  columns: {
-    type: Array as PropType<DataTableColumn[]>,
-    required: true
-  },
-  rowDataProp: {
-    type: Array as PropType<T[]>,
-    default: () => []
-  },
+  columns: { type: Array as PropType<DataTableColumn[]>, required: true },
+  rowDataProp: { type: Array as PropType<T[]>, default: () => [] },
   dataUrl: String,
-  enableFiltering: {
-    type: Boolean,
-    default: true
-  },
-  pagination: {
-    type: Boolean,
-    default: true
-  },
-  storageKey: {
-    type: String,
-    default: 'visibleFields'
-  },
-  showColumnSelector: {
-    type: Boolean,
-    default: true
-  },
-  actions: {
-    type: Array as PropType<ActionConfig<T>[]>,
-    default: () => []
-  },
-  actionsHeaderName: {
-    type: String,
-    default: 'Actions'
-  },
-  rowSelection: {
-    type: Boolean,
-    default: false
-  },
-  exportTitle: {
-    type: String,
-    default: 'Export de données'
-  },
-  inlineEditing: {
-    type: Boolean,
-    default: false
-  },
-  maxRowsForDynamicHeight: {
-    type: Number,
-    default: 10
-  }
+  enableFiltering: { type: Boolean, default: true },
+  pagination: { type: Boolean, default: true },
+  storageKey: { type: String, default: 'visibleFields' },
+  showColumnSelector: { type: Boolean, default: true },
+  actions: { type: Array as PropType<ActionConfig<T>[]>, default: () => [] },
+  actionsHeaderName: { type: String, default: 'Actions' },
+  rowSelection: { type: Boolean, default: false },
+  exportTitle: { type: String, default: 'Export de données' },
+  inlineEditing: { type: Boolean, default: false },
+  maxRowsForDynamicHeight: { type: Number, default: 10 }
 })
-
-// State for dynamic height
-const calculatedHeight = ref(470)
-
-// Dynamic grid style
-const dynamicGridStyle = computed(() => ({
-  width: '100%',
-  height: `${calculatedHeight.value}px`
-}))
-
-// Calculate optimal height
-const calculateOptimalHeight = () => {
-  if (!isGridValid()) return
-  
-  const displayedRowCount = gridApi.value!.getDisplayedRowCount()
-  const headerHeight = 48
-  const rowHeight = 42
-  const paginationHeight = props.pagination ? 52 : 0
-  const scrollbarBuffer = 20
-
-  if (displayedRowCount <= props.maxRowsForDynamicHeight) {
-    const contentHeight = headerHeight + (displayedRowCount * rowHeight) + paginationHeight + scrollbarBuffer
-    calculatedHeight.value = Math.max(contentHeight, 200)
-  } else {
-    calculatedHeight.value = 470
-  }
-}
-
-// Model updated event
-const onModelUpdated = (event: ModelUpdatedEvent) => {
-  nextTick(() => {
-    calculateOptimalHeight()
-  })
-}
-
-// Selection changed event
-const onSelectionChanged = (event: SelectionChangedEvent) => {
-  if (!isGridValid()) return
-  const selectedRows = gridApi.value!.getSelectedRows() as T[]
-  emit('selection-changed', selectedRows)
-}
-
-// Export functions
-const showExportDropdown = ref(false)
-const exportDropdownRef = ref<HTMLElement | null>(null)
-
-const toggleExportDropdown = () => {
-  showExportDropdown.value = !showExportDropdown.value
-}
-
-const getExportableColumns = () => {
-  return computedVisibleColumnDefsWithIndex.value
-    .filter(col => col.field !== 'actions' && col.field !== undefined)
-}
-
-const exportToCsv = () => {
-  if (!isGridValid()) return
-  
-  const params: CsvExportParams = {
-    columnSeparator: ',',
-    columnKeys: getExportableColumns().map(col => col.field!) as string[],
-  }
-  gridApi.value!.exportDataAsCsv(params)
-  showExportDropdown.value = false
-}
-
-const exportToExcel = () => {
-  if (!isGridValid()) return
-  
-  const allData: Record<string, unknown>[] = []
-  gridApi.value!.forEachNodeAfterFilterAndSort(node => {
-    if (node.data) allData.push(node.data)
-  })
-  
-  if (!allData.length) return
-  
-  const visibleCols = getExportableColumns()
-  const headers = visibleCols.map(col => col.headerName || col.field)
-  const dataForSheet = allData.map(row => {
-    const obj: Record<string, unknown> = {}
-    visibleCols.forEach(col => {
-      if (col.field) obj[col.field] = row[col.field]
-    })
-    return obj
-  })
-  
-  const ws = XLSX.utils.json_to_sheet(dataForSheet, {
-    header: visibleCols.map(c => c.field as string).filter(Boolean)
-  })
-  XLSX.utils.sheet_add_aoa(ws, [headers], { origin: 'A1' })
-  
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'Données')
-  
-  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
-  const blob = new Blob([wbout], { type: 'application/octet-stream' })
-  saveAs(blob, 'export.xlsx')
-  showExportDropdown.value = false
-}
-
-const exportToPdf = () => {
-  if (!isGridValid()) return
-  
-  const doc = new jsPDF()
-  doc.setFontSize(12)
-  doc.setTextColor(44, 62, 80)
-  doc.text(props.exportTitle, 14, 15)
-  
-  const visibleCols = getExportableColumns()
-  const headers = visibleCols.map(col => col.headerName || col.field || '')
-  const body: (string | number)[][] = []
-  
-  gridApi.value!.forEachNodeAfterFilterAndSort(node => {
-    if (!node.data) return
-    const row: (string | number)[] = []
-    visibleCols.forEach(col => {
-      const val = node.data[col.field!] ?? ''
-      row.push(val)
-    })
-    body.push(row)
-  })
-  
-  autoTable(doc, {
-    head: [headers],
-    body,
-    startY: 25,
-    headStyles: { fillColor: [255, 204, 17] },
-  })
-  
-  doc.save('export.pdf')
-  showExportDropdown.value = false
-}
-
-// Cell editing handlers
-const onCellKeyDown = (e: CellKeyDownEvent) => {
-  if (e.event instanceof KeyboardEvent && e.event.key === 'Enter' && isGridValid()) {
-    gridApi.value!.stopEditing()
-  }
-}
-
-const onCellEditingStopped = async (e: CellEditingStoppedEvent) => {
-  const field = e.colDef.field!
-  const oldVal = e.oldValue
-  const newVal = e.value
-  
-  if (newVal === oldVal) return
-  
-  await nextTick()
-  
-  // Emit the change event
-  emit('cell-value-changed', {
-    data: e.data,
-    colDef: e.colDef,
-    newValue: newVal,
-    oldValue: oldVal
-  } as CellValueChangedEvent)
-}
-
-const onCellValueChanged = (event: CellValueChangedEvent) => {
-  emit('cell-value-changed', event)
-}
-
-// Handle click outside for export dropdown
-const handleClickOutsideExport = (event: MouseEvent) => {
-  const wrap = exportDropdownRef.value
-  if (wrap && !wrap.contains(event.target as Node)) {
-    showExportDropdown.value = false
-  }
-}
 
 // Use DataTable composable
 const {
-  defaultColDef,
+  // Grid state
   rowData,
   pageSize,
-  onGridReady: originalOnGridReady,
-  onFirstDataRendered: originalOnFirstDataRendered,
-  computedVisibleColumnDefs,
+  dynamicGridStyle,
+  defaultColDef,
+
+  // Column management
   visibleFields,
   showDropdown,
+  dropdownRef,
+  minVisibleColumns,
+  computedVisibleColumnDefsWithIndex,
   toggleDropdown,
   resetVisibleFields,
-  minVisibleColumns,
-  dropdownRef,
-  gridApi,
-  isGridValid,
+
+  // Export functionality
+  showExportDropdown,
+  exportDropdownRef,
+  toggleExportDropdown,
+  exportToCsv,
+  exportToExcel,
+  exportToPdf,
+
+  // Event handlers
+  onGridReady,
+  onFirstDataRendered,
+  onModelUpdated,
+  onSelectionChanged,
+  onCellKeyDown,
+  onCellEditingStopped,
 } = useDataTable(props)
 
-// Wrapper functions with height calculation
-const onGridReady = (event: any) => {
-  originalOnGridReady(event)
-  nextTick(() => {
-    calculateOptimalHeight()
+// Wrapper event handlers
+const handleGridReady = (event: any) => {
+  onGridReady(event)
+}
+
+const handleFirstDataRendered = (event: any) => {
+  onFirstDataRendered(event)
+}
+
+const handleModelUpdated = (event: ModelUpdatedEvent) => {
+  onModelUpdated(event)
+}
+
+const handleSelectionChanged = (event: SelectionChangedEvent) => {
+  onSelectionChanged(event, (selectedRows) => {
+    emit('selection-changed', selectedRows)
   })
 }
 
-const onFirstDataRendered = (event: any) => {
-  originalOnFirstDataRendered(event)
-  nextTick(() => {
-    calculateOptimalHeight()
+const handleCellKeyDown = (event: CellKeyDownEvent) => {
+  onCellKeyDown(event)
+}
+
+const handleCellEditingStopped = (event: CellEditingStoppedEvent) => {
+  onCellEditingStopped(event, (changeEvent) => {
+    emit('cell-value-changed', changeEvent)
   })
 }
 
-// Watch for data changes
-watch(() => rowData.value, () => {
-  nextTick(() => {
-    calculateOptimalHeight()
-  })
-}, { deep: true })
-
-watch(() => pageSize.value, () => {
-  nextTick(() => {
-    calculateOptimalHeight()
-  })
-})
-
-// Row number column
-const rowNumberColumn: ColDef = {
-  headerName: 'N°',
-  valueGetter: params => {
-    return params.node?.rowIndex != null ? (params.node.rowIndex + 1).toString() : ''
-  },
-  width: 70,
-  minWidth: 70,
-  maxWidth: 80,
-  suppressSizeToFit: true,
-  menuTabs: [],
-  sortable: false,
-  filter: 'agTextColumnFilter',
-  cellClass: 'text-left',
+const handleCellValueChanged = (event: CellValueChangedEvent) => {
+  emit('cell-value-changed', event)
 }
-
-// Computed visible columns with index
-const computedVisibleColumnDefsWithIndex = computed<ColDef[]>(() => {
-  const cols = [...computedVisibleColumnDefs.value]
-  
-  // Add actions column if actions are provided
-  if (props.actions.length) {
-    cols.push({
-      headerName: props.actionsHeaderName,
-      field: 'actions',
-      colId: 'actions',
-      sortable: false,
-      filter: false,
-      editable: () => false,
-      singleClickEdit: false,
-      minWidth: 80,
-      maxWidth: 80,
-      cellRenderer: ActionMenu,
-      cellRendererParams: { actions: props.actions },
-      cellStyle: { display: 'block', overflow: 'visible' },
-      suppressSizeToFit: true,
-      headerTooltip: props.actionsHeaderName
-    })
-  }
-  
-  // Add row number column at the beginning
-  cols.unshift(rowNumberColumn)
-  
-  return cols
-})
-
-// Lifecycle hooks
-onMounted(() => {
-  document.addEventListener('click', handleClickOutsideExport)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutsideExport)
-})
 </script>
 
 <style scoped>
@@ -544,7 +305,7 @@ onUnmounted(() => {
   border-top: none !important;
 }
 
-:deep(.ag-header-cell-text),
+:deep(.ag-header-cell-text), 
 :deep(.ag-header-cell-label) {
   font-size: 13.5px;
 }
@@ -553,10 +314,10 @@ onUnmounted(() => {
   font-size: 12.5px;
 }
 
-:deep(.ag-paging-panel),
-:deep(.ag-pagination-button),
-:deep(.ag-page-size-panel),
-:deep(.ag-page-size),
+:deep(.ag-paging-panel), 
+:deep(.ag-pagination-button), 
+:deep(.ag-page-size-panel), 
+:deep(.ag-page-size), 
 :deep(.ag-input-field-input) {
   font-size: 13.5px;
 }
@@ -568,10 +329,10 @@ onUnmounted(() => {
     padding: 0.15rem;
   }
 
-  :deep(.ag-paging-panel),
-  :deep(.ag-pagination-button),
-  :deep(.ag-page-size-panel),
-  :deep(.ag-page-size),
+  :deep(.ag-paging-panel), 
+  :deep(.ag-pagination-button), 
+  :deep(.ag-page-size-panel), 
+  :deep(.ag-page-size), 
   :deep(.ag-input-field-input) {
     font-size: 6.5px;
     padding: 0.3rem;

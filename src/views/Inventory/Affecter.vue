@@ -10,6 +10,7 @@
         :pagination="true"
         :enableFiltering="true"
         :rowSelection="true"
+        inlineEditing
         @selection-changed="onSelectionChanged"
         @row-clicked="onRowClicked"
         @cell-value-changed="onCellValueChanged"

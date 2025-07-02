@@ -124,16 +124,5 @@ const positionTooltip = () => {
 }
 </script>
 <style scoped>
-.ag-tooltip {
-  background-color:  var(--color-primary) !important; /* Tailwind bg-gray-700 */
-  color: white !important;
-  border: 1px solid #4B5563 !important; /* Tailwind border-gray-600 */
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
-  font-size: 12px !important;
-  padding: 4px 8px !important;
-  border-radius: 4px !important;
-  z-index: 9999 !important;
-  max-width: 250px !important;
-  word-wrap: break-word !important;
-}
+
 </style>

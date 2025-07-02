@@ -100,7 +100,7 @@ text: 'Voulez-vous vraiment annuler ?'
 if (result.isConfirmed) {
 await clearSavedState();
 resetState();
-await saveState();
+// Removed automatic save after reset
 }
 }
 
@@ -143,7 +143,7 @@ state.comptages[step - 1] = { ...data };
 }
 
 currentStep.value = step + 1;
-await saveState();
+// Removed automatic save after step completion
 return true;
 }
 
@@ -151,19 +151,20 @@ async function onComplete() {
 if (!await validateCurrentStep()) return;
 await clearSavedState();
 resetState();
-await saveState();
+// Removed automatic save after completion
 }
 
+// Removed watchers that automatically save state
 watch(state, () => {
 const validation = validateCreation(state);
 isValid.value = getCurrentStepValidation(validation).isValid;
-saveState();
+// Removed automatic save on state change
 }, { deep: true });
 
 watch(currentStep, () => {
 const validation = validateCreation(state);
 isValid.value = getCurrentStepValidation(validation).isValid;
-saveState();
+// Removed automatic save on step change
 });
 
 onMounted(loadState);
