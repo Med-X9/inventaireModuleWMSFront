@@ -22,19 +22,14 @@ export const useInventoryStore = defineStore('inventory', () => {
         loading.value = true;
         error.value = null;
         try {
-            console.log('🌐 Appel API - Récupération des inventaires...');
             const response: AxiosResponse<{ count: number; results: Inventory[]; next: string | null; previous: string | null }> = await InventoryService.getAll();
-            console.log('📡 Réponse API brute:', response);
-            console.log('📦 Données reçues:', response.data);
 
             // Extraire les données du champ 'results' de la réponse paginée
             const inventoryData = response.data.results || response.data;
             console.log('📋 Données d\'inventaires extraites:', inventoryData);
 
             inventories.value = Array.isArray(inventoryData) ? inventoryData : [];
-            console.log('💾 Données stockées dans le store:', inventories.value);
         } catch (err: any) {
-            console.error('💥 Erreur dans le store inventory:', err);
             error.value = err.response?.data?.message || 'Erreur lors de la récupération des inventaires';
             throw err;
         } finally {
