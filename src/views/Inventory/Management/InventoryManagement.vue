@@ -8,7 +8,6 @@
                         <icon-plus class="w-5 h-5 ltr:mr-2 rtl:ml-2 " />
                         Créer
                     </button>
-
                 </div>
             </template>
         </DataTable>
