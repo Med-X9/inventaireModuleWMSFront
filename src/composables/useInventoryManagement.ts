@@ -1,151 +1,132 @@
-import { ref, markRaw } from 'vue'
-import { useRouter } from 'vue-router'
-import type { InventoryManagement, InventoryAction } from '../interfaces/inventoryManagement'
-import type { DataTableColumn } from '@/interfaces/dataTable'
-import { inventoryManagementService } from '../services/inventoryManagementService'
-import { alertService } from '@/services/alertService'
+import { computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { useInventoryStore } from '@/stores/inventory';
+import type { InventoryManagement, InventoryAction } from '../interfaces/inventoryManagement';
+import type { DataTableColumn } from '@/interfaces/dataTable';
+import { alertService } from '@/services/alertService';
 
-import IconEdit          from '@/components/icon/icon-edit.vue'
-import IconTrashLines    from '@/components/icon/icon-trash-lines.vue'
-import IconEye           from '@/components/icon/icon-eye.vue'
-import IconCalendar      from '@/components/icon/icon-calendar.vue'
-import IconSquareCheck   from '@/components/icon/icon-square-check.vue'
-import IconUpload        from '@/components/icon/icon-upload.vue'
+import IconEdit from '@/components/icon/icon-edit.vue';
+import IconTrashLines from '@/components/icon/icon-trash-lines.vue';
+import IconEye from '@/components/icon/icon-eye.vue';
+import IconCalendar from '@/components/icon/icon-calendar.vue';
+import IconSquareCheck from '@/components/icon/icon-square-check.vue';
 
 export function useInventoryManagement() {
-  const router = useRouter()
-  const inventories = ref<InventoryManagement[]>([])
-  const loading     = ref(false)
+    const router = useRouter();
+    const inventoryStore = useInventoryStore();
 
-  const columns: DataTableColumn[] = [
-    { headerName: 'Référence',      field: 'reference',     sortable: true, filter: 'agTextColumnFilter', description: 'Référence unique'  },
-    { headerName: 'Libellé',         field: 'label',         sortable: true, filter: 'agTextColumnFilter', description: 'Libellé' },
-    { headerName: 'Type',            field: 'type',          sortable: true, filter: 'agTextColumnFilter', description: 'Type' },
-    {
-      headerName: 'Statut',
-      field: 'statut',
-      sortable: true,
-      filter: 'agTextColumnFilter',
-      minWidth: 150,
-      description: 'État',
-      cellRenderer: params => {
-        const val = (params.value || '').toString()
-        const s   = val.toLowerCase()
-        let cls   = ''
-        let textCls = ''
-        
-        switch (s) {
-          case 'en préparation': 
-            cls = 'bg-gradient-to-r from-amber-50 to-primary/20'
-            textCls = 'text-amber-700 font-medium'
-            break
-          case 'en réalisation': 
-            cls = 'bg-gradient-to-r from-blue-50 to-info/20 '
-            textCls = 'text-blue-700 font-medium'
-            break
-          case 'terminé': 
-            cls = 'bg-gradient-to-r from-emerald-50 to-success/20'
-            textCls = 'text-emerald-700 font-medium'
-            break
-          case 'clôturé': 
-            cls = 'bg-gradient-to-r from-slate-50 to-gray-200'
-            textCls = 'text-slate-700 font-medium'
-            break
-          default: 
-            cls = 'bg-gradient-to-r from-gray-50 to-slate-50'
-            textCls = 'text-gray-700 font-medium'
+    // Utilisation des données du store
+    const inventories = computed(() => inventoryStore.inventories);
+    const loading = computed(() => inventoryStore.loading);
+
+    const columns: DataTableColumn[] = [
+        { headerName: 'Référence', field: 'reference', sortable: true, filter: 'agTextColumnFilter', description: 'Référence unique', editable: false },
+        { headerName: 'Libellé', field: 'label', sortable: true, filter: 'agTextColumnFilter', description: 'Libellé', editable: false },
+        { headerName: 'Type', field: 'inventory_type', sortable: true, filter: 'agTextColumnFilter', description: 'Type', editable: true },
+        {
+            headerName: 'Statut',
+            field: 'status',
+            sortable: true,
+            filter: 'agTextColumnFilter',
+            description: 'État',
+            cellRenderer: params => {
+                const val = (params.value || '').toString();
+                const s = val.toLowerCase();
+                let cls = '';
+                switch (s) {
+                    case 'EN PREPARATION': cls = 'bg-warning-light text-warning'; break;
+                    case 'EN REALISATION': cls = 'bg-info-light text-info'; break;
+                    case 'TERMINE': cls = 'bg-success-light text-success'; break;
+                    case 'CLOTURE': cls = 'bg-secondary-light text-secondary'; break;
+                    default: cls = 'bg-secondary-light text-secondary';
+                }
+                return `<span class="${cls} px-3 py-1 rounded-full">${val}</span>`;
+            }
+        },
+        { headerName: "Date d'inventaire", field: 'date', sortable: true, filter: 'agDateColumnFilter', description: "Date d'inventaire" },
+        { headerName: 'Date de création', field: 'created_at', sortable: true, filter: 'agDateColumnFilter', description: 'Date de création' },
+        { headerName: 'Date de lancement', field: 'en_realisation_status_date', sortable: true, filter: 'agDateColumnFilter', description: 'Date de lancement' },
+        { headerName: "Date de fin", field: 'termine_status_date', sortable: true, filter: 'agDateColumnFilter', description: 'Date de fin' },
+        { headerName: 'Date de clôture', field: 'cloture_status_date', sortable: true, filter: 'agDateColumnFilter', description: 'Date de clôture' },
+    ];
+
+
+    const fetchInventories = async () => {
+        await inventoryStore.fetchInventories();
+    };
+
+    const handleDelete = async (inv: InventoryManagement) => {
+        try {
+            const r = await alertService.confirm({
+                title: 'Confirmation',
+                text: 'Supprimer cet inventaire ?'
+            });
+            if (r.isConfirmed) {
+                await inventoryStore.deleteInventory(inv.id);
+                await alertService.success({ text: "Supprimé avec succès" });
+                await fetchInventories();
+            }
+        } catch {
+            await alertService.error({ text: "Erreur lors de la suppression" });
         }
-        
-        return `<span class="${cls} ${textCls} px-3 py-1.5 rounded-full text-xs shadow-sm inline-flex items-center">${val}</span>`
-      }
-    },
-    { headerName: "Inventory_date",      field: 'inventory_date', sortable: true, filter: 'agDateColumnFilter', description: 'Inventory_date' },
-    { headerName: 'Date_creation',       field: 'date_creation',  sortable: true, filter: 'agDateColumnFilter', description: 'Date_creation' },
-    { headerName: 'Date_lancement',      field: 'date_lancement', sortable: true, filter: 'agDateColumnFilter', description: 'Date_lancement' },
-    { headerName: "Date de fin",         field: 'date_echeance',  sortable: true, filter: 'agDateColumnFilter', description: 'Date de fin' },
-    { headerName: 'Date_cloture',        field: 'date_cloture',   sortable: true, filter: 'agDateColumnFilter', description: 'Date_cloture' },
-  ]
+    };
 
-  const fetchInventories = async () => {
-    loading.value = true
-    try {
-      inventories.value = await inventoryManagementService.getInventories()
-    } catch {
-      await alertService.error({ text: "Erreur lors du chargement" })
-    } finally {
-      loading.value = false
-    }
-  }
+    const actions = [
+        {
+            label: 'Détail',
+            icon: IconEye,
+            class: 'flex items-center gap-1 px-2 py-1 text-secondary text-md',
+            handler: (row: Record<string, unknown>) => { const inv = row as unknown as InventoryManagement; void router.push({ name: 'inventory-detail', params: { id: inv.id } }); },
+            showWhen: () => true,
+        },
+        {
+            label: 'Importer stock',
+            icon: IconSquareCheck,
+            class: 'flex items-center gap-1 px-2 py-1 text-secondary text-md',
+            handler: (row: Record<string, unknown>) => { const inv = row as unknown as InventoryManagement; void router.push({ name: 'stock-import', params: { id: inv.id } }); },
+            showWhen: (row: Record<string, unknown>) => { const inv = row as unknown as InventoryManagement; return inv.statut === 'En préparation'; },
+        },
+        {
+            label: (row: Record<string, unknown>) => {
+                const inv = row as unknown as InventoryManagement;
+                return inv.statut === 'En réalisation' ? 'Transférer' : 'Préparer';
+            },
+            icon: IconCalendar,
+            class: 'flex items-center gap-1 px-2 py-1 text-secondary text-md',
+            handler: (row: Record<string, unknown>) => { const inv = row as unknown as InventoryManagement; void router.push({ name: 'planning-management', params: { id: inv.id } }); },
+            showWhen: (row: Record<string, unknown>) => { const inv = row as unknown as InventoryManagement; return ['En préparation', 'En réalisation'].includes(inv.statut); },
+        },
+        {
+            label: 'Modifier',
+            icon: IconEdit,
+            class: 'flex items-center gap-1 px-2 py-1 text-secondary text-md',
+            handler: (row: Record<string, unknown>) => { const inv = row as unknown as InventoryManagement; void router.push({ name: 'inventory-edit', params: { id: inv.id } }); },
+            showWhen: (row: Record<string, unknown>) => { const inv = row as unknown as InventoryManagement; return inv.statut === 'En préparation'; },
+        },
+        {
+            label: 'Résultats',
+            icon: IconSquareCheck,
+            class: 'flex items-center gap-1 px-2 py-1 text-secondary text-md',
+            handler: (row: Record<string, unknown>) => { const inv = row as unknown as InventoryManagement; void router.push({ name: 'inventory-results', params: { reference: inv.reference } }); },
+            showWhen: (row: Record<string, unknown>) => { const inv = row as unknown as InventoryManagement; return ['En réalisation', 'Terminé', 'Clôturé'].includes(inv.statut); },
+        },
+        {
+            label: 'Supprimer',
+            icon: IconTrashLines,
+            class: 'flex items-center gap-1 px-2 py-1 text-secondary text-md',
+            handler: (row: Record<string, unknown>) => { const inv = row as unknown as InventoryManagement; handleDelete(inv); },
+            showWhen: (row: Record<string, unknown>) => { const inv = row as unknown as InventoryManagement; return inv.statut === 'En préparation'; },
+        },
+    ];
 
-  const handleDelete = async (inv: InventoryManagement) => {
-    try {
-      const r = await alertService.confirm({
-        title: 'Confirmation',
-        text: 'Supprimer cet inventaire ?'
-      })
-      if (r.isConfirmed) {
-        await inventoryManagementService.deleteInventory(inv.id)
-        await alertService.success({ text: "Supprimé avec succès" })
-        await fetchInventories()
-      }
-    } catch {
-      await alertService.error({ text: "Erreur lors de la suppression" })
-    }
-  }
+    const redirectToAdd = () => { void router.push({ name: 'inventory-create' }); };
 
-  const actions: InventoryAction[] = [
-    {
-      label: 'Détail',
-      icon: markRaw(IconEye),
-      class: 'flex items-center gap-1 px-2 py-1 text-blue-600 hover:text-blue-800 text-md',
-      handler: inv => { void router.push({ name: 'inventory-detail', params: { id: inv.id } }) },
-      showWhen: () => true,
-    },
-    {
-      label: 'Importer stock',
-      icon: markRaw(IconUpload),
-      class: 'flex items-center gap-1 px-2 py-1 text-purple-600 hover:text-purple-800 text-md',
-      handler: inv => { void router.push({ name: 'stock-import', params: { id: inv.id } }) },
-      showWhen: inv => inv.statut === 'En préparation',
-    },
-    {
-      label: inv => inv.statut === 'En réalisation' ? 'Transférer' : 'Préparer',
-      icon: markRaw(IconCalendar),
-      class: 'flex items-center gap-1 px-2 py-1 text-orange-600 hover:text-orange-800 text-md',
-      handler: inv => { void router.push({ name: 'planning-management', params: { id: inv.id } }) },
-      showWhen: inv => ['En préparation', 'En réalisation'].includes(inv.statut),
-    },
-    {
-      label: 'Modifier',
-      icon: markRaw(IconEdit),
-      class: 'flex items-center gap-1 px-2 py-1 text-green-600 hover:text-green-800 text-md',
-      handler: inv => { void router.push({ name: 'inventory-edit', params: { id: inv.id } }) },
-      showWhen: inv => inv.statut === 'En préparation',
-    },
-    {
-      label: 'Résultats',
-      icon: markRaw(IconSquareCheck),
-      class: 'flex items-center gap-1 px-2 py-1 text-emerald-600 hover:text-emerald-800 text-md',
-      handler: inv => { void router.push({ name: 'inventory-results', params: { reference: inv.reference } }) },
-      showWhen: inv => ['En réalisation', 'Terminé', 'Clôturé'].includes(inv.statut),
-    },
-    {
-      label: 'Supprimer',
-      icon: markRaw(IconTrashLines),
-      class: 'flex items-center gap-1 px-2 py-1 text-red-600 hover:text-red-800 text-md',
-      handler: handleDelete,
-      showWhen: inv => inv.statut === 'En préparation',
-    },
-  ]
-
-  const redirectToAdd = () => { void router.push({ name: 'inventory-create' }) }
-
-  return {
-    inventories,
-    loading,
-    columns,
-    actions,
-    redirectToAdd,
-    fetchInventories,
-  }
+    return {
+        inventories,
+        loading,
+        columns,
+        actions,
+        redirectToAdd,
+        fetchInventories,
+    };
 }
