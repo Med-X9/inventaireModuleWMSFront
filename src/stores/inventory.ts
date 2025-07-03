@@ -61,11 +61,13 @@ export const useInventoryStore = defineStore('inventory', () => {
         loading.value = true;
         error.value = null;
         try {
-            const response: AxiosResponse<Inventory> = await InventoryService.create(data);
+            // Forcer le typage de account_id en number
+            data.account_id = Number(data.account_id);
+            const response = await InventoryService.create(data);
             inventories.value.push(response.data);
             return response.data;
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la création de l\'inventaire';
+            error.value = err.message || 'Erreur lors de la création';
             throw err;
         } finally {
             loading.value = false;

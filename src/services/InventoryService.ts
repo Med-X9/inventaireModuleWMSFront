@@ -5,10 +5,10 @@ import API from '@/api';
 
 // Interface pour la réponse paginée
 interface PaginatedResponse<T> {
-  count: number;
-  results: T[];
-  next: string | null;
-  previous: string | null;
+    count: number;
+    results: T[];
+    next: string | null;
+    previous: string | null;
 }
 
 export class InventoryService {
@@ -35,7 +35,7 @@ export class InventoryService {
 
     static async create(data: CreateInventoryRequest): Promise<AxiosResponse<Inventory>> {
         try {
-            return await axiosInstance.post<Inventory>(API.endpoints.inventory.base, data);
+            return await axiosInstance.post<Inventory>(`${API.endpoints.inventory.base}create/`, data);
         } catch (error) {
             throw error;
         }

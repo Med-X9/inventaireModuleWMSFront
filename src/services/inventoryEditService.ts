@@ -1,6 +1,6 @@
 import type { InventoryCreationState, ComptageMode } from '../interfaces/inventoryCreation';
 import type { InventoryManagement } from '../interfaces/inventoryManagement';
-import { inventoryCreationService } from './inventoryCreationService';
+import { inventoryWizardLogic } from './InventoryWizardLogic';
 
 class InventoryEditService {
   private mockInventoryMap: Map<number, InventoryManagement> = new Map([
@@ -41,7 +41,7 @@ class InventoryEditService {
     } catch (error) {
       console.error('Error updating inventory:', error);
       throw new Error('Erreur lors de la mise à jour de l\'inventaire');
-    
+
     }
   }
 
@@ -66,19 +66,19 @@ class InventoryEditService {
 
   // Réutilise la logique du service de création
   getOptionsForMode(mode: ComptageMode) {
-    return inventoryCreationService.getOptionsForMode(mode);
+    return inventoryWizardLogic.getOptionsForMode(mode);
   }
 
   getAvailableModesForStep(state: InventoryCreationState, stepIndex: number): ComptageMode[] {
-    return inventoryCreationService.getAvailableModesForStep(state, stepIndex);
+    return inventoryWizardLogic.getAvailableModesForStep(state, stepIndex);
   }
 
   getInheritedOptionsForComptage3(state: InventoryCreationState) {
-    return inventoryCreationService.getInheritedOptionsForComptage3(state);
+    return inventoryWizardLogic.getInheritedOptionsForComptage3(state);
   }
 
   getComptage3Constraints(state: InventoryCreationState) {
-    return inventoryCreationService.getComptage3Constraints(state);
+    return inventoryWizardLogic.getComptage3Constraints(state);
   }
 }
 

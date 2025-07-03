@@ -16,7 +16,7 @@ const routes: RouteRecordRaw[] = [
 
   // Inventaire
   {
-    path: '/inventory/creation',
+    path: '/inventory/create',
     name: 'inventory-create',
     component: () =>
       import(/* webpackChunkName: "inventory-create" */ '../views/Inventory/InventoryCreation.vue'),

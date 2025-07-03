@@ -85,6 +85,8 @@ export const useInventory = () => {
     };
 
     const createInventory = async (data: CreateInventoryRequest) => {
+        // Forcer le typage de account_id en number
+        data.account_id = Number(data.account_id);
         try {
             console.log('➕ Création d\'un nouvel inventaire:', data);
             const result = await inventoryStore.createInventory(data);

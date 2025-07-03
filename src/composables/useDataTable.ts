@@ -35,7 +35,7 @@ export function useDataTable(props: UseDataTableProps) {
 
   const savePaginationState = () => {
     if (!isGridValid() || !props.pagination) return
-    
+
     try {
       const currentPage = gridApi.value!.paginationGetCurrentPage()
       const currentPageSize = gridApi.value!.paginationGetPageSize()
@@ -45,7 +45,7 @@ export function useDataTable(props: UseDataTableProps) {
         pageSize: currentPageSize,
         timestamp: Date.now()
       }
-      
+
       localStorage.setItem(paginationStorageKey, JSON.stringify(state))
     } catch (err) {
       console.warn('Erreur sauvegarde pagination:', err)
@@ -54,14 +54,14 @@ export function useDataTable(props: UseDataTableProps) {
 
   const restorePaginationState = () => {
     if (!isGridValid() || !props.pagination) return
-    
+
     try {
       const saved = localStorage.getItem(paginationStorageKey)
       if (!saved) return
 
       const state = JSON.parse(saved)
       const maxAge = 24 * 60 * 60 * 1000 // 24h
-      
+
       if (state.timestamp && Date.now() - state.timestamp > maxAge) {
         localStorage.removeItem(paginationStorageKey)
         return
@@ -79,7 +79,7 @@ export function useDataTable(props: UseDataTableProps) {
           if (isGridValid()) {
             const totalPages = gridApi.value!.paginationGetTotalPages()
             const targetPage = Math.min(state.currentPage, Math.max(0, totalPages - 1))
-            
+
             if (targetPage >= 0 && totalPages > 0) {
               gridApi.value!.paginationGoToPage(targetPage)
             }
@@ -113,7 +113,7 @@ export function useDataTable(props: UseDataTableProps) {
     const stored = localStorage.getItem(props.storageKey)
     const allFields = allAvailableFields.value
     if (!stored) return allFields
-    
+
     try {
       const parsed = JSON.parse(stored) as string[]
       const newOnes = allFields.filter(f => !parsed.includes(f))
@@ -186,7 +186,7 @@ export function useDataTable(props: UseDataTableProps) {
 
   onMounted(() => {
     document.addEventListener('click', handleClickOutside, { passive: true })
-    
+
     if (props.dataUrl) {
       fetchData(props.dataUrl)
         .then(data => {
@@ -228,7 +228,7 @@ export function useDataTable(props: UseDataTableProps) {
 
       // Écouter les événements de pagination
       gridApi.value.addEventListener('paginationChanged', handlePaginationChanged)
-      
+
       // Restaurer l'état après l'initialisation
       setTimeout(() => {
         if (isGridValid()) {
