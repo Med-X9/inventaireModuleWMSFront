@@ -18,14 +18,19 @@ export interface ComptageConfig {
   // Legacy props (deprecated mais nécessaires pour la synchronisation)
   saisieQuantite: boolean;
   scannerUnitaire: boolean;
+  // Props pour compatibilité avec l'ancien système
+  useScanner?: boolean;
+  useSaisie?: boolean;
+  // Propriété pour le mode "image de stock"
+  stock_situation?: boolean;
 }
 
 export interface InventoryCreationStep1 {
   libelle: string;
   date: string;
   type: string;
-  compte: string;
-  magasin: Array<{ magasin: string; date: string }>; // Changed to support dates per magasin
+  compte: string; // ID du compte (string pour le moment, sera converti en number)
+  magasin: Array<{ magasin: string; date: string }>; // magasin contient l'ID du magasin
 }
 
 export interface InventoryCreationState {

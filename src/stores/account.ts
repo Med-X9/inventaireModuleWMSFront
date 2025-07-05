@@ -13,9 +13,12 @@ export const useAccountStore = defineStore('account', () => {
         error.value = null;
         try {
             const response = await AccountService.getAll();
-            accounts.value = response.data;
+            accounts.value = response.data.data || [];
+            console.log('💰 Accounts chargés:', accounts.value.length);
         } catch (err: any) {
             error.value = err.message || 'Erreur lors du chargement des comptes';
+            accounts.value = []; // S'assurer que c'est toujours un tableau
+            console.error('❌ Erreur chargement accounts:', err);
             throw err;
         } finally {
             loading.value = false;

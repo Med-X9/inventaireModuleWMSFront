@@ -84,39 +84,36 @@
     </div>
 </template>
 
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends Record<string, unknown> = Record<string, unknown>">
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
-import type { InventoryAction, InventoryManagement } from '@/interfaces/inventoryManagement'
+import type { ActionConfig } from '@/interfaces/dataTable'
 import IconHorizontalDots from '../icon/icon-horizontal-dots.vue'
 
-// Interface simplifiée
-interface SimplifiedInventoryAction extends InventoryAction {
+interface SimplifiedAction<T> extends ActionConfig<T> {
     disabled?: boolean
     separator?: boolean
-    important?: boolean // Nouvel indicateur pour les actions importantes
+    important?: boolean
 }
 
 const props = defineProps<{
     params: {
-        actions: SimplifiedInventoryAction[]
-        data: InventoryManagement
+        actions: SimplifiedAction<T>[]
+        data: T
     }
 }>()
 
-// État du composant
 const isOpen = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const dropdownStyle = ref<Record<string, string>>({})
 
-// Propriétés calculées
 const filteredActions = computed(() => {
-    const inv = props.params.data
+    const row = props.params.data
     return props.params.actions
-        .filter(a => a.showWhen ? a.showWhen(inv) : true)
+        .filter(a => a.visible ? (typeof a.visible === 'function' ? a.visible(row) : a.visible) : true)
         .map(a => {
             const labelText = typeof a.label === 'function'
-                ? (a.label as Function)(inv)
+                ? (a.label as Function)(row)
                 : a.label as string
 
             return {
@@ -172,6 +169,7 @@ const calculatePosition = async () => {
     }
 }
 
+
 // Gestion des événements
 const toggleMenu = async () => {
     isOpen.value = !isOpen.value
@@ -180,7 +178,7 @@ const toggleMenu = async () => {
     }
 }
 
-const handleActionClick = (action: SimplifiedInventoryAction) => {
+const handleActionClick = (action: SimplifiedAction<T>) => {
     if (action.disabled) return
 
     action.handler(props.params.data)

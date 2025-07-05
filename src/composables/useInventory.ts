@@ -67,19 +67,23 @@ export const useInventory = () => {
             console.log(`🔍 Récupération de l'inventaire ID: ${id}`);
             const result = await inventoryStore.fetchInventoryById(id);
             console.log('✅ Inventaire récupéré:', result);
-            globalStore.addNotification({
-                type: 'success',
-                title: 'Succès',
-                message: 'Inventaire récupéré avec succès'
-            });
+            if (globalStore.addNotification) {
+                globalStore.addNotification({
+                    type: 'success',
+                    title: 'Succès',
+                    message: 'Inventaire récupéré avec succès'
+                });
+            }
             return result;
         } catch (err: any) {
             console.error(`❌ Erreur lors de la récupération de l'inventaire ${id}:`, err);
-            globalStore.addNotification({
-                type: 'error',
-                title: 'Erreur',
-                message: err.message || 'Erreur lors de la récupération de l\'inventaire'
-            });
+            if (globalStore.addNotification) {
+                globalStore.addNotification({
+                    type: 'error',
+                    title: 'Erreur',
+                    message: err.message || 'Erreur lors de la récupération de l\'inventaire'
+                });
+            }
             throw err;
         }
     };
@@ -91,19 +95,23 @@ export const useInventory = () => {
             console.log('➕ Création d\'un nouvel inventaire:', data);
             const result = await inventoryStore.createInventory(data);
             console.log('✅ Inventaire créé:', result);
-            globalStore.addNotification({
-                type: 'success',
-                title: 'Succès',
-                message: 'Inventaire créé avec succès'
-            });
+            if (globalStore.addNotification) {
+                globalStore.addNotification({
+                    type: 'success',
+                    title: 'Succès',
+                    message: 'Inventaire créé avec succès'
+                });
+            }
             return result;
         } catch (err: any) {
             console.error('❌ Erreur lors de la création de l\'inventaire:', err);
-            globalStore.addNotification({
-                type: 'error',
-                title: 'Erreur',
-                message: err.message || 'Erreur lors de la création de l\'inventaire'
-            });
+            if (globalStore.addNotification) {
+                globalStore.addNotification({
+                    type: 'error',
+                    title: 'Erreur',
+                    message: err.message || 'Erreur lors de la création de l\'inventaire'
+                });
+            }
             throw err;
         }
     };
@@ -113,19 +121,23 @@ export const useInventory = () => {
             console.log(`✏️ Mise à jour de l'inventaire ID: ${id}`, data);
             const result = await inventoryStore.updateInventory(id, data);
             console.log('✅ Inventaire mis à jour:', result);
-            globalStore.addNotification({
-                type: 'success',
-                title: 'Succès',
-                message: 'Inventaire mis à jour avec succès'
-            });
+            if (globalStore.addNotification) {
+                globalStore.addNotification({
+                    type: 'success',
+                    title: 'Succès',
+                    message: 'Inventaire mis à jour avec succès'
+                });
+            }
             return result;
         } catch (err: any) {
             console.error(`❌ Erreur lors de la mise à jour de l'inventaire ${id}:`, err);
-            globalStore.addNotification({
-                type: 'error',
-                title: 'Erreur',
-                message: err.message || 'Erreur lors de la mise à jour de l\'inventaire'
-            });
+            if (globalStore.addNotification) {
+                globalStore.addNotification({
+                    type: 'error',
+                    title: 'Erreur',
+                    message: err.message || 'Erreur lors de la mise à jour de l\'inventaire'
+                });
+            }
             throw err;
         }
     };
@@ -135,18 +147,22 @@ export const useInventory = () => {
             console.log(`🗑️ Suppression de l'inventaire ID: ${id}`);
             await inventoryStore.deleteInventory(id);
             console.log('✅ Inventaire supprimé avec succès');
-            globalStore.addNotification({
-                type: 'success',
-                title: 'Succès',
-                message: 'Inventaire supprimé avec succès'
-            });
+            if (globalStore.addNotification) {
+                globalStore.addNotification({
+                    type: 'success',
+                    title: 'Succès',
+                    message: 'Inventaire supprimé avec succès'
+                });
+            }
         } catch (err: any) {
             console.error(`❌ Erreur lors de la suppression de l'inventaire ${id}:`, err);
-            globalStore.addNotification({
-                type: 'error',
-                title: 'Erreur',
-                message: err.message || 'Erreur lors de la suppression de l\'inventaire'
-            });
+            if (globalStore.addNotification) {
+                globalStore.addNotification({
+                    type: 'error',
+                    title: 'Erreur',
+                    message: err.message || 'Erreur lors de la suppression de l\'inventaire'
+                });
+            }
             throw err;
         }
     };

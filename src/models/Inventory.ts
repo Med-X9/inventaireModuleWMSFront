@@ -1,13 +1,14 @@
-import type { Count } from './Count';
+import type { Count, CreateCountRequest } from './Count';
+import type { TableRow } from '@/interfaces/dataTable';
 
 export interface InventoryWarehouse {
     id: number;
     date: string;
 }
 
-export interface Inventory {
-    id: number | null;
-    reference: string | null;
+export interface InventoryTable extends TableRow {
+    id: number;
+    reference: string;
     label: string;
     date: string;
     status: string;
@@ -26,5 +27,5 @@ export interface CreateInventoryRequest {
     date: string;
     account_id: number;
     warehouse: InventoryWarehouse[];
-    comptages: Omit<Count, 'id' | 'reference' | 'inventory' | 'created_at' | 'updated_at'>[];
+    comptages: CreateCountRequest[];
 }

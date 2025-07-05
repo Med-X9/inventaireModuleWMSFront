@@ -76,8 +76,8 @@ const modeFields = computed<FieldConfig[]>(() => [
     key: 'mode',
     label: 'Mode de comptage',
     type: 'select',
-    options: props.availableModes.map(m => ({ 
-      label: m, 
+    options: props.availableModes.map(m => ({
+      label: m,
       value: m,
       tooltip: modeTooltips[m] || ''
     })),
@@ -95,7 +95,7 @@ const availableFields = computed<FieldConfig[]>(() => {
   if (options.value.hasEnVracOptions) {
     // Options radio pour "en vrac"
     const radioOptions = getRadioOptions();
-    
+
     fields.push({
       key: 'inputMethod',
       label: 'Méthode opératoire',
@@ -229,11 +229,13 @@ function getFieldValues() {
 
 function onModeChange(data: Record<string, unknown>) {
   const newMode = data.mode as string;
-  
+
   // Reset toutes les options selon le mode sélectionné
   if (newMode === 'image de stock') {
     // Aucune option pour "image de stock"
     resetAllOptions();
+    // Pour "image de stock", stock_situation doit être true
+    local.stock_situation = true;
   } else if (newMode === 'en vrac') {
     // Reset options "par article"
     local.isVariante = false;
@@ -241,7 +243,9 @@ function onModeChange(data: Record<string, unknown>) {
     local.dlc = false;
     local.numeroSerie = false;
     local.numeroLot = false;
-    
+    // Pour les autres modes, stock_situation doit être false
+    local.stock_situation = false;
+
     // Valeur par défaut pour "en vrac" si pas encore définie
     if (!local.inputMethod) {
       local.inputMethod = 'scanner';
@@ -252,11 +256,13 @@ function onModeChange(data: Record<string, unknown>) {
     local.inputMethod = '';
     local.saisieQuantite = false;
     local.scannerUnitaire = false;
+    // Pour les autres modes, stock_situation doit être false
+    local.stock_situation = false;
   }
 
   // Assigner le nouveau mode
   local.mode = newMode as any;
-  
+
   // Pour Comptage 3, hériter des options des comptages précédents si nécessaire
   if (props.stepIndex === 2) {
     const inheritedOptions = inventoryCreationService.getInheritedOptionsForComptage3({
@@ -283,6 +289,7 @@ function resetAllOptions() {
   local.numeroLot = false;
   local.saisieQuantite = false;
   local.scannerUnitaire = false;
+  local.stock_situation = false;
 }
 
 function onOptionsChange(data: Record<string, unknown>) {
@@ -314,7 +321,7 @@ function onValidationChange(isValid: boolean) {
 // Watch pour synchroniser avec les props
 watch(() => props.modelValue, val => {
   Object.assign(local, val);
-  
+
   // Valeur par défaut pour "en vrac" si pas encore définie
   if (local.mode === 'en vrac' && !local.inputMethod) {
     local.inputMethod = 'scanner';

@@ -1,6 +1,8 @@
+import { Count } from '@/models/Count'
+import { InventoryWarehouse } from '@/models/Inventory'
 import type { ColDef } from 'ag-grid-community'
 
-// Generic action configuration that works with any row type
+// Action générique
 export interface ActionConfig<T = Record<string, unknown>> {
     label: string | ((row: T) => string)
     icon?: unknown
@@ -10,26 +12,58 @@ export interface ActionConfig<T = Record<string, unknown>> {
     disabled?: boolean | ((row: T) => boolean)
 }
 
-// Generic table row interface
+// Table row générique
 export interface TableRow {
     [key: string]: unknown
 }
 
-// DataTable column interface extending ColDef
-export interface DataTableColumn extends ColDef {
+// Configuration pour les détails expandables
+export interface DetailConfig {
+    key: string
+    displayField: string
+    labelField?: string
+    iconCollapsed?: string
+    iconExpanded?: string
+    countSuffix?: string
+    columns?: {
+        field: string
+        valueKey?: string
+        formatter?: (value: unknown, item: unknown) => string
+    }[]
+}
+
+// DataTableColumn générique
+export interface DataTableColumn<T = TableRow> extends ColDef {
     description?: string
     field?: string
     headerName?: string
+    detailConfig?: DetailConfig
+}
+
+// Interface pour les lignes avec détails
+export interface RowWithDetails extends TableRow {
+    isChild?: boolean
+    parentId?: string | null
+    childType?: string
+    originalItem?: unknown
 }
 
 // Specific inventory interfaces
-export interface InventoryManagement {
-    id: string
-    reference: string
-    inventory_date: string
-    date_creation: string
-    status: string
-    [key: string]: unknown
+export interface InventoryManagement extends TableRow {
+    id: number ;
+    reference: string ;
+    label: string;
+    date: string;
+    inventory_type : string
+    status: string;
+    created_at: string;
+    en_preparation_status_date: string | null;
+    en_realisation_status_date: string | null;
+    ternime_status_date: string | null;
+    cloture_status_date: string | null;
+    account_name: string;
+    warehouse: InventoryWarehouse[];
+    comptages: Count[];
 }
 
 export interface InventoryResult {

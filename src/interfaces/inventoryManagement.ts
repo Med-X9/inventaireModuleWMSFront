@@ -1,34 +1,38 @@
+import { Count } from '@/models/Count';
+import { InventoryWarehouse } from '@/models/Inventory';
 import type { Component } from 'vue'
 // src/interfaces/inventoryManagement.ts
 export interface Team {
-  id: number;
-  name: string;
+    id: number;
+    name: string;
 }
 
 export interface InventoryManagement {
-  id: number;
-  reference: string;
-  inventory_date: string;
-  date_creation: string;
-  date_lancement: string;
-  date_echeance: string;
-  date_cloture: string;
-  label: string;
-  type: string;
-  statut: string;
-  teams?: Team[];
-  comptages?: import('./inventoryCreation').ComptageConfig[];
+    id: number ;
+    reference: string ;
+    label: string;
+    date: string;
+    inventory_type : string
+    status: string;
+    created_at: string;
+    en_preparation_status_date: string | null;
+    en_realisation_status_date: string | null;
+    ternime_status_date: string | null;
+    cloture_status_date: string | null;
+    account_name: string;
+    warehouse: InventoryWarehouse[];
+    comptages: Count[];
 }
 
 // Ajout de showWhen dans InventoryAction
 export interface InventoryAction {
-  label: string | ((inventory: InventoryManagement) => string)
+    label: string | ((inventory: InventoryManagement) => string)
 
-  icon?: Component
+    icon?: Component
 
-  class?: string
+    class?: string
 
-  handler: (inventory: InventoryManagement) => void | Promise<void>
+    handler: (inventory: InventoryManagement) => void | Promise<void>
 
-  showWhen?: (inventory: InventoryManagement) => boolean
+    showWhen?: (inventory: InventoryManagement) => boolean
 }
