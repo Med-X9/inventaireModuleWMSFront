@@ -23,7 +23,7 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'git-cred', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
                     sh '''
                         rm -rf /tmp/frontend
-                        git clone --single-branch --branch devops https://$GIT_USER:$GIT_PASS@github.com/Med-X9/inventaireModuleWMSFront.git /tmp/frontend
+                        git clone --single-branch --branch dev https://$GIT_USER:$GIT_PASS@github.com/Med-X9/inventaireModuleWMSFront.git /tmp/frontend
                     '''
                 }
             }
