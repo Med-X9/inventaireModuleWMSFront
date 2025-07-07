@@ -18,6 +18,9 @@ const API = {
         warehouse: {
             base: '/masterdata/api/warehouses/'
         },
+        usersmobile: {
+            base: '/masterdata/api/users/mobile/'
+        },
         account: {
             base: '/masterdata/api/accounts/'
         },
