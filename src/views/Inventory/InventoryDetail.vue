@@ -1,54 +1,65 @@
 <template>
   <div class="space-y-2">
-    <!-- En-tête -->
-    <div class="flex flex-wrap gap-2 mb-4 justify-end">
-      <!-- Buttons for "En préparation" status -->
-      <template v-if="inventory?.statut?.toLowerCase() === 'en préparation'">
-        <button class="btn btn-primary p-2 px-4 flex items-center gap-2" @click="launchInventory">
-          <IconPlay class="w-4 h-4" />
-          Lancer
-        </button>
-        <button class="btn btn-primary p-2 px-4 flex items-center gap-2" @click="editInventory">
-          <IconEdit class="w-4 h-4" />
-          Modifier
-        </button>
-      </template>
+    <!-- En-tête avec navigation -->
+    <div class="flex flex-wrap gap-2 mb-4 justify-between items-center">
+      <!-- Navigation Links -->
+      <div class="flex-shrink-0">
+        <PageNavigationLinks 
+          :inventoryId="inventoryId" 
+          :actions="['planning', 'affectation', 'edit', 'results']" 
+        />
+      </div>
 
-      <!-- Buttons for "En réalisation" status -->
-      <template v-else-if="inventory?.statut?.toLowerCase() === 'en réalisation'">
-        <button class="btn btn-danger p-2 px-4 flex items-center gap-2" @click="cancelInventory">
-          <IconCancel class="w-4 h-4" />
-          Annuler
-        </button>
-        <button class="btn btn-primary p-2 px-4 flex items-center gap-2" @click="terminateInventory">
-          <IconCheck class="w-4 h-4" />
-          Terminer
-        </button>
-        <button class="btn btn-primary p-2 px-4 flex items-center gap-2" @click="closeInventory">
-          <IconLock class="w-4 h-4" />
-          Clôturer
-        </button>
-      </template>
+      <!-- Action Buttons -->
+      <div class="flex flex-wrap gap-2">
+        <!-- Buttons for "En préparation" status -->
+        <template v-if="inventory?.statut?.toLowerCase() === 'en préparation'">
+          <button class="btn btn-primary p-2 px-4 flex items-center gap-2" @click="launchInventory">
+            <IconPlay class="w-4 h-4" />
+            Lancer
+          </button>
+          <button class="btn btn-primary p-2 px-4 flex items-center gap-2" @click="editInventory">
+            <IconEdit class="w-4 h-4" />
+            Modifier
+          </button>
+        </template>
 
-      <!-- Buttons for "Terminé" status -->
-      <template v-else-if="inventory?.statut?.toLowerCase() === 'terminé'">
-        <button class="btn btn-primary p-2 px-4 flex items-center gap-2" @click="closeInventory">
-          <IconLock class="w-4 h-4" />
-          Clôturer
-        </button>
-      </template>
+        <!-- Buttons for "En réalisation" status -->
+        <template v-else-if="inventory?.statut?.toLowerCase() === 'en réalisation'">
+          <button class="btn btn-danger p-2 px-4 flex items-center gap-2" @click="cancelInventory">
+            <IconCancel class="w-4 h-4" />
+            Annuler
+          </button>
+          <button class="btn btn-primary p-2 px-4 flex items-center gap-2" @click="terminateInventory">
+            <IconCheck class="w-4 h-4" />
+            Terminer
+          </button>
+          <button class="btn btn-primary p-2 px-4 flex items-center gap-2" @click="closeInventory">
+            <IconLock class="w-4 h-4" />
+            Clôturer
+          </button>
+        </template>
 
-      <!-- PDF button - always visible except for "Clôturé" status where it's the only button -->
-      <button 
-        type="button" 
-        @click="exportToPDF" 
-        v-tippy:button 
-        class="btn btn-primary p-2 px-4 flex items-center gap-2"
-      >
-        <IconDownload class="w-4 h-4" />
-        PDF
-      </button>
-      <tippy target="button" placement="bottom">Exporter en PDF</tippy>
+        <!-- Buttons for "Terminé" status -->
+        <template v-else-if="inventory?.statut?.toLowerCase() === 'terminé'">
+          <button class="btn btn-primary p-2 px-4 flex items-center gap-2" @click="closeInventory">
+            <IconLock class="w-4 h-4" />
+            Clôturer
+          </button>
+        </template>
+
+        <!-- PDF button - always visible except for "Clôturé" status where it's the only button -->
+        <button 
+          type="button" 
+          @click="exportToPDF" 
+          v-tippy:button 
+          class="btn btn-primary p-2 px-4 flex items-center gap-2"
+        >
+          <IconDownload class="w-4 h-4" />
+          PDF
+        </button>
+        <tippy target="button" placement="bottom">Exporter en PDF</tippy>
+      </div>
     </div>
 
     <!-- Container principal -->
@@ -313,6 +324,7 @@
                     :rowDataProp="getJobsForTab(tab.id)"
                     :pagination="true"
                     :showColumnSelector="true"
+                    :showDetails="true"
                     :storageKey="'inventory_jobs_' + tab.id"
                   >
                     <template #contenu>
@@ -380,6 +392,7 @@ import { onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DataTable from '@/components/DataTable/DataTable.vue';
 import GridView from '@/components/GridView/GridView.vue';
+import PageNavigationLinks from '@/components/PageNavigationLinks.vue';
 import IconDownload from '@/components/icon/icon-download.vue';
 import IconPlay from '@/components/icon/icon-play.vue';
 import IconEdit from '@/components/icon/icon-edit.vue';

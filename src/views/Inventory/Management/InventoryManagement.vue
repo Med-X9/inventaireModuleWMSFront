@@ -7,8 +7,8 @@
         :pagination="true"
         :enableRowSelection="true"
         :enableFiltering="true"
-        storageKey="inventory_management_table"
-        inlineEditing
+         storageKey="inventory_management_table"
+        :inlineEditing="false"
       >
         <template #table-actions>
           <div class="flex items-center flex-wrap gap-2">

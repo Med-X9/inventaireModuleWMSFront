@@ -81,16 +81,52 @@ class InventoryDetailService {
       ],
       jobsData: {
         comptage1: [
-          { name: 'Préparation zone', status: 'Terminé', date: '2025-12-20', operator: 'Jean D.' },
-          { name: 'Scan emplacements', status: 'En cours', date: '2025-12-20', operator: 'Marie L.' },
-          { name: 'Vérification', status: 'En attente', date: '2025-12-20', operator: 'Pierre M.' }
+          { 
+            name: 'Job Zone A', 
+            status: 'Terminé', 
+            date: '2025-12-20', 
+            operator: 'Jean D.',
+            locations: ['Emplacement A1 | Zone A | Sous-zone A1', 'Emplacement A2 | Zone A | Sous-zone A2', 'Emplacement A3 | Zone A | Sous-zone A1']
+          },
+          { 
+            name: 'Job Zone B', 
+            status: 'En cours', 
+            date: '2025-12-20', 
+            operator: 'Marie L.',
+            locations: ['Emplacement B1 | Zone B | Sous-zone B1', 'Emplacement B2 | Zone B | Sous-zone B2']
+          },
+          { 
+            name: 'Job Zone C', 
+            status: 'En attente', 
+            date: '2025-12-20', 
+            operator: 'Pierre M.',
+            locations: ['Emplacement C1 | Zone C | Sous-zone C1', 'Emplacement C2 | Zone C | Sous-zone C2', 'Emplacement C3 | Zone C | Sous-zone C1', 'Emplacement C4 | Zone C | Sous-zone C3']
+          }
         ],
         comptage2: [
-          { name: 'Scan articles', status: 'En attente', date: '2025-12-21', operator: 'Sophie R.' },
-          { name: 'Contrôle quantités', status: 'En attente', date: '2025-12-21', operator: 'Luc B.' }
+          { 
+            name: 'Job Contrôle A', 
+            status: 'En attente', 
+            date: '2025-12-21', 
+            operator: 'Sophie R.',
+            locations: ['Emplacement A1 | Zone A | Sous-zone A1', 'Emplacement A5 | Zone A | Sous-zone A3']
+          },
+          { 
+            name: 'Job Contrôle B', 
+            status: 'En attente', 
+            date: '2025-12-21', 
+            operator: 'Luc B.',
+            locations: ['Emplacement B3 | Zone B | Sous-zone B1', 'Emplacement B4 | Zone B | Sous-zone B3', 'Emplacement B5 | Zone B | Sous-zone B2']
+          }
         ],
         comptage3: [
-          { name: 'Validation finale', status: 'En attente', date: '2025-12-22', operator: 'Anne C.' }
+          { 
+            name: 'Job Validation Finale', 
+            status: 'En attente', 
+            date: '2025-12-22', 
+            operator: 'Anne C.',
+            locations: ['Emplacement A1 | Zone A | Sous-zone A1', 'Emplacement B1 | Zone B | Sous-zone B1']
+          }
         ]
       }
     };

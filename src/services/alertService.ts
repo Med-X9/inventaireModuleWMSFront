@@ -1,11 +1,6 @@
 // src/services/alertService.ts
 import Swal from 'sweetalert2';
 
-const getCssVar = (name: string) =>
-  getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim();
-
 const Toast = Swal.mixin({
   toast: true,
   position: 'top-end',
@@ -14,17 +9,14 @@ const Toast = Swal.mixin({
   timerProgressBar: true,
 
   customClass: {
-    popup: 'sweet-alerts toast-alert',    // vos classes existantes
+    popup: 'sweet-alerts toast-alert',
     title: 'toast-title',
     htmlContainer: 'toast-message'
   },
 
-  // On ajoute ici showClass pour déclencher l'animation d'entrée
   showClass: {
     popup: 'swal2-show toast-enter'
   },
-  // On peut ajouter hideClass pour la sortie (mais ce n'est pas obligatoire si on laisse 
-  // SweetAlert2 gérer par défaut la suppression ; on l'ajoute ici pour être complet) :
   hideClass: {
     popup: 'swal2-hide'
   },
@@ -41,22 +33,42 @@ export interface AlertOptions {
   timer?: number;
 }
 
+export interface ConfirmOptions {
+  title?: string;
+  text: string;
+  confirmButtonText?: string;
+  cancelButtonText?: string;
+  type?: 'warning' | 'danger';
+}
+
 export const alertService = {
-  async confirm(opts: AlertOptions) {
+  async confirm(opts: ConfirmOptions) {
+    const isDelete = opts.type === 'danger';
+    
     return Swal.fire({
       title: opts.title || 'Confirmation',
       text: opts.text,
-      icon: 'warning',
+      icon: isDelete ? 'error' : 'warning',
       showCancelButton: true,
-      confirmButtonColor: getCssVar('--color-primary'),
-      cancelButtonColor: getCssVar('--color-secondary'),
-      confirmButtonText: 'Oui, confirmer',
-      cancelButtonText: 'Annuler',
+      confirmButtonColor: isDelete ? '#ef4444' : '#FFCC11', // Utilise vos couleurs Tailwind
+      cancelButtonColor: '#595959',
+      confirmButtonText: opts.confirmButtonText || (isDelete ? 'Oui, supprimer' : 'Oui, confirmer'),
+      cancelButtonText: opts.cancelButtonText || 'Annuler',
       customClass: {
-        popup: 'sweet-alerts',
-        confirmButton: 'btn btn-primary',
-        cancelButton: 'bg-secondary/10 text-secondary hover:bg-secondary/5',
+        popup: 'sweet-alerts confirmation-popup',
+        confirmButton: `btn ${isDelete ? 'btn-danger' : 'btn-primary'}`,
+        cancelButton: 'btn btn-secondary',
       },
+      buttonsStyling: false
+    });
+  },
+
+  async confirmDelete(opts: Omit<ConfirmOptions, 'type'>) {
+    return this.confirm({
+      ...opts,
+      type: 'danger',
+      title: opts.title || 'Confirmer la suppression',
+      confirmButtonText: opts.confirmButtonText || 'Oui, supprimer'
     });
   },
 
@@ -66,7 +78,7 @@ export const alertService = {
       title: opts.title || 'Succès',
       text: opts.text,
       timer: opts.timer ?? 3000,
-      background: getCssVar('--color-success'),
+      background: '#22c55e', // Couleur unie success de Tailwind
       iconColor: 'white',
     });
   },
@@ -77,7 +89,7 @@ export const alertService = {
       title: opts.title || 'Erreur',
       text: opts.text,
       timer: opts.timer ?? 3000,
-      background: getCssVar('--color-danger'),
+      background: '#ef4444', // Couleur unie danger de Tailwind
       iconColor: 'white',
     });
   },
@@ -88,7 +100,7 @@ export const alertService = {
       title: opts.title || 'Attention',
       text: opts.text,
       timer: opts.timer ?? 3000,
-      background: getCssVar('--color-warning'),
+      background: '#f59e0b', // Couleur unie warning de Tailwind
       iconColor: 'white',
     });
   },
@@ -96,10 +108,10 @@ export const alertService = {
   info(opts: AlertOptions) {
     return Toast.fire({
       icon: 'info',
-      title: opts.title || 'Info',
+      title: opts.title || 'Information',
       text: opts.text,
       timer: opts.timer ?? 3000,
-      background: getCssVar('--color-info'),
+      background: '#3b82f6', // Couleur unie info de Tailwind
       iconColor: 'white',
     });
   }

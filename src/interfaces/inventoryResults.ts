@@ -10,7 +10,7 @@ export interface InventoryResult {
   premier_contage: number;
   deuxieme_contage: number;
   ecart: number;
-  troisieme_contage: number;
+  troisieme_contage: number | null;
   resultats: string;
   inventory: string;
   store: string;

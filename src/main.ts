@@ -1,10 +1,6 @@
 import { createApp } from 'vue';
 import App from '@/App.vue';
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
-// main.ts ou équivalent
-
-
-
 
 // pinia store
 import { createPinia } from 'pinia';
@@ -71,6 +67,8 @@ import {
   SelectEditorModule,
   NumberEditorModule,
   DateEditorModule,
+    CustomEditorModule,    // ← à ajouter
+  RenderApiModule 
 } from 'ag-grid-community'
 
 ModuleRegistry.registerModules([
@@ -89,7 +87,9 @@ ModuleRegistry.registerModules([
   TextEditorModule,     
   SelectEditorModule,
   NumberEditorModule,
-  DateEditorModule
+  DateEditorModule,
+   CustomEditorModule,    // ← ici
+  RenderApiModule        // ← et ici
 ])
 
 // montez l'app après avoir enregistré vos modules

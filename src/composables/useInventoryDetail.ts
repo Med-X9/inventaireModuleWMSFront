@@ -6,6 +6,7 @@ import type { DetailData } from '@/interfaces/Detail';
 import { inventoryDetailService } from '@/services/inventoryDetailService';
 import { useAppStore } from '@/stores';
 import { generatePDF } from '@/utils/pdfGenerator';
+import type { DataTableColumn } from '@/interfaces/dataTable';
 
 export function useInventoryDetail(inventoryId: number) {
   const router = useRouter();
@@ -33,23 +34,93 @@ export function useInventoryDetail(inventoryId: number) {
     { id: 'comptage3', label: 'Troisième comptage' },
   ];
 
-  const jobColumns = [
-    { headerName: 'Nom', field: 'name', sortable: true },
+  const jobColumns: DataTableColumn[] = [
+    {
+      headerName: 'Job',
+      field: 'name',
+      sortable: true,
+      filter: 'agTextColumnFilter',
+      flex: 2,
+      detailConfig: {
+        key: 'locations',
+        displayField: 'name',
+        countSuffix: 'emplacements',
+        columns: [
+          {
+            field: 'name',
+            formatter: (value, item) => {
+              // Les emplacements sont des strings directement
+              if (typeof item === 'string') {
+                const [emplacement] = item.split(' | ');
+                return emplacement;
+              }
+              return String(item || '');
+            }
+          },
+          {
+            field: 'zone',
+            formatter: (value, item) => {
+              if (typeof item === 'string') {
+                const [, zone] = item.split(' | ');
+                return zone || '';
+              }
+              return '';
+            }
+          },
+          {
+            field: 'sousZone',
+            formatter: (value, item) => {
+              if (typeof item === 'string') {
+                const [, , sousZone] = item.split(' | ');
+                return sousZone || '';
+              }
+              return '';
+            }
+          }
+        ]
+      }
+    },
+    {
+      headerName: 'Zone',
+      field: 'zone',
+      sortable: true,
+      filter: 'agTextColumnFilter',
+      flex: 1
+    },
+    {
+      headerName: 'Sous-zone',
+      field: 'sousZone',
+      sortable: true,
+      filter: 'agTextColumnFilter',
+      flex: 1
+    },
     {
       headerName: 'Statut',
       field: 'status',
       sortable: true,
       cellRenderer: (params: any) => {
+        if (!params.data || params.data.isChild) return '';
         const statusClass = getStatusClass(params.data.status);
         return `<span class="px-3 py-1 rounded-full text-sm ${statusClass}">${params.data.status}</span>`;
       }
     },
-    { headerName: 'Date', field: 'date', sortable: true },
+    { 
+      headerName: 'Date', 
+      field: 'date', 
+      sortable: true,
+      valueFormatter: (params: any) => {
+        if (!params.data) return '';
+        if (params.data.isChild) return '';
+        return params.value || '';
+      }
+    },
     {
       headerName: 'Opérateur',
       field: 'operator',
       sortable: true,
       cellRenderer: (params: any) => {
+        if (!params.data) return '';
+        if (params.data.isChild) return '';
         return params.data.status.toLowerCase() === 'terminé' ? params.data.operator : '';
       }
     }
@@ -111,8 +182,25 @@ export function useInventoryDetail(inventoryId: number) {
     }
   };
 
+  // Fonction pour transformer les données des jobs en s'assurant que les locations sont correctement structurées
   const getJobsForTab = (tabId: string) => {
-    return detailData.value.jobsData[tabId] || [];
+    const rawJobs = detailData.value.jobsData[tabId] || [];
+    
+    // Transformer les jobs pour s'assurer que la structure des locations est correcte
+    return rawJobs.map(job => {
+      // Créer une copie du job avec les locations correctement formatées
+      const processedJob = {
+        ...job,
+        // S'assurer que l'ID est défini pour l'expansion
+        id: job.id || job.name || Math.random().toString(36).substr(2, 9),
+        // S'assurer que les locations sont un array
+        locations: Array.isArray(job.locations) ? job.locations : []
+      };
+
+      console.log('Processing job:', processedJob.name, 'locations:', processedJob.locations);
+      
+      return processedJob;
+    });
   };
 
   const getCompletedJobsCount = (tabId: string) => {
@@ -175,6 +263,15 @@ export function useInventoryDetail(inventoryId: number) {
     try {
       const data = await inventoryDetailService.getInventoryDetail(inventoryId);
       detailData.value = data;
+      
+      // Debug: Log the structure of jobsData to understand the data format
+      console.log('Loaded jobsData:', detailData.value.jobsData);
+      
+      // Process each tab's jobs to ensure proper structure
+      Object.keys(detailData.value.jobsData).forEach(tabId => {
+        const jobs = detailData.value.jobsData[tabId];
+        console.log(`Jobs for tab ${tabId}:`, jobs);
+      });
     } catch (error) {
       console.error('Error loading inventory details:', error);
     }

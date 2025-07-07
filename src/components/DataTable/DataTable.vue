@@ -144,6 +144,7 @@
         class="ag-theme-alpine"
         :style="dynamicGridStyle"
         domLayout="normal"
+        :theme="gridTheme"
         @grid-ready="handleGridReady"
         @first-data-rendered="handleFirstDataRendered"
         @selection-changed="handleSelectionChanged"
@@ -169,8 +170,11 @@
           minWidth: 65,
           maxWidth: 70,
           cellClass: 'text-left',
+          cellStyle: (params) => params.data?.isChild ? { display: 'none' } : undefined
         }"
-        :singleClickEdit="inlineEditing"
+        :selectionOptions="{ isRowSelectable }"
+        :enterNavigatesVertically="true"
+        :enterNavigatesVerticallyAfterEdit="true"
         :stopEditingWhenCellsLoseFocus="false"
         @cellKeyDown="handleCellKeyDown"
         @cellEditingStopped="handleCellEditingStopped"
@@ -186,13 +190,27 @@
 
 <script setup lang="ts" generic="T extends Record<string, unknown> = Record<string, unknown>">
 import { defineEmits } from 'vue'
+import { defineProps, computed } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3'
 import type { PropType } from 'vue'
 import type { SelectionChangedEvent, CellKeyDownEvent, CellEditingStoppedEvent, ModelUpdatedEvent, CellValueChangedEvent } from 'ag-grid-community'
-import type { ActionConfig, DataTableColumn } from '@/interfaces/dataTable'
+import type { ActionConfig, DataTableColumn, RowWithDetails } from '@/interfaces/dataTable'
 import { useDataTable } from '@/composables/useDataTable'
 import ActionMenu from './ActionMenu.vue'
 import Tooltip from '../Tooltip.vue'
+import { useAppStore } from '@/stores/index';
+import { themeQuartz, colorSchemeLightWarm, colorSchemeDarkBlue } from 'ag-grid-community';
+
+
+
+const themeStore = useAppStore();
+const themeLight = themeQuartz.withPart(colorSchemeLightWarm);
+const themeDark = themeQuartz.withPart(colorSchemeDarkBlue);
+
+const gridTheme = computed(() =>
+  themeStore.theme === 'dark' ? themeDark : themeLight
+);
+
 
 const emit = defineEmits<{
   'selection-changed': [selectedRows: T[]]
@@ -212,9 +230,15 @@ const props = defineProps({
   actionsHeaderName: { type: String, default: 'Actions' },
   rowSelection: { type: Boolean, default: false },
   exportTitle: { type: String, default: 'Export de données' },
-  inlineEditing: { type: Boolean, default: false },
-  maxRowsForDynamicHeight: { type: Number, default: 10 }
+  inlineEditing: { type: Boolean, default: false }, // DÉFAUT FALSE
+  maxRowsForDynamicHeight: { type: Number, default: 10 },
+  showDetails: { type: Boolean, default: false }
 })
+
+// Fonction pour déterminer si une ligne peut être sélectionnée
+const isRowSelectable = (params: { data?: RowWithDetails }) => {
+  return !params.data?.isChild;
+};
 
 // Use DataTable composable
 const {
@@ -320,6 +344,15 @@ const handleCellValueChanged = (event: CellValueChangedEvent) => {
 :deep(.ag-page-size), 
 :deep(.ag-input-field-input) {
   font-size: 13.5px;
+}
+
+/* Masquer les checkboxes pour les lignes enfants */
+:deep(.ag-row .ag-selection-checkbox) {
+  visibility: visible;
+}
+
+:deep(.ag-row[data-is-child="true"] .ag-selection-checkbox) {
+  display: none !important;
 }
 
 @media (max-width: 640px) {

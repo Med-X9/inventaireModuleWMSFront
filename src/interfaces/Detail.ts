@@ -5,6 +5,7 @@ export interface JobDetail extends Record<string, unknown> {
   status: string;
   date: string;
   operator: string;
+  locations: string[];
 }
 
 export interface DetailData {

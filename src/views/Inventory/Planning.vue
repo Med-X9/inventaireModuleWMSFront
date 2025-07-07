@@ -2,17 +2,23 @@
   <div>
     <div>
       <!-- Section Jobs -->
+      <div class="mb-3">
+        <PageNavigationLinks 
+          :inventoryId="currentInventoryId" 
+          :actions="['detail', 'affectation', 'edit']" 
+        />
+      </div>
       <section>
-       
-         <!-- Table 2: Jobs créés -->
+        <!-- Table 2: Jobs créés -->
         <div class="panel">
           <h3 class="text-lg font-semibold mb-2">Jobs créés</h3>
           <DataTable
             v-if="jobs.length"
             :key="jobsKey"
             :columns="jobColumns"
-            :rowDataProp="displayJobsData"
+            :rowDataProp="jobs"
             :rowSelection="true"
+            :showDetails="true"
             @selection-changed="onJobSelectionChanged"
             :showColumnSelector="false"
             storageKey="planning_jobs"
@@ -56,9 +62,10 @@
             <p class="text-sm text-gray-400 mt-2">Sélectionnez des emplacements dans la table ci-dessous pour créer un job</p>
           </div>
         </div>
+
         <!-- Table 2: Emplacements disponibles -->
         <div class="mt-6 panel">
-           <h3 class="text-lg font-semibold mb-2">Emplacements disponibles</h3>
+          <h3 class="text-lg font-semibold mb-2">Emplacements disponibles</h3>
           <DataTable
             :key="availableLocationsKey"
             :columns="availableLocationColumns"
@@ -115,17 +122,36 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
+import { useRoute } from 'vue-router';
 import { usePlanning } from '@/composables/usePlanning';
 import { alertService } from '@/services/alertService';
 import DataTable from '@/components/DataTable/DataTable.vue';
 import SelectField from '@/components/Form/SelectField.vue';
+import PageNavigationLinks from '@/components/PageNavigationLinks.vue';
 
 // Import CSS pour vue-select
 import '@/assets/css/select2.css';
 
 import type { ColDef, CellClassParams, ValueFormatterParams } from 'ag-grid-community';
-import type { TableRow } from '@/interfaces/dataTable';
+import type { TableRow, DataTableColumn } from '@/interfaces/dataTable';
 import type { SelectOption } from '@/interfaces/form';
+
+const route = useRoute();
+
+// Fonction utilitaire pour récupérer l'ID d'inventaire de manière robuste
+const currentInventoryId = computed<string>(() => {
+  const fromParam = route.params.id
+  const fromQuery = route.query.inventoryId
+
+  // Privilégier le param, sinon le query, sinon valeur par défaut
+  const raw = typeof fromParam === 'string'
+    ? fromParam
+    : typeof fromQuery === 'string'
+      ? fromQuery
+      : '1'
+
+  return raw.trim() || '1'
+})
 
 const {
   jobs,
@@ -219,9 +245,6 @@ watch(
   }
 );
 
-// État pour gérer l'expansion des jobs
-const expandedJobIds = ref<Set<string>>(new Set());
-
 // Fonction pour supprimer un emplacement d'un job - SIMPLIFIÉE
 async function onRemoveLocationFromJob(jobId: string, location: string) {
   console.log('Tentative de suppression:', { jobId, location });
@@ -249,43 +272,40 @@ const availableLocationColumns: ColDef[] = [
   { headerName: 'Sous-zone',   field: 'sousZone',    flex: 1, sortable: true, filter: 'agTextColumnFilter' }
 ];
 
-// Colonnes pour la table des jobs avec colonne Actions améliorée
-const jobColumns: ColDef[] = [
+// Colonnes pour la table des jobs avec configuration des détails
+const jobColumns: DataTableColumn[] = [
   { 
     headerName: 'Job', 
     field: 'reference',
     flex: 2,
     sortable: true,
-    cellStyle: (params: CellClassParams) => {
-      if (!params.data) return undefined;
-      if (params.data.isChild) {
-        return { paddingLeft: '35px', fontStyle: 'italic' };
-      }
-      return undefined;
-    },
-    cellRenderer: (params) => {
-      if (!params.data) return '';
-      if (!params.data.isChild) {
-        const jobId = params.data.jobId;
-        const isExpanded = expandedJobIds.value.has(jobId);
-        const arrow = isExpanded 
-          ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`
-          : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>`;
-        return `<div style="display: flex; align-items: center; width: 100%;">
-                  <span style="cursor: pointer; display: inline-flex; align-items: center; width: 20px; margin-right: 8px;" data-expand-toggle="${jobId}">${arrow}</span>
-                  <span>${params.value ?? ''}</span>
-                </div>`;
-      }
-      return `${params.value ?? ''}`;
-    },
-    onCellClicked: (params) => {
-      const target = params.event?.target as HTMLElement;
-      const expandToggle = target.closest('[data-expand-toggle]');
-      if (expandToggle && !params.data?.isChild) {
-        const jobId = expandToggle.getAttribute('data-expand-toggle')!;
-        if (expandedJobIds.value.has(jobId)) expandedJobIds.value.delete(jobId);
-        else expandedJobIds.value.add(jobId);
-      }
+    detailConfig: {
+      key: 'locations',
+      displayField: 'reference',
+      countSuffix: 'emplacements',
+      columns: [
+        {
+          field: 'reference',
+          formatter: (value, item) => {
+            const [emplacement] = String(item).split(' | ');
+            return emplacement;
+          }
+        },
+        {
+          field: 'zone',
+          formatter: (value, item) => {
+            const [, zone] = String(item).split(' | ');
+            return zone || '';
+          }
+        },
+        {
+          field: 'sousZone',
+          formatter: (value, item) => {
+            const [, , sousZone] = String(item).split(' | ');
+            return sousZone || '';
+          }
+        }
+      ]
     }
   },
   { 
@@ -305,22 +325,24 @@ const jobColumns: ColDef[] = [
     field: 'zone',
     width: 120,
     sortable: true,
-    filter: 'agTextColumnFilter',
-    valueFormatter: (params: ValueFormatterParams) => params.data?.isChild ? (params.value as string) : ''
+    filter: 'agTextColumnFilter'
   },
   { 
     headerName: 'Sous-zone', 
     field: 'sousZone',
     width: 150,
     sortable: true,
-    filter: 'agSelectColumnFilter',
-    valueFormatter: (params: ValueFormatterParams) => params.data?.isChild ? (params.value as string) : ''
+    filter: 'agSelectColumnFilter'
   },
   {
     headerName: 'Actions',
     field: 'actions',
-    width: 100,
     sortable: false,
+        filter: false,
+        editable: false,
+        singleClickEdit: false,
+        minWidth: 80,
+        maxWidth: 120,
     cellStyle: { 
       display: 'flex', 
       justifyContent: 'center', 
@@ -328,16 +350,17 @@ const jobColumns: ColDef[] = [
       height: '100%'
     },
     cellRenderer: (params) => {
-      if (!params.data || !params.data.isChild) return '';
+      if (!params.data || !params.data.isChild || !params.data.originalItem) return '';
       
-      const location = params.data.originalLocation;
+      const location = params.data.originalItem;
+      const jobId = params.data.parentId;
       
       return `
         <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
           <button 
             type="button"
             class="delete-location-btn"
-            data-job-id="${params.data.jobId}"
+            data-job-id="${jobId}"
             data-location="${location}"
             style="
               display: flex;
@@ -387,36 +410,6 @@ const availableLocationData = computed(() =>
     return { id: location, emplacement, zone, sousZone };
   })
 );
-
-const displayJobsData = computed(() => {
-  const rows: any[] = [];
-  jobs.value.forEach((job, idx) => {
-    rows.push({
-      id: job.id,
-      jobId: job.id,
-      reference: job.reference,
-      isChild: false,
-      isValidated: job.isValidated,
-      status: job.isValidated ? 'VALIDÉ' : 'EN ATTENTE'
-    });
-    if (expandedJobIds.value.has(job.id)) {
-      job.locations.forEach((loc, i) => {
-        const [emp, z, sz] = loc.split(' | ');
-        rows.push({ 
-          id: `${job.id}-${i}`, 
-          jobId: job.id, 
-          reference: emp, 
-          zone: z, 
-          sousZone: sz, 
-          isChild: true,
-          originalLocation: loc,
-          parentJobValidated: job.isValidated
-        });
-      });
-    }
-  });
-  return rows;
-});
 
 // Sélections
 function onAvailableSelectionChanged(rows: TableRow[]) {
@@ -566,6 +559,4 @@ input[type="search"]::-webkit-search-results-button,
 input[type="search"]::-webkit-search-results-decoration {
   display: none;
 }
-
-
 </style>

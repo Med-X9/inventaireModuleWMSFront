@@ -31,7 +31,7 @@
               }"
             >
               <span 
-                class="text-gray-700 hover:text-primary hover:underline font-medium whitespace-nowrap"
+                class="hover:text-primary hover:underline text-gray-600  whitespace-nowrap"
               >
                 {{ item.label }}
               </span>

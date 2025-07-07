@@ -1,10 +1,7 @@
-import { ref, computed, watch, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import type { Job } from '@/interfaces/planning';
 import { planningService } from '@/services/planningService';
 import { alertService } from '@/services/alertService';
-import { indexedDBService } from '@/services/indexedDBService';
-
-const JOBS_KEY = 'planningJobs';
 
 export function usePlanning() {
   const jobs = ref<Job[]>([]);
@@ -35,42 +32,10 @@ export function usePlanning() {
     return jobs.value.filter(job => !job.isValidated);
   });
 
-  // Persist only base job data (without validation flags)
-  async function saveJobs() {
-    try {
-      const jobsToSave = jobs.value.map(({ id, reference, locations, createdAt, isValidated, validatedAt }) => 
-        ({ id, reference, locations, createdAt, isValidated, validatedAt }));
-      await indexedDBService.saveState(JSON.parse(JSON.stringify(jobsToSave)), JOBS_KEY);
-    } catch (error) {
-      console.error('Error saving jobs:', error);
-    }
-  }
-
-  async function loadJobs() {
-    try {
-      const saved = await indexedDBService.getState(JOBS_KEY);
-      if (saved && Array.isArray(saved)) {
-        jobs.value = (saved as Job[]).map(j => ({ 
-          ...j, 
-          isValidated: j.isValidated || false,
-          validatedAt: j.validatedAt
-        }));
-        console.log('Jobs chargés depuis IndexedDB');
-      } else {
-        jobs.value = [];
-      }
-    } catch (error) {
-      console.error('Error loading jobs:', error);
-      jobs.value = [];
-    }
-  }
-
-  onMounted(async () => {
-    await indexedDBService.init();
-    await loadJobs();
+  onMounted(() => {
+    // Initialize with empty jobs array - no persistence
+    jobs.value = [];
   });
-
-  watch(() => jobs.value, saveJobs, { deep: true, immediate: false });
 
   function generateJobReference(): string {
     const today = new Date();
@@ -96,7 +61,6 @@ export function usePlanning() {
     };
 
     jobs.value.push(newJob);
-    await nextTick();
     selectedAvailable.value = [];
 
     await alertService.success({
@@ -134,7 +98,6 @@ export function usePlanning() {
     // Ajouter les nouveaux emplacements
     job.locations.push(...selectedLocations);
     
-    await nextTick();
     selectedAvailable.value = [];
     selectedJobToAddLocation.value = '';
     showJobDropdown.value = false;
@@ -210,7 +173,6 @@ export function usePlanning() {
         });
       }
       
-      await nextTick();
       return true;
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
@@ -246,8 +208,6 @@ export function usePlanning() {
 
     jobs.value = jobs.value.filter(job => !selectedJobIds.has(job.id));
     selectedJobs.value = [];
-
-    await nextTick();
 
     await alertService.success({
       text: `${selectedJobIds.size} job(s) retourné(s). ${locationsToRestore.length} emplacement(s) remis en disponible.`

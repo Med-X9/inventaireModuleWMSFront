@@ -1,95 +1,60 @@
+// Types pour les affectations
 export interface Team {
-  id: string;
-  name: string;
-  session: string;
+  id: string
+  name: string
 }
 
 export interface Job {
-  id: string;
-  locations: string[];
+  id: string
+  name: string
+  locations: string[]
 }
 
-export interface JobDisplayData {
-  id: string;
-  job: string;
-  locations: string[];
-  team1: string;
-  date1: string;
-  team2: string;
-  date2: string;
-  resourcesList: string[];
-  resources: string;
-  nbResources: number;
-  status: 'planifier' | 'affecter' | 'valider' | 'transfere';
-}
-
-export interface AffectationState {
-  teamJobs1: Map<string, string[]>;
-  teamJobs2: Map<string, string[]>;
-  dates1: Record<string, string>;
-  dates2: Record<string, string>;
-  resources: Record<string, string[]>;
-  validatedJobs: Set<string>;
-  jobStatuses: Record<string, 'planifier' | 'affecter' | 'valider' | 'transfere'>;
-}
-
+// Données d'affectation (maintenant en mémoire uniquement)
 export interface AffectationData {
-  teams: Team[];
-  jobs: Job[];
-  teamJobs1: Map<string, string[]>;
-  teamJobs2: Map<string, string[]>;
-  dates1: Record<string, string>;
-  dates2: Record<string, string>;
-  resources: Record<string, string[]>;
-  validatedJobs: Set<string>;
-  jobStatuses: Record<string, 'planifier' | 'affecter' | 'valider' | 'transfere'>;
+  teamJobs1: Map<string, string[]>  // teamId -> jobIds pour premier comptage
+  teamJobs2: Map<string, string[]>  // teamId -> jobIds pour deuxième comptage
+  dates1: Record<string, string>    // jobId -> date pour premier comptage
+  dates2: Record<string, string>    // jobId -> date pour deuxième comptage
+  jobResources: Map<string, string[]> // jobId -> resources
+  jobStatuses: Record<string, string> // jobId -> status
 }
 
-export interface AffectationOptions {
-  premierComptage: boolean;
-  deuxiemeComptage: boolean;
+// Interface pour l'affichage dans le tableau - CORRIGÉ avec index signature
+export interface JobAffectation extends Record<string, unknown> {
+  id: string
+  job: string
+  locations: string[]
+  team1: string
+  date1: string
+  team2: string
+  date2: string
+  resourcesList: string[]
+  resources: string
+  resourceCount: number
+  status: string
 }
 
-export interface ResourceOption {
-  label: string;
-  value: string;
+// Requêtes pour les actions
+export interface AffectationRequest {
+  team: string
+  jobIds: string[]
+  date: string
 }
 
-export interface TeamOption {
-  label: string;
-  value: string;
+export interface ResourceAffectationRequest {
+  jobIds: string[]
+  resources: string[]
 }
 
-// Types pour les formulaires d'affectation
-export interface TeamFormData {
-  team: string;
-  date: string;
+export interface ValidationRequest {
+  jobIds: string[]
 }
 
-export interface ResourceFormData {
-  resources: string[];
-}
-
-export interface TransferFormData {
-  premierComptage: boolean;
-  deuxiemeComptage: boolean;
-}
-
-// Types pour les événements d'affectation
-export interface AffectationEvent {
-  type: 'team1' | 'team2' | 'resources' | 'validate' | 'transfer';
-  jobIds: string[];
-  data?: any;
-}
-
-// Interface pour les statistiques d'affectation
-export interface AffectationStats {
-  totalJobs: number;
-  planifierJobs: number;
-  affecterJobs: number;
-  validerJobs: number;
-  transfereJobs: number;
-  teamsWithJobs1: number;
-  teamsWithJobs2: number;
-  jobsWithResources: number;
+export interface TransferRequest {
+  jobIds: string[]
+  options: {
+    premierComptage: boolean
+    deuxiemeComptage: boolean
+  }
 }

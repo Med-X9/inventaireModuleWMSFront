@@ -3,7 +3,6 @@ import type { StoreOption, InventoryResult } from '../interfaces/inventoryResult
 const mockStores: StoreOption[] = [
   { label: 'Magasin A', value: 'store_A' },
   { label: 'Magasin B', value: 'store_B' },
-  
 ];
 
 const mockResults: InventoryResult[] = [
@@ -37,10 +36,22 @@ const mockResults: InventoryResult[] = [
     emplacement: 'Emplacement 3',
     premier_contage: 50,
     deuxieme_contage: 52,
-    ecart: 2,
+    ecart: -2,
     troisieme_contage: 50,
     resultats: '50',
     inventory: 'inventory_1',
+    store: 'store_B'
+  },
+  {
+    id: 4,
+    article: 'Article B',
+    emplacement: 'Emplacement 2',
+    premier_contage: 200,
+    deuxieme_contage: 200,
+    ecart: 0,
+    troisieme_contage: null, // ou undefined, ou simplement omettre cette propriété
+    resultats: '200',
+    inventory: 'inventory_2',
     store: 'store_B'
   },
 ];
@@ -54,6 +65,15 @@ export const inventoryResultsService = {
   async getResultsForInventoryAndStore(inventoryId: number, storeId: string): Promise<InventoryResult[]> {
     await new Promise(resolve => setTimeout(resolve, 500));
     return mockResults.filter(result => result.store === storeId);
+  },
+
+  async updateResult(id: number, updates: Partial<InventoryResult>): Promise<void> {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const result = mockResults.find(r => r.id === id);
+    if (result) {
+      Object.assign(result, updates);
+    }
+    console.log('Update result:', id, updates);
   },
 
   async editResult(id: number): Promise<void> {
