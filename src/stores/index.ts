@@ -1,9 +1,15 @@
 import { defineStore } from 'pinia';
 import i18n from '@/i18n';
 import appSetting from '@/app-setting';
-
+import type { ViewModeType } from '@/interfaces/planningManagement';
 export const useAppStore = defineStore('app', {
     state: () => ({
+        viewMode: (localStorage.getItem('viewMode') as ViewModeType) || 'table',
+        inventoryCurrentTab: localStorage.getItem('inventoryCurrentTab') || 'general',
+        inventoryViewMode: (localStorage.getItem('inventoryViewMode') as ViewModeType) || 'table',
+        planningViewModeAll: (localStorage.getItem('planningViewModeAll') as ViewModeType) || 'table',
+        planningTeamsFullscreen: localStorage.getItem('planningTeamsFullscreen') === 'true',
+        planningJobsFullscreen: localStorage.getItem('planningJobsFullscreen') === 'true',
         isDarkMode: false,
         mainLayout: 'app',
         theme: 'light',
@@ -12,8 +18,8 @@ export const useAppStore = defineStore('app', {
         rtlClass: 'ltr',
         animation: '',
         navbar: 'navbar-sticky',
-        locale: 'en',
-        sidebar: false,
+        locale: 'fr',
+        sidebar: true,
         languageList: [
             { code: 'zh', name: 'Chinese' },
             { code: 'da', name: 'Danish' },
@@ -37,11 +43,35 @@ export const useAppStore = defineStore('app', {
     }),
 
     actions: {
+        setPlanningTeamsFullscreen(isFullscreen: boolean) {
+            this.planningTeamsFullscreen = isFullscreen;
+            localStorage.setItem('planningTeamsFullscreen', isFullscreen.toString());
+        },
+        setPlanningJobsFullscreen(isFullscreen: boolean) {
+            this.planningJobsFullscreen = isFullscreen;
+            localStorage.setItem('planningJobsFullscreen', isFullscreen.toString());
+        },
+        setViewMode(mode: ViewModeType) {
+            this.viewMode = mode;
+            localStorage.setItem('viewMode', mode);
+        },
+        setInventoryCurrentTab(tab: string) {
+            this.inventoryCurrentTab = tab;
+            localStorage.setItem('inventoryCurrentTab', tab);
+        },
+        setInventoryViewMode(mode: ViewModeType) {
+            this.inventoryViewMode = mode;
+            localStorage.setItem('inventoryViewMode', mode);
+        },
+        setPlanningViewModeAll(mode: ViewModeType) {
+            this.planningViewModeAll = mode;
+            localStorage.setItem('planningViewModeAll', mode);
+        },
         setMainLayout(payload: any = null) {
-            this.mainLayout = payload; //app , auth
+            this.mainLayout = payload;
         },
         toggleTheme(payload: any = null) {
-            payload = payload || this.theme; // light|dark|system
+            payload = payload || this.theme;
             localStorage.setItem('theme', payload);
             this.theme = payload;
             if (payload == 'light') {
@@ -63,31 +93,31 @@ export const useAppStore = defineStore('app', {
             }
         },
         toggleMenu(payload: any = null) {
-            payload = payload || this.menu; // vertical, collapsible-vertical, horizontal
-            this.sidebar = false; // reset sidebar state
+            payload = payload || this.menu;
+            this.sidebar = false;
             localStorage.setItem('menu', payload);
             this.menu = payload;
         },
         toggleLayout(payload: any = null) {
-            payload = payload || this.layout; // full, boxed-layout
+            payload = payload || this.layout;
             localStorage.setItem('layout', payload);
             this.layout = payload;
         },
         toggleRTL(payload: any = null) {
-            payload = payload || this.rtlClass; // rtl, ltr
+            payload = payload || this.rtlClass;
             localStorage.setItem('rtlClass', payload);
             this.rtlClass = payload;
             document.querySelector('html')?.setAttribute('dir', this.rtlClass || 'ltr');
         },
         toggleAnimation(payload: any = null) {
-            payload = payload || this.animation; // animate__fadeIn, animate__fadeInDown, animate__fadeInUp, animate__fadeInLeft, animate__fadeInRight, animate__slideInDown, animate__slideInLeft, animate__slideInRight, animate__zoomIn
+            payload = payload || this.animation;
             payload = payload?.trim();
             localStorage.setItem('animation', payload);
             this.animation = payload;
             appSetting.changeAnimation();
         },
         toggleNavbar(payload: any = null) {
-            payload = payload || this.navbar; // navbar-sticky, navbar-floating, navbar-static
+            payload = payload || this.navbar;
             localStorage.setItem('navbar', payload);
             this.navbar = payload;
         },
@@ -107,9 +137,9 @@ export const useAppStore = defineStore('app', {
                 this.toggleRTL('ltr');
             }
         },
-        toggleSidebar(state: boolean = false) {
-            this.sidebar = !this.sidebar;
-        },
+       toggleSidebar() {
+    this.sidebar = !this.sidebar;
+},
         toggleMainLoader(state: boolean = false) {
             this.isShowMainLoader = true;
             setTimeout(() => {

@@ -5,7 +5,7 @@ body.swal2-toast-shown .swal2-container.toast {
 .swal2-popup {
     flex-direction: column;
     justify-content: center;
-    padding: 20px !important;
+    padding: 14px !important;
     box-sizing: border-box;
 }
 
@@ -17,30 +17,60 @@ body.swal2-toast-shown .swal2-container.toast {
     color: #888ea8;
 }
 
+/* TITRE DES ALERTES MODALES - Taille réduite */
 .swal2-popup .swal2-title {
     display: block;
     margin: 0px !important;
     width: 100%;
+    padding-left: 5%;
     color: #3b3f5c;
-    font-size: 24px;
+    font-size: 16px !important; /* Réduit de 20px à 16px */
+    font-weight: 500 !important; /* Optionnel: réduire le poids aussi */
     @apply ltr:!pr-10 rtl:!pl-10;
 }
 
+/* CONTENU/TEXTE DES ALERTES MODALES - Couleur gray-700 */
+.swal2-popup .swal2-html-container {
+    color: #374151; /* gray-700 au lieu de #ef4444 */
+    font-weight: 300;
+    font-size: 13px !important; /* Ajout d'une taille plus petite */
+    line-height: 1.4 !important; /* Améliore la lisibilité */
+}
+
+/* Texte de confirmation spécifique */
+.confirmation-text {
+    color: #374151 !important; /* gray-700 */
+    font-weight: 400 !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+}
+
+/* Espacement entre les boutons de confirmation */
+.swal2-actions {
+    gap: 16px !important; /* Augmenté de 12px à 16px */
+  
+    width: 100% !important;
+}
+.confirmation-actions {
+    gap: 12px !important; /* Ajoute de l'espace entre les boutons */
+    display: flex !important;
+    justify-content: center !important;
+    margin-top: 20px !important;
+}
 .swal2-popup .swal2-styled {
     box-shadow: 0px 5px 20px 0 rgba(0, 0, 0, 0.1) !important;
     letter-spacing: 1px;
-    font-size: 14px !important;
+    font-size: 12px !important;
     line-height: 20px !important;
     transition: all 0.3s ease-out;
     -webkit-transition: all 0.3s ease-out;
-    margin: 0 5px;
+    margin: 0 !important; /* Supprime les marges par défaut */
     padding: 8px 20px;
     border-radius: 6px;
 }
 
 .swal2-popup .swal2-styled.swal2-cancel {
     background-color: #fff !important;
-    color: #4361ee;
     border: 1px solid #e8e8e8;
     box-shadow: none;
     padding: 7px 20px;
@@ -53,18 +83,11 @@ body.swal2-toast-shown .swal2-container.toast {
 }
 
 .swal2-popup .swal2-styled.swal2-confirm {
-    background-color: #4361ee;
+    background-color: #3b82f6; /* Primary blue */
 }
 
 .swal2-popup .swal2-styled.swal2-confirm:focus {
     box-shadow: none !important;
-}
-
-.swal2-popup .swal2-html-container {
-    margin: 0 !important;
-    color: #e95f2b;
-    font-weight: 300;
-    @apply ltr:!pr-10 rtl:!pl-10;
 }
 
 .swal2-popup .swal2-close {
@@ -77,16 +100,6 @@ body.swal2-toast-shown .swal2-container.toast {
 
 .dark .swal2-popup .swal2-close {
     color: #888ea8;
-}
-
-.swal2-popup.swal2-toast {
-    flex-direction: row;
-    align-items: center;
-    width: auto !important;
-    box-shadow: 0 0 0.625em #d9d9d9;
-    padding: 2em;
-    overflow-y: hidden;
-    display: flex !important;
 }
 
 .swal2-popup.swal2-toast.swal2-show {
@@ -161,14 +174,14 @@ body.swal2-toast-shown .swal2-container.toast {
 }
 
 .swal2-icon.swal2-info {
-    color: #4361ee !important;
+    color: #3b82f6 !important; /* Primary blue pour cohérence */
     border: 4px solid #f1f2f3 !important;
     box-shadow: 0px 3px 25px 0px rgba(113, 106, 202, 0.2);
     text-align: center;
 }
 
 .swal2-icon.swal2-question {
-    color: #805dca !important;
+    color: #3b82f6 !important; /* Primary blue au lieu du violet */
     border: solid 4px #ebedf2 !important;
     border-color: none !important;
     text-align: center;
@@ -251,7 +264,7 @@ body.swal2-toast-shown .swal2-container.toast {
 }
 
 .sweet-alerts .swal2-icon-content {
-    font-size: 5.75rem !important;
+    font-size: 2rem !important;
 }
 .swal2-icon-content {
     @apply !text-xl;
@@ -281,7 +294,7 @@ body.swal2-toast-shown .swal2-container.toast {
 }
 
 .sweet-alerts.swal2-popup .swal2-html-container {
-    @apply !mt-4 !px-0;
+    @apply !mt-2 !px-0;
 }
 
 .sweet-alerts.swal2-popup .swal2-title {
@@ -358,4 +371,82 @@ body.swal2-toast-shown .swal2-container.toast {
 }
 .swal2-popup.swal2-toast .swal2-success [class^='swal2-success-circular-line'][class$='right'] {
     border-radius: 0 2em 2em 0 !important;
+}
+
+/* 1) Définition de la keyframe « slideIn » (ou autre nom) */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.sweet-alerts.toast-alert.swal2-show.toast-enter {
+  display: flex;
+  align-items: flex-start;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1),
+              0 4px 6px -2px rgba(0,0,0,0.05);
+  min-width: 350px;
+  max-width: 28rem;
+  /* Animation d'arrivée */
+  animation: slideIn 0.4s ease-out;
+  /* Vous pouvez ajuster durée (0.4s), easing, etc. */
+  backdrop-filter: blur(8px);
+}
+
+.sweet-alerts.toast-alert.swal2-hide {
+  display: none !important;
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Exemple d'animation de sortie : */
+.sweet-alerts.toast-alert.swal2-hide {
+  animation: fadeOut 0.3s ease-in forwards;
+}
+
+/* TOAST - Titre plus petit */
+.toast-title {
+  color: #fff;                
+  font-weight: 600;            
+  font-size: 0.80rem !important; /* Augmenté de 0.5rem à 0.85rem pour plus de lisibilité */
+}
+
+/* TOAST - Message plus petit */
+.toast-message {
+  color: rgba(255,255,255,0.9);
+  font-size: 0.70rem !important; /* Augmenté de 0.600rem à 0.75rem pour plus de lisibilité */
+  line-height: 1.3 !important; /* Améliore la lisibilité */
+}
+
+.sweet-alerts.toast-alert .swal2-icon .swal2-icon-content {
+  font-size: 1.2rem !important;
+  line-height: 20px !important;
+}
+
+/* Adjust warning icon specifically */
+.sweet-alerts.toast-alert .swal2-icon.swal2-warning {
+  font-size: 14px !important;
+  line-height: 10px !important;
+  margin: 0 8px 0 0 !important;
+}
+/* Amélioration spécifique pour l'icône INFO dans les toasts */
+.sweet-alerts.toast-alert .swal2-icon.swal2-info {
+  font-size: 10px !important; /* Réduit de 12px à 10px */
+  margin: 0 !important;
+  color: #ffffff !important;
+  border: 2px solid rgba(255,255,255,0.3) !important;
+  background: rgba(255,255,255,0.1) !important;
 }

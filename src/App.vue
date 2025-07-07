@@ -19,7 +19,7 @@
     const store = useAppStore();
 
     // meta
-    useMeta({ title: 'Sales Admin' });
+    useMeta({ title: 'Inventaire' });
 
     const mainLayout = computed(() => {
         return store.mainLayout === 'auth' ? authLayout : appLayout;
