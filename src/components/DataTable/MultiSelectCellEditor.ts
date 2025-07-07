@@ -1,36 +1,23 @@
 import { ICellEditorComp, ICellEditorParams } from 'ag-grid-community';
 
 export class MultiSelectCellEditor implements ICellEditorComp {
-    private container: HTMLElement;
+    private container!: HTMLElement;
     private value: string[] = [];
-    private originalValue: string[] = [];
     private options: string[] = [];
-    private gridApi: any;
 
     init(params: ICellEditorParams) {
-        this.container = document.createElement('div');
-        this.options = params.options || [];
-        this.gridApi = params.api;
+        this.options = (params as any).options || [];
 
-        // Convertir la valeur en tableau
-        if (Array.isArray(params.value)) {
+        // Initialiser la valeur depuis les paramètres
+        if (typeof params.value === 'string') {
+            this.value = params.value.split(',').map(s => s.trim()).filter(Boolean);
+        } else if (Array.isArray(params.value)) {
             this.value = [...params.value];
-            this.originalValue = [...params.value];
-        } else if (typeof params.value === 'string' && params.value) {
-            this.value = params.value.split(',').map(v => v.trim()).filter(Boolean);
-            this.originalValue = [...this.value];
         } else {
             this.value = [];
-            this.originalValue = [];
         }
 
-        this.renderEditor();
-
-        // Focus sur le select
-        setTimeout(() => {
-            const select = this.container.querySelector('select') as HTMLSelectElement;
-            if (select) select.focus();
-        }, 100);
+        this.createEditor();
     }
 
     getGui() {
@@ -47,180 +34,125 @@ export class MultiSelectCellEditor implements ICellEditorComp {
         return true;
     }
 
-    destroy() {
-        // Cleanup si nécessaire
-    }
+    private createEditor() {
+        this.container = document.createElement('div');
+        this.container.className = 'multi-select-editor';
+        this.container.style.cssText = `
+            position: absolute;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 8px;
+            min-width: 200px;
+            max-width: 300px;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        `;
 
-    private renderEditor() {
+        // Créer l'interface de l'éditeur
         this.container.innerHTML = `
-            <div class="multi-select-editor" style="
-                position: relative;
-                min-width: 200px;
-                max-width: 300px;
-                background: white;
-                border: 2px solid #3b82f6;
-                border-radius: 4px;
-                padding: 8px;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-                z-index: 1000;
-            ">
-                <div class="selected-items" style="
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 4px;
-                    margin-bottom: 8px;
-                ">
-                    ${this.value.map((val, index) => `
-                        <span class="selected-item" data-index="${index}" style="
-                            display: inline-flex;
-                            align-items: center;
-                            background: #3b82f6;
-                            color: white;
-                            padding: 2px 6px;
-                            border-radius: 12px;
-                            font-size: 11px;
-                            gap: 4px;
-                        ">
-                            ${val}
-                            <button class="remove-btn" data-index="${index}" style="
-                                background: none;
-                                border: none;
-                                color: white;
-                                cursor: pointer;
-                                font-size: 12px;
-                                padding: 0;
-                                width: 16px;
-                                height: 16px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                border-radius: 50%;
-                            ">×</button>
-                        </span>
-                    `).join('')}
-                </div>
-
-                <select class="multi-select-input" style="
-                    width: 100%;
-                    padding: 4px 8px;
-                    border: 1px solid #d1d5db;
-                    border-radius: 4px;
-                    font-size: 12px;
-                    background: white;
-                    color: #374151;
-                ">
-                    <option value="">Ajouter des ressources...</option>
-                    ${this.options.filter(option => !this.value.includes(option)).map(option => `
-                        <option value="${option}">${option}</option>
-                    `).join('')}
+            <div style="margin-bottom: 8px;">
+                <div style="font-weight: bold; margin-bottom: 4px;">Sélectionner les ressources:</div>
+                <div id="selected-badges" style="margin-bottom: 8px; min-height: 20px;"></div>
+            </div>
+            <div style="margin-bottom: 8px;">
+                <select id="resource-select" style="width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 3px;">
+                    <option value="">Choisir une ressource...</option>
+                    ${this.options.map(option => `<option value="${option}">${option}</option>`).join('')}
                 </select>
-
-                <div class="editor-actions" style="
-                    display: flex;
-                    gap: 4px;
-                    margin-top: 8px;
-                    justify-content: flex-end;
-                ">
-                    <button class="save-btn" style="
-                        padding: 4px 8px;
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        font-size: 12px;
-                        font-weight: bold;
-                        background: #10b981;
-                        color: white;
-                    ">✓</button>
-                    <button class="cancel-btn" style="
-                        padding: 4px 8px;
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        font-size: 12px;
-                        font-weight: bold;
-                        background: #ef4444;
-                        color: white;
-                    ">✕</button>
-                </div>
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button id="cancel-btn" style="padding: 4px 8px; border: 1px solid #ccc; background: #f5f5f5; border-radius: 3px; cursor: pointer;">Annuler</button>
+                <button id="save-btn" style="padding: 4px 8px; border: 1px solid #007bff; background: #007bff; color: white; border-radius: 3px; cursor: pointer;">Sauvegarder</button>
             </div>
         `;
 
-        // Ajouter les event listeners
-        this.addEventListeners();
+        this.setupEventListeners();
+        this.updateBadges();
     }
 
-    private addEventListeners() {
-        // Boutons de suppression
-        const removeButtons = this.container.querySelectorAll('.remove-btn');
-        removeButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
-                const index = parseInt((e.target as HTMLElement).getAttribute('data-index') || '0');
-                this.removeValue(index);
-            });
+    private setupEventListeners() {
+        const select = this.container.querySelector('#resource-select') as HTMLSelectElement;
+        const saveBtn = this.container.querySelector('#save-btn') as HTMLButtonElement;
+        const cancelBtn = this.container.querySelector('#cancel-btn') as HTMLButtonElement;
+
+        select.addEventListener('change', (e) => {
+            const target = e.target as HTMLSelectElement;
+            const selectedValue = target.value;
+
+            if (selectedValue && !this.value.includes(selectedValue)) {
+                this.value.push(selectedValue);
+                this.updateBadges();
+                target.value = ''; // Reset select
+            }
         });
 
-        // Select pour ajouter des ressources
-        const select = this.container.querySelector('.multi-select-input') as HTMLSelectElement;
-        if (select) {
-            select.addEventListener('change', (e) => {
-                this.onSelectChange(e);
-            });
-            select.addEventListener('keydown', (e) => {
-                this.onKeyDown(e);
-            });
-        }
-
-        // Bouton sauvegarder
-        const saveBtn = this.container.querySelector('.save-btn');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', () => {
-                this.onSave();
-            });
-        }
-
-        // Bouton annuler
-        const cancelBtn = this.container.querySelector('.cancel-btn');
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => {
-                this.onCancel();
-            });
-        }
-    }
-
-    private removeValue(index: number) {
-        this.value.splice(index, 1);
-        this.renderEditor();
-    }
-
-    private onSelectChange(event: Event) {
-        const target = event.target as HTMLSelectElement;
-        const selectedOption = target.value;
-
-        if (selectedOption && !this.value.includes(selectedOption)) {
-            this.value.push(selectedOption);
-            target.value = ''; // Reset pour permettre une nouvelle sélection
-            this.renderEditor();
-        }
-    }
-
-    private onKeyDown(event: KeyboardEvent) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
+        saveBtn.addEventListener('click', () => {
+            // Sauvegarder les modifications
             this.onSave();
-        } else if (event.key === 'Escape') {
-            event.preventDefault();
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            // Annuler les modifications
             this.onCancel();
+        });
+    }
+
+    private updateBadges() {
+        const badgesContainer = this.container.querySelector('#selected-badges') as HTMLElement;
+
+        if (this.value.length === 0) {
+            badgesContainer.innerHTML = '<span style="color: #999; font-style: italic;">Aucune ressource sélectionnée</span>';
+            return;
         }
+
+        badgesContainer.innerHTML = this.value.map(resource => `
+            <span style="
+                display: inline-block;
+                background: #e3f2fd;
+                color: #1976d2;
+                padding: 2px 6px;
+                margin: 2px;
+                border-radius: 12px;
+                font-size: 11px;
+                position: relative;
+            ">
+                ${resource}
+                <button onclick="this.removeBadge('${resource}')" style="
+                    background: none;
+                    border: none;
+                    color: #1976d2;
+                    cursor: pointer;
+                    margin-left: 4px;
+                    font-size: 10px;
+                    padding: 0;
+                " title="Supprimer">×</button>
+            </span>
+        `).join('');
+
+        // Ajouter les event listeners pour les boutons de suppression
+        badgesContainer.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const badge = (e.target as HTMLElement).closest('span');
+                if (badge) {
+                    const resourceText = badge.textContent?.replace('×', '').trim();
+                    if (resourceText) {
+                        this.value = this.value.filter(r => r !== resourceText);
+                        this.updateBadges();
+                    }
+                }
+            });
+        });
     }
 
     private onSave() {
-        // AG Grid va automatiquement récupérer la valeur via getValue()
-        this.gridApi.stopEditing();
+        // Fermer l'éditeur et sauvegarder
+        this.container.remove();
     }
 
     private onCancel() {
-        // Restaurer les valeurs originales
-        this.value = [...this.originalValue];
-        this.gridApi.stopEditing();
+        // Fermer l'éditeur sans sauvegarder
+        this.container.remove();
     }
 }

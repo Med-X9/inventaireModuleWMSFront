@@ -123,13 +123,6 @@
                 :stopEditingWhenCellsLoseFocus="false"
                 :suppressRowClickSelection="true"
                 :suppressCellFocus="true"
-                :suppressKeyboardEvent="(params) => {
-                    // Désactiver les confirmations automatiques d'édition
-                    if (params.event.key === 'Enter' && params.editing) {
-                        return false; // Permettre la navigation sans confirmation
-                    }
-                    return false;
-                }"
                 @cellKeyDown="handleCellKeyDown"
                 @cellEditingStopped="handleCellEditingStopped" :components="{ ActionMenu }" />
         </div>

@@ -7,14 +7,18 @@ class InventoryEditService {
     [1, {
       id: 1,
       reference: 'INV-2025-001',
-      inventory_date: '2025-12-20',
-      statut: 'En préparation',
-      date_creation: '2025-06-24',
-      date_lancement: '',
-      date_echeance: '',
-      date_cloture: '',
       label: 'Inventaire général 2025',
-      type: 'Inventaire Général',
+      date: '2025-12-20',
+      status: 'En préparation',
+      inventory_type: 'Inventaire Général',
+      en_preparation_status_date: '2025-06-24',
+      en_realisation_status_date: null,
+      termine_status_date: null,
+      cloture_status_date: null,
+      account_name: 'Compte Test',
+      warehouse_name: ['Entrepôt A'],
+      comptages: [],
+      equipe: []
     }]
   ]);
 
@@ -35,13 +39,13 @@ class InventoryEditService {
         this.mockInventoryMap.set(id, {
           ...existingInventory,
           label: inventoryData.step1Data.libelle,
-          inventory_date: inventoryData.step1Data.date,
+          date: inventoryData.step1Data.date,
         });
       }
     } catch (error) {
       console.error('Error updating inventory:', error);
       throw new Error('Erreur lors de la mise à jour de l\'inventaire');
-    
+
     }
   }
 

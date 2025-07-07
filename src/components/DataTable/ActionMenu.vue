@@ -174,7 +174,6 @@ const calculatePosition = async () => {
     }
 }
 
-
 // Gestion des événements
 const toggleMenu = async () => {
     isOpen.value = !isOpen.value

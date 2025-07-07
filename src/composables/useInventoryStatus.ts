@@ -41,7 +41,7 @@ const defaultSteps: InventoryStep[] = [
   }
 ];
 
-// Routes où les J’ai terminé la gestion dynamique des actions et de la sous-navigation selon le statut d’un inventairene doivent pas être affichées
+// Routes où les J'ai terminé la gestion dynamique des actions et de la sous-navigation selon le statut d'un inventairene doivent pas être affichées
 const excludedRoutesForSteps = ['home', 'login'];
 
 // Mapping des statuts vers les étapes
@@ -82,7 +82,7 @@ export function useInventoryStatus() {
       // Charger tous les inventaires et trouver celui qui correspond
       const inventories = await inventoryManagementService.getInventories();
       const inventory = inventories.find(inv => inv.id.toString() === inventoryId);
-      
+
       if (inventory) {
         // Mettre en cache
         inventoryCache.value[inventoryId] = inventory;
@@ -109,7 +109,7 @@ export function useInventoryStatus() {
   // Fonction pour mettre à jour le statut basé sur l'inventaire réel
   const updateStatusFromInventory = async () => {
     const inventoryId = getCurrentInventoryId();
-    
+
     if (inventoryId === 'default') {
       // Utiliser le statut par défaut
       currentInventoryStatus.value = {
@@ -120,9 +120,9 @@ export function useInventoryStatus() {
     }
 
     const inventory = await loadInventory(inventoryId);
-    
+
     if (inventory) {
-      const currentStep = getStepFromStatus(inventory.statut);
+      const currentStep = getStepFromStatus(inventory.status);
       currentInventoryStatus.value = {
         currentStep,
         steps: [...defaultSteps]
@@ -140,7 +140,7 @@ export function useInventoryStatus() {
   const inventorySteps = computed(() => {
     const status = currentInventoryStatus.value;
     const currentStepOrder = status.steps.find(step => step.id === status.currentStep)?.order || 1;
-    
+
     return status.steps.map(step => ({
       ...step,
       isCompleted: step.order < currentStepOrder,
@@ -165,7 +165,7 @@ export function useInventoryStatus() {
     const currentStatus = currentInventoryStatus.value;
     const currentStepOrder = currentStatus.steps.find(step => step.id === currentStatus.currentStep)?.order || 1;
     const nextStepData = currentStatus.steps.find(step => step.order === currentStepOrder + 1);
-    
+
     if (nextStepData) {
       // Mapping des étapes vers les statuts
       const stepToStatusMap: Record<string, string> = {
@@ -178,11 +178,11 @@ export function useInventoryStatus() {
       if (newStatus) {
         try {
           // Mettre à jour l'inventaire via le service
-          await inventoryManagementService.updateInventory(inventory.id, { statut: newStatus });
-          
+          await inventoryManagementService.updateInventory(inventory.id, { status: newStatus });
+
           // Invalider le cache
           delete inventoryCache.value[inventoryId];
-          
+
           // Recharger le statut
           await updateStatusFromInventory();
         } catch (error) {
@@ -210,11 +210,11 @@ export function useInventoryStatus() {
     if (newStatus) {
       try {
         // Mettre à jour l'inventaire via le service
-        await inventoryManagementService.updateInventory(inventory.id, { statut: newStatus });
-        
+        await inventoryManagementService.updateInventory(inventory.id, { status: newStatus });
+
         // Invalider le cache
         delete inventoryCache.value[inventoryId];
-        
+
         // Recharger le statut
         await updateStatusFromInventory();
       } catch (error) {

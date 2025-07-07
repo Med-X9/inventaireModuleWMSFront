@@ -115,22 +115,6 @@ export function useResourceModal() {
     // Computed pour obtenir le nombre de lignes
     const lineCount = computed(() => resourceLines.value.length);
 
-    const addResources = () => {
-        if (selectedResources.value.length === 0) return;
-
-        const resourcesToAdd = selectedResources.value.map(resourceId => {
-            const resource = availableResources.value.find(r => r.id === resourceId);
-            return {
-                id: resourceId,
-                name: resource?.name || '',
-                quantity: 1
-            };
-        });
-
-        resourceLines.value.push(...resourcesToAdd);
-        selectedResources.value = [];
-    };
-
     return {
         // État
         showAddResourceModal,
@@ -148,7 +132,6 @@ export function useResourceModal() {
         handleAddResources,
         openModal,
         closeModal,
-        resetForm,
-        addResources
+        resetForm
     };
 }

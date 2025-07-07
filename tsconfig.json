@@ -17,7 +17,7 @@
       "paths": { "@/*": ["src/*"] },
       "noImplicitAny": false,
       "allowJs": true,
-      "types": ["vite/client", "vue"]  // Retirer ou ajuster les types si nécessaire
+      "types": ["vite/client"]
     },
     "include": ["src/**/*.js", "src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx","src/**/*.vue"],
     "references": [
@@ -26,4 +26,3 @@
       }
     ]
   }
-  

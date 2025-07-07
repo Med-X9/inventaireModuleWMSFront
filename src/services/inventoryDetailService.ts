@@ -169,3 +169,6 @@
 // }
 
 // export const inventoryDetailService = new InventoryDetailService();
+
+// Export vide pour faire du fichier un module
+export {};

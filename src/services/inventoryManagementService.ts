@@ -12,14 +12,14 @@ const staticInventory: InventoryManagement = {
     inventory_type: 'Inventaire Général',
     status: 'En préparation',
     date: '2025-12-20',
-    created_at: '2025-06-24',
-    en_preparation_status_date: '',
-    en_realisation_status_date: "",
-    ternime_status_date: "",
-    cloture_status_date: "" ,
-    account_name: "",
-    warehouse: [],
-    comptages: []
+    en_preparation_status_date: '2025-06-24',
+    en_realisation_status_date: null,
+    termine_status_date: null,
+    cloture_status_date: null,
+    account_name: 'Compte Test',
+    warehouse_name: ['Entrepôt A'],
+    comptages: [],
+    equipe: []
 };
 
 // Types et statuts disponibles pour les autres inventaires
@@ -43,16 +43,15 @@ function generateMockInventories(count = 99): InventoryManagement[] {
         const label = `Inventaire ${id}`;
         const inventory_type = types[Math.floor(Math.random() * types.length)];
         const status = statuts[Math.floor(Math.random() * statuts.length)];
-        const created_at = randomDate('2025-01-01', '2025-06-24');
-        const en_preparation_status_date = randomDate(created_at, '2025-12-31');
+        const en_preparation_status_date = randomDate('2025-01-01', '2025-06-24');
         const date = randomDate(en_preparation_status_date, '2026-06-30');
         const en_realisation_status_date = randomDate(en_preparation_status_date, date);
-        const ternime_status_date = ['Clôturé', 'Terminé'].includes(status)
+        const termine_status_date = ['Clôturé', 'Terminé'].includes(status)
             ? randomDate(en_realisation_status_date, '2026-12-31')
-            : '';
+            : null;
         const cloture_status_date = status === 'Clôturé'
-            ? randomDate(ternime_status_date || en_realisation_status_date, '2026-12-31')
-            : '';
+            ? randomDate(termine_status_date || en_realisation_status_date, '2026-12-31')
+            : null;
         const account_name = `Compte ${id}`;
 
         return {
@@ -62,14 +61,14 @@ function generateMockInventories(count = 99): InventoryManagement[] {
             date,
             inventory_type,
             status,
-            created_at,
             en_preparation_status_date,
             en_realisation_status_date,
-            ternime_status_date,
+            termine_status_date,
             cloture_status_date,
             account_name,
-            warehouse: [],
-            comptages: []
+            warehouse_name: [`Entrepôt ${id}`],
+            comptages: [],
+            equipe: []
         };
     });
 }

@@ -38,7 +38,9 @@ export function useJobManagement() {
             if (params?.sort) currentSortModel.value = params.sort;
             if (params?.filter) currentFilterModel.value = params.filter;
 
-            await jobStore.fetchJobs(params);
+            // Utiliser un warehouseId par défaut (1) si non spécifié
+            const warehouseId = 1; // TODO: Récupérer depuis le contexte ou les props
+            await jobStore.fetchJobs(warehouseId, params);
         } catch (err) {
             console.error('Erreur chargement jobs:', err);
         }

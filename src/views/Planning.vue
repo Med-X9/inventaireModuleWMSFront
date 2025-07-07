@@ -45,14 +45,14 @@ const actions: ActionConfig[] = [
   {
     label: 'Éditer',
     icon: 'edit',
-    action: (row) => {
+    handler: (row) => {
       console.log('Éditer:', row)
     }
   },
   {
     label: 'Supprimer',
     icon: 'delete',
-    action: (row) => {
+    handler: (row) => {
       console.log('Supprimer:', row)
     }
   }

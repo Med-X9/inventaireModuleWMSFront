@@ -39,12 +39,11 @@
             </template>
 
             <!-- PDF button - always visible except for "Clôturé" status where it's the only button -->
-            <button type="button" @click="exportToPDF" v-tippy:button
+            <button type="button" @click="exportToPDF"
                 class="btn btn-primary p-2 px-4 flex items-center gap-2">
                 <IconDownload class="w-4 h-4" />
                 PDF
             </button>
-            <tippy target="button" placement="bottom">Exporter en PDF</tippy>
         </div>
 
         <!-- Container principal -->

@@ -1,14 +1,14 @@
 import { computed } from 'vue';
 import { useInventoryStore } from '@/stores/inventory';
 import { useAppStore } from '@/stores/app';
-import type { CreateInventoryRequest, Inventory } from '@/models/Inventory';
+import type { CreateInventoryRequest } from '@/models/Inventory';
 
 export const useInventory = () => {
     const inventoryStore = useInventoryStore();
     const globalStore = useAppStore();
 
     // Getters réactifs
-    const inventories = computed(() => inventoryStore.getInventories);
+    const inventories = computed(() => inventoryStore.inventories);
     const currentInventory = computed(() => inventoryStore.getCurrentInventory);
     const isLoading = computed(() => inventoryStore.isLoading);
     const error = computed(() => inventoryStore.getError);
@@ -16,8 +16,7 @@ export const useInventory = () => {
     // Actions avec gestion des notifications
     const fetchInventories = async () => {
         try {
-            const result = await inventoryStore.fetchInventories();
-            inventories.value = result.data.results || result.data;
+            await inventoryStore.fetchInventories();
         } catch (error) {
             console.error('Erreur lors du chargement des inventaires:', error);
         }
@@ -26,7 +25,7 @@ export const useInventory = () => {
     const fetchInventoryById = async (id: number | string) => {
         try {
             const result = await inventoryStore.fetchInventoryById(id);
-            return result.data;
+            return result;
         } catch (error) {
             console.error('Erreur lors de la récupération de l\'inventaire:', error);
             throw error;
@@ -36,17 +35,17 @@ export const useInventory = () => {
     const createInventory = async (data: CreateInventoryRequest) => {
         try {
             const result = await inventoryStore.createInventory(data);
-            return result.data;
+            return result;
         } catch (error) {
             console.error('Erreur lors de la création de l\'inventaire:', error);
             throw error;
         }
     };
 
-    const updateInventory = async (id: number | string, data: Partial<Inventory>) => {
+    const updateInventory = async (id: number | string, data: any) => {
         try {
             const result = await inventoryStore.updateInventory(id, data);
-            return result.data;
+            return result;
         } catch (error) {
             console.error('Erreur lors de la mise à jour de l\'inventaire:', error);
             throw error;

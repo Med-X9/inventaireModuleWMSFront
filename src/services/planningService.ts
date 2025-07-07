@@ -1,4 +1,4 @@
-import type { Job } from '../interfaces/planning';
+import type { Job, Location } from '../interfaces/planning';
 
 export const planningService = {
     // Sauvegarder les jobs dans le backend
@@ -17,19 +17,18 @@ export const planningService = {
 
         // Retourner des jobs simulés
         return [
-            { id: 1, name: 'Job 1', status: 'validated' },
-            { id: 2, name: 'Job 2', status: 'validated' },
+            { id: '1', reference: 'Job 1', locations: [], isValidated: true },
+            { id: '2', reference: 'Job 2', locations: [], isValidated: true },
         ];
     },
 
     // Générer des emplacements pour un job
-    generateLocations(jobId: number, count: number): Location[] {
+    generateLocations(jobId: string, count: number): Location[] {
         const locations: Location[] = [];
         for (let i = 1; i <= count; i++) {
             locations.push({
                 id: `${jobId}-${i}`,
-                name: `Emplacement ${i}`,
-                status: 'available'
+                name: `Emplacement ${i}`
             });
         }
         return locations;
