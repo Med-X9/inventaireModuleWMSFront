@@ -35,7 +35,7 @@ export interface UseDataTableProps<T = Record<string, unknown>> {
     maxRowsForDynamicHeight: number
     showColumnSelector: boolean
     showDetails: boolean
-    onPaginationChanged?: (params: { page: number, pageSize: number }) => void
+    onPaginationChanged?: (params: { page: number; pageSize: number; sort?: any; filter?: any }) => void
 }
 
 export function useDataTable<T extends Record<string, unknown> = Record<string, unknown>>(
@@ -491,51 +491,16 @@ export function useDataTable<T extends Record<string, unknown> = Record<string, 
         // Si les valeurs normalisées sont identiques, ne rien faire
         if (normalizedNewValue === normalizedOldValue) return
 
-        // Demander confirmation avant de valider le changement
-        try {
-            const confirmed = await alertService.confirm({
-                title: 'Confirmer la modification',
-                text: `Voulez-vous vraiment modifier "${e.colDef.headerName || field}" de "${normalizedOldValue}" vers "${normalizedNewValue}" ?`,
-            });
+        // Émettre directement l'événement de changement sans confirmation
+        // Le système de modifications en attente gérera la sauvegarde
+        const changeEvent = {
+            data: e.data,
+            colDef: e.colDef,
+            newValue: newVal,
+            oldValue: oldVal
+        } as CellValueChangedEvent
 
-            if (confirmed.isConfirmed) {
-                // Émettre l'événement de changement
-                const changeEvent = {
-                    data: e.data,
-                    colDef: e.colDef,
-                    newValue: newVal,
-                    oldValue: oldVal
-                } as CellValueChangedEvent
-
-                callback?.(changeEvent)
-            } else {
-                // Annuler le changement en restaurant l'ancienne valeur
-                if (e.data && e.colDef.field) {
-                    e.data[e.colDef.field] = oldVal
-                    // Forcer le rafraîchissement de la cellule
-                    if (isGridValid()) {
-                        gridApi.value!.refreshCells({
-                            rowNodes: [e.node!],
-                            columns: [e.colDef.field],
-                            force: true
-                        })
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Erreur lors de la confirmation:', error)
-            // En cas d'erreur, restaurer l'ancienne valeur
-            if (e.data && e.colDef.field) {
-                e.data[e.colDef.field] = oldVal
-                if (isGridValid()) {
-                    gridApi.value!.refreshCells({
-                        rowNodes: [e.node!],
-                        columns: [e.colDef.field],
-                        force: true
-                    })
-                }
-            }
-        }
+        callback?.(changeEvent)
     }
 
     // Handle pagination changes
@@ -559,27 +524,9 @@ export function useDataTable<T extends Record<string, unknown> = Record<string, 
                 const currentPage = gridApi.value!.paginationGetCurrentPage() + 1; // AG Grid est 0-based
                 const currentPageSize = gridApi.value!.paginationGetPageSize();
 
-                // Récupérer les paramètres de tri et filtre actuels (compatible AG Grid Community)
-                let sortModel = [];
-                let filterModel = {};
-
-                try {
-                    // Essayer d'abord les méthodes Enterprise
-                    if (typeof gridApi.value!.getSortModel === 'function') {
-                        sortModel = gridApi.value!.getSortModel();
-                    }
-                    if (typeof gridApi.value!.getFilterModel === 'function') {
-                        filterModel = gridApi.value!.getFilterModel();
-                    }
-                } catch (error) {
-                    console.warn('Méthodes Enterprise non disponibles, utilisation des méthodes Community');
-                }
-
                 actualProps.value.onPaginationChanged({
                     page: currentPage,
-                    pageSize: currentPageSize,
-                    sort: sortModel,
-                    filter: filterModel
+                    pageSize: currentPageSize
                 });
             }
 

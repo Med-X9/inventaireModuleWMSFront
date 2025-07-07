@@ -117,8 +117,20 @@
             maxWidth: 70,
             cellClass: 'text-left',
             cellStyle: (params) => params.data?.isChild ? { display: 'none' } : undefined
-        }" :selectionOptions="{ isRowSelectable }" :singleClickEdit="inlineEditing"
-                :stopEditingWhenCellsLoseFocus="false" @cellKeyDown="handleCellKeyDown"
+        }" :singleClickEdit="inlineEditing"
+                :enterNavigatesVertically="true"
+                :enterNavigatesVerticallyAfterEdit="true"
+                :stopEditingWhenCellsLoseFocus="false"
+                :suppressRowClickSelection="true"
+                :suppressCellFocus="true"
+                :suppressKeyboardEvent="(params) => {
+                    // Désactiver les confirmations automatiques d'édition
+                    if (params.event.key === 'Enter' && params.editing) {
+                        return false; // Permettre la navigation sans confirmation
+                    }
+                    return false;
+                }"
+                @cellKeyDown="handleCellKeyDown"
                 @cellEditingStopped="handleCellEditingStopped" :components="{ ActionMenu }" />
         </div>
 
@@ -259,20 +271,21 @@ const handleCellKeyDown = (event: CellKeyDownEvent) => {
 }
 
 const handleCellEditingStopped = (event: CellEditingStoppedEvent) => {
-    onCellEditingStopped(event, (changeEvent) => {
-        emit('cell-value-changed', changeEvent)
-    })
+    // Éviter les confirmations automatiques, laisser le système de modifications en attente gérer
+    if (event.valueChanged) {
+        onCellEditingStopped(event, (changeEvent) => {
+            emit('cell-value-changed', changeEvent)
+        })
+    }
 }
 
 const handleCellValueChanged = (event: CellValueChangedEvent) => {
     emit('cell-value-changed', event)
 }
 
-const handleSortChanged = (event) => {
+const handleSortChanged = (event: any) => {
     let sortModel = [];
-    if (event && event.api && typeof event.api.getSortModel === 'function') {
-        sortModel = event.api.getSortModel();
-    } else if (event && Array.isArray(event.columns)) {
+    if (event && Array.isArray(event.columns)) {
         // AG Grid Community: extraire le tri depuis event.columns
         sortModel = event.columns
             .filter(col => col.sort)
@@ -351,6 +364,51 @@ onMounted(() => {
 
 :deep(.ag-row[data-is-child="true"] .ag-selection-checkbox) {
     display: none !important;
+}
+
+/* Styles pour l'édition par cellule */
+:deep(.ag-cell-edit-input) {
+    border: 2px solid #3b82f6 !important;
+    border-radius: 4px !important;
+    padding: 4px 8px !important;
+    font-size: 12.5px !important;
+    background-color: #ffffff !important;
+}
+
+.dark :deep(.ag-cell-edit-input) {
+    background-color: #1f2937 !important;
+    border-color: #60a5fa !important;
+    color: #f9fafb !important;
+}
+
+:deep(.ag-cell-edit-input:focus) {
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+}
+
+.dark :deep(.ag-cell-edit-input:focus) {
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2) !important;
+}
+
+/* Indicateur visuel pour les cellules éditables */
+:deep(.ag-cell[col-id]:hover) {
+    background-color: rgba(59, 130, 246, 0.05) !important;
+    cursor: pointer !important;
+}
+
+.dark :deep(.ag-cell[col-id]:hover) {
+    background-color: rgba(96, 165, 250, 0.1) !important;
+}
+
+/* Style pour les cellules en cours d'édition */
+:deep(.ag-cell-edit-input) {
+    animation: cellEditPulse 0.3s ease-in-out;
+}
+
+@keyframes cellEditPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
 }
 
 @media (max-width: 640px) {

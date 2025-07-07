@@ -112,52 +112,136 @@ function validerJobs(jobIds: string[]) {
     alertService.success({ text: 'Jobs validés avec succès.' });
 }
 
-// Fonction pour mise à jour inline
+// Fonction pour mise à jour inline avec validation améliorée
 function updateJobField(jobId: string, field: string, value: any) {
-    switch (field) {
-        case 'team1':
-            // Retirer l'ancien assignment
-            localTeamJobs1.value.forEach((jobIds, teamId) => {
-                const index = jobIds.indexOf(jobId);
-                if (index > -1) {
-                    jobIds.splice(index, 1);
+    try {
+        switch (field) {
+            case 'team1':
+                // Retirer l'ancien assignment
+                localTeamJobs1.value.forEach((jobIds, teamId) => {
+                    const index = jobIds.indexOf(jobId);
+                    if (index > -1) {
+                        jobIds.splice(index, 1);
+                    }
+                });
+                // Ajouter le nouveau
+                if (value) {
+                    const teamObj = teams.find(t => t.name === value);
+                    if (teamObj) {
+                        const curr = localTeamJobs1.value.get(teamObj.id) || [];
+                        localTeamJobs1.value.set(teamObj.id, [...curr, jobId]);
+                        // Mettre à jour le statut si nécessaire
+                        if (localJobStatuses.value[jobId] === 'planifier') {
+                            localJobStatuses.value[jobId] = 'affecter';
+                        }
+                    } else {
+                        throw new Error(`Équipe "${value}" introuvable`);
+                    }
                 }
-            });
-            // Ajouter le nouveau
-            if (value) {
-                const teamObj = teams.find(t => t.name === value);
-                if (teamObj) {
-                    const curr = localTeamJobs1.value.get(teamObj.id) || [];
-                    localTeamJobs1.value.set(teamObj.id, [...curr, jobId]);
+                break;
+
+            case 'team2':
+                // Vérifier que le premier comptage existe
+                if (value && !localDates1.value[jobId]) {
+                    throw new Error('Le premier comptage doit être affecté avant le deuxième');
                 }
-            }
-            break;
-        case 'team2':
-            // Retirer l'ancien assignment
-            localTeamJobs2.value.forEach((jobIds, teamId) => {
-                const index = jobIds.indexOf(jobId);
-                if (index > -1) {
-                    jobIds.splice(index, 1);
+
+                // Retirer l'ancien assignment
+                localTeamJobs2.value.forEach((jobIds, teamId) => {
+                    const index = jobIds.indexOf(jobId);
+                    if (index > -1) {
+                        jobIds.splice(index, 1);
+                    }
+                });
+                // Ajouter le nouveau
+                if (value) {
+                    const teamObj = teams.find(t => t.name === value);
+                    if (teamObj) {
+                        const curr = localTeamJobs2.value.get(teamObj.id) || [];
+                        localTeamJobs2.value.set(teamObj.id, [...curr, jobId]);
+                        // Mettre à jour le statut si nécessaire
+                        if (localJobStatuses.value[jobId] === 'planifier') {
+                            localJobStatuses.value[jobId] = 'affecter';
+                        }
+                    } else {
+                        throw new Error(`Équipe "${value}" introuvable`);
+                    }
                 }
-            });
-            // Ajouter le nouveau
-            if (value) {
-                const teamObj = teams.find(t => t.name === value);
-                if (teamObj) {
-                    const curr = localTeamJobs2.value.get(teamObj.id) || [];
-                    localTeamJobs2.value.set(teamObj.id, [...curr, jobId]);
+                break;
+
+            case 'date1':
+                // Validation de la date
+                if (value) {
+                    const date = new Date(value);
+                    if (isNaN(date.getTime())) {
+                        throw new Error('Format de date invalide');
+                    }
+                    // Vérifier que la date n'est pas dans le passé
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    if (date < today) {
+                        throw new Error('La date ne peut pas être dans le passé');
+                    }
                 }
-            }
-            break;
-        case 'date1':
-            localDates1.value[jobId] = value;
-            break;
-        case 'date2':
-            localDates2.value[jobId] = value;
-            break;
-        case 'resources':
-            localResources.value[jobId] = Array.isArray(value) ? value : value.split(',').map((r: string) => r.trim());
-            break;
+                localDates1.value[jobId] = value;
+                break;
+
+            case 'date2':
+                // Validation de la date
+                if (value) {
+                    const date = new Date(value);
+                    if (isNaN(date.getTime())) {
+                        throw new Error('Format de date invalide');
+                    }
+
+                    // Vérifier que la date n'est pas dans le passé
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    if (date < today) {
+                        throw new Error('La date ne peut pas être dans le passé');
+                    }
+
+                    // Vérifier que la date2 n'est pas avant la date1
+                    const date1 = localDates1.value[jobId];
+                    if (date1) {
+                        const date1Obj = new Date(date1);
+                        if (date < date1Obj) {
+                            throw new Error('La date du deuxième comptage doit être après celle du premier');
+                        }
+                    }
+                }
+                localDates2.value[jobId] = value;
+                break;
+
+            case 'resources':
+                if (value) {
+                    const resourceArray = Array.isArray(value) ? value : value.split(',').map((r: string) => r.trim()).filter(Boolean);
+                    if (resourceArray.length === 0) {
+                        throw new Error('Au moins une ressource doit être sélectionnée');
+                    }
+                    localResources.value[jobId] = resourceArray;
+                    // Mettre à jour le statut si nécessaire
+                    if (localJobStatuses.value[jobId] === 'planifier') {
+                        localJobStatuses.value[jobId] = 'affecter';
+                    }
+                } else {
+                    localResources.value[jobId] = [];
+                }
+                break;
+
+            default:
+                console.warn(`Champ inconnu pour l'édition: ${field}`);
+                return false;
+        }
+
+        return true;
+    } catch (error) {
+        console.error(`Erreur lors de la mise à jour du champ ${field}:`, error);
+        alertService.error({
+            title: 'Erreur de validation',
+            text: error instanceof Error ? error.message : 'Erreur inconnue'
+        });
+        return false;
     }
 }
 

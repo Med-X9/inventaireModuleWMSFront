@@ -36,15 +36,15 @@
                                     'action-item group w-full flex items-center gap-3 px-3 py-2.5 text-left transition-all duration-150',
                                     'hover:bg-gray-100 dark:hover:bg-gray-800/60',
                                     'active:bg-gray-100 dark:active:bg-gray-800',
-                                    action.disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer',
+                                    (typeof action.disabled === 'function' ? action.disabled(props.params.data) : action.disabled) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer',
                                     action.class || ''
-                                ]" :disabled="action.disabled" tabindex="-1">
+                                ]" :disabled="typeof action.disabled === 'function' ? action.disabled(props.params.data) : action.disabled" tabindex="-1">
                                     <!-- Icône de l'action -->
                                     <div :class="[
                                         'flex items-center justify-center w-4 h-4 flex-shrink-0 transition-colors duration-150',
                                         'text-gray-500 dark:text-gray-400',
                                         'group-hover:text-gray-700 dark:group-hover:text-gray-200',
-                                        action.disabled ? '' : 'group-hover:scale-105'
+                                        (typeof action.disabled === 'function' ? action.disabled(props.params.data) : action.disabled) ? '' : 'group-hover:scale-105'
                                     ]">
                                         <component :is="action.icon" class="w-4 h-4" />
                                     </div>
@@ -85,14 +85,19 @@
 </template>
 
 <script setup lang="ts" generic="T extends Record<string, unknown> = Record<string, unknown>">
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, Teleport } from 'vue'
 import type { ActionConfig } from '@/interfaces/dataTable'
 import IconHorizontalDots from '../icon/icon-horizontal-dots.vue'
 
-interface SimplifiedAction<T> extends ActionConfig<T> {
-    disabled?: boolean
-    separator?: boolean
+interface SimplifiedAction<T> {
+    label: string | ((row: T) => string)
+    icon?: unknown
+    class?: string
+    handler: (row: T) => void | Promise<void>
+    visible?: boolean | ((row: T) => boolean)
+    disabled?: boolean | ((row: T) => boolean)
     important?: boolean
+    separator?: boolean
 }
 
 const props = defineProps<{
@@ -179,7 +184,7 @@ const toggleMenu = async () => {
 }
 
 const handleActionClick = (action: SimplifiedAction<T>) => {
-    if (action.disabled) return
+    if (typeof action.disabled === 'function' ? action.disabled(props.params.data) : action.disabled) return
 
     action.handler(props.params.data)
     isOpen.value = false

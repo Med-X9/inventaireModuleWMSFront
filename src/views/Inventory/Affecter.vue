@@ -1,11 +1,12 @@
 <template>
     <div class="container mx-auto">
 
-        <!-- DataTable (master) -->
+        <!-- DataTable (master) avec édition par cellule activée -->
         <div class="panel datatable">
-            <DataTable :columns="columns" :rowDataProp="displayData" :actions="rowActions" :pagination="true"
-                :enableFiltering="true" :rowSelection="true" inlineEditing @selection-changed="onSelectionChanged"
-                @row-clicked="onRowClicked" @cell-value-changed="onCellValueChanged" storageKey="affecter_table">
+            <DataTable ref="agGridRef" :columns="columns" :rowDataProp="displayData" :actions="rowActions" :pagination="true"
+                :enableFiltering="true" :rowSelection="true" :inlineEditing="true" @selection-changed="onSelectionChanged"
+                @row-clicked="onRowClicked" @cell-value-changed="onCellValueChanged" @grid-ready="onGridReady" storageKey="affecter_table"
+                :suppressRowClickSelection="true" :suppressCellFocus="true" :singleClickEdit="false">
                 <template #table-actions>
                     <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4 w-full">
                         <!-- Conteneur principal des boutons -->
@@ -82,6 +83,22 @@
 
                             <!-- Conteneur pour les boutons d'action -->
                             <div class="flex  flex-col sm:flex-row gap-2 sm:gap-3">
+                                <!-- Bouton Sauvegarder -->
+                                <button @click="saveAllChanges"
+                                    :disabled="!hasUnsavedChanges"
+                                    class="btn px-4 sm:px-6 py-2.5 btn-success btn-sm flex items-center justify-center whitespace-nowrap min-w-fit"
+                                    :class="{ 'opacity-50 cursor-not-allowed': !hasUnsavedChanges }">
+                                    <svg class="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    <span>Sauvegarder</span>
+                                    <span v-if="hasUnsavedChanges" class="ml-2 bg-white text-success px-2 py-0.5 rounded-full text-xs font-bold">
+                                        {{ Array.from(pendingChanges.values()).reduce((total, changes) => total + changes.size, 0) }}
+                                    </span>
+                                </button>
+
                                 <!-- Bouton Transférer -->
                                 <button @click="handleTransfererClick"
                                     class="btn px-4 sm:px-6 py-2.5 btn-primary btn-sm flex items-center justify-center whitespace-nowrap min-w-fit">
@@ -147,6 +164,7 @@ import type { ActionConfig, TableRow } from '@/interfaces/dataTable';
 import type { FieldConfig } from '@/interfaces/form';
 import { useAffecter } from '@/composables/useAffecter';
 import { alertService } from '@/services/alertService';
+import { MultiSelectCellEditor } from '@/components/DataTable/MultiSelectCellEditor';
 
 const router = useRouter();
 
@@ -181,8 +199,15 @@ interface RowNode extends TableRow {
 const expandedJobIds = ref<Set<string>>(new Set());
 const expandedResourceIds = ref<Set<string>>(new Set());
 
+// --- Système de suivi des modifications ---
+const pendingChanges = ref<Map<string, Map<string, any>>>(new Map());
+const hasUnsavedChanges = computed(() => pendingChanges.value.size > 0);
+
 // --- Data "aplatie" qui sera envoyée à DataTable.vue ---
 const displayData = ref<RowNode[]>([]);
+
+// Référence vers la grille AG Grid pour forcer le rafraîchissement
+const agGridRef = ref<any>(null);
 
 /**
  * Reconstruit displayData à partir de rows.value (parent only).
@@ -190,9 +215,17 @@ const displayData = ref<RowNode[]>([]);
  * on insère autant de lignes enfant qu'il y a d'emplacements.
  */
 function rebuildDisplayData() {
+    console.log('🔄 Rebuild display data...');
+    console.log('📊 Expanded resource IDs:', Array.from(expandedResourceIds.value));
+
     const newData: RowNode[] = [];
 
     rows.value.forEach((parentRow) => {
+        console.log(`📋 Processing job ${parentRow.id}:`, {
+            resourcesList: parentRow.resourcesList,
+            isExpanded: expandedResourceIds.value.has(parentRow.id)
+        });
+
         // Ligne parent
         newData.push({
             id: parentRow.id,
@@ -235,6 +268,8 @@ function rebuildDisplayData() {
         // Si on doit déplier les ressources de ce job
         if (expandedResourceIds.value.has(parentRow.id)) {
             const resources = parentRow.resourcesList || [];
+            console.log(`🔽 Expanding resources for job ${parentRow.id}:`, resources);
+
             resources.forEach((resource, index) => {
                 newData.push({
                     id: `${parentRow.id}--resource--${resource}`,
@@ -255,7 +290,16 @@ function rebuildDisplayData() {
         }
     });
 
+    console.log('📊 Final data length:', newData.length);
     displayData.value = newData;
+
+    // Forcer le rafraîchissement de la grille AG Grid
+    if (agGridRef.value && agGridRef.value.api) {
+        setTimeout(() => {
+            agGridRef.value.api.refreshCells();
+            agGridRef.value.api.redrawRows();
+        }, 100);
+    }
 }
 
 // Exécution initiale pour remplir displayData
@@ -447,7 +491,12 @@ const columns: ColDef[] = [
         editable: (params) => !params.data?.isChild,
         cellEditor: 'agSelectCellEditor',
         cellEditorParams: {
-            values: teamOptions.map(option => option.value)
+            values: teamOptions.map(option => option.value),
+            allowEmpty: true
+        },
+        suppressKeyboardEvent: (params) => {
+            // Désactiver les confirmations automatiques
+            return false;
         },
         cellStyle: (params: CellClassParams) => {
             if (!params.data) return undefined;
@@ -471,11 +520,16 @@ const columns: ColDef[] = [
         editable: (params) => !params.data?.isChild,
         cellEditor: 'agDateCellEditor',
         cellEditorParams: {
-            useFormatter: true
+            useFormatter: true,
+            browserDatePicker: true
         },
         valueGetter: dateValueGetter,
         valueParser: dateValueParser,
         valueSetter: dateValueSetter,
+        suppressKeyboardEvent: (params) => {
+            // Désactiver les confirmations automatiques
+            return false;
+        },
         cellStyle: (params: CellClassParams) => {
             if (!params.data) return undefined;
             if (params.data.isChild) {
@@ -505,7 +559,12 @@ const columns: ColDef[] = [
         editable: (params) => !params.data?.isChild,
         cellEditor: 'agSelectCellEditor',
         cellEditorParams: {
-            values: teamOptions.map(option => option.value)
+            values: teamOptions.map(option => option.value),
+            allowEmpty: true
+        },
+        suppressKeyboardEvent: (params) => {
+            // Désactiver les confirmations automatiques
+            return false;
         },
         cellStyle: (params: CellClassParams) => {
             if (!params.data) return undefined;
@@ -529,11 +588,16 @@ const columns: ColDef[] = [
         editable: (params) => !params.data?.isChild,
         cellEditor: 'agDateCellEditor',
         cellEditorParams: {
-            useFormatter: true
+            useFormatter: true,
+            browserDatePicker: true
         },
         valueGetter: dateValueGetter,
         valueParser: dateValueParser,
         valueSetter: dateValueSetter,
+        suppressKeyboardEvent: (params) => {
+            // Désactiver les confirmations automatiques
+            return false;
+        },
         cellStyle: (params: CellClassParams) => {
             if (!params.data) return undefined;
             if (params.data.isChild) {
@@ -561,9 +625,13 @@ const columns: ColDef[] = [
         filter: 'agTextColumnFilter',
         flex: 1.5,
         editable: (params) => !params.data?.isChild,
-        cellEditor: 'agSelectCellEditor',
+        cellEditor: MultiSelectCellEditor,
         cellEditorParams: {
-            values: resourceOptions.map(option => option.value)
+            options: resourceOptions.map(option => option.value)
+        },
+        suppressKeyboardEvent: (params) => {
+            // Désactiver les confirmations automatiques
+            return false;
         },
         cellStyle: (params: CellClassParams) => {
             if (!params.data) return undefined;
@@ -599,7 +667,16 @@ const columns: ColDef[] = [
           <span style="cursor: pointer; display: inline-flex; align-items: center; width: 20px; margin-right: 8px;" data-expand-resource="${jobId}" title="Cliquer pour afficher/masquer les ressources">
             ${arrow}
           </span>
-          <span>${params.data.nbResources} ressource${params.data.nbResources > 1 ? 's' : ''}</span>
+          <span style="cursor: pointer; padding: 2px 4px; border-radius: 3px; transition: background-color 0.2s;"
+                data-edit-resources="${jobId}"
+                title="Double-cliquer pour éditer les ressources"
+                onmouseover="this.style.backgroundColor='#f3f4f6'"
+                onmouseout="this.style.backgroundColor='transparent'">
+            ${params.data.nbResources} ressource${params.data.nbResources > 1 ? 's' : ''}
+            <svg style="width: 12px; height: 12px; margin-left: 4px; opacity: 0.6;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+            </svg>
+          </span>
         </div>`;
         },
         onCellClicked: (params) => {
@@ -608,26 +685,76 @@ const columns: ColDef[] = [
             if (expandToggle && !params.data?.isChild) {
                 const jobId = expandToggle.getAttribute('data-expand-resource');
                 if (jobId) {
+                    console.log('🖱️ Click on resource expand toggle for job:', jobId);
+                    console.log('📊 Current expanded resources:', Array.from(expandedResourceIds.value));
+
                     if (expandedResourceIds.value.has(jobId)) {
                         expandedResourceIds.value.delete(jobId);
+                        console.log('🔽 Collapsing resources for job:', jobId);
                     } else {
                         expandedResourceIds.value.add(jobId);
+                        console.log('🔼 Expanding resources for job:', jobId);
                     }
+
+                    console.log('📊 Updated expanded resources:', Array.from(expandedResourceIds.value));
                     rebuildDisplayData();
+                }
+            }
+        },
+        onCellDoubleClicked: (params) => {
+            // Double-clic pour éditer les ressources
+            if (!params.data?.isChild && params.data) {
+                console.log('🖱️🖱️ Double-click to edit resources for job:', params.data.id);
+                // Démarrer l'édition de la cellule
+                if (agGridRef.value && agGridRef.value.api) {
+                    agGridRef.value.api.startEditingCell({
+                        rowIndex: params.rowIndex,
+                        colKey: 'resources'
+                    });
                 }
             }
         }
     }
 ];
 
-// Gestion des changements de cellules
+// Gestion des changements de cellules avec système de modifications en attente
 function onCellValueChanged(event: CellValueChangedEvent) {
-    const { data, colDef, newValue } = event;
+    const { data, colDef, newValue, oldValue } = event;
     if (!data || data.isChild || !colDef.field) return;
 
-    updateJobField(data.id, colDef.field, newValue);
-    rebuildDisplayData();
-    alertService.success({ text: `${colDef.headerName} mis à jour avec succès.` });
+    console.log('🔄 Édition de cellule:', {
+        jobId: data.id,
+        field: colDef.field,
+        oldValue,
+        newValue
+    });
+
+    // Ajouter la modification aux changements en attente
+    addPendingChange(data.id, colDef.field, newValue);
+
+    // Mettre à jour l'affichage immédiatement pour l'UX
+    const success = updateJobField(data.id, colDef.field, newValue);
+    if (success) {
+        rebuildDisplayData();
+    }
+}
+
+// Fonction pour sauvegarder en base de données (optionnel)
+async function saveToDatabase(jobId: string, field: string, value: any) {
+    try {
+        // Simulation d'un appel API
+        console.log('💾 Sauvegarde en base:', { jobId, field, value });
+
+        // Exemple d'appel API réel :
+        // await api.updateJobField(jobId, field, value);
+
+    } catch (error) {
+        console.error('❌ Erreur lors de la sauvegarde:', error);
+        alertService.error({
+            title: 'Erreur de sauvegarde',
+            text: 'Les modifications n\'ont pas pu être sauvegardées en base de données.'
+        });
+    }
 }
 
 // --- Actions sur chaque ligne "parent" uniquement ---
@@ -876,6 +1003,72 @@ onMounted(() => {
 onUnmounted(() => {
     document.removeEventListener('click', handleClickOutsideAssignment);
 });
+
+// Fonction pour ajouter une modification en attente
+function addPendingChange(jobId: string, field: string, value: any) {
+    if (!pendingChanges.value.has(jobId)) {
+        pendingChanges.value.set(jobId, new Map());
+    }
+    pendingChanges.value.get(jobId)!.set(field, value);
+}
+
+// Fonction pour supprimer une modification en attente
+function removePendingChange(jobId: string, field: string) {
+    const jobChanges = pendingChanges.value.get(jobId);
+    if (jobChanges) {
+        jobChanges.delete(field);
+        if (jobChanges.size === 0) {
+            pendingChanges.value.delete(jobId);
+        }
+    }
+}
+
+// Fonction pour sauvegarder toutes les modifications en attente
+async function saveAllChanges() {
+    if (!hasUnsavedChanges.value) return;
+
+    try {
+        const changesToSave: Array<{ jobId: string; field: string; value: any }> = [];
+
+        // Collecter toutes les modifications
+        pendingChanges.value.forEach((jobChanges, jobId) => {
+            jobChanges.forEach((value, field) => {
+                changesToSave.push({ jobId, field, value });
+            });
+        });
+
+        // Appliquer toutes les modifications
+        for (const change of changesToSave) {
+            const success = updateJobField(change.jobId, change.field, change.value);
+            if (success) {
+                await saveToDatabase(change.jobId, change.field, change.value);
+            }
+        }
+
+        // Vider les modifications en attente
+        pendingChanges.value.clear();
+
+        // Reconstruire les données affichées
+        rebuildDisplayData();
+
+        // Afficher un message de succès
+        alertService.success({
+            text: `${changesToSave.length} modification(s) sauvegardée(s) avec succès.`
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur lors de la sauvegarde globale:', error);
+        alertService.error({
+            title: 'Erreur de sauvegarde',
+            text: 'Certaines modifications n\'ont pas pu être sauvegardées.'
+        });
+    }
+}
+
+function onGridReady(params: any) {
+    // Référence à la grille AG Grid
+    agGridRef.value = params.api;
+}
 </script>
 
 <style scoped>
@@ -883,5 +1076,34 @@ onUnmounted(() => {
 :deep(.ag-cell) {
     display: flex;
     align-items: center;
+}
+
+/* Styles pour les éléments cliquables dans la colonne ressources */
+:deep([data-expand-resource]) {
+    transition: transform 0.2s ease;
+}
+
+:deep([data-expand-resource]:hover) {
+    transform: scale(1.1);
+    background-color: rgba(59, 130, 246, 0.1);
+    border-radius: 4px;
+}
+
+:deep([data-edit-resources]) {
+    transition: all 0.2s ease;
+}
+
+:deep([data-edit-resources]:hover) {
+    background-color: rgba(16, 185, 129, 0.1);
+    border-radius: 4px;
+}
+
+/* Mode sombre */
+.dark :deep([data-expand-resource]:hover) {
+    background-color: rgba(59, 130, 246, 0.2);
+}
+
+.dark :deep([data-edit-resources]:hover) {
+    background-color: rgba(16, 185, 129, 0.2);
 }
 </style>
