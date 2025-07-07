@@ -1,19 +1,24 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { InventoryService } from '@/services/InventoryService';
-import type { InventoryTable, CreateInventoryRequest } from '@/models/Inventory';
+import type { InventoryTable, CreateInventoryRequest, InventoryDetails, ResponseInventoryDetails } from '@/models/Inventory';
+import type { InventoryDetail, InventoryDetailResponse } from '@/models/InventoryDetail';
 import type { AxiosResponse } from 'axios';
 import API from '@/api';
+import { PlanningManagementResponse } from '@/models/PlanningManagement';
 
 export const useInventoryStore = defineStore('inventory', () => {
     // State
     const inventories = ref<InventoryTable[]>([]);
     const currentInventory = ref<InventoryTable | null>(null);
+    const currentInventoryDetails = ref<InventoryDetails | null>(null);
+    const currentInventoryDetail = ref<InventoryDetail | null>(null);
     const loading = ref(false);
     const error = ref<string | null>(null);
 
     // Getters
     const getCurrentInventory = computed(() => currentInventory.value);
+    const getCurrentInventoryDetail = computed(() => currentInventoryDetail.value);
     const isLoading = computed(() => loading.value);
     const getError = computed(() => error.value);
 
@@ -111,17 +116,13 @@ export const useInventoryStore = defineStore('inventory', () => {
             const baseUrl = API.endpoints.inventory.base;
             const queryString = new URLSearchParams(queryParams).toString();
             const fullUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;
-            console.log('🌐 URL de l\'API:', fullUrl);
 
             const response: AxiosResponse<{ count: number; results: InventoryTable[]; next: string | null; previous: string | null }> = await InventoryService.getAll(queryParams);
 
             // Extraire les données du champ 'results' de la réponse paginée
             const inventoryData = response.data.results || response.data;
-            console.log('📋 Données d\'inventaires extraites:', inventoryData);
 
-            console.log('Avant mutation, inventories:', inventories.value);
             inventories.value = inventoryData;
-            console.log('Après mutation, inventories:', inventories.value);
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erreur lors de la récupération des inventaires';
             throw err;
@@ -134,11 +135,33 @@ export const useInventoryStore = defineStore('inventory', () => {
         loading.value = true;
         error.value = null;
         try {
-            const response: AxiosResponse<InventoryTable> = await InventoryService.getById(id);
-            currentInventory.value = response.data;
-            return response.data;
+            const response: AxiosResponse<ResponseInventoryDetails> = await InventoryService.getById(id);
+            currentInventoryDetails.value = response.data.data;
+            return response.data.data;
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erreur lors de la récupération de l\'inventaire';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+
+    const fetchInventoryDetail = async (id: number | string) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response: AxiosResponse<InventoryDetailResponse> = await InventoryService.getInventoryDetail(id);
+
+            // La structure de réponse est { message: "...", data: {...} }
+            if (response.data && response.data.data) {
+                currentInventoryDetail.value = response.data.data;
+                return response.data.data;
+            } else {
+                throw new Error(response.data.message || 'Erreur lors de la récupération des détails');
+            }
+        } catch (err: any) {
+            error.value = err.response?.data?.message || err.message || 'Erreur lors de la récupération de l\'inventaire';
             throw err;
         } finally {
             loading.value = false;
@@ -192,6 +215,19 @@ export const useInventoryStore = defineStore('inventory', () => {
         }
     };
 
+    const fetchPlanningManagement = async (id: number) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response: AxiosResponse<PlanningManagementResponse> = await InventoryService.getPlanningManagement(id);
+            return response.data;
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Erreur lors de la récupération des statistiques de planning';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
     const clearError = () => {
         error.value = null;
     };
@@ -204,20 +240,24 @@ export const useInventoryStore = defineStore('inventory', () => {
         // State
         inventories,
         currentInventory,
+        currentInventoryDetail,
         loading,
         error,
 
         // Getters
         getCurrentInventory,
+        getCurrentInventoryDetail,
         isLoading,
         getError,
 
         // Actions
         fetchInventories,
         fetchInventoryById,
+        fetchInventoryDetail,
         createInventory,
         updateInventory,
         deleteInventory,
+        fetchPlanningManagement,
         clearError,
         clearCurrentInventory,
     };

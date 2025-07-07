@@ -1,9 +1,12 @@
 import type { StoreOption, InventoryResult } from '../interfaces/inventoryResults';
+import axios from 'axios';
+import { AxiosResponse } from 'axios';
+import { API } from '../constants/api';
 
 const mockStores: StoreOption[] = [
   { label: 'Magasin A', value: 'store_A' },
   { label: 'Magasin B', value: 'store_B' },
-  
+
 ];
 
 const mockResults: InventoryResult[] = [
@@ -45,6 +48,8 @@ const mockResults: InventoryResult[] = [
   },
 ];
 
+const axiosInstance = axios.create();
+
 export const inventoryResultsService = {
   async getStoreOptionsForInventory(inventoryId: number): Promise<StoreOption[]> {
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -56,18 +61,27 @@ export const inventoryResultsService = {
     return mockResults.filter(result => result.store === storeId);
   },
 
-  async editResult(id: number): Promise<void> {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    console.log('Edit result:', id);
+  static async editResult(id: number): Promise<AxiosResponse<any>> {
+    try {
+      return await axiosInstance.put(`${API.endpoints.inventoryResults.base}${id}/edit/`);
+    } catch (error) {
+      throw error;
+    }
   },
 
-  async launchResult(id: number): Promise<void> {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    console.log('Launch result:', id);
+  static async launchResult(id: number): Promise<AxiosResponse<any>> {
+    try {
+      return await axiosInstance.post(`${API.endpoints.inventoryResults.base}${id}/launch/`);
+    } catch (error) {
+      throw error;
+    }
   },
 
-  async validateResult(id: number): Promise<void> {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    console.log('Validate result:', id);
+  static async validateResult(id: number): Promise<AxiosResponse<any>> {
+    try {
+      return await axiosInstance.post(`${API.endpoints.inventoryResults.base}${id}/validate/`);
+    } catch (error) {
+      throw error;
+    }
   }
 };

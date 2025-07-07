@@ -201,11 +201,11 @@ const actions: ActionConfig[] = [
             title: 'Transfer le job',
             text: `Voulez-vous vraiment Transfer le job "${row.name}" ?`
           });
-          
+
           if (result.isConfirmed) {
             console.log('Lancement du job :', row);
             // Placez ici votre logique de lancement du job
-            
+
             await alertService.success({
               text: `Le job "${row.name}" a été lancé avec succès !`
             });
@@ -245,7 +245,7 @@ async function launchSelected() {
   }
 
   const noms = selectedJobs.value.map(j => j.name).join(', ');
-  
+
   try {
     const result = await alertService.confirm({
       title: 'Confirmer le transfert',
@@ -275,6 +275,22 @@ async function launchSelected() {
     });
   }
 }
+
+const launchJob = async (row: any) => {
+  try {
+    // Logique de lancement du job
+  } catch (error) {
+    console.error('Erreur lors du lancement du job:', error);
+  }
+};
+
+const launchTransfer = async () => {
+  try {
+    // Logique de lancement du transfert
+  } catch (error) {
+    console.error('Erreur lors du lancement du transfert:', error);
+  }
+};
 </script>
 
 <style scoped>

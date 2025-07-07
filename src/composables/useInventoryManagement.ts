@@ -21,6 +21,10 @@ export function useInventoryManagement() {
     const inventories = computed(() => inventoryStore.inventories);
     const loading = inventoryStore.isLoading;
 
+    // États pour les paramètres de tri et filtre
+    const currentSortModel = ref<Array<{ colId: string; sort: 'asc' | 'desc' }>>([]);
+    const currentFilterModel = ref<Record<string, { filter: string }>>({});
+
     // Charger les inventaires via store avec paramètres
     const fetchInventories = async (params?: {
         sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>;
@@ -29,10 +33,43 @@ export function useInventoryManagement() {
         pageSize?: number;
     }) => {
         try {
+            // Mettre à jour les modèles actuels si fournis
+            if (params?.sort) currentSortModel.value = params.sort;
+            if (params?.filter) currentFilterModel.value = params.filter;
+
             await inventoryStore.fetchInventories(params);
         } catch (err) {
             console.error('Erreur chargement inventaires:', err);
         }
+    };
+
+    // Handler pour les changements de pagination
+    const handlePaginationChanged = async ({ page, pageSize }: { page: number, pageSize: number }) => {
+        console.log('🔄 Pagination inventaires changée:', { page, pageSize });
+        await fetchInventories({
+            page,
+            pageSize,
+            sort: currentSortModel.value,
+            filter: currentFilterModel.value
+        });
+    };
+
+    // Handler pour les changements de tri
+    const handleSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }>) => {
+        currentSortModel.value = sortModel;
+        await fetchInventories({
+            sort: sortModel,
+            filter: currentFilterModel.value
+        });
+    };
+
+    // Handler pour les changements de filtre
+    const handleFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
+        currentFilterModel.value = filterModel;
+        await fetchInventories({
+            sort: currentSortModel.value,
+            filter: filterModel
+        });
     };
 
     const columns: DataTableColumn<InventoryTable>[] = [
@@ -88,9 +125,9 @@ export function useInventoryManagement() {
             })
             if (r.isConfirmed) {
                 if (typeof inv.id === 'number') {
-                    await inventoryManagementService.deleteInventory(inv.id)
-                    await alertService.success({ text: "Supprimé avec succès" })
-                    await fetchInventories()
+                await inventoryManagementService.deleteInventory(inv.id)
+                await alertService.success({ text: "Supprimé avec succès" })
+                await fetchInventories()
                 } else {
                     await alertService.error({ text: "ID d'inventaire invalide" })
                 }
@@ -105,7 +142,7 @@ export function useInventoryManagement() {
             label: 'Détail',
             icon: markRaw(IconEye),
             class: 'flex items-center gap-1 px-2 py-1 text-blue-600 hover:text-blue-800 text-md',
-            handler: inv => { void router.push({ name: 'inventory-detail', params: { id: inv.id } }) },
+            handler: inv => { void router.push({ name: 'inventory-detail', params: { reference: inv.reference } }) },
             visible: () => true,
         },
         {
@@ -119,14 +156,14 @@ export function useInventoryManagement() {
             label: inv => inv.status === 'EN REALISATION' ? 'Transférer' : 'Préparer',
             icon: markRaw(IconCalendar),
             class: 'flex items-center gap-1 px-2 py-1 text-orange-600 hover:text-orange-800 text-md',
-            handler: inv => { void router.push({ name: 'planning-management', params: { id: inv.id } }) },
+            handler: inv => { void router.push({ name: 'planning-management', params: { reference: inv.reference } }) },
             visible: inv => ['EN PREPARATION', 'EN REALISATION'].includes(inv.status),
         },
         {
             label: 'Modifier',
             icon: markRaw(IconEdit),
             class: 'flex items-center gap-1 px-2 py-1 text-green-600 hover:text-green-800 text-md',
-            handler: inv => { void router.push({ name: 'inventory-edit', params: { id: inv.id } }) },
+            handler: inv => { void router.push({ name: 'inventory-edit', params: { reference: inv.reference } }) },
             visible: inv => inv.status === 'EN PREPARATION',
         },
         {
@@ -154,5 +191,8 @@ export function useInventoryManagement() {
         actions,
         redirectToAdd,
         fetchInventories,
+        handlePaginationChanged,
+        handleSortChanged,
+        handleFilterChanged,
     }
 }

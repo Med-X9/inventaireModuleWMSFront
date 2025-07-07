@@ -16,154 +16,49 @@ export const useInventory = () => {
     // Actions avec gestion des notifications
     const fetchInventories = async () => {
         try {
-            console.log('🔄 Chargement des inventaires...');
-            await inventoryStore.fetchInventories();
-            console.log('✅ Inventaires récupérés:', inventories.value);
-            console.log('📊 Nombre d\'inventaires:', inventories.value?.length || 0);
-
-            // Vérifier que les données sont un tableau avant d'utiliser forEach
-            if (Array.isArray(inventories.value)) {
-                // Afficher les détails de chaque inventaire
-                inventories.value.forEach((inventory, index) => {
-                    console.log(`📋 Inventaire ${index + 1}:`, {
-                        id: inventory.id,
-                        label: inventory.label,
-                        date: inventory.date,
-                        status: inventory.status,
-                        account_name: inventory.account_name,
-                        warehouse_count: inventory.warehouse?.length || 0,
-                        comptages_count: inventory.comptages?.length || 0
-                    });
-                });
-            } else {
-                console.warn('⚠️ Les données ne sont pas un tableau:', inventories.value);
-            }
-
-            // Vérifier que globalStore.addNotification existe avant de l'appeler
-            if (globalStore.addNotification) {
-                globalStore.addNotification({
-                    type: 'success',
-                    title: 'Succès',
-                    message: 'Inventaires récupérés avec succès'
-                });
-            } else {
-                console.warn('⚠️ addNotification non disponible dans globalStore');
-            }
-        } catch (err: any) {
-            console.error('❌ Erreur lors de la récupération des inventaires:', err);
-            if (globalStore.addNotification) {
-                globalStore.addNotification({
-                    type: 'error',
-                    title: 'Erreur',
-                    message: err.message || 'Erreur lors de la récupération des inventaires'
-                });
-            }
-            throw err;
+            const result = await inventoryStore.fetchInventories();
+            inventories.value = result.data.results || result.data;
+        } catch (error) {
+            console.error('Erreur lors du chargement des inventaires:', error);
         }
     };
 
     const fetchInventoryById = async (id: number | string) => {
         try {
-            console.log(`🔍 Récupération de l'inventaire ID: ${id}`);
             const result = await inventoryStore.fetchInventoryById(id);
-            console.log('✅ Inventaire récupéré:', result);
-            if (globalStore.addNotification) {
-                globalStore.addNotification({
-                    type: 'success',
-                    title: 'Succès',
-                    message: 'Inventaire récupéré avec succès'
-                });
-            }
-            return result;
-        } catch (err: any) {
-            console.error(`❌ Erreur lors de la récupération de l'inventaire ${id}:`, err);
-            if (globalStore.addNotification) {
-                globalStore.addNotification({
-                    type: 'error',
-                    title: 'Erreur',
-                    message: err.message || 'Erreur lors de la récupération de l\'inventaire'
-                });
-            }
-            throw err;
+            return result.data;
+        } catch (error) {
+            console.error('Erreur lors de la récupération de l\'inventaire:', error);
+            throw error;
         }
     };
 
     const createInventory = async (data: CreateInventoryRequest) => {
-        // Forcer le typage de account_id en number
-        data.account_id = Number(data.account_id);
         try {
-            console.log('➕ Création d\'un nouvel inventaire:', data);
             const result = await inventoryStore.createInventory(data);
-            console.log('✅ Inventaire créé:', result);
-            if (globalStore.addNotification) {
-                globalStore.addNotification({
-                    type: 'success',
-                    title: 'Succès',
-                    message: 'Inventaire créé avec succès'
-                });
-            }
-            return result;
-        } catch (err: any) {
-            console.error('❌ Erreur lors de la création de l\'inventaire:', err);
-            if (globalStore.addNotification) {
-                globalStore.addNotification({
-                    type: 'error',
-                    title: 'Erreur',
-                    message: err.message || 'Erreur lors de la création de l\'inventaire'
-                });
-            }
-            throw err;
+            return result.data;
+        } catch (error) {
+            console.error('Erreur lors de la création de l\'inventaire:', error);
+            throw error;
         }
     };
 
     const updateInventory = async (id: number | string, data: Partial<Inventory>) => {
         try {
-            console.log(`✏️ Mise à jour de l'inventaire ID: ${id}`, data);
             const result = await inventoryStore.updateInventory(id, data);
-            console.log('✅ Inventaire mis à jour:', result);
-            if (globalStore.addNotification) {
-                globalStore.addNotification({
-                    type: 'success',
-                    title: 'Succès',
-                    message: 'Inventaire mis à jour avec succès'
-                });
-            }
-            return result;
-        } catch (err: any) {
-            console.error(`❌ Erreur lors de la mise à jour de l'inventaire ${id}:`, err);
-            if (globalStore.addNotification) {
-                globalStore.addNotification({
-                    type: 'error',
-                    title: 'Erreur',
-                    message: err.message || 'Erreur lors de la mise à jour de l\'inventaire'
-                });
-            }
-            throw err;
+            return result.data;
+        } catch (error) {
+            console.error('Erreur lors de la mise à jour de l\'inventaire:', error);
+            throw error;
         }
     };
 
     const deleteInventory = async (id: number | string) => {
         try {
-            console.log(`🗑️ Suppression de l'inventaire ID: ${id}`);
             await inventoryStore.deleteInventory(id);
-            console.log('✅ Inventaire supprimé avec succès');
-            if (globalStore.addNotification) {
-                globalStore.addNotification({
-                    type: 'success',
-                    title: 'Succès',
-                    message: 'Inventaire supprimé avec succès'
-                });
-            }
-        } catch (err: any) {
-            console.error(`❌ Erreur lors de la suppression de l'inventaire ${id}:`, err);
-            if (globalStore.addNotification) {
-                globalStore.addNotification({
-                    type: 'error',
-                    title: 'Erreur',
-                    message: err.message || 'Erreur lors de la suppression de l\'inventaire'
-                });
-            }
-            throw err;
+        } catch (error) {
+            console.error('Erreur lors de la suppression de l\'inventaire:', error);
+            throw error;
         }
     };
 

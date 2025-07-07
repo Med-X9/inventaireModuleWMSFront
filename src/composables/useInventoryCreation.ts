@@ -1,15 +1,16 @@
 // src/composables/useInventoryCreation.ts
-import { ref, reactive, watch, onMounted } from 'vue';
+import { ref, reactive, watch, onMounted, nextTick } from 'vue';
 import { alertService } from '@/services/alertService';
 import { inventoryCreationService } from '@/services/inventoryCreationService';
 import { useInventory } from '@/composables/useInventory';
 import { useWarehouse } from '@/composables/useWarehouse';
 import { useAccount } from '@/composables/useAccount';
+import { useInventoryStore } from '@/stores/inventory';
 import { CountingDispatcher } from '@/usecases/CountingDispatcher';
 import { CountingValidationError } from '@/usecases/CountingByArticle';
-import type { InventoryCreationState, ComptageConfig } from '@/interfaces/inventoryCreation';
-import type { CreateInventoryRequest } from '@/models/Inventory';
-import type { Count } from '@/models/Count';
+import type { InventoryCreationState, ComptageConfig, ComptageMode } from '@/interfaces/inventoryCreation';
+import type { CreateInventoryRequest, InventoryDetails, InventoryTable } from '@/models/Inventory';
+import type { Count, CreateCountRequest } from '@/models/Count';
 import { validateCreation } from '@/utils/validate';
 
 export function useInventoryCreation() {
@@ -17,11 +18,15 @@ export function useInventoryCreation() {
     const loaded = ref<boolean>(false);
     const isValid = ref<boolean>(false);
     const isSubmitting = ref<boolean>(false);
+    const isEditMode = ref<boolean>(false);
+    const inventoryId = ref<number | null>(null);
+    const isInitializing = ref<boolean>(false);
 
     // Utiliser les stores
-    const { createInventory } = useInventory();
+    const { createInventory, fetchInventoryById, updateInventory: updateInventoryStore, fetchInventories } = useInventory();
     const { warehouses, loading: warehousesLoading, fetchWarehouses } = useWarehouse();
     const { accounts, loading: accountsLoading, fetchAccounts } = useAccount();
+    const inventoryStore = useInventoryStore();
 
     const state = reactive<InventoryCreationState>({
         step1Data: {
@@ -207,75 +212,55 @@ export function useInventoryCreation() {
         return true;
     }
 
-    // Fonction pour convertir les données du formulaire au format API
-    function convertToApiFormat(): CreateInventoryRequest {
-        console.log('🔄 Conversion des données du formulaire vers le format API...');
-        console.log('📋 Données du formulaire:', state);
-
-        // Convertir les magasins
+    // Convertir les données du formulaire vers le format API
+    const convertFormDataToAPI = (state: InventoryCreationState): CreateInventoryRequest => {
         const warehouse = state.step1Data.magasin.map(mag => {
-            const warehouseId = parseInt(mag.magasin);
-            console.log(`🏪 Conversion magasin: ${mag.magasin} -> ID: ${warehouseId}, Date: ${mag.date}`);
+            const warehouseId = warehouses.value.find(w => w.id.toString() === mag.magasin)?.id || 0;
             return {
                 id: warehouseId,
                 date: mag.date
             };
         });
 
-        console.log('📦 Magasins convertis:', warehouse);
+        const comptages: CreateCountRequest[] = state.comptages.map((comptage, index) => {
+            // Déterminer unit_scanned et entry_quantity selon le mode
+            let unit_scanned = false;
+            let entry_quantity = false;
 
-        // Convertir les comptages
-        const comptages = state.comptages
-            .filter(comptage => comptage.mode) // Filtrer les comptages vides
-            .map((comptage, index) => {
-                const order = index + 1;
+            if (comptage.mode === 'en vrac') {
+                unit_scanned = comptage.scannerUnitaire || comptage.inputMethod === 'scanner';
+                entry_quantity = comptage.saisieQuantite || comptage.inputMethod === 'saisie';
+            }
 
-                // Déterminer unit_scanned et entry_quantity selon le mode
-                let unit_scanned = false;
-                let entry_quantity = false;
+            // Déterminer stock_situation selon le mode
+            let stock_situation = comptage.stock_situation || false;
+            if (comptage.mode === 'image de stock') {
+                stock_situation = true;
+            }
 
-                if (comptage.mode === 'en vrac') {
-                    unit_scanned = comptage.scannerUnitaire || comptage.inputMethod === 'scanner';
-                    entry_quantity = comptage.saisieQuantite || comptage.inputMethod === 'saisie';
-                }
+            return {
+                order: index + 1,
+                count_mode: comptage.mode,
+                unit_scanned,
+                entry_quantity,
+                is_variant: comptage.isVariante,
+                n_lot: comptage.numeroLot,
+                n_serie: comptage.numeroSerie,
+                dlc: comptage.dlc,
+                show_product: comptage.guideArticle,
+                stock_situation,
+                quantity_show: comptage.guideQuantite
+            };
+        });
 
-                // Déterminer stock_situation selon le mode
-                let stock_situation = comptage.stock_situation || false;
-                if (comptage.mode === 'image de stock') {
-                    stock_situation = true; // Forcer à true pour le mode "image de stock"
-                }
-
-                const convertedComptage = {
-                    order,
-                    count_mode: comptage.mode,
-                    unit_scanned,
-                    entry_quantity,
-                    is_variant: comptage.isVariante,
-                    stock_situation,
-                    quantity_show: comptage.guideQuantite,
-                    show_product: comptage.guideArticle,
-                    dlc: comptage.dlc,
-                    n_serie: comptage.numeroSerie,
-                    n_lot: comptage.numeroLot
-                };
-
-                console.log(`📊 Comptage ${order} converti:`, convertedComptage);
-                return convertedComptage;
-            });
-
-        console.log('📊 Comptages convertis:', comptages);
-
-        const result: CreateInventoryRequest = {
+        return {
             label: state.step1Data.libelle,
             date: state.step1Data.date,
             account_id: parseInt(state.step1Data.compte),
             warehouse,
             comptages
         };
-
-        console.log('✅ Données finales pour l\'API:', result);
-        return result;
-    }
+    };
 
     async function onComplete() {
         if (!await validateCurrentStep()) return;
@@ -284,9 +269,7 @@ export function useInventoryCreation() {
             isSubmitting.value = true;
 
             // Convertir les données au format API
-            const apiData = convertToApiFormat();
-
-            console.log('📤 Données envoyées à l\'API:', apiData);
+            const apiData = convertFormDataToAPI(state);
 
             // Appeler l'API via le store
             await createInventory(apiData);
@@ -303,6 +286,7 @@ export function useInventoryCreation() {
 
     // Validation réactive
     watch(state, () => {
+        if (isInitializing.value) return; // Ne pas valider pendant l'initialisation
         const validation = validateCreation(state);
         isValid.value = getCurrentStepValidation(validation).isValid;
     }, { deep: true });
@@ -321,44 +305,18 @@ export function useInventoryCreation() {
     // Fonction pour charger les données maîtres
     async function loadMasterData() {
         try {
-            console.log('🔄 Chargement des données maîtres...');
-
-            // Initialiser les tableaux vides si nécessaire
-            if (!warehouses.value) {
-                console.log('⚠️ Warehouses non initialisé, initialisation...');
-            }
-            if (!accounts.value) {
-                console.log('⚠️ Accounts non initialisé, initialisation...');
-            }
-
             const [warehousesResult, accountsResult] = await Promise.allSettled([
                 fetchWarehouses(),
                 fetchAccounts()
             ]);
 
-            // Log des résultats avec vérification de sécurité
-            if (warehousesResult.status === 'fulfilled') {
-                console.log('✅ Magasins chargés:', Array.isArray(warehouses.value) ? warehouses.value.length : 0);
-            } else {
+            if (warehousesResult.status === 'rejected') {
                 console.error('❌ Erreur chargement magasins:', warehousesResult.reason);
             }
 
-            if (accountsResult.status === 'fulfilled') {
-                console.log('✅ Comptes chargés:', Array.isArray(accounts.value) ? accounts.value.length : 0);
-            } else {
+            if (accountsResult.status === 'rejected') {
                 console.error('❌ Erreur chargement comptes:', accountsResult.reason);
             }
-
-            // Vérification finale des données
-            const warehousesArray = Array.isArray(warehouses.value) ? warehouses.value : [];
-            const accountsArray = Array.isArray(accounts.value) ? accounts.value : [];
-
-            console.log('📊 Données maîtres finales:', {
-                warehouses: warehousesArray.length,
-                accounts: accountsArray.length,
-                warehousesData: warehousesArray.map(w => ({ id: w.id, name: w.warehouse_name })),
-                accountsData: accountsArray.map(a => ({ id: a.id, name: a.account_name }))
-            });
 
         } catch (error) {
             console.error('❌ Erreur lors du chargement des données maîtres:', error);
@@ -370,18 +328,202 @@ export function useInventoryCreation() {
         }
     }
 
+    // Fonction pour formater la date au format attendu par flat-pickr
+    function formatDateForFlatpickr(dateString: string): string {
+        if (!dateString) return '';
+
+        try {
+            // Si la date est déjà au format Y-m-d, la retourner telle quelle
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+                return dateString;
+            }
+
+            // Si c'est un datetime ISO, extraire seulement la partie date
+            if (/^\d{4}-\d{2}-\d{2}T/.test(dateString)) {
+                return dateString.split('T')[0];
+            }
+
+            // Sinon, essayer de parser la date et la reformater
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) {
+                console.warn('Format de date invalide:', dateString);
+                return '';
+            }
+
+            // Formater au format Y-m-d
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+
+            return `${year}-${month}-${day}`;
+        } catch (error) {
+            console.error('Erreur lors du formatage de la date:', error);
+            return '';
+        }
+    }
+
+    // Fonction pour initialiser en mode édition
+    const initializeEditMode = async (reference: string) => {
+        isEditMode.value = true;
+        inventoryId.value = null;
+        isInitializing.value = true; // Désactiver la validation pendant l'initialisation
+
+        try {
+            // Charger d'abord les données maîtres et attendre qu'elles soient disponibles
+            await loadMasterData();
+
+            // Attendre un peu pour s'assurer que les données sont bien chargées
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Vérifier que les données des comptes et magasins sont chargées
+            if (!accounts.value || accounts.value.length === 0) {
+                console.warn('Les données des comptes ne sont pas encore chargées, nouvelle tentative...');
+                await fetchAccounts();
+            }
+
+            if (!warehouses.value || warehouses.value.length === 0) {
+                console.warn('Les données des magasins ne sont pas encore chargées, nouvelle tentative...');
+                await fetchWarehouses();
+            }
+
+            // Récupérer l'inventaire par sa référence
+            // D'abord, charger la liste des inventaires pour trouver celui avec la bonne référence
+            await inventoryStore.fetchInventories();
+            const inventory = inventoryStore.inventories.find(inv => inv.reference === reference);
+
+            if (!inventory) {
+                throw new Error(`Aucun inventaire trouvé avec la référence: ${reference}`);
+            }
+
+            // Stocker l'ID de l'inventaire
+            inventoryId.value = inventory.id;
+
+            // Récupérer les détails de l'inventaire avec l'ID
+            const inventoryDetails: InventoryDetails = await inventoryStore.fetchInventoryById(inventory.id);
+            if (!inventoryDetails) {
+                throw new Error(`Impossible de récupérer les détails de l'inventaire avec l'ID: ${inventory.id}`);
+            }
+            console.log(formatDateForFlatpickr(inventoryDetails.date));
+
+            // Mapper les données de l'API vers le state local
+            const step1Data = {
+                libelle: inventoryDetails.label || '',
+                date: formatDateForFlatpickr(inventoryDetails.date),
+                type: (inventoryDetails.inventory_type as string) || 'Inventaire Général',
+                compte: inventoryDetails.account_id?.toString() || '',
+                magasin: inventoryDetails.warehouses?.map(wh => ({
+                    magasin: wh.id.toString(),
+                    date: formatDateForFlatpickr(wh.inventory_start_date)
+                })) || []
+            };
+
+            console.log('📝 Données mappées:', step1Data);
+            console.log('📅 Date mappée:', step1Data.date);
+
+            // Assigner les données de manière réactive
+            state.step1Data.libelle = step1Data.libelle;
+            state.step1Data.date = step1Data.date;
+            state.step1Data.type = step1Data.type;
+            state.step1Data.compte = step1Data.compte;
+            state.step1Data.magasin = step1Data.magasin;
+
+            console.log('🔧 State après assignation:', state.step1Data);
+            console.log('📅 Date dans le state:', state.step1Data.date);
+
+            // Mapper les comptages
+            if (inventoryDetails.comptages && inventoryDetails.comptages.length > 0) {
+                state.comptages = inventoryDetails.comptages.map(count => {
+                    // Déterminer inputMethod pour le mode "en vrac"
+                    let inputMethod: '' | 'saisie' | 'scanner' = '';
+                    if (count.count_mode === 'en vrac') {
+                        if (count.entry_quantity) {
+                            inputMethod = 'saisie';
+                        } else if (count.unit_scanned) {
+                            inputMethod = 'scanner';
+                        }
+                    }
+
+                    return {
+                        mode: (count.count_mode || '') as ComptageMode,
+                        inputMethod,
+                        saisieQuantite: count.entry_quantity || false,
+                        scannerUnitaire: count.unit_scanned || false,
+                        guideQuantite: count.quantity_show || false,
+                        isVariante: count.is_variant || false,
+                        guideArticle: count.show_product || false,
+                        dlc: count.dlc || false,
+                        numeroSerie: count.n_serie || false,
+                        numeroLot: count.n_lot || false,
+                        stock_situation: count.stock_situation || false,
+                        // Legacy props
+                        useScanner: count.unit_scanned || false,
+                        useSaisie: count.entry_quantity || false
+                    };
+                });
+            }
+
+            // Forcer une mise à jour réactive après le prochain tick
+            await nextTick();
+
+            console.log('🔄 Après nextTick - State:', state.step1Data);
+            console.log('🔄 Après nextTick - Date:', state.step1Data.date);
+
+            // Forcer une validation manuelle après l'initialisation
+            const validation = validateCreation(state);
+            isValid.value = getCurrentStepValidation(validation).isValid;
+
+            console.log('✅ Validation effectuée, date finale:', state.step1Data.date);
+        } catch (error) {
+            console.error('Erreur lors du chargement de l\'inventaire:', error);
+            throw error;
+        } finally {
+            isInitializing.value = false; // Réactiver la validation après l'initialisation
+        }
+    };
+
+    // Fonction pour mettre à jour un inventaire existant
+    const updateInventory = async () => {
+        if (!inventoryId.value) {
+            throw new Error('ID d\'inventaire manquant pour la mise à jour');
+        }
+
+        try {
+            isSubmitting.value = true;
+
+            // Convertir les données au format API
+            const apiData = convertFormDataToAPI(state);
+
+            // Appeler l'API de mise à jour via le store
+            await updateInventoryStore(inventoryId.value, apiData);
+
+            // Reset après succès
+            resetState();
+            isEditMode.value = false;
+            inventoryId.value = null;
+        } catch (error) {
+            console.error('❌ Erreur lors de la mise à jour:', error);
+            throw error;
+        } finally {
+            isSubmitting.value = false;
+        }
+    };
+
     return {
         state,
         currentStep,
         availableModesForStep,
         onStepComplete,
         onComplete,
+        updateInventory,
+        initializeEditMode,
         cancelCreation,
         loaded,
         isValid,
         isSubmitting,
+        isEditMode,
+        inventoryId,
         resetState,
-        convertToApiFormat,
+        convertFormDataToAPI,
         validateComptageWithDispatcher,
         // Exposer les données des stores
         warehouses,

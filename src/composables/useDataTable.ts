@@ -35,6 +35,7 @@ export interface UseDataTableProps<T = Record<string, unknown>> {
     maxRowsForDynamicHeight: number
     showColumnSelector: boolean
     showDetails: boolean
+    onPaginationChanged?: (params: { page: number, pageSize: number }) => void
 }
 
 export function useDataTable<T extends Record<string, unknown> = Record<string, unknown>>(
@@ -49,7 +50,12 @@ export function useDataTable<T extends Record<string, unknown> = Record<string, 
     });
 
     const gridApi = ref<GridApi | null>(null)
+    const columnApi = ref<any>(null)
     const expandedRowIds = ref<Set<string>>(new Set())
+
+    // Flag pour éviter les appels multiples de pagination
+    const isRestoringState = ref(false)
+    let paginationTimeout: number | null = null
 
     // Utiliser directement la prop comme source de vérité
     const rowData = computed<RowWithDetails[]>(() => {
@@ -153,8 +159,18 @@ export function useDataTable<T extends Record<string, unknown> = Record<string, 
     const toggleRowExpansion = (rowId: string) => {
         if (expandedRowIds.value.has(rowId)) {
             expandedRowIds.value.delete(rowId);
+            emitRowExpanded(rowId, false);
         } else {
             expandedRowIds.value.add(rowId);
+            emitRowExpanded(rowId, true);
+        }
+    }
+
+    // Événement personnalisé pour l'expansion
+    const emitRowExpanded = (rowId: string, expanded: boolean) => {
+        if (typeof window !== 'undefined' && window.dispatchEvent) {
+            const event = new CustomEvent('datatable-row-expanded', { detail: { rowId, expanded } });
+            window.dispatchEvent(event);
         }
     }
 
@@ -204,16 +220,22 @@ export function useDataTable<T extends Record<string, unknown> = Record<string, 
     const restorePaginationState = () => {
         if (!isGridValid() || !actualProps.value.pagination) return
 
+        isRestoringState.value = true;
+
         try {
             const saved = localStorage.getItem(paginationStorageKey)
-            if (!saved) return
+            if (!saved) {
+                isRestoringState.value = false;
+                return;
+            }
 
             const state = JSON.parse(saved)
             const maxAge = 24 * 60 * 60 * 1000 // 24h
 
             if (state.timestamp && Date.now() - state.timestamp > maxAge) {
                 localStorage.removeItem(paginationStorageKey)
-                return
+                isRestoringState.value = false;
+                return;
             }
 
             // Restore page size first
@@ -233,11 +255,18 @@ export function useDataTable<T extends Record<string, unknown> = Record<string, 
                             gridApi.value!.paginationGoToPage(targetPage)
                         }
                     }
+                    // Réactiver les événements de pagination après restauration
+                    setTimeout(() => {
+                        isRestoringState.value = false;
+                    }, 100);
                 }, 300)
+            } else {
+                isRestoringState.value = false;
             }
         } catch (err) {
             console.warn('Error restoring pagination:', err)
             localStorage.removeItem(paginationStorageKey)
+            isRestoringState.value = false;
         }
     }
 
@@ -511,19 +540,54 @@ export function useDataTable<T extends Record<string, unknown> = Record<string, 
 
     // Handle pagination changes
     const handlePaginationChanged = () => {
-        if (!isGridValid() || !actualProps.value.pagination) return
+        if (!isGridValid() || !actualProps.value.pagination || isRestoringState.value) return
 
-        const newPageSize = gridApi.value!.paginationGetPageSize()
-        if (newPageSize !== pageSize.value) {
-            pageSize.value = newPageSize
+        // Clear previous timeout
+        if (paginationTimeout) {
+            clearTimeout(paginationTimeout)
         }
 
-        // Save state with slight delay to avoid multiple calls
-        setTimeout(() => {
+        // Debounce the pagination callback to avoid multiple calls
+        paginationTimeout = setTimeout(() => {
+            const newPageSize = gridApi.value!.paginationGetPageSize()
+            if (newPageSize !== pageSize.value) {
+                pageSize.value = newPageSize
+            }
+
+            // Appeler le callback de pagination si fourni
+            if (actualProps.value.onPaginationChanged) {
+                const currentPage = gridApi.value!.paginationGetCurrentPage() + 1; // AG Grid est 0-based
+                const currentPageSize = gridApi.value!.paginationGetPageSize();
+
+                // Récupérer les paramètres de tri et filtre actuels (compatible AG Grid Community)
+                let sortModel = [];
+                let filterModel = {};
+
+                try {
+                    // Essayer d'abord les méthodes Enterprise
+                    if (typeof gridApi.value!.getSortModel === 'function') {
+                        sortModel = gridApi.value!.getSortModel();
+                    }
+                    if (typeof gridApi.value!.getFilterModel === 'function') {
+                        filterModel = gridApi.value!.getFilterModel();
+                    }
+                } catch (error) {
+                    console.warn('Méthodes Enterprise non disponibles, utilisation des méthodes Community');
+                }
+
+                actualProps.value.onPaginationChanged({
+                    page: currentPage,
+                    pageSize: currentPageSize,
+                    sort: sortModel,
+                    filter: filterModel
+                });
+            }
+
+            // Save state
             if (isGridValid()) {
                 savePaginationState()
             }
-        }, 100)
+        }, 150) // Délai de 150ms pour éviter les appels multiples
     }
 
     // Variable to track if we should save on destroy
@@ -534,6 +598,13 @@ export function useDataTable<T extends Record<string, unknown> = Record<string, 
         if (shouldSaveOnDestroy && actualProps.value.pagination && isGridValid()) {
             savePaginationState()
         }
+
+        // Clean up timeout
+        if (paginationTimeout) {
+            clearTimeout(paginationTimeout)
+            paginationTimeout = null
+        }
+
         // Clean up the API reference
         gridApi.value = null
         shouldSaveOnDestroy = false
@@ -543,10 +614,19 @@ export function useDataTable<T extends Record<string, unknown> = Record<string, 
     const saveTableState = () => {
         if (!isGridValid()) return;
         try {
+            // Récupérer les modèles de tri et filtre de manière compatible
+            let filterModel = {};
+            try {
+                if (typeof gridApi.value!.getFilterModel === 'function') {
+                    filterModel = gridApi.value!.getFilterModel();
+                }
+            } catch (error) {
+                console.warn('getFilterModel non disponible');
+            }
+
             const state = {
                 visibleFields: visibleFields.value,
-                filterModel: gridApi.value!.getFilterModel(),
-                sortModel: (gridApi.value as any).getSortModel(),
+                filterModel: filterModel,
                 page: gridApi.value!.paginationGetCurrentPage(),
                 pageSize: gridApi.value!.paginationGetPageSize(),
                 timestamp: Date.now()
@@ -559,9 +639,15 @@ export function useDataTable<T extends Record<string, unknown> = Record<string, 
 
     const restoreTableState = () => {
         if (!isGridValid()) return;
+
+        isRestoringState.value = true;
+
         try {
             const saved = localStorage.getItem(actualProps.value.storageKey + '_tableState');
-            if (!saved) return;
+            if (!saved) {
+                isRestoringState.value = false;
+                return;
+            }
             const state = JSON.parse(saved);
             // Colonnes visibles
             if (Array.isArray(state.visibleFields)) {
@@ -569,11 +655,13 @@ export function useDataTable<T extends Record<string, unknown> = Record<string, 
             }
             // Filtres
             if (state.filterModel) {
-                gridApi.value!.setFilterModel(state.filterModel);
-            }
-            // Tri
-            if (state.sortModel) {
-                (gridApi.value as any).setSortModel(state.sortModel);
+                try {
+                    if (typeof gridApi.value!.setFilterModel === 'function') {
+                        gridApi.value!.setFilterModel(state.filterModel);
+                    }
+                } catch (error) {
+                    console.warn('setFilterModel non disponible');
+                }
             }
             // Page size
             if (typeof state.pageSize === 'number' && state.pageSize > 0) {
@@ -590,11 +678,18 @@ export function useDataTable<T extends Record<string, unknown> = Record<string, 
                             gridApi.value!.paginationGoToPage(targetPage);
                         }
                     }
+                    // Réactiver les événements de pagination après restauration
+                    setTimeout(() => {
+                        isRestoringState.value = false;
+                    }, 100);
                 }, 300);
+            } else {
+                isRestoringState.value = false;
             }
         } catch (err) {
             console.warn('Error restoring table state:', err);
             localStorage.removeItem(actualProps.value.storageKey + '_tableState');
+            isRestoringState.value = false;
         }
     };
 
@@ -608,21 +703,24 @@ export function useDataTable<T extends Record<string, unknown> = Record<string, 
         saveTableState();
     };
 
-    // Brancher les événements AG Grid
-    function onGridReady(e: GridReadyEvent, callback?: () => void) {
-        gridApi.value = e.api;
-        if (actualProps.value.pagination) {
-            gridApi.value.addEventListener('paginationChanged', handlePaginationChanged);
+    // Grid ready handler
+    const onGridReady = (event: any) => {
+        gridApi.value = event.api
+        columnApi.value = event.columnApi
+
+        // Écouter les changements de pagination
+        if (actualProps.value.pagination && gridApi.value) {
+            gridApi.value.addEventListener('paginationChanged', handlePaginationChanged)
         }
-        gridApi.value.addEventListener('filterChanged', onAnyTableChange);
-        gridApi.value.addEventListener('sortChanged', onAnyTableChange);
-        calculateOptimalHeight();
-        restoreTableState();
-        callback?.();
+
+        // Restore state if available (seulement si pas déjà en cours de restauration)
+        if (actualProps.value.storageKey && !isRestoringState.value) {
+            restoreTableState()
+        }
     }
 
     function onFirstDataRendered(_: FirstDataRenderedEvent, callback?: () => void) {
-        if (actualProps.value.pagination && isGridValid()) {
+        if (actualProps.value.pagination && isGridValid() && !isRestoringState.value) {
             // Restore after first render
             setTimeout(() => {
                 if (isGridValid()) {

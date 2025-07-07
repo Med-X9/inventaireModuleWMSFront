@@ -56,14 +56,13 @@ export const useAuthStore = defineStore('auth', {
         clearTokens();
         this.user = null;
         this.isAuthenticated = false;
-        
+
         // Only call API logout if we had tokens
         if (hadTokens) {
           await authService.logout();
         }
       } catch (error) {
         // On ignore l'erreur (déjà gérée dans authService)
-        console.log('Logout store error (ignored):', error);
       } finally {
         this.loading = false;
         router.push('/auth/login');

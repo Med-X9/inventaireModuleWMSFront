@@ -1,6 +1,11 @@
+import axiosInstance from '@/utils/axiosConfig';
+
 // API base configuration
 const API = {
-    baseURL: 'http://127.0.0.1:8000',
+    baseURL: import.meta.env.VITE_API_BASE_URL,
+    get axiosInstance() {
+        return axiosInstance;
+    },
     endpoints: {
         auth: {
             login: '/api/auth/login/',
@@ -15,8 +20,18 @@ const API = {
         },
         account: {
             base: '/masterdata/api/accounts/'
+        },
+        job: {
+            base: '/web/api/jobs/'
+        },
+        resource: {
+            base: 'masterdata/api/ressources'
+        },
+        location: {
+            base: '/masterdata/api/locations/'
         }
-    }
+
+    },
 };
 
 export default API;

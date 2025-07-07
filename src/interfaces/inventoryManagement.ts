@@ -8,20 +8,20 @@ export interface Team {
 }
 
 export interface InventoryManagement {
-    id: number ;
-    reference: string ;
+    id: number;
+    reference: string;
     label: string;
     date: string;
-    inventory_type : string
     status: string;
-    created_at: string;
+    inventory_type: string;
     en_preparation_status_date: string | null;
     en_realisation_status_date: string | null;
-    ternime_status_date: string | null;
+    termine_status_date: string | null;
     cloture_status_date: string | null;
     account_name: string;
-    warehouse: InventoryWarehouse[];
+    warehouse_name: string[];
     comptages: Count[];
+    equipe: Team[];
 }
 
 // Ajout de showWhen dans InventoryAction

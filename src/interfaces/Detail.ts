@@ -10,5 +10,6 @@ export interface JobDetail extends Record<string, unknown> {
 export interface DetailData {
     inventory: InventoryManagement;
     magasins: string[];
-    
+    jobsData?: Record<string, JobDetail[]>;
+    teams?: any[];
 }

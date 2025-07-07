@@ -2,7 +2,7 @@
     <div class="datatable panel py-7">
         <DataTable :columns="columns" :rowDataProp="inventories" :actions="actions" :pagination="true"
             :rowSelection="false" :enableFiltering="true" storageKey="inventory_management_table" :showColumnSelector="true"
-            @sort-changed="onSortChanged" @filter-changed="onFilterChanged">
+            :onPaginationChanged="handlePaginationChanged" @sort-changed="onSortChanged" @filter-changed="onFilterChanged">
             <template #table-actions>
                 <div class="flex items-center flex-wrap gap-2">
                     <button class=" btn btn-primary p-2 px-4 mb-4 btn-sm " @click="redirectToAdd">
@@ -28,8 +28,6 @@ export default defineComponent({
         IconPlus,
     },
     setup() {
-        console.log('🔄 InventoryManagement: setup() démarré');
-
         const {
             inventories,
             loading,
@@ -37,55 +35,30 @@ export default defineComponent({
             actions,
             redirectToAdd,
             fetchInventories,
+            handlePaginationChanged,
+            handleSortChanged,
+            handleFilterChanged,
         } = useInventoryManagement();
-
-        console.log('🔄 InventoryManagement: composable chargé, inventories:', inventories);
-
-        // États pour les paramètres de tri et filtre
-        const sortModel = ref<Array<{ colId: string; sort: 'asc' | 'desc' }>>([]);
-        const filterModel = ref<Record<string, { filter: string }>>({});
 
         // Charger les données une fois le composant monté
         onMounted(async () => {
-            console.log('🔄 InventoryManagement: onMounted() - début du chargement');
+            console.log('🚀 Chargement initial des inventaires...');
             await fetchInventories();
-            console.log('inventories:', inventories);
         });
 
         // Surveiller les changements dans le store
         watch(inventories, (newInventories) => {
-            console.log('🔄 Inventories mis à jour dans la vue:', newInventories);
+            console.log('📊 Inventaires mis à jour:', newInventories.length, 'éléments');
         }, { deep: true });
-
-        // Handler pour les changements de tri
-        const onSortChanged = (model: Array<{ colId: string; sort: 'asc' | 'desc' }>) => {
-            console.log('🔄 Tri changé:', model);
-            console.log('📊 Modèle de tri AG Grid:', JSON.stringify(model, null, 2));
-            sortModel.value = model;
-            fetchInventories({
-                sort: sortModel.value,
-                filter: filterModel.value
-            });
-        };
-
-        // Handler pour les changements de filtre
-        const onFilterChanged = (model: Record<string, { filter: string }>) => {
-            console.log('🔄 Filtre changé:', model);
-            console.log('🔍 Modèle de filtre AG Grid:', JSON.stringify(model, null, 2));
-            filterModel.value = model;
-            fetchInventories({
-                sort: sortModel.value,
-                filter: filterModel.value
-            });
-        };
 
         return {
             inventories,
             columns,
             actions,
             redirectToAdd,
-            onSortChanged,
-            onFilterChanged,
+            onSortChanged: handleSortChanged,
+            onFilterChanged: handleFilterChanged,
+            handlePaginationChanged,
         };
     },
 });

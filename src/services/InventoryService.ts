@@ -1,7 +1,9 @@
 import axiosInstance from '@/utils/axiosConfig';
 import type { AxiosResponse } from 'axios';
-import type {CreateInventoryRequest, InventoryTable } from '@/models/Inventory';
+import type { CreateInventoryRequest, InventoryDetails, InventoryTable, ResponseInventoryDetails } from '@/models/Inventory';
+import type { InventoryDetail, InventoryDetailResponse } from '@/models/InventoryDetail';
 import API from '@/api';
+import type { PlanningManagementResponse } from '@/models/PlanningManagement';
 
 // Interface pour la réponse paginée
 interface PaginatedResponse<T> {
@@ -18,12 +20,10 @@ export class InventoryService {
             const baseUrl = API.endpoints.inventory.base;
             const queryString = params ? new URLSearchParams(params).toString() : '';
             const fullUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;
-            console.log('🌐 URL complète de l\'API:', fullUrl);
 
             const response = await axiosInstance.get<PaginatedResponse<InventoryTable>>(API.endpoints.inventory.base, {
                 params: params
             });
-            console.log('📥 Réponse du service:', response);
             return response;
         } catch (error) {
             console.error('💥 Erreur dans le service InventoryService.getAll():', error);
@@ -31,10 +31,20 @@ export class InventoryService {
         }
     }
 
-    static async getById(id: number | string): Promise<AxiosResponse<InventoryTable>> {
+    static async getById(id: number | string): Promise<AxiosResponse<ResponseInventoryDetails>> {
         try {
-            return await axiosInstance.get<InventoryTable>(`${API.endpoints.inventory.base}${id}/edit/`);
+            return await axiosInstance.get<ResponseInventoryDetails>(`${API.endpoints.inventory.base}${id}/edit/`);
         } catch (error) {
+            throw error;
+        }
+    }
+
+    static async getInventoryDetail(id: number | string): Promise<AxiosResponse<InventoryDetailResponse>> {
+        try {
+            const response = await axiosInstance.get<InventoryDetailResponse>(`${API.endpoints.inventory.base}${id}/detail/`);
+            return response;
+        } catch (error) {
+            console.error('💥 Erreur dans le service InventoryService.getInventoryDetail():', error);
             throw error;
         }
     }
@@ -58,6 +68,13 @@ export class InventoryService {
     static async delete(id: number | string): Promise<AxiosResponse<void>> {
         try {
             return await axiosInstance.delete<void>(`${API.endpoints.inventory.base}${id}/`);
+        } catch (error) {
+            throw error;
+        }
+    }
+    static async getPlanningManagement(id: number): Promise<AxiosResponse<PlanningManagementResponse>> {
+        try {
+            return await axiosInstance.get<PlanningManagementResponse>(`${API.endpoints.inventory.base}${id}/warehouse-stats/`);
         } catch (error) {
             throw error;
         }

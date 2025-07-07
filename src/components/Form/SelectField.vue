@@ -14,9 +14,9 @@
             </span>
         </label>
 
-        <v-select :id="fieldId" :model-value="modelValue" :options="formattedOptions" :multiple="multiple"
+        <v-select :id="fieldId" :model-value="selected" :options="formattedOptions" :multiple="multiple"
             :searchable="searchable" :clearable="clearable" :placeholder="placeholder" :disabled="disabled"
-            :loading="loading" label="label" :reduce="(opt: SelectOption) => opt?.value || opt" :class="[
+            :loading="loading" label="label" :reduce="(option) => option.value" :class="[
                 'vs-custom',
                 compact ? 'vs-compact' : '',
                 multiple ? 'vs-multi' : 'vs-single',
@@ -26,15 +26,16 @@
             ]" :filter="customFilter" @update:model-value="$emit('update:modelValue', $event)"
             @search="$emit('search', $event)" @open="$emit('open')" @close="$emit('close')">
             <!-- Custom option template with tooltip support -->
-            <template #option="slotProps: OptionSlotProps">
+            <template #option="slotProps: any">
                 <div v-if="slotProps?.option" class="vs-option-with-tooltip relative w-full">
                     <div class="vs-option-content flex items-center justify-between w-full">
                         <span>{{ slotProps.option.label }}</span>
-                        <svg v-if="slotProps.option.tooltip" class="w-3 h-3 text-gray-400 cursor-help vs-tooltip-trigger ml-2"
-                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        <svg v-if="slotProps.option.tooltip"
+                            class="w-3 h-3 text-gray-400 cursor-help vs-tooltip-trigger ml-2" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24"
                             @mouseenter="handleMouseEnter($event, slotProps.option)" @mouseleave="handleMouseLeave">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M8.228 9c.549-1.165 2.03-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
 
@@ -48,12 +49,12 @@
             </template>
 
             <!-- Template pour afficher les valeurs sélectionnées -->
-            <template #selected-option="slotProps: OptionSlotProps">
+            <template #selected-option="slotProps: any">
                 <span v-if="slotProps?.option">{{ slotProps.option.label }}</span>
             </template>
 
             <!-- Template pour afficher la valeur sélectionnée dans les selects simples -->
-            <template #value="slotProps: ValueSlotProps">
+            <template #value="slotProps: any">
                 <span v-if="slotProps?.option">
                     {{ typeof slotProps.option === 'object' ? slotProps.option.label : slotProps.option }}
                 </span>
@@ -67,7 +68,7 @@
             </template>
 
             <!-- Custom search input template for enhanced search -->
-            <template v-if="enhancedSearch" #search="slotProps: SearchSlotProps">
+            <template v-if="enhancedSearch" #search="slotProps: any">
                 <input v-bind="slotProps.attributes" v-on="slotProps.events" class="vs-search-input"
                     :placeholder="searchPlaceholder || 'Rechercher...'" />
             </template>
@@ -92,20 +93,6 @@ import Tooltip from '@/components/Tooltip.vue';
 import 'vue-select/dist/vue-select.css';
 import '@/assets/css/select2.css';
 import type { SelectOption, SelectFieldProps, SelectFieldEmits } from '@/interfaces/form';
-
-// Types pour les slots de vue-select
-interface OptionSlotProps {
-  option: SelectOption;
-}
-
-interface ValueSlotProps {
-  option: SelectOption | string;
-}
-
-interface SearchSlotProps {
-  attributes: any;
-  events: any;
-}
 
 const props = withDefaults(defineProps<SelectFieldProps>(), {
     searchable: true,
@@ -134,6 +121,17 @@ const formattedOptions = computed((): SelectOption[] => {
         typeof opt === 'string' ? { label: opt, value: opt } : opt
     );
 });
+
+// Use selected prop if provided, otherwise fall back to modelValue
+const selected = computed(() => {
+    return props.selected !== undefined ? props.selected : props.modelValue;
+});
+
+// Fonction pour obtenir le label à partir d'une value
+const getLabelFromValue = (value: string | number): string => {
+    const option = formattedOptions.value.find(opt => opt.value === value);
+    return option ? option.label : String(value);
+};
 
 // Gestion des événements de tooltip
 const handleMouseEnter = (event: MouseEvent, option: SelectOption) => {

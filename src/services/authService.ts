@@ -14,26 +14,26 @@ class AuthService {
     } catch (unknownError) {
       if (axios.isAxiosError(unknownError)) {
         const error = unknownError as AxiosError;
-        
+
         // Handle 401 Unauthorized with a clear message
         if (error.response?.status === 401) {
           throw new Error('Nom d\'utilisateur ou mot de passe incorrect');
         }
-        
+
         // Handle API error messages
         if (error.response?.data && typeof error.response.data === 'object') {
           const responseData = error.response.data as Record<string, unknown>;
-          
+
           if (typeof responseData.message === 'string') {
             throw new Error(responseData.message);
           }
-          
+
           if (typeof responseData.detail === 'string') {
             throw new Error(responseData.detail);
           }
         }
       }
-      
+
       throw new Error('Erreur de connexion au serveur. Veuillez réessayer.');
     }
   }
@@ -56,14 +56,13 @@ class AuthService {
       if (!tokens?.refresh) {
         return;
       }
-      
+
       await axios.post(
         `${API.baseURL}${API.endpoints.auth.logout}`,
         { refresh: tokens.refresh }
       );
     } catch (error) {
-      // Silently handle logout errors
-      console.log('Logout error (ignored):', error);
+      // Erreur de logout ignorée
     }
   }
 }

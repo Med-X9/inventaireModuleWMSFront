@@ -133,10 +133,17 @@
 
         <DynamicWizard v-else :key="wizardKey" :steps="wizardSteps" v-model:current-step="currentStep"
             :is-valid="isValid" :beforeChange="validateAndSaveStep" @complete="handleSubmit"
-            :finish-button-text="isSubmitting ? 'Création…' : 'Créer'" color="#ffc107">
+            :finish-button-text="isSubmitting ? (isEditMode ? 'Modification…' : 'Création…') : (isEditMode ? 'Modifier' : 'Créer')" color="#ffc107">
 
             <template #step-0>
-                <FormBuilder v-model:modelValue="state.step1Data" :fields="formFields" hide-submit :columns="4" />
+                <div>
+                    <div class="mb-4 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg">
+                        <p class="text-xs text-yellow-600 dark:text-yellow-300">
+                            Debug - Date dans state: {{ state.step1Data.date }}
+                        </p>
+                    </div>
+                    <FormBuilder v-model:modelValue="state.step1Data" :fields="formFields" hide-submit :columns="4" />
+                </div>
             </template>
 
             <template #step-1>
@@ -203,8 +210,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useInventoryCreation } from '@/composables/useInventoryCreation';
 import DynamicWizard from '@/components/wizard/Wizard.vue';
 import FormBuilder from '@/components/Form/FormBuilder.vue';
@@ -215,7 +222,12 @@ import { required, date, magasinWithDatesRequired } from '@/utils/validate';
 import { alertService } from '@/services/alertService';
 
 const router = useRouter();
+const route = useRoute();
 const wizardKey = ref(Date.now());
+
+// Détecter si on est en mode édition
+const isEditMode = computed(() => !!route.params.reference);
+const inventoryReference = computed(() => isEditMode.value ? route.params.reference as string : null);
 
 const {
     state,
@@ -223,6 +235,8 @@ const {
     availableModesForStep,
     onStepComplete,
     onComplete,
+    updateInventory,
+    initializeEditMode,
     loaded,
     isValid,
     isSubmitting,
@@ -231,6 +245,22 @@ const {
     warehousesLoading,
     accountsLoading,
 } = useInventoryCreation();
+
+// Initialiser en mode édition si nécessaire
+onMounted(async () => {
+    if (isEditMode.value && inventoryReference.value) {
+        try {
+            await initializeEditMode(inventoryReference.value);
+        } catch (error) {
+            console.error('❌ Erreur lors de l\'initialisation du mode édition:', error);
+            await alertService.error({
+                title: 'Erreur',
+                text: 'Impossible de charger l\'inventaire à modifier'
+            });
+            router.push({ name: 'inventory-list' });
+        }
+    }
+});
 
 // Créer les options dynamiques pour les comptes
 const accountOptions = computed(() => {
@@ -266,7 +296,7 @@ const getWarehouseName = (warehouseId: string) => {
 };
 
 /* Étape 1 (fusion des anciennes étapes 1 et 2) */
-const formFields = computed<FieldConfig[]>(() => [
+const formFields = computed((): FieldConfig[] => [
     {
         key: 'libelle',
         label: 'Libellé',
@@ -315,12 +345,12 @@ const formFields = computed<FieldConfig[]>(() => [
 ]);
 
 /* Définitions des étapes du wizard */
-const wizardSteps = [
-    { title: 'Création' },
+const wizardSteps = computed(() => [
+    { title: isEditMode.value ? 'Modification' : 'Création' },
     { title: 'comptage 1/3' },
     { title: 'comptage 2/3' },
     { title: 'comptage 3/3' }
-];
+]);
 
 /* Fonction helper pour vérifier si un comptage a des options actives selon son mode */
 function hasActiveOptions(comptage: ComptageConfig): boolean {
@@ -358,7 +388,7 @@ async function handleSubmit() {
 
     try {
         // Validation et sauvegarde de toutes les étapes
-        for (let i = 0; i < wizardSteps.length; i++) {
+        for (let i = 0; i < wizardSteps.value.length; i++) {
             const ok = await validateAndSaveStep(i, i + 1);
             if (!ok) {
                 await alertService.error({
@@ -369,40 +399,31 @@ async function handleSubmit() {
             }
         }
 
-        // Appeler la fonction de complétion du composable
-        await onComplete();
+        if (isEditMode.value) {
+            // Mode édition : mettre à jour l'inventaire
+            await updateInventory();
 
-        // → Redirection vers la liste des inventaires
-        router.push({ name: 'inventory-list' });
+            // Alerte de succès pour la modification
+            await alertService.success({
+                title: 'Succès',
+                text: 'Votre inventaire a été modifié avec succès !'
+            });
+        } else {
+            // Mode création : créer un nouvel inventaire
+            await onComplete();
 
-        // Alerte de succès
-        await alertService.success({
-            title: 'Succès',
-            text: 'Votre inventaire a été créé avec succès !'
-        });
-    } catch (err: any) {
-        console.error('Erreur lors de la création:', err);
-
-        // Vérifier si l'erreur est liée aux notifications
-        if (err.message && err.message.includes('addNotification')) {
-            // Si c'est juste une erreur de notification, on peut quand même considérer que c'est un succès
-            console.log('⚠️ Erreur de notification, mais inventaire créé avec succès');
-
-            // → Redirection vers la liste des inventaires
-            router.push({ name: 'inventory-list' });
-
-            // Alerte de succès
+            // Alerte de succès pour la création
             await alertService.success({
                 title: 'Succès',
                 text: 'Votre inventaire a été créé avec succès !'
             });
-        } else {
-            // Erreur réelle, afficher le message d'erreur
-            await alertService.error({
-                title: 'Erreur',
-                text: "Une erreur est survenue lors de la création de l'inventaire."
-            });
         }
+
+        // → Redirection vers la liste des inventaires
+        router.push({ name: 'inventory-list' });
+    } catch (error) {
+        // Erreur de notification
+        console.error('Erreur lors de la soumission:', error);
     }
 }
 </script>

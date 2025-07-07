@@ -98,6 +98,7 @@
         <!-- AG Grid Table -->
         <div v-if="rowData !== undefined" class="table-container">
             <ag-grid-vue class="ag-theme-alpine" :style="dynamicGridStyle" domLayout="normal"
+                ref="agGridRef"
                 @grid-ready="handleGridReady" @first-data-rendered="handleFirstDataRendered"
                 @selection-changed="handleSelectionChanged" @row-clicked="$emit('row-clicked', $event)"
                 @model-updated="handleModelUpdated" @cell-value-changed="handleCellValueChanged"
@@ -105,18 +106,18 @@
                 :columnDefs="computedVisibleColumnDefsWithIndex" :defaultColDef="defaultColDef" :rowData="rowData"
                 :pagination="pagination" :paginationPageSize="pageSize"
                 :paginationPageSizeSelector="[5, 10, 20, 50, 100]" :rowSelection="rowSelection
-                    ? {
-                        mode: 'multiRow',
-                        checkboxes: true,
-                        headerCheckbox: true,
-                    }
-                    : undefined
+                        ? {
+                            mode: 'multiRow',
+                            checkboxes: true,
+                            headerCheckbox: true,
+                        }
+                        : undefined
                     " :selectionColumnDef="{
-                        minWidth: 65,
-                        maxWidth: 70,
-                        cellClass: 'text-left',
-                        cellStyle: (params) => params.data?.isChild ? { display: 'none' } : undefined
-                    }" :selectionOptions="{ isRowSelectable }" :singleClickEdit="inlineEditing"
+            minWidth: 65,
+            maxWidth: 70,
+            cellClass: 'text-left',
+            cellStyle: (params) => params.data?.isChild ? { display: 'none' } : undefined
+        }" :selectionOptions="{ isRowSelectable }" :singleClickEdit="inlineEditing"
                 :stopEditingWhenCellsLoseFocus="false" @cellKeyDown="handleCellKeyDown"
                 @cellEditingStopped="handleCellEditingStopped" :components="{ ActionMenu }" />
         </div>
@@ -128,7 +129,7 @@
 </template>
 
 <script lang="ts" setup generic="T extends Record<string, unknown> = Record<string, unknown>">
-import { defineEmits } from 'vue'
+import { defineEmits, ref, onMounted, onUnmounted } from 'vue'
 import { AgGridVue } from 'ag-grid-vue3'
 import type { PropType } from 'vue'
 import type { SelectionChangedEvent, CellKeyDownEvent, CellEditingStoppedEvent, ModelUpdatedEvent, CellValueChangedEvent, SortChangedEvent, FilterChangedEvent } from 'ag-grid-community'
@@ -138,6 +139,7 @@ import ActionMenu from './ActionMenu.vue'
 import Tooltip from '../Tooltip.vue'
 import { computed } from 'vue'
 
+const agGridRef = ref<any>(null);
 
 const emit = defineEmits<{
     'selection-changed': [selectedRows: T[]]
@@ -145,6 +147,7 @@ const emit = defineEmits<{
     'cell-value-changed': [event: CellValueChangedEvent]
     'sort-changed': [sortModel: any]
     'filter-changed': [filterModel: any]
+    'row-expanded': [event: any]
 }>()
 
 const props = defineProps<{
@@ -162,6 +165,7 @@ const props = defineProps<{
     inlineEditing?: boolean
     maxRowsForDynamicHeight?: number
     showDetails?: boolean
+    onPaginationChanged?: (params: { page: number, pageSize: number }) => void
 }>()
 
 // Fusionner les props avec des valeurs par défaut pour les champs requis par le composable
@@ -180,6 +184,7 @@ const mergedProps = computed(() => ({
     inlineEditing: props.inlineEditing ?? false,
     maxRowsForDynamicHeight: props.maxRowsForDynamicHeight ?? 10,
     showDetails: props.showDetails ?? false,
+    onPaginationChanged: props.onPaginationChanged,
 }))
 
 const reactiveRowData = computed(() => [...props.rowDataProp]);
@@ -230,6 +235,8 @@ const isRowSelectable = (params: { data?: RowWithDetails }) => {
 
 // Wrapper event handlers
 const handleGridReady = (event: any) => {
+    agGridRef.value = event.api;
+
     onGridReady(event)
 }
 
@@ -287,6 +294,16 @@ const handleFilterChanged = (event) => {
         console.warn('⚠️ Filter event without API ou getFilterModel:', event);
     }
 };
+
+onMounted(() => {
+    const handler = (e: CustomEvent) => {
+        emit('row-expanded', e.detail)
+    }
+    window.addEventListener('datatable-row-expanded', handler as EventListener)
+    onUnmounted(() => {
+        window.removeEventListener('datatable-row-expanded', handler as EventListener)
+    })
+})
 </script>
 
 <style scoped>
