@@ -6,7 +6,7 @@ COPY package*.json ./
 COPY tsconfig*.json ./
 COPY tsconfig.node*.json ./
 COPY vite.config.* ./
-COPY .npmrc .npmrc
+# COPY .npmrc .npmrc
 
 RUN npm install
 
