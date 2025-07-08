@@ -411,10 +411,12 @@ export function useInventoryCreation() {
                 date: formatDateForFlatpickr(inventoryDetails.date),
                 type: (inventoryDetails.inventory_type as string) || 'Inventaire Général',
                 compte: inventoryDetails.account_id ? inventoryDetails.account_id.toString() : '',
-                magasin: inventoryDetails.warehouses?.map(wh => ({
-                    magasin: wh.id ? wh.id.toString() : '',
-                    date: formatDateForFlatpickr(wh.inventory_start_date)
-                })) || []
+                magasin: Array.isArray(inventoryDetails.warehouses)
+                    ? inventoryDetails.warehouses.map(wh => ({
+                        magasin: wh.id ? wh.id.toString() : '',
+                        date: formatDateForFlatpickr(wh.inventory_start_date)
+                    }))
+                    : []
             };
 
             console.log('📝 Données mappées:', step1Data);
