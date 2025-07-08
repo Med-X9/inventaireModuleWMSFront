@@ -228,6 +228,20 @@ export const useInventoryStore = defineStore('inventory', () => {
             loading.value = false;
         }
     };
+
+    const importStockImage = async (id: number, formData: FormData) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await InventoryService.importStocks(id, formData);
+            return response.data;
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Erreur lors de l\'import du stock';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
     const clearError = () => {
         error.value = null;
     };
@@ -258,6 +272,7 @@ export const useInventoryStore = defineStore('inventory', () => {
         updateInventory,
         deleteInventory,
         fetchPlanningManagement,
+        importStockImage,
         clearError,
         clearCurrentInventory,
     };

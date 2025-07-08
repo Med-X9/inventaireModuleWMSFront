@@ -59,8 +59,8 @@ export class JobService {
     }
 
     // Supprimer un job
-    static async delete(id: number | string): Promise<DeleteJobResponse> {
-        const response = await axiosInstance.delete<DeleteJobResponse>(`${this.baseUrlInventory}${id}/`);
+    static async delete(job_ids: number[]): Promise<DeleteJobResponse> {
+        const response = await axiosInstance.delete<DeleteJobResponse>(`${this.baseUrlJob}delete/`, { data: { job_ids } });
         return response.data;
     }
 

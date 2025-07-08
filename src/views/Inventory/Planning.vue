@@ -50,7 +50,7 @@
                                             Valider...
                                         </span>
                                     </button>
-                                    <button @click="onReturnSelectedJobs" class="btn btn-primary">
+                                    <button @click="onReturnSelectedJobsFromStore" class="btn btn-primary">
                                         ↩ Retourner ({{ selectedJobs.length }})
                                     </button>
 
@@ -174,7 +174,7 @@ const {
     onJobSelectionChanged,
     onSelectJobForLocation,
     onBulkValidate,
-    onReturnSelectedJobs,
+    onReturnSelectedJobsFromStore,
     onRefreshLocations,
     onLocationPaginationChanged,
     onLocationFilterChanged,

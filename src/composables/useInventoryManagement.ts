@@ -87,7 +87,6 @@ export function useInventoryManagement() {
                 let status = params.value;
                 // Mettre en majuscules et supprimer les accents/diacritiques
                 let badgeClass = '';
-
                 switch(status) {
                     case 'EN PREPARATION':
                         badgeClass = 'bg-blue-100 text-blue-800';
@@ -137,6 +136,37 @@ export function useInventoryManagement() {
         }
     }
 
+    const fileInputRefs = ref<Record<number, HTMLInputElement | null>>({});
+
+    // Action d'import Excel par ligne
+    const handleImportExcel = async (inv: InventoryTable) => {
+        // Crée dynamiquement un input file si besoin
+        if (!fileInputRefs.value[inv.id]) {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.xlsx,.xls';
+            input.style.display = 'none';
+            input.addEventListener('change', async (event: Event) => {
+                const target = event.target as HTMLInputElement;
+                if (!target.files || target.files.length === 0) return;
+                const file = target.files[0];
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    await importStockImage(inv.id, formData);
+                    await alertService.success({ text: 'Import Excel réussi !' });
+                    await fetchInventories();
+                } catch (e) {
+                    // L'alerte d'erreur est déjà gérée
+                }
+                target.value = '';
+            });
+            document.body.appendChild(input);
+            fileInputRefs.value[inv.id] = input;
+        }
+        fileInputRefs.value[inv.id]?.click();
+    };
+
     const actions: ActionConfig<InventoryTable>[] = [
         {
             label: 'Détail',
@@ -146,10 +176,10 @@ export function useInventoryManagement() {
             visible: () => true,
         },
         {
-            label: 'Importer stock',
+            label: 'Importer image de stock',
             icon: markRaw(IconUpload),
             class: 'flex items-center gap-1 px-2 py-1 text-purple-600 hover:text-purple-800 text-md',
-            handler: inv => { void router.push({ name: 'stock-import', params: { id: inv.id } }) },
+            handler: handleImportExcel,
             visible: inv => inv.status === 'EN PREPARATION',
         },
         {
@@ -184,6 +214,19 @@ export function useInventoryManagement() {
 
     const redirectToAdd = () => { void router.push({ name: 'inventory-create' }) }
 
+    // --- Import d'image de stock (Excel) via le store Pinia ---
+    const importStockImage = async (id: number, formData: FormData) => {
+        try {
+            return await inventoryStore.importStockImage(id, formData);
+        } catch (error) {
+            await alertService.error({
+                title: 'Erreur import',
+                text: 'Erreur lors de l\'import du fichier Excel.'
+            });
+            throw error;
+        }
+    };
+
     return {
         inventories,
         loading,
@@ -194,5 +237,6 @@ export function useInventoryManagement() {
         handlePaginationChanged,
         handleSortChanged,
         handleFilterChanged,
+        importStockImage, // <-- expose la méthode
     }
 }

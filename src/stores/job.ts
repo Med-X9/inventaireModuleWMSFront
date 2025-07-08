@@ -337,7 +337,7 @@ export const useJobStore = defineStore('job', () => {
         }
     };
 
-    const deleteJob = async (id: number | string): Promise<DeleteJobResponse> => {
+    const deleteJob = async (id: number[]): Promise<DeleteJobResponse> => {
         loading.value = true;
         error.value = null;
         try {

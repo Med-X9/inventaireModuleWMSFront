@@ -410,9 +410,9 @@ export function useInventoryCreation() {
                 libelle: inventoryDetails.label || '',
                 date: formatDateForFlatpickr(inventoryDetails.date),
                 type: (inventoryDetails.inventory_type as string) || 'Inventaire Général',
-                compte: inventoryDetails.account_id?.toString() || '',
+                compte: inventoryDetails.account_id ? inventoryDetails.account_id.toString() : '',
                 magasin: inventoryDetails.warehouses?.map(wh => ({
-                    magasin: wh.id.toString(),
+                    magasin: wh.id ? wh.id.toString() : '',
                     date: formatDateForFlatpickr(wh.inventory_start_date)
                 })) || []
             };

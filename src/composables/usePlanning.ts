@@ -1436,6 +1436,34 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
         return true;
     }
 
+    // Fonction pour supprimer les jobs sélectionnés via le store
+    async function onReturnSelectedJobsFromStore() {
+        if (!selectedJobs.value.length) {
+            await alertService.error({ text: 'Veuillez sélectionner au moins un job.' });
+            return;
+        }
+        try {
+            // Convertir les IDs en nombres
+            const jobIds = selectedJobs.value.map(id => Number(id));
+            await jobStore.deleteJob(jobIds);
+            await alertService.success({ text: `${jobIds.length} job(s) supprimé(s) avec succès.` });
+            selectedJobs.value = [];
+            await loadJobsFromStore();
+        } catch (error) {
+            let errorMessage = 'Erreur lors de la suppression des jobs.';
+            if (error && typeof error === 'object') {
+                const backendError = (error as any).response?.data;
+                if (backendError) {
+                    if (backendError.message) errorMessage = backendError.message;
+                    else if (backendError.detail) errorMessage = backendError.detail;
+                    else if (backendError.error) errorMessage = backendError.error;
+                    else if (typeof backendError === 'string') errorMessage = backendError;
+                }
+            }
+            await alertService.error({ text: errorMessage });
+        }
+    }
+
     return {
         // Jobs
         planningJobs,
@@ -1509,6 +1537,7 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
         inventoryId,
         warehouseId,
         initializeIdsFromReferences,
-        refreshIdsFromReferences
+        refreshIdsFromReferences,
+        onReturnSelectedJobsFromStore
     };
 }

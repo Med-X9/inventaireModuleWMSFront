@@ -79,4 +79,17 @@ export class InventoryService {
             throw error;
         }
     }
+
+    static async importStocks(id: number, formData: FormData): Promise<AxiosResponse<any>> {
+        try {
+            return await axiosInstance.post<any>(`${API.endpoints.inventory.base}${id}/stocks/import/`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+        } catch (error) {
+            console.error('💥 Erreur dans le service InventoryService.importStocks():', error);
+            throw error;
+        }
+    }
 }
