@@ -9,7 +9,8 @@ import type {
     AddLocationToJobResponse,
     DeleteLocationFromJobResponse,
     UpdateJobStatusResponse,
-    DeleteJobResponse
+    DeleteJobResponse,
+    JobPaginatedResponse
 } from '@/models/Job';
 import API from '@/api';
 
@@ -21,6 +22,11 @@ export class JobService {
     // Récupérer tous les jobs avec pagination, tri et filtres
     static async getAll(warehouseId: number, params?: { page?: number; page_size?: number; ordering?: string; [key: string]: any; }): Promise<JobResponse> {
         const response = await axiosInstance.get<JobResponse>(`${this.baseUrlInventory}${warehouseId}/jobs/`, { params });
+        return response.data;
+    }
+
+    static async getAllValidated(inventoryId: number, warehouseId: number, params?: { page?: number; page_size?: number; ordering?: string; [key: string]: any; }): Promise<JobPaginatedResponse> {
+        const response = await axiosInstance.get<JobPaginatedResponse>(`${this.baseUrlJob}valid/warehouse/${warehouseId}/inventory/${inventoryId}/`, { params });
         return response.data;
     }
 

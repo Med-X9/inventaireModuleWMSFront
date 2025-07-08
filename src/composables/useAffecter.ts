@@ -1,309 +1,191 @@
-import { ref, computed } from 'vue';
-import type { Team, Job } from '@/interfaces/planning';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useJobStore } from '@/stores/job';
 import { alertService } from '@/services/alertService';
 
-const teams: Team[] = [
-    { id: '1', name: 'Équipe A', session: '1' },
-    { id: '2', name: 'Équipe B', session: '1' },
-    { id: '3', name: 'Équipe C', session: '1' }
-];
+const jobStore = useJobStore();
 
-const jobs: Job[] = [
-    { id: '1', locations: ['Emplacement A1', 'Emplacement A2'] },
-    { id: '2', locations: ['Emplacement B1'] },
-    { id: '3', locations: ['Emplacement C1', 'Emplacement C2', 'Emplacement C3'] }
-];
-
-// stockage local
-const localTeamJobs1 = ref<Map<string, string[]>>(new Map());
-const localTeamJobs2 = ref<Map<string, string[]>>(new Map());
-const localDates1 = ref<Record<string, string>>({});
-const localDates2 = ref<Record<string, string>>({});
-const localResources = ref<Record<string, string[]>>({});
-const localValidatedJobs = ref<Set<string>>(new Set());
-const localJobStatuses = ref<Record<string, 'planifier' | 'affecter' | 'valider' | 'transfere'>>({});
-
-// Fonction pour initialiser les statuts selon le contexte d'inventaire
-function initializeJobStatuses(inventoryStatus: string) {
-    const defaultStatus: 'planifier' | 'affecter' = inventoryStatus === 'En réalisation' ? 'affecter' : 'planifier';
-
-    jobs.forEach(job => {
-        if (!localJobStatuses.value[job.id]) {
-            localJobStatuses.value[job.id] = defaultStatus;
-        }
-    });
+// TODO: Remplacer ce mapping par un appel API réel pour obtenir les IDs à partir des références
+async function getInventoryIdFromReference(reference: string): Promise<number> {
+    return Number(reference) || 1;
+}
+async function getWarehouseIdFromReference(reference: string): Promise<number> {
+    return Number(reference) || 1;
 }
 
-// fonctions d'affectation
-async function affecterAuPremierComptage(team: string, jobIds: string[], date: string) {
-    const teamObj = teams.find(t => t.name === team);
-    if (!teamObj) {
-        alertService.error({ title: 'Erreur', text: 'Équipe introuvable.' });
-        return;
-    }
+export function useAffecter(inventoryReference: string, warehouseReference: string) {
+    // --- État global ---
+    const inventoryId = ref<number|null>(null);
+    const warehouseId = ref<number|null>(null);
+    const expandedJobIds = ref<Set<string>>(new Set());
+    const expandedResourceIds = ref<Set<string>>(new Set());
+    const selectedRows = ref<any[]>([]);
+    const pendingChanges = ref<Map<string, Map<string, any>>>(new Map());
+    const hasUnsavedChanges = computed(() => pendingChanges.value.size > 0);
+    const showTeamModal = ref(false);
+    const showResourceModal = ref(false);
+    const showTransferModal = ref(false);
+    const currentTeamType = ref<'premier' | 'deuxieme'>('premier');
+    const teamForm = ref<Record<string, unknown>>({ team: '', date: '' });
+    const resourceForm = ref({ resources: [] });
+    const transferForm = ref({ premierComptage: false, deuxiemeComptage: false });
+    const modalTitle = computed(() => `Affecter ${currentTeamType.value === 'premier' ? 'Premier' : 'Deuxième'} Comptage`);
 
-    const curr = localTeamJobs1.value.get(teamObj.id) || [];
-    localTeamJobs1.value.set(teamObj.id, [...curr, ...jobIds]);
-    jobIds.forEach(id => {
-        localDates1.value[id] = date;
-        localJobStatuses.value[id] = 'affecter';
-    });
-    alertService.success({ text: 'Premier comptage affecté avec succès.' });
-}
+    // --- Champs de formulaire ---
+    const teamFields = [
+        { key: 'team', label: 'Équipe', type: 'select', searchable: true, options: [ { value: 'Team A', label: 'Team A' }, { value: 'Team B', label: 'Team B' }, { value: 'Team C', label: 'Team C' } ], validators: [{ key: 'required', fn: v => !!v, msg: 'Équipe requise' }] },
+        { key: 'date', label: 'Date', type: 'date', validators: [{ key: 'required', fn: v => !!v, msg: 'Date requise' }] }
+    ];
+    const resourceFields = [
+        { key: 'resources', label: 'Ressources', type: 'select', options: [ { value: 'Resource A', label: 'Resource A' }, { value: 'Resource B', label: 'Resource B' }, { value: 'Resource C', label: 'Resource C' } ], multiple: true, searchable: true, clearable: true, props: { placeholder: 'Sélectionnez une ou plusieurs ressources' }, validators: [{ key: 'required', fn: v => Array.isArray(v) && v.length > 0, msg: 'Sélectionnez au moins une ressource' }] }
+    ];
+    const transferFields = [
+        { key: 'premierComptage', label: 'Premier Comptage', type: 'checkbox', props: { label: 'Transférer le premier comptage', description: 'Transférer les affectations du premier comptage' } },
+        { key: 'deuxiemeComptage', label: 'Deuxième Comptage', type: 'checkbox', props: { label: 'Transférer le deuxième comptage', description: 'Transférer les affectations du deuxième comptage' } }
+    ];
 
-async function affecterAuDeuxiemeComptage(team: string, jobIds: string[], date: string) {
-    const teamObj = teams.find(t => t.name === team);
-    if (!teamObj) {
-        alertService.error({ title: 'Erreur', text: 'Équipe introuvable.' });
-        return;
-    }
+    // --- Données principales ---
+    const rows = computed(() =>
+        jobStore.jobsValidated.map(job => ({
+            id: job.id,
+            job: job.reference || `Job ${job.id}`,
+            locations: job.emplacements ? job.emplacements.map(l => l.reference) : [],
+            team1: job.assignments && job.assignments[0] && job.assignments[0].session ? String(job.assignments[0].session) : '',
+            date1: '',
+            team2: job.assignments && job.assignments[1] && job.assignments[1].session ? String(job.assignments[1].session) : '',
+            date2: '',
+            resourcesList: job.ressources || [],
+            resources: job.ressources ? job.ressources.join(', ') : '',
+            nbResources: job.ressources ? job.ressources.length : 0,
+            status: job.status || 'planifier'
+        }))
+    );
+    const displayData = ref<any[]>([]);
 
-    const curr = localTeamJobs2.value.get(teamObj.id) || [];
-    localTeamJobs2.value.set(teamObj.id, [...curr, ...jobIds]);
-    jobIds.forEach(id => {
-        localDates2.value[id] = date;
-        localJobStatuses.value[id] = 'affecter';
-    });
-    alertService.success({ text: 'Deuxième comptage affecté avec succès.' });
-}
-
-async function affecterRessources(jobIds: string[], ressources: string[]) {
-    jobIds.forEach(id => {
-        localResources.value[id] = ressources;
-        if (localJobStatuses.value[id] === 'planifier') {
-            localJobStatuses.value[id] = 'affecter';
-        }
-    });
-    alertService.success({ text: 'Ressources affectées avec succès.' });
-}
-
-// Fonction de transfert - met à jour le statut vers 'transfere'
-async function transfererJobs(jobIds: string[], options: { premierComptage: boolean; deuxiemeComptage: boolean }) {
-    if (!options.premierComptage && !options.deuxiemeComptage) {
-        alertService.error({ title: 'Erreur', text: 'Vous devez sélectionner au moins un type de comptage à transférer.' });
-        return;
-    }
-
-    let message = 'Transféré: ';
-    const parts: string[] = [];
-
-    if (options.premierComptage) {
-        parts.push('Premier comptage');
-    }
-    if (options.deuxiemeComptage) {
-        parts.push('Deuxième comptage');
-    }
-
-    message += parts.join(' et ');
-
-    // Changer le statut vers 'transfere' après transfert
-    jobIds.forEach(id => {
-        localJobStatuses.value[id] = 'transfere';
-    });
-
-    alertService.success({ text: message });
-}
-
-function validerJobs(jobIds: string[]) {
-    jobIds.forEach(id => {
-        localValidatedJobs.value.add(id);
-        localJobStatuses.value[id] = 'valider';
-    });
-    alertService.success({ text: 'Jobs validés avec succès.' });
-}
-
-// Fonction pour mise à jour inline avec validation améliorée
-function updateJobField(jobId: string, field: string, value: any) {
-    try {
-        switch (field) {
-            case 'team1':
-                // Retirer l'ancien assignment
-                localTeamJobs1.value.forEach((jobIds, teamId) => {
-                    const index = jobIds.indexOf(jobId);
-                    if (index > -1) {
-                        jobIds.splice(index, 1);
-                    }
+    // --- Méthodes ---
+    function rebuildDisplayData() {
+        const newData: any[] = [];
+        rows.value.forEach((parentRow) => {
+            newData.push({ ...parentRow, isChild: false, parentId: null });
+            if (expandedJobIds.value.has(String(parentRow.id))) {
+                const locs = parentRow.locations || [];
+                locs.forEach((location) => {
+                    newData.push({
+                        id: `${String(parentRow.id)}--location--${location}`,
+                        job: `└─ ${location}`,
+                        team1: '', date1: '', team2: '', date2: '', resources: '', resourcesList: [], nbResources: 0,
+                        status: parentRow.status,
+                        isChild: true, parentId: String(parentRow.id), childType: 'location'
+                    });
                 });
-                // Ajouter le nouveau
-                if (value) {
-                    const teamObj = teams.find(t => t.name === value);
-                    if (teamObj) {
-                        const curr = localTeamJobs1.value.get(teamObj.id) || [];
-                        localTeamJobs1.value.set(teamObj.id, [...curr, jobId]);
-                        // Mettre à jour le statut si nécessaire
-                        if (localJobStatuses.value[jobId] === 'planifier') {
-                            localJobStatuses.value[jobId] = 'affecter';
-                        }
-                    } else {
-                        throw new Error(`Équipe "${value}" introuvable`);
-                    }
-                }
-                break;
-
-            case 'team2':
-                // Vérifier que le premier comptage existe
-                if (value && !localDates1.value[jobId]) {
-                    throw new Error('Le premier comptage doit être affecté avant le deuxième');
-                }
-
-                // Retirer l'ancien assignment
-                localTeamJobs2.value.forEach((jobIds, teamId) => {
-                    const index = jobIds.indexOf(jobId);
-                    if (index > -1) {
-                        jobIds.splice(index, 1);
-                    }
+            }
+            if (expandedResourceIds.value.has(String(parentRow.id))) {
+                const resources = parentRow.resourcesList || [];
+                resources.forEach((resource) => {
+                    newData.push({
+                        id: `${String(parentRow.id)}--resource--${resource}`,
+                        job: '', team1: '', date1: '', team2: '', date2: '',
+                        resources: `└─ ${resource}`, resourcesList: [], nbResources: 0,
+                        status: parentRow.status,
+                        isChild: true, parentId: String(parentRow.id), childType: 'resource'
+                    });
                 });
-                // Ajouter le nouveau
-                if (value) {
-                    const teamObj = teams.find(t => t.name === value);
-                    if (teamObj) {
-                        const curr = localTeamJobs2.value.get(teamObj.id) || [];
-                        localTeamJobs2.value.set(teamObj.id, [...curr, jobId]);
-                        // Mettre à jour le statut si nécessaire
-                        if (localJobStatuses.value[jobId] === 'planifier') {
-                            localJobStatuses.value[jobId] = 'affecter';
-                        }
-                    } else {
-                        throw new Error(`Équipe "${value}" introuvable`);
-                    }
-                }
-                break;
-
-            case 'date1':
-                // Validation de la date
-                if (value) {
-                    const date = new Date(value);
-                    if (isNaN(date.getTime())) {
-                        throw new Error('Format de date invalide');
-                    }
-                    // Vérifier que la date n'est pas dans le passé
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    if (date < today) {
-                        throw new Error('La date ne peut pas être dans le passé');
-                    }
-                }
-                localDates1.value[jobId] = value;
-                break;
-
-            case 'date2':
-                // Validation de la date
-                if (value) {
-                    const date = new Date(value);
-                    if (isNaN(date.getTime())) {
-                        throw new Error('Format de date invalide');
-                    }
-
-                    // Vérifier que la date n'est pas dans le passé
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    if (date < today) {
-                        throw new Error('La date ne peut pas être dans le passé');
-                    }
-
-                    // Vérifier que la date2 n'est pas avant la date1
-                    const date1 = localDates1.value[jobId];
-                    if (date1) {
-                        const date1Obj = new Date(date1);
-                        if (date < date1Obj) {
-                            throw new Error('La date du deuxième comptage doit être après celle du premier');
-                        }
-                    }
-                }
-                localDates2.value[jobId] = value;
-                break;
-
-            case 'resources':
-                if (value) {
-                    const resourceArray = Array.isArray(value) ? value : value.split(',').map((r: string) => r.trim()).filter(Boolean);
-                    if (resourceArray.length === 0) {
-                        throw new Error('Au moins une ressource doit être sélectionnée');
-                    }
-                    localResources.value[jobId] = resourceArray;
-                    // Mettre à jour le statut si nécessaire
-                    if (localJobStatuses.value[jobId] === 'planifier') {
-                        localJobStatuses.value[jobId] = 'affecter';
-                    }
-                } else {
-                    localResources.value[jobId] = [];
-                }
-                break;
-
-            default:
-                console.warn(`Champ inconnu pour l'édition: ${field}`);
-                return false;
-        }
-
-        return true;
-    } catch (error) {
-        console.error(`Erreur lors de la mise à jour du champ ${field}:`, error);
-        alertService.error({
-            title: 'Erreur de validation',
-            text: error instanceof Error ? error.message : 'Erreur inconnue'
+            }
         });
-        return false;
+        displayData.value = newData;
     }
-}
 
-// Options pour les sélecteurs
-const teamOptions = teams.map(team => ({ label: team.name, value: team.name }));
+    function handleAffecterPremierComptageClick() {
+        if (!selectedRows.value.length) {
+            alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
+            return;
+        }
+        currentTeamType.value = 'premier';
+        showTeamModal.value = true;
+        // showAssignmentDropdown.value = false;
+    }
+    function handleAffecterDeuxiemeComptageClick() {
+        if (!selectedRows.value.length) {
+            alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
+            return;
+        }
+        currentTeamType.value = 'deuxieme';
+        showTeamModal.value = true;
+        // showAssignmentDropdown.value = false;
+    }
+    function handleValiderClick() {
+        if (!selectedRows.value.length) {
+            alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
+            return;
+        }
+        alertService.info({ text: 'La fonction de validation est désactivée pour l\'instant.' });
+        rebuildDisplayData();
+    }
+    async function handleResourceSubmit(data: Record<string, unknown>) {
+        alertService.info({ text: 'La fonction d\'affectation de ressources est désactivée pour l\'instant.' });
+        showResourceModal.value = false;
+        resourceForm.value = { resources: [] };
+        rebuildDisplayData();
+    }
+    async function handleTeamSubmit(data: Record<string, unknown>) {
+        alertService.info({ text: 'La fonction d\'affectation de comptage est désactivée pour l\'instant.' });
+        showTeamModal.value = false;
+        teamForm.value = { team: '', date: '' };
+        rebuildDisplayData();
+    }
+    function handleTransfererClick() {
+        if (!selectedRows.value.length) {
+            alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
+            return;
+        }
+        alertService.info({ text: 'La fonction de transfert de comptage est désactivée pour l\'instant.' });
+        showTransferModal.value = false;
+        transferForm.value = { premierComptage: false, deuxiemeComptage: false };
+        rebuildDisplayData();
+    }
+    function onSelectionChanged(rowsData: any[]) {
+        selectedRows.value = rowsData.filter((r: any) => !r.isChild);
+    }
 
-const resourceOptions = [
-    { label: 'Scanner Zebra MC9300', value: 'Scanner Zebra MC9300' },
-    { label: 'Terminal Honeywell CT60', value: 'Terminal Honeywell CT60' },
-    { label: 'Imprimante Mobile Zebra ZQ630', value: 'Imprimante Mobile Zebra ZQ630' },
-    { label: 'Tablette Samsung Galaxy Tab A8', value: 'Tablette Samsung Galaxy Tab A8' },
-    { label: 'Pistolet de Comptage Datalogic', value: 'Pistolet de Comptage Datalogic' }
-];
+    // --- Lifecycle ---
+    onMounted(async () => {
+        inventoryId.value = await getInventoryIdFromReference(inventoryReference);
+        warehouseId.value = await getWarehouseIdFromReference(warehouseReference);
+        if (inventoryId.value && warehouseId.value) {
+            await jobStore.fetchJobsValidated(inventoryId.value, warehouseId.value);
+        }
+        rebuildDisplayData();
+        document.addEventListener('click', () => {}); // placeholder pour click outside
+    });
+    onUnmounted(() => {
+        document.removeEventListener('click', () => {});
+    });
 
-// données finales
-const rows = computed(() =>
-    jobs.map(job => {
-        const id = job.id;
-        // équipe & date 1
-        let team1 = '';
-        localTeamJobs1.value.forEach((list, tId) => {
-            if (list.includes(id)) team1 = teams.find(t => t.id === tId)!.name;
-        });
-        const date1 = localDates1.value[id] || '';
-        // équipe & date 2
-        let team2 = '';
-        localTeamJobs2.value.forEach((list, tId) => {
-            if (list.includes(id)) team2 = teams.find(t => t.id === tId)!.name;
-        });
-        const date2 = localDates2.value[id] || '';
-        // ressources
-        const ress = localResources.value[id] || [];
-        const status = localJobStatuses.value[id] || 'planifier';
-
-        return {
-            id,
-            job: `Job ${id}`,
-            locations: job.locations,
-            team1,
-            date1,
-            team2,
-            date2,
-            resourcesList: ress,
-            resources: ress.join(', '),
-            nbResources: ress.length,
-            status
-        };
-    })
-);
-
-export function useAffecter() {
     return {
         rows,
-        affecterAuPremierComptage,
-        affecterAuDeuxiemeComptage,
-        affecterRessources,
-        validerJobs,
-        transfererJobs,
-        updateJobField,
-        teamOptions,
-        resourceOptions,
-        localValidatedJobs,
-        initializeJobStatuses
+        displayData,
+        expandedJobIds,
+        expandedResourceIds,
+        selectedRows,
+        pendingChanges,
+        hasUnsavedChanges,
+        showTeamModal,
+        showResourceModal,
+        showTransferModal,
+        currentTeamType,
+        modalTitle,
+        teamForm,
+        teamFields,
+        resourceForm,
+        resourceFields,
+        transferForm,
+        transferFields,
+        rebuildDisplayData,
+        handleAffecterPremierComptageClick,
+        handleAffecterDeuxiemeComptageClick,
+        handleValiderClick,
+        handleResourceSubmit,
+        handleTeamSubmit,
+        handleTransfererClick,
+        onSelectionChanged
     };
 }

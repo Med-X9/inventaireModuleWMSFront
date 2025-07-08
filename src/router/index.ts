@@ -38,17 +38,25 @@ const routes: RouteRecordRaw[] = [
     },
 
     {
-        path: '/inventory/planning',
+        path: '/inventory/:reference/:warehouse/planning',
         name: 'inventory-planning',
         component: () =>
             import(/* webpackChunkName: "inventory-planning" */ '../views/Inventory/Planning.vue'),
+        props: route => ({
+            reference: route.params.reference as string,
+            warehouse: route.params.warehouse as string
+        }),
         meta: { requiresAuth: true },
     },
     {
-        path: '/inventory/affecter',
+        path: '/inventory/:reference/:warehouse/affecter',
         name: 'inventory-affecter',
         component: () =>
             import(/* webpackChunkName: "inventory-affecter" */ '../views/Inventory/Affecter.vue'),
+        props: route => ({
+            reference: route.params.reference as string,
+            warehouse: route.params.warehouse as string
+        }),
         meta: { requiresAuth: true },
     },
     {

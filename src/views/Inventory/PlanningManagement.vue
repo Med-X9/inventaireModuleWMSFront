@@ -46,8 +46,8 @@
                 titleField="store_name" :selectedItem="selectedStore" :onItemClick="handleItemClick" enableStats :stats="[
                     { label: 'Équipes', value: 'teams_count', suffix: 'équipes' },
                     { label: 'Jobs', value: 'jobs_count', suffix: 'jobs' }
-                ]" enableActions :actions="gridActions" showActionsIcon @actionsClick="handleActionsClick" :itemsPerPage="6"
-                enablePagination>
+                ]" enableActions :actions="gridActions" showActionsIcon @actionsClick="handleActionsClick"
+                :itemsPerPage="6" enablePagination>
                 <template #header>
                     <h2 class="text-xl font-semibold mb-6 text-gray-800">Magasins</h2>
                 </template>

@@ -20,17 +20,19 @@ interface PlanningJob {
     validatedAt?: string;
 }
 
-export function usePlanning() {
+export function usePlanning(options?: { inventoryReference?: string, warehouseReference?: string }) {
     const locationStore = useLocationStore();
     const jobStore = useJobStore();
     const inventoryStore = useInventoryStore();
     const warehouseStore = useWarehouseStore();
     const route = useRoute();
 
+    // Priorité aux options, sinon fallback sur la route
+    const inventoryReference = options?.inventoryReference ?? (route.params.reference as string);
+    const warehouseReference = options?.warehouseReference ?? (route.params.warehouse as string);
+
     // Récupérer les paramètres de route
     const storeId = route.query.storeId as string;
-    const inventoryReference = route.query.inventoryReference as string;
-    const warehouseReference = route.query.warehouseReference as string;
 
     // IDs récupérés depuis les références
     const inventoryId = ref<number | null>(null);
@@ -449,10 +451,7 @@ export function usePlanning() {
     }, { deep: true });
 
     onMounted(async () => {
-        // Initialiser les IDs depuis les références de l'URL
         await initializeIdsFromReferences();
-
-        // Charger les locations et jobs
         await loadLocations();
         await loadJobsFromStore();
     });
@@ -1360,7 +1359,6 @@ export function usePlanning() {
         if (inventoryReference) {
             inventoryId.value = await fetchInventoryIdByReference(inventoryReference);
         }
-
         if (warehouseReference) {
             warehouseId.value = await fetchWarehouseIdByReference(warehouseReference);
         }

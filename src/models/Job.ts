@@ -134,3 +134,49 @@ export interface JobLocation {
     };
     status: string;
 }
+
+// Interface pour les assignments
+export interface JobAssignment {
+    counting_order: number;
+    status: string;
+    date_start: string | null;
+    session: string | null;
+}
+
+// Interface pour les emplacements dans la réponse
+export interface JobEmplacement {
+    id: number;
+    reference: string;
+    sous_zone: {
+        id: number;
+        sous_zone_name: string;
+        zone_name: string;
+    };
+    zone: {
+        id: number;
+        warehouse: number;
+        warehouse_name: string;
+        zone_name: string;
+        zone_status: string;
+        created_at: string;
+        updated_at: string;
+    };
+}
+
+// Interface pour un job dans la réponse
+export interface JobResult {
+    id: number;
+    reference: string;
+    status: string;
+    emplacements: JobEmplacement[];
+    assignments: JobAssignment[];
+    ressources: any[];
+}
+
+// Interface pour la réponse paginée
+export interface JobPaginatedResponse {
+    count: number;
+    next: string | null;
+    previous: string | null;
+    results: JobResult[];
+}

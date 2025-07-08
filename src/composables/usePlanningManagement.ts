@@ -46,9 +46,9 @@ export function usePlanningManagement() {
                 handler: (store: Store) => {
                     router.push({
                         name: 'inventory-planning',
-                        query: {
-                            storeReference: (store.reference as string) || '',
-                            inventoryReference: inventoryReference.value || ''
+                        params: {
+                            reference: inventoryReference.value || '',
+                            warehouse: (store.reference as string) || ''
                         }
                     });
                 },
@@ -61,7 +61,10 @@ export function usePlanningManagement() {
             handler: (store: Store) => {
                 router.push({
                     name: 'inventory-affecter',
-                    query: { storeReference: (store.reference as string) || '' }
+                    params: {
+                        reference: inventoryReference.value || '',
+                        warehouse: (store.reference as string) || ''
+                    }
                 });
             },
         });

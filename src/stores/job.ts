@@ -11,12 +11,15 @@ import type {
     AddLocationToJobResponse,
     DeleteLocationFromJobResponse,
     UpdateJobStatusResponse,
-    DeleteJobResponse
+    DeleteJobResponse,
+    JobPaginatedResponse,
+    JobResult
 } from '@/models/Job';
 
 export const useJobStore = defineStore('job', () => {
     // State
     const jobs = ref<JobTable[]>([]);
+    const jobsValidated = ref<JobResult[]>([]);
     const currentJob = ref<Job | null>(null);
     const loading = ref(false);
     const error = ref<string | null>(null);
@@ -139,6 +142,111 @@ export const useJobStore = defineStore('job', () => {
         }
     };
 
+    const fetchJobsValidated = async (inventoryId: number, warehouseId: number, params?: {
+        sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>;
+        filter?: Record<string, { filter: string; type?: string; dateFrom?: string; dateTo?: string; filterTo?: string }>;
+        page?: number;
+        pageSize?: number;
+        inventoryId?: number;
+    }) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            // Construire les paramètres de requête pour Django
+            const queryParams: any = {};
+
+            if (params?.sort && params.sort.length > 0) {
+                // Convertir le modèle de tri AG Grid en format Django REST Framework
+                const sortParams = params.sort.map(sort => {
+                    const field = sort.colId;
+                    const direction = sort.sort === 'asc' ? field : `-${field}`;
+                    return direction;
+                });
+                queryParams.ordering = sortParams.join(',');
+            }
+
+            if (params?.filter) {
+                Object.keys(params.filter).forEach(field => {
+                    const filter = params.filter![field];
+                    if (filter) {
+                        // Pour les filtres de type number/date
+                        if (filter.type) {
+                            let op: string | null = '';
+                            switch (filter.type) {
+                                case 'equals':
+                                case 'exact':
+                                    op = '';
+                                    break;
+                                case 'greaterThan':
+                                    op = '__gt';
+                                    break;
+                                case 'greaterThanOrEqual':
+                                    op = '__gte';
+                                    break;
+                                case 'lessThan':
+                                    op = '__lt';
+                                    break;
+                                case 'lessThanOrEqual':
+                                    op = '__lte';
+                                    break;
+                                case 'inRange':
+                                    // Pour les dates
+                                    if (filter.dateFrom !== undefined && filter.dateFrom !== null && filter.dateFrom !== '') {
+                                        queryParams[`${field}__gte`] = filter.dateFrom;
+                                    }
+                                    if (filter.dateTo !== undefined && filter.dateTo !== null && filter.dateTo !== '') {
+                                        queryParams[`${field}__lte`] = filter.dateTo;
+                                    }
+                                    // Pour les nombres
+                                    if (filter.filter !== undefined && filter.filter !== null && filter.filter !== '') {
+                                        queryParams[`${field}__gte`] = filter.filter;
+                                    }
+                                    if (filter.filterTo !== undefined && filter.filterTo !== null && filter.filterTo !== '') {
+                                        queryParams[`${field}__lte`] = filter.filterTo;
+                                    }
+                                    op = null; // On ne traite pas la suite
+                                    break;
+                                default:
+                                    op = '';
+                            }
+
+                            const value = filter.filter ?? filter.dateFrom;
+                            if (op !== null && value !== undefined && value !== null && value !== '') {
+                                queryParams[`${field}${op}`] = value;
+                            }
+                        } else if (filter.filter) {
+                            // Filtres texte classiques
+                            queryParams[field] = filter.filter;
+                        }
+                    }
+                });
+            }
+
+            if (params?.page) {
+                queryParams.page = params.page;
+                currentPage.value = params.page;
+            }
+
+            if (params?.pageSize) {
+                queryParams.page_size = params.pageSize;
+                pageSize.value = params.pageSize;
+            }
+
+            // Utiliser l'inventoryId par défaut si non fourni
+            const response = await JobService.getAllValidated(inventoryId, warehouseId, queryParams);
+
+            // Extraire les données du champ 'results' de la réponse paginée
+            const jobData = response.results || response;
+            totalCount.value = response.count || jobData.length;
+
+            jobsValidated.value = jobData;
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Erreur lors de la récupération des jobs';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
     const fetchJobById = async (id: number | string) => {
         loading.value = true;
         error.value = null;
@@ -356,6 +464,7 @@ export const useJobStore = defineStore('job', () => {
     return {
         // State
         jobs,
+        jobsValidated,
         currentJob,
         loading,
         error,
@@ -373,6 +482,7 @@ export const useJobStore = defineStore('job', () => {
 
         // Actions
         fetchJobs,
+        fetchJobsValidated,
         fetchJobById,
         createJob,
         addLocationToJob,

@@ -1,5 +1,8 @@
 <template>
     <div>
+        <div class="w-full mb-3">
+            <slot name="table-actions" />
+        </div>
         <div class="flex flex-col mb-3 md:flex-row justify-between gap-4">
             <!-- Column Selector -->
             <div class="flex flex-col mb-4 md:flex-row gap-4 w-full">
@@ -46,7 +49,6 @@
 
             <!-- Export Dropdown -->
             <div class="flex-shrink-0 flex gap-2 mb-4 md:mb-0">
-                <slot name="table-actions" />
                 <div class="relative" ref="exportDropdownRef">
                     <button @click="toggleExportDropdown"
                         class="flex items-center justify-between p-2 btn text-gray-700 shadow-sm hover:border-gray-300 w-full md:w-auto">
@@ -133,7 +135,7 @@
     </div>
 </template>
 
-<script lang="ts" setup generic="T extends Record<string, unknown> = Record<string, unknown>">
+<script setup lang="ts" generic="T extends Record<string, unknown> = Record<string, unknown>">
 import { defineEmits, ref, onMounted, onUnmounted } from 'vue'
 import { AgGridVue } from 'ag-grid-vue3'
 import type { PropType } from 'vue'
@@ -209,6 +211,7 @@ const {
     computedVisibleColumnDefsWithIndex,
     toggleDropdown,
     resetVisibleFields,
+    // handleClickOutside, // supprimé car non défini
 
     // Export functionality
     showExportDropdown,

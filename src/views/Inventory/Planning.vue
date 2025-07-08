@@ -9,24 +9,15 @@
                         <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-semibold">
                             {{ inventoryReference }}
                         </span>
-                        <span v-if="inventoryId" class="text-xs text-gray-500">(ID: {{ inventoryId }})</span>
                     </div>
                     <div v-if="warehouseReference" class="flex items-center space-x-2">
                         <span class="text-sm font-medium text-gray-600">Entrepôt:</span>
                         <span class="px-2 py-1 bg-green-100 text-green-800 rounded text-sm font-semibold">
                             {{ warehouseReference }}
                         </span>
-                        <span v-if="warehouseId" class="text-xs text-gray-500">(ID: {{ warehouseId }})</span>
                     </div>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <div v-if="storeId" class="text-xs text-gray-500">
-                        Store ID: {{ storeId }}
-                    </div>
-                    <button @click="onRefreshData" class="text-xs text-blue-600 hover:text-blue-800 underline">
-                        Actualiser IDs
-                    </button>
-                </div>
+
             </div>
         </div>
 
@@ -42,11 +33,7 @@
                             storageKey="planning_jobs_table" :actions="[]" :pagination="true" :enableFiltering="false"
                             :showDetails="true" @row-expanded="onJobRowExpanded">
                             <template #table-actions>
-                                <div class="flex items-center justify-between gap-4 mb-4">
-                                    <button @click="onReturnSelectedJobs" class="btn btn-primary">
-                                        ↩ Retourner ({{ selectedJobs.length }})
-                                    </button>
-
+                                <div class="flex items-center justify-end gap-4 mb-4">
                                     <button @click="onBulkValidate" class="btn btn-primary flex items-center"
                                         :disabled="isSubmitting">
                                         <span v-if="!isSubmitting">
@@ -63,6 +50,10 @@
                                             Valider...
                                         </span>
                                     </button>
+                                    <button @click="onReturnSelectedJobs" class="btn btn-primary">
+                                        ↩ Retourner ({{ selectedJobs.length }})
+                                    </button>
+
                                 </div>
                             </template>
                         </DataTable>
@@ -87,11 +78,6 @@
                                 @input="onSearchLocations"
                                 class="w-full max-w-md px-3 py-2 border rounded-lg outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-10 transition-all duration-200" />
                         </div>
-                        <div class="flex gap-2">
-                            <button @click="onRefreshData" class="btn btn-secondary">
-                                Actualiser
-                            </button>
-                        </div>
                     </div>
 
                     <div class="">
@@ -102,20 +88,16 @@
                             @sort-changed="onLocationSortChanged" @filter-changed="onLocationFilterChanged"
                             @pagination-changed="onLocationPaginationChanged">
                             <template #table-actions>
-                                <div class="flex items-center gap-4 mb-4">
-                                    <div class="flex gap-2 items-center">
-                                        <button @click="createSingleJob" class="btn btn-primary">
-                                            Créer Job ({{ selectedAvailable.length }})
-                                        </button>
-
-                                        <!-- SelectField pour ajouter à un job existant -->
-                                        <div v-if="hasAvailableJobs" class="min-w-[250px]">
-                                            <SelectField :key="`job-select-${selectFieldKey}`" v-model="selectedJobId"
-                                                :options="jobSelectOptions" :searchable="true" :clearable="true"
-                                                :compact="true" placeholder="Ajouter à un job existant..."
-                                                no-options-text="Aucun job trouvé"
-                                                @update:modelValue="onSelectJobForLocation" />
-                                        </div>
+                                <div class="flex items-center gap-4 w-full justify-end">
+                                    <button @click="createSingleJob" class="btn btn-primary">
+                                        Créer Job ({{ selectedAvailable.length }})
+                                    </button>
+                                    <div v-if="hasAvailableJobs" class="min-w-[250px]">
+                                        <SelectField :key="`job-select-${selectFieldKey}`" v-model="selectedJobId"
+                                            :options="jobSelectOptions" :searchable="true" :clearable="true"
+                                            :compact="true" placeholder="Ajouter à un job existant..."
+                                            no-options-text="Aucun job trouvé"
+                                            @update:modelValue="onSelectJobForLocation" />
                                     </div>
                                 </div>
                             </template>
@@ -129,6 +111,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { usePlanning } from '@/composables/usePlanning';
 import { alertService } from '@/services/alertService';
 import DataTable from '@/components/DataTable/DataTable.vue';
@@ -136,6 +119,10 @@ import SelectField from '@/components/Form/SelectField.vue';
 
 // Import CSS pour vue-select
 import '@/assets/css/select2.css';
+
+const route = useRoute();
+const inventoryReference = route.params.reference as string;
+const warehouseReference = route.params.warehouse as string;
 
 const {
     // Jobs
@@ -194,8 +181,6 @@ const {
 
     // Paramètres de route et IDs
     storeId,
-    inventoryReference,
-    warehouseReference,
     inventoryId,
     warehouseId,
     initializeIdsFromReferences,
@@ -205,7 +190,7 @@ const {
     onJobPaginationChanged,
     onJobSortChanged,
     onJobFilterChanged
-} = usePlanning();
+} = usePlanning({ inventoryReference, warehouseReference });
 
 console.log('🔗 Paramètres de route reçus:', {
     storeId,
