@@ -6,7 +6,6 @@ COPY package*.json ./
 COPY tsconfig*.json ./
 COPY tsconfig.node*.json ./
 COPY vite.config.* ./
-# COPY .npmrc .npmrc
 
 RUN npm install
 
@@ -20,7 +19,7 @@ FROM nginx:1.27.4-alpine-slim
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Utiliser une configuration custom de Nginx (optimisée pour SPA)
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
