@@ -432,7 +432,7 @@ export function useInventoryCreation() {
 
             // Mapper les comptages
             if (inventoryDetails.comptages && inventoryDetails.comptages.length > 0) {
-                state.comptages = inventoryDetails.comptages.map(count => {
+                state.comptages = inventoryDetails.comptages.slice(0, 3).map(count => {
                     // Déterminer inputMethod pour le mode "en vrac"
                     let inputMethod: '' | 'saisie' | 'scanner' = '';
                     if (count.count_mode === 'en vrac') {
