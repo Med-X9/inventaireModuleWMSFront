@@ -120,7 +120,7 @@ export function useJobManagement() {
             })
             if (r.isConfirmed) {
                 if (typeof job.id === 'number') {
-                    await JobService.delete(job.id)
+                    await JobService.delete([job.id])
                     await alertService.success({ text: "Job supprimé avec succès" })
                     await fetchJobs()
                 } else {
