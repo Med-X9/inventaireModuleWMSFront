@@ -1,3 +1,5 @@
+import type { Session } from '@/models/Session';
+
 export interface Job {
     id: number;
     reference: string;
@@ -140,7 +142,7 @@ export interface JobAssignment {
     counting_order: number;
     status: string;
     date_start: string | null;
-    session: string | null;
+    session: Session | null;
 }
 
 // Interface pour les emplacements dans la réponse
@@ -180,3 +182,27 @@ export interface JobPaginatedResponse {
     previous: string | null;
     results: JobResult[];
 }
+
+
+export interface JobAssignmentsTeamRequest {
+    job_ids: number[];
+    counting_order: number;
+    session_id: number;
+    date_start: string;
+}
+
+export interface JobAssignmentsResourceRequest {
+    job_ids: number[];
+    resource_assignments: number[];
+}
+
+export interface JobManualAssignmentsRequest {
+    job_id: number;
+    team1: number | null;
+    date1: string | null;
+    team2: number | null;
+    date2: string | null;
+    resources?: number[] | null;
+}
+
+

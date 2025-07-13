@@ -155,3 +155,4 @@ export const useAppStore = defineStore('app', {
 export { useInventoryStore } from './inventory';
 export { useCountStore } from './count';
 export { useAppStore as useGlobalStore } from './app';
+export { useSessionStore } from './session';

@@ -38,9 +38,10 @@ export function useJobManagement() {
             if (params?.sort) currentSortModel.value = params.sort;
             if (params?.filter) currentFilterModel.value = params.filter;
 
-            // Utiliser un warehouseId par défaut (1) si non spécifié
+            // Utiliser un warehouseId et inventoryId par défaut (1) si non spécifié
             const warehouseId = 1; // TODO: Récupérer depuis le contexte ou les props
-            await jobStore.fetchJobs(warehouseId, params);
+            const inventoryId = 1; // TODO: Récupérer depuis le contexte ou les props
+            await jobStore.fetchJobs(inventoryId, warehouseId, params);
         } catch (err) {
             console.error('Erreur chargement jobs:', err);
         }
@@ -139,7 +140,7 @@ export function useJobManagement() {
                 text: 'Valider ce job ?'
             })
             if (r.isConfirmed) {
-                await jobStore.validateJob(job.id)
+                await jobStore.validateJob([job.id])
                 await alertService.success({ text: "Job validé avec succès" })
                 await fetchJobs()
             }

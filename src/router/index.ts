@@ -38,6 +38,14 @@ const routes: RouteRecordRaw[] = [
     },
 
     {
+        path: '/inventory/:reference/detail',
+        name: 'inventory-detail',
+        component: () => import('@/views/Inventory/InventoryDetail.vue'),
+        props: route => ({ reference: route.params.reference as string }),
+        meta: { requiresAuth: true },
+    },
+
+    {
         path: '/inventory/:reference/:warehouse/planning',
         name: 'inventory-planning',
         component: () =>
@@ -66,13 +74,7 @@ const routes: RouteRecordRaw[] = [
         props: route => ({ reference: route.params.reference as string }),
         meta: { requiresAuth: true },
     },
-    {
-        path: '/inventory/:reference/detail',
-        name: 'inventory-detail',
-        component: () => import('../views/Inventory/InventoryDetail.vue'),
-        props: route => ({ reference: route.params.reference as string }),
-        meta: { requiresAuth: true },
-    },
+
     {
         path: '/inventory/:reference/planning-management',
         name: 'planning-management',

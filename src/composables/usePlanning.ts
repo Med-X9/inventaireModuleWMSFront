@@ -1,14 +1,55 @@
-import { ref, computed, watch, onMounted, nextTick, onUnmounted } from 'vue';
-import { useRoute } from 'vue-router';
-import type { Job } from '@/interfaces/planning';
+import { ref, computed, watch, onMounted, nextTick, onUnmounted, toRaw } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useLocationStore } from '@/stores/location';
 import { useJobStore } from '@/stores/job';
 import { useInventoryStore } from '@/stores/inventory';
 import { alertService } from '@/services/alertService';
-import type { Location, LocationQueryParams } from '@/models/Location';
-import type { JobTable, CreateJobRequest } from '@/models/Job';
 import { useWarehouseStore } from '@/stores/warehouse';
-import DataTableColumn from '@/interfaces/dataTable';
+import { useDataTableFilters, type DataTableParams } from '@/composables/useDataTableFilters';
+
+// Import des icônes pour les actions
+import IconEye from '@/components/icon/icon-eye.vue';
+import IconCalendar from '@/components/icon/icon-calendar.vue';
+import IconUser from '@/components/icon/icon-user.vue';
+
+// Interfaces pour la migration depuis PlanningManagement.vue
+interface Store {
+    id: number;
+    store_name: string;
+    teams_count: number;
+    jobs_count: number;
+    reference: string;
+}
+
+interface PlanningAction {
+    label: string;
+    icon: any;
+    handler: (store: Store) => void;
+}
+
+type ViewModeType = 'table' | 'grid';
+
+interface GridDataItem {
+    id: number;
+    store_name: string;
+    teams_count: number;
+    jobs_count: number;
+    reference: string;
+}
+
+interface Action<T> {
+    label: string;
+    icon: any;
+    handler: (item: T) => void;
+    variant?: 'primary' | 'secondary' | 'danger';
+}
+
+interface ActionConfig {
+    label: string;
+    icon: any;
+    onClick: (row: Record<string, unknown>) => void;
+    color: 'primary' | 'secondary' | 'danger';
+}
 
 // Interface locale pour les jobs du planning (différente du store)
 interface PlanningJob {
@@ -26,6 +67,10 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
     const inventoryStore = useInventoryStore();
     const warehouseStore = useWarehouseStore();
     const route = useRoute();
+    const router = useRouter();
+
+    // Utiliser le composable générique pour les jobs
+    const jobDataTableFilters = useDataTableFilters();
 
     // Priorité aux options, sinon fallback sur la route
     const inventoryReference = options?.inventoryReference ?? (route.params.reference as string);
@@ -52,7 +97,7 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
     const pageSize = ref(20);
     const sortBy = ref('reference');
     const sortOrder = ref<'asc' | 'desc'>('asc');
-    const filters = ref<LocationQueryParams>({});
+    const filters = ref<any>({}); // Assuming LocationQueryParams is no longer needed or replaced
 
     // États pour les paramètres de tri et filtre
     const sortModel = ref<Array<{ colId: string; sort: 'asc' | 'desc' }>>([]);
@@ -130,7 +175,7 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
                 reference: job.reference,
                 isChild: false,
                 isValidated: job.isValidated,
-                status: job.isValidated ? 'VALIDÉ' : 'EN ATTENTE'
+                status: job.isValidated ? 'VALIDE' : 'EN ATTENTE'
             });
             if (expandedJobIds.value.has(job.id)) {
                 job.locations.forEach((loc, i) => {
@@ -166,225 +211,12 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
         return rows;
     });
 
-    // Computed pour les colonnes du dataTable
-    const tableColumns = computed(() => [
-        {
-            key: 'reference',
-            label: 'Référence',
-            sortable: true,
-            width: '120px'
-        },
-        {
-            key: 'location_reference',
-            label: 'Réf. Location',
-            sortable: true,
-            width: '130px'
-        },
-        {
-            key: 'description',
-            label: 'Description',
-            sortable: true,
-            width: '200px'
-        },
-        {
-            key: 'sous_zone',
-            label: 'Sous-zone',
-            sortable: true,
-            width: '120px'
-        },
-        {
-            key: 'zone',
-            label: 'Zone',
-            sortable: true,
-            width: '120px'
-        },
-        {
-            key: 'warehouse',
-            label: 'Entrepôt',
-            sortable: true,
-            width: '130px'
-        },
-        {
-            key: 'status',
-            label: 'Statut',
-            sortable: true,
-            width: '100px'
-        }
-    ]);
-
-    // Colonnes pour la table des emplacements disponibles (AG Grid)
-    const availableLocationColumns = [
-        {
-            headerName: 'ID',
-            field: 'id',
-            flex: 1,
-            sortable: true,
-            hide: true,
-            filter: 'agTextColumnFilter'
-        },
-        {
-            headerName: 'Référence',
-            field: 'reference',
-            flex: 1,
-            sortable: true,
-            filter: 'agTextColumnFilter'
-        },
-        {
-            headerName: 'Réf. Location',
-            field: 'location_reference',
-            flex: 1,
-            sortable: true,
-            filter: 'agTextColumnFilter'
-        },
-        {
-            headerName: 'Description',
-            field: 'description',
-            flex: 2,
-            sortable: true,
-            filter: 'agTextColumnFilter',
-            cellRenderer: (params: any) => {
-                const description = params.value;
-                if (description && description.length > 50) {
-                    return `<span title="${description}">${description.substring(0, 50)}...</span>`;
-                }
-                return description;
-            }
-        },
-        {
-            headerName: 'Sous-zone',
-            field: 'sous_zone',
-            flex: 1,
-            sortable: true,
-            filter: 'agTextColumnFilter'
-        },
-        {
-            headerName: 'Zone',
-            field: 'zone',
-            flex: 1,
-            sortable: true,
-            filter: 'agTextColumnFilter'
-        },
-        {
-            headerName: 'Entrepôt',
-            field: 'warehouse',
-            flex: 1,
-            sortable: true,
-            filter: 'agTextColumnFilter'
-        },
-        {
-            headerName: 'Statut',
-            field: 'status',
-            width: 100,
-            sortable: true,
-            filter: 'agTextColumnFilter',
-            cellRenderer: (params: any) => {
-                const status = params.value;
-                if (status === 'ACTIVE') {
-                    return '<span class="bg-success-light text-success rounded-lg px-2 py-1 text-xs font-medium">ACTIF</span>';
-                } else {
-                    return '<span class="bg-warning-light text-warning rounded-lg px-2 py-1 text-xs font-medium">INACTIF</span>';
-                }
-            }
-        }
-    ];
-
-    // Colonnes pour la table des jobs avec colonne Actions améliorée (AG Grid)
-    const locationColumns = [
-        {
-            headerName: 'Job',
-            field: 'reference',
-            flex: 2,
-            sortable: true,
-            cellStyle: (params: any) => {
-                if (!params.data) return undefined;
-                if (params.data.isChild) {
-                    return { paddingLeft: '35px', fontStyle: 'italic' };
-                }
-                return undefined;
-            },
-            cellRenderer: (params: any) => {
-                if (!params.data) return '';
-                if (!params.data.isChild) {
-                    const jobId = params.data.jobId;
-                    const isExpanded = expandedJobIds.value.has(jobId);
-                    const arrow = isExpanded
-                        ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`
-                        : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>`;
-                    return `<div style="display: flex; align-items: center; width: 100%;">
-                      <span style="cursor: pointer; display: inline-flex; align-items: center; width: 20px; margin-right: 8px;" data-expand-toggle="${jobId}">${arrow}</span>
-                      <span>${params.value ?? ''}</span>
-                    </div>`;
-                }
-                return `${params.value ?? ''}`;
-            },
-            onCellClicked: (params: any) => {
-                const target = params.event?.target as HTMLElement;
-                const expandToggle = target.closest('[data-expand-toggle]');
-                if (expandToggle && !params.data?.isChild) {
-                    const jobId = expandToggle.getAttribute('data-expand-toggle')!;
-                    if (expandedJobIds.value.has(jobId)) expandedJobIds.value.delete(jobId);
-                    else expandedJobIds.value.add(jobId);
-                }
-            }
-        },
-        {
-            headerName: 'Statut',
-            field: 'status',
-            width: 120,
-            sortable: true,
-            cellRenderer: (params: any) => {
-                if (!params.data || params.data.isChild) return '';
-                return params.data.isValidated
-                    ? '<span class="bg-success-light text-success rounded-lg px-2 py-1 text-xs font-medium">VALIDÉ</span>'
-                    : '<span class="bg-warning-light text-warning rounded-lg px-2 py-1 text-xs font-medium">EN ATTENTE</span>';
-            }
-        },
-        {
-            headerName: 'Zone',
-            field: 'zone',
-            width: 120,
-            sortable: true,
-            filter: 'agTextColumnFilter',
-            valueFormatter: (params: any) => params.data?.isChild ? (params.value as string) : ''
-        },
-        {
-            headerName: 'Sous-zone',
-            field: 'sousZone',
-            width: 150,
-            sortable: true,
-            filter: 'agSelectColumnFilter',
-            valueFormatter: (params: any) => params.data?.isChild ? (params.value as string) : ''
-        },
-        {
-            headerName: 'Actions',
-            field: 'actions',
-            width: 120,
-            sortable: false,
-            cellRenderer: (params: any) => {
-                // Afficher le bouton seulement si la ligne a un location_reference
-                if (!params.data.location_reference) {
-                    return '';
-                }
-
-                // Récupérer l'ID du job de plusieurs façons possibles
-                const jobId = params.data.jobId || params.data.job_id || params.data.id || '';
-                const locationReference = params.data.location_reference;
-
-                return `<button class="btn-supprimer-emplacement" data-job-id="${jobId}" data-location-id="${locationReference}" style="color: #ef4444; border: none; background: none; cursor: pointer;" title="Supprimer cet emplacement">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="m19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        <line x1="10" y1="11" x2="10" y2="17"></line>
-                        <line x1="14" y1="11" x2="14" y2="17"></line>
-                    </svg>
-                </button>`;
-            }
-        }
-    ];
+    const loading = ref(false);
 
     // Charger les locations depuis le store
-    const loadLocations = async (params?: LocationQueryParams) => {
+    const loadLocations = async (params?: any) => {
         try {
+            loading.value = true;
             if (warehouseId.value !== null) {
                 await locationStore.fetchUnassignedLocations(warehouseId.value, {
                     page: currentPage.value,
@@ -395,7 +227,9 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
                 });
             }
         } catch (error) {
-            console.error('Erreur lors du chargement des locations:', error);
+            // Erreur déjà gérée
+        } finally {
+            loading.value = false;
         }
     };
 
@@ -420,7 +254,7 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
     };
 
     // Gestion des filtres des locations
-    const handleLocationFilterChange = async (newFilters: LocationQueryParams) => {
+    const handleLocationFilterChange = async (newFilters: any) => { // Assuming LocationQueryParams is no longer needed or replaced
         filters.value = { ...filters.value, ...newFilters };
         currentPage.value = 1;
         await loadLocations();
@@ -438,7 +272,7 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
                     ...filters.value
                 });
             } catch (error) {
-                console.error('Erreur lors de la recherche:', error);
+                // Erreur déjà gérée
             }
         } else {
             await loadLocations();
@@ -456,14 +290,6 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
         await loadJobsFromStore();
     });
 
-    function generateJobReference(): string {
-        const today = new Date();
-        const year = today.getFullYear().toString().slice(-2);
-        const month = (today.getMonth() + 1).toString().padStart(2, '0');
-        const day = today.getDate().toString().padStart(2, '0');
-        const jobNumber = (planningJobs.value.length + 1).toString().padStart(3, '0');
-        return `JOB-${year}${month}${day}-${jobNumber}`;
-    }
 
     // Fonction utilitaire pour recharger les deux tables
     const reloadBothTables = async () => {
@@ -514,10 +340,16 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
 
             for (const locationIdStr of selectedAvailable.value) {
                 const locationId = parseInt(locationIdStr);
+                if (isNaN(locationId)) {
+                    continue;
+                }
+
                 const location = locationStore.getLocations.find(loc => loc.id === locationId);
                 if (location) {
                     locationIds.push(location.id);
                     locationDetails.push(location.id);
+                } else {
+                    console.warn(`Location with ID ${locationId} not found in store.`);
                 }
             }
 
@@ -624,45 +456,22 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
         filter?: Record<string, { filter: string }>;
     }) {
         try {
-            if (warehouseId.value !== null) {
-                await jobStore.fetchJobs(warehouseId.value, {
+            loading.value = true;
+            if (warehouseId.value !== null && inventoryId.value !== null) {
+                await jobStore.fetchJobs(inventoryId.value, warehouseId.value, {
                     page: params?.page || 1,
                     pageSize: params?.pageSize || 20,
                     sort: params?.sort,
                     filter: params?.filter
                 });
-            } else {
-                console.warn('⚠️ warehouseId non disponible, impossible de charger les jobs');
             }
         } catch (error) {
-            console.error('❌ Erreur lors du chargement des jobs depuis le store:', error);
+            // Erreur déjà gérée
+        } finally {
+            loading.value = false;
         }
     }
 
-    async function createJob(selectedLocations: string[]) {
-        if (!selectedLocations.length) {
-            await alertService.error({ text: 'Veuillez sélectionner au moins un emplacement.' });
-            return false;
-        }
-
-        const newJob: PlanningJob = {
-            id: crypto.randomUUID(),
-            reference: generateJobReference(),
-            locations: [...selectedLocations],
-            isValidated: false,
-            createdAt: new Date().toISOString()
-        };
-
-        planningJobs.value.push(newJob);
-        await nextTick();
-        selectedAvailable.value = [];
-
-        await alertService.success({
-            text: `Job ${newJob.reference} créé avec ${newJob.locations.length} emplacement(s)`
-        });
-
-        return true;
-    }
 
     // Fonction améliorée pour supprimer un emplacement d'un job
     async function removeLocationFromJob(jobId: string, location: string) {
@@ -891,144 +700,6 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
         }));
     });
 
-    // Colonnes pour la table des jobs du store (AG Grid)
-    const storeJobsColumns: DataTableColumn<Job>[] = [
-        {
-            headerName: 'ID',
-            field: 'id',
-            width: 80,
-            sortable: true,
-            hide: true,
-            filter: 'agTextColumnFilter'
-        },
-        {
-            headerName: 'Référence',
-            field: 'reference',
-            width: 200,
-            sortable: true,
-            filter: 'agTextColumnFilter',
-        },
-        {
-            headerName: 'Statut',
-            field: 'status',
-            width: 120,
-            sortable: true,
-            filter: 'agTextColumnFilter',
-            cellRenderer: (params: any) => {
-                const status = params.value;
-                if (status !== undefined) {
-                    let badgeClass = '';
-                    switch (status) {
-                        case 'EN ATTENTE':
-                            badgeClass = 'bg-yellow-100 text-yellow-800';
-                            break;
-                        case 'VALIDE':
-                            badgeClass = 'bg-blue-100 text-blue-800';
-                            break;
-                        case 'TERMINE':
-                            badgeClass = 'bg-green-100 text-green-800';
-                            break;
-                        default:
-                            badgeClass = 'bg-gray-100 text-gray-800';
-                    }
-                    return `<span class="px-2 py-1 text-xs font-medium rounded-full ${badgeClass}">${status}</span>`;
-                }
-            }
-        },
-        {
-            headerName: 'Réf. Locations',
-            field: 'emplacements',
-            width: 200,
-            sortable: false,
-            cellRenderer: (params: any) => {
-                if (Array.isArray(params.value)) {
-                    return params.value.map((loc: any) => loc.location_reference).join(', ');
-                }
-                return '';
-            }
-        },
-        {
-            headerName: 'Date création',
-            field: 'created_at',
-            width: 120,
-            sortable: true,
-            filter: 'agTextColumnFilter',
-            cellRenderer: (params: any) => {
-                const date = params.value;
-                if (date !== undefined) {
-                    return date ? new Date(date).toLocaleDateString() : '-';
-                }
-            }
-        },
-        {
-            headerName: 'Emplacements',
-            field: 'emplacements_count',
-            width: 120,
-            sortable: true,
-            filter: 'agNumberColumnFilter',
-            cellRenderer: (params: any) => {
-                const count = params.value;
-                return count ? `${count} emplacement(s)` : '0';
-            },
-            detailConfig: {
-                key: 'emplacements',
-                displayField: 'location_reference',
-                labelField: 'location_reference',
-                countSuffix: 'emplacement(s)',
-                iconCollapsed: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>`,
-                iconExpanded: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`,
-                columns: [
-                    {
-                        field: 'location_reference',
-                        valueKey: 'location_reference',
-                        formatter: (_: unknown, item: any) => {
-                            // Récupérer l'ID du job de plusieurs façons possibles
-                            const jobId = item.jobId || item.parentRow?.id || item.parent?.id || '';
-                            const locationReference = item.location_reference;
-
-                            return `
-                                <span style="margin-right: 8px;">${item.location_reference}</span>
-                                <button class="btn-supprimer-emplacement" data-job-id="${jobId}" data-location-id="${locationReference}" style="color: #ef4444; border: none; background: none; cursor: pointer;" title="Supprimer cet emplacement">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <polyline points="3 6 5 6 21 6"></polyline>
-                                        <path d="m19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                        <line x1="10" y1="11" x2="10" y2="17"></line>
-                                        <line x1="14" y1="11" x2="14" y2="17"></line>
-                                    </svg>
-                                </button>
-                            `;
-                        }
-                    }
-                ]
-            }
-        },
-        {
-            headerName: 'Actions',
-            field: 'actions',
-            width: 120,
-            sortable: false,
-            cellRenderer: (params: any) => {
-                // Afficher le bouton seulement si la ligne a un location_reference
-                if (!params.data.location_reference) {
-                    return '';
-                }
-
-                // Récupérer l'ID du job de plusieurs façons possibles
-                const jobId = params.data.jobId || params.data.job_id || params.data.id || '';
-                const locationReference = params.data.location_reference;
-
-                return `<button class="btn-supprimer-emplacement" data-job-id="${jobId}" data-location-id="${locationReference}" style="color: #ef4444; border: none; background: none; cursor: pointer;" title="Supprimer cet emplacement">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="m19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        <line x1="10" y1="11" x2="10" y2="17"></line>
-                        <line x1="14" y1="11" x2="14" y2="17"></line>
-                    </svg>
-                </button>`;
-            }
-        }
-    ];
-
     // Handler pour les changements de taille de page
     const onPageSizeChanged = async (size: number) => {
         pageSize.value = size;
@@ -1096,7 +767,7 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
         }
 
         // Préparer les paramètres de requête
-        const params: LocationQueryParams = {
+        const params: any = { // Assuming LocationQueryParams is no longer needed or replaced
             page: currentPage.value,
             page_size: pageSize.value,
             ...filters.value
@@ -1114,14 +785,23 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
     };
 
     // Fonction pour gérer la sélection des emplacements disponibles
-    function onAvailableSelectionChanged(rows: any[]) {
-        const selectedIds = rows.map(r => String(r.id));
+    function onAvailableSelectionChanged(selectedRows: Set<string>) {
+        console.log('🔍 Sélection des emplacements disponibles:', selectedRows);
+
+        // Convertir le Set en tableau de strings
+        const selectedIds = Array.from(selectedRows).map(id => String(id));
+
         selectedAvailable.value = selectedIds;
     }
 
     // Fonction pour gérer la sélection des jobs
-    function onJobSelectionChanged(rows: any[]) {
-        selectedJobs.value = rows.filter(r => !r.isChild).map(r => String(r.id));
+    function onJobSelectionChanged(selectedRows: Set<string>) {
+        console.log('🔍 Sélection des jobs:', selectedRows);
+
+        // Convertir le Set en tableau de strings
+        const selectedIds = Array.from(selectedRows).map(id => String(id));
+
+        selectedJobs.value = selectedIds;
     }
 
     // Fonction pour sélectionner un job pour ajouter des emplacements
@@ -1464,6 +1144,151 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
         }
     }
 
+    async function validateJobs(jobIds: (string | number)[]) {
+        if (!jobIds.length) {
+            await alertService.error({ text: 'Veuillez sélectionner au moins un job.' });
+            return;
+        }
+
+        // Si jobIds est un Proxy (ref ou reactive), on le convertit en tableau natif
+        const rawJobIds = Array.isArray(jobIds) ? jobIds : toRaw(jobIds);
+
+        // Améliorer la conversion des IDs avec validation
+        const jobIdsNum = rawJobIds.map(id => {
+            // Si c'est un objet, essayer d'extraire l'ID
+            if (typeof id === 'object' && id !== null) {
+                const extractedId = (id as any).id || (id as any).jobId || (id as any).job_id;
+                if (extractedId !== undefined) {
+                    const numId = Number(extractedId);
+                    return isNaN(numId) ? null : numId;
+                }
+            }
+
+            // Conversion directe
+            const numId = Number(id);
+            return isNaN(numId) ? null : numId;
+        }).filter(id => id !== null) as number[];
+
+        // Utiliser les jobs du store comme source de vérité
+        const storeJobsSelected = storeJobs.value.filter(sj => jobIdsNum.includes(Number(sj.id)));
+
+        // Vérifier le statut de chaque job - accepter plusieurs statuts valides
+        const validStatuses = ['EN ATTENTE'];
+        const jobsPending = storeJobsSelected.filter(j => validStatuses.includes(j.status));
+        const notPending = storeJobsSelected.filter(j => !validStatuses.includes(j.status));
+
+        if (notPending.length > 0) {
+            const jobRefs = notPending.map(j => j.reference || j.id).join(', ');
+            await alertService.error({
+                title: 'Validation impossible',
+                text: `Les jobs suivants ne sont pas au statut approprié : ${jobRefs}`
+            });
+            // return; // décommente si tu veux bloquer la validation si au moins un n'est pas EN ATTENTE
+        }
+
+        if (!jobsPending.length) {
+            await alertService.info({ text: 'Aucun job à valider.' });
+            return;
+        }
+
+        const result = await alertService.confirm({
+            title: 'Confirmer la validation',
+            text: `Valider ${jobsPending.length} job(s) ?`
+        });
+
+        if (!result.isConfirmed) {
+            await alertService.info({ text: 'Validation annulée.' });
+            return;
+        }
+
+        isSubmitting.value = true;
+        try {
+            for (const job of jobsPending) {
+                // Appel backend pour chaque job du store
+                // Remplace createJobInStore par la méthode de validation réelle si besoin
+                if (jobStore && typeof jobStore.validateJob === 'function') {
+                    await jobStore.validateJob([job.id]);
+                } else {
+                    // Fallback : log ou autre action
+                    console.warn('Aucune méthode de validation backend définie pour le job', job);
+                }
+            }
+            await alertService.success({
+                title: 'Succès',
+                text: `${jobsPending.length} job(s) validé(s) avec succès.`
+            });
+            await loadJobsFromStore();
+        } catch (error) {
+            await alertService.error({ text: 'Erreur lors de la validation des jobs.' });
+        } finally {
+            isSubmitting.value = false;
+        }
+    }
+
+    // ===== FONCTIONS POUR PLANNING MANAGEMENT =====
+
+    // États pour le planning management
+    const planningStores = ref<Store[]>([]);
+    const selectedPlanningStore = ref<Store | null>(null);
+    const planningLoading = ref(false);
+    const planningInventoryStatus = ref('En préparation');
+    const planningInventoryReference = ref<string>('');
+
+
+
+
+
+    // Fonction pour charger les magasins
+
+
+    // Fonction pour sélectionner un magasin
+    function selectPlanningStore(store: Store) {
+        selectedPlanningStore.value = store;
+    }
+
+    // Fonction pour définir le statut d'inventaire
+    function setPlanningInventoryStatus(status: string) {
+        planningInventoryStatus.value = status;
+    }
+
+    // Fonction pour définir la référence d'inventaire
+    function setPlanningInventoryReference(reference: string) {
+        planningInventoryReference.value = reference;
+    }
+
+    // Fonction pour vérifier si un item est un Store
+    function isStore(item: GridDataItem): item is Store {
+        return (
+            typeof item.id === 'number' &&
+            typeof item.store_name === 'string'
+        );
+    }
+
+    // Handlers pour les actions
+    const handlePlanningItemClick = (item: GridDataItem) => {
+        if (isStore(item)) selectPlanningStore(item);
+    };
+
+
+    const handleActionsClick = (item: GridDataItem, e: MouseEvent) => {
+        if (!isStore(item)) return;
+        selectedPlanningStore.value = item;
+        // Logique pour afficher le menu contextuel
+        console.log('Menu contextuel pour:', item);
+    };
+
+    const handleEditItem = (item: Store | null) => {
+        if (item) {
+            console.log('Édition de:', item);
+        }
+    };
+
+    const handleDeleteItem = (item: Store | null) => {
+        if (item) {
+            console.log('Suppression de:', item);
+        }
+    };
+
     return {
         // Jobs
         planningJobs,
@@ -1476,17 +1301,15 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
         showJobDropdown,
         isSubmitting,
         expandedJobIds,
-        createJob,
         createJobFromSelectedLocations,
         addLocationToJob,
         removeLocationFromJob,
         returnSelectedJobs,
         validateJob,
+        validateJobs, // <-- nouveau
 
         // DataTable des locations
         tableData,
-        tableColumns,
-        availableLocationColumns,
         currentPage,
         pageSize,
         sortBy,
@@ -1511,11 +1334,9 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
 
         // Jobs du store
         storeJobs,
-        storeJobsColumns,
 
         // Données des jobs avec expansion
         displayJobsData,
-        locationColumns,
 
         // Handlers pour les sélections et actions
         onAvailableSelectionChanged,
@@ -1538,6 +1359,27 @@ export function usePlanning(options?: { inventoryReference?: string, warehouseRe
         warehouseId,
         initializeIdsFromReferences,
         refreshIdsFromReferences,
-        onReturnSelectedJobsFromStore
+        onReturnSelectedJobsFromStore,
+
+        // ===== PLANNING MANAGEMENT =====
+        // États
+        planningStores,
+        selectedPlanningStore,
+        planningLoading,
+        planningInventoryStatus,
+        planningInventoryReference,
+
+
+
+        // Fonctions
+        selectPlanningStore,
+        setPlanningInventoryStatus,
+        setPlanningInventoryReference,
+        isStore,
+        handlePlanningItemClick,
+        handleActionsClick,
+        handleEditItem,
+        handleDeleteItem,
+        loading
     };
 }

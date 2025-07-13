@@ -21,28 +21,27 @@
                     <div class="flex items-center gap-1.5">
                         <span class="text-gray-500 dark:text-gray-400">Libellé:</span>
                         <span class="text-gray-900 dark:text-white-light">{{ state.step1Data?.libelle || 'Sans libellé'
-                            }}</span>
+                        }}</span>
                     </div>
 
                     <!-- Date -->
                     <div class="flex items-center gap-1.5">
                         <span class="text-gray-500 dark:text-gray-400">Date:</span>
                         <span class="text-gray-900 dark:text-white-light">{{ state.step1Data?.date || 'Date non définie'
-                            }}</span>
+                        }}</span>
                     </div>
 
                     <!-- Type -->
                     <div class="flex items-center gap-1.5">
                         <span class="text-gray-500 dark:text-gray-400">Type:</span>
-                        <span class="text-gray-900 dark:text-white-light">{{ state.step1Data && state.step1Data.type ?
-                            state.step1Data.type : 'Type' }}
-                        </span>
+                        <span class="text-gray-900 dark:text-white-light">{{ getInventoryTypeLabel(state.step1Data?.inventory_type) }}</span>
                     </div>
 
                     <!-- Compte -->
                     <div class="flex items-center gap-1.5">
                         <span class="text-gray-500 dark:text-gray-400">Compte:</span>
-                        <span class="text-gray-900 dark:text-white-light">{{ getAccountName(state.step1Data?.compte) }}</span>
+                        <span class="text-gray-900 dark:text-white-light">{{ getAccountName(state.step1Data?.compte)
+                            }}</span>
                     </div>
                 </div>
 
@@ -51,7 +50,8 @@
                     <span class="text-gray-500 dark:text-gray-400 flex-shrink-0">Magasin:</span>
                     <template v-if="Array.isArray(state.step1Data.magasin) && state.step1Data.magasin.length">
                         <span class="text-gray-900 dark:text-white-light">
-                            {{state.step1Data.magasin.map(m => getWarehouseName(typeof m === 'string' ? m : m.magasin)).join(', ')}}
+                            {{state.step1Data.magasin.map(m => getWarehouseName(typeof m === 'string' ? m :
+                            m.magasin)).join(', ')}}
                         </span>
                     </template>
                     <template v-else>
@@ -127,31 +127,72 @@
             </div>
         </div>
 
+        <!-- Section des erreurs et champs vides -->
+        <div v-if="showValidationErrors && validationErrors.length > 0"
+            class="w-full mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg">
+            <div class="flex items-center gap-2 mb-3">
+                <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <span class="font-semibold text-red-800 dark:text-red-200">Champs à corriger</span>
+            </div>
+
+            <div class="space-y-2">
+                <div v-for="error in validationErrors" :key="error.field" class="flex items-start gap-2">
+                    <svg class="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <div>
+                        <span class="font-medium text-red-700 dark:text-red-300">{{ error.label }}</span>
+                        <p class="text-sm text-red-600 dark:text-red-400">{{ error.message }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div v-if="!loaded" class="text-center py-10">
             Chargement...
         </div>
 
+        <!-- Indicateur de chargement des données maîtres -->
+        <div v-else-if="warehousesLoading || accountsLoading" class="text-center py-10">
+            <div class="flex items-center justify-center gap-2">
+                <svg class="animate-spin h-5 w-5 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Chargement des données de référence...</span>
+            </div>
+        </div>
+
+
         <DynamicWizard v-else :key="wizardKey" :steps="wizardSteps" v-model:current-step="currentStep"
             :is-valid="isValid" :beforeChange="validateAndSaveStep" @complete="handleSubmit"
-            :finish-button-text="isSubmitting ? (isEditMode ? 'Modification…' : 'Création…') : (isEditMode ? 'Modifier' : 'Créer')" color="#ffc107">
+            :finish-button-text="isSubmitting ? (isEditMode ? 'Modification…' : 'Création…') : (isEditMode ? 'Modifier' : 'Créer')"
+            color="#ffc107">
 
             <template #step-0>
                 <div>
-                    <div class="mb-4 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg">
-                        <p class="text-xs text-yellow-600 dark:text-yellow-300">
-                            Debug - Date dans state: {{ state.step1Data.date }}
-                        </p>
-                    </div>
-                    <FormBuilder v-model:modelValue="state.step1Data" :fields="formFields" hide-submit :columns="4" />
+                    <DOMErrorBoundary>
+                        <FormBuilder :key="`form-step-0-${state.step1Data.date || 'empty'}`" v-model="state.step1Data"
+                            :fields="formFields" hide-submit :columns="3" />
+                    </DOMErrorBoundary>
                 </div>
             </template>
 
             <template #step-1>
                 <div>
-                    <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                    <div
+                        class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
                         <div class="flex items-center gap-2">
-                            <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
                                 Validation des règles métier active
@@ -161,16 +202,22 @@
                             Les règles de validation spécifiques au mode de comptage seront vérifiées.
                         </p>
                     </div>
-                    <ParamStep v-model="state.comptages[0]" :step-index="0"
-                        :available-modes="availableModesForStep(0)" :prev-comptages="state.comptages" />
+                    <DOMErrorBoundary>
+                        <ParamStep :key="`param-step-1-${state.comptages[0]?.mode || 'empty'}`"
+                            v-model="state.comptages[0]" :step-index="0" :available-modes="availableModesForStep(0)"
+                            :prev-comptages="state.comptages" />
+                    </DOMErrorBoundary>
                 </div>
             </template>
             <template #step-2 v-if="state.comptages.length > 1">
                 <div>
-                    <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                    <div
+                        class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
                         <div class="flex items-center gap-2">
-                            <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
                                 Validation des règles métier active
@@ -180,16 +227,22 @@
                             Les règles de validation spécifiques au mode de comptage seront vérifiées.
                         </p>
                     </div>
-                    <ParamStep v-model="state.comptages[1]" :step-index="1"
-                        :available-modes="availableModesForStep(1)" :prev-comptages="state.comptages" />
+                    <DOMErrorBoundary>
+                        <ParamStep :key="`param-step-2-${state.comptages[1]?.mode || 'empty'}`"
+                            v-model="state.comptages[1]" :step-index="1" :available-modes="availableModesForStep(1)"
+                            :prev-comptages="state.comptages" />
+                    </DOMErrorBoundary>
                 </div>
             </template>
             <template #step-3 v-if="state.comptages.length > 2">
                 <div>
-                    <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                    <div
+                        class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
                         <div class="flex items-center gap-2">
-                            <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
                                 Validation des règles métier active
@@ -199,18 +252,22 @@
                             Les règles de validation spécifiques au mode de comptage seront vérifiées.
                         </p>
                     </div>
-                    <ParamStep v-model="state.comptages[2]" :step-index="2"
-                        :available-modes="availableModesForStep(2)" :prev-comptages="state.comptages" />
+                    <DOMErrorBoundary>
+                        <ParamStep :key="`param-step-3-${state.comptages[2]?.mode || 'empty'}`"
+                            v-model="state.comptages[2]" :step-index="2" :available-modes="availableModesForStep(2)"
+                            :prev-comptages="state.comptages" />
+                    </DOMErrorBoundary>
                 </div>
             </template>
 
         </DynamicWizard>
 
     </div>
+
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useInventoryCreation } from '@/composables/useInventoryCreation';
 import DynamicWizard from '@/components/wizard/Wizard.vue';
@@ -224,6 +281,9 @@ import { alertService } from '@/services/alertService';
 const router = useRouter();
 const route = useRoute();
 const wizardKey = ref(Date.now());
+
+// Variable pour contrôler l'affichage des erreurs
+const showValidationErrors = ref(false);
 
 // Détecter si on est en mode édition
 const isEditMode = computed(() => !!route.params.reference);
@@ -244,13 +304,27 @@ const {
     accounts,
     warehousesLoading,
     accountsLoading,
+    accountOptions,
+    warehouseOptions,
+    inventoryTypeOptions,
+    getAccountName,
+    getWarehouseName,
+    validationErrors,
+    forceValidation,
+    goToStep0
 } = useInventoryCreation();
+
+// Fonction pour réinitialiser l'affichage des erreurs
+function resetValidationDisplay() {
+    showValidationErrors.value = false;
+}
 
 // Initialiser en mode édition si nécessaire
 onMounted(async () => {
     if (isEditMode.value && inventoryReference.value) {
         try {
             await initializeEditMode(inventoryReference.value);
+
         } catch (error) {
             console.error('❌ Erreur lors de l\'initialisation du mode édition:', error);
             await alertService.error({
@@ -262,87 +336,82 @@ onMounted(async () => {
     }
 });
 
-// Créer les options dynamiques pour les comptes
-const accountOptions = computed(() => {
-    const accountsArray = Array.isArray(accounts.value) ? accounts.value : [];
-    return accountsArray.map(account => ({
-        label: account.account_name,
-        value: account.id.toString()
-    }));
-});
-
-// Créer les options dynamiques pour les magasins
-const warehouseOptions = computed(() => {
-    const warehousesArray = Array.isArray(warehouses.value) ? warehouses.value : [];
-    return warehousesArray.map(warehouse => ({
-        label: warehouse.warehouse_name,
-        value: warehouse.id.toString()
-    }));
-});
-
-// Fonctions pour obtenir les noms des comptes et magasins
-const getAccountName = (accountId: string) => {
-    if (!accountId) return 'Compte non défini';
-    const accountsArray = Array.isArray(accounts.value) ? accounts.value : [];
-    const account = accountsArray.find(acc => acc.id.toString() === accountId);
-    return account ? account.account_name : accountId;
-};
-
-const getWarehouseName = (warehouseId: string) => {
-    if (!warehouseId) return 'Magasin non défini';
-    const warehousesArray = Array.isArray(warehouses.value) ? warehouses.value : [];
-    const warehouse = warehousesArray.find(wh => wh.id.toString() === warehouseId);
-    return warehouse ? warehouse.warehouse_name : warehouseId;
-};
+// Watcher pour forcer la validation quand les données changent
+watch([() => state.step1Data, () => state.comptages, currentStep], () => {
+    nextTick(() => {
+        forceValidation();
+        // Réinitialiser l'affichage des erreurs quand les données changent
+        resetValidationDisplay();
+    });
+}, { deep: true });
 
 /* Étape 1 (fusion des anciennes étapes 1 et 2) */
-const formFields = computed((): FieldConfig[] => [
-    {
-        key: 'libelle',
-        label: 'Libellé',
-        type: 'text',
-        props: { placeholder: 'Entrer le libellé' },
-        validators: [{ key: 'libelle', ...required('Le libellé est requis') }]
-    },
-    {
-        key: 'date',
-        label: 'Date',
-        type: 'date',
-        validators: [
-            { key: 'date', ...required('La date est requise') },
-            { key: 'date', ...date('Format de date invalide') }
-        ]
-    },
-    {
-        key: 'type',
-        label: 'Type',
-        type: 'select',
-        options: ['Inventaire Général'],
-        props: { disabled: false },
-        searchable: false,
-        clearable: false,
-        validators: []
-    },
-    {
-        key: 'compte',
-        label: 'Compte',
-        type: 'select',
-        options: accountOptions.value,
-        validators: [{ key: 'compte', ...required('Veuillez sélectionner un compte') }]
-    },
-    {
-        key: 'magasin',
-        label: 'Magasin',
-        type: 'multi-select-with-dates',
-        options: warehouseOptions.value,
-        searchable: true,
-        clearable: true,
-        props: { placeholder: 'Sélectionnez des magasins' },
-        itemKey: 'magasin', // Specify the key name for magasin items
-        dateLabel: 'Dates par magasin', // Label indicating dates are required
-        validators: [{ key: 'magasin', ...magasinWithDatesRequired('Veuillez sélectionner au moins un magasin et renseigner toutes les dates') }]
-    }
-]);
+const formFields = computed(() => {
+    const fields: FieldConfig[] = [
+        {
+            key: 'libelle',
+            label: 'Libellé',
+            type: 'text',
+            props: {
+                placeholder: 'Entrer le libellé',
+                'data-error': hasFieldError('libelle') ? 'true' : 'false'
+            },
+            validators: [required('Le libellé est requis')]
+        },
+        {
+            key: 'date',
+            label: 'Date',
+            type: 'date',
+            props: {
+                'data-error': hasFieldError('date') ? 'true' : 'false'
+            },
+            validators: [
+                required('La date est requise'),
+                date('Format de date invalide')
+            ]
+        },
+        {
+            key: 'type',
+            label: 'Type',
+            type: 'select',
+            options: inventoryTypeOptions.value,
+            props: {
+                disabled: false,
+                'data-error': hasFieldError('type') ? 'true' : 'false'
+            },
+            searchable: false,
+            clearable: false,
+            validators: []
+        },
+        {
+            key: 'compte',
+            label: 'Compte',
+            type: 'select',
+            options: accountOptions.value,
+            props: {
+                'data-error': hasFieldError('compte') ? 'true' : 'false'
+            },
+            validators: [required('Veuillez sélectionner un compte')]
+        },
+        {
+            key: 'magasin',
+            label: 'Magasin',
+            type: 'multi-select-with-dates',
+            options: warehouseOptions.value,
+            searchable: true,
+            clearable: true,
+            props: {
+                placeholder: 'Sélectionnez des magasins',
+                'data-error': hasFieldError('magasin') ? 'true' : 'false'
+            },
+            itemKey: 'magasin', // Specify the key name for magasin items
+            dateLabel: 'Dates par magasin', // Label indicating dates are required
+            validators: [magasinWithDatesRequired('Veuillez sélectionner au moins un magasin et renseigner toutes les dates')]
+        }
+    ];
+
+    return fields;
+});
 
 /* Définitions des étapes du wizard */
 const wizardSteps = computed(() => [
@@ -373,13 +442,47 @@ function hasActiveOptions(comptage: ComptageConfig): boolean {
     return false;
 }
 
+/* Fonction pour identifier les champs avec des erreurs */
+function getFieldError(fieldKey: string): string | null {
+    const error = validationErrors.value.find(err => err.field === fieldKey);
+    return error ? error.message : null;
+}
+
+/* Fonction pour vérifier si un champ a une erreur */
+function hasFieldError(fieldKey: string): boolean {
+    return validationErrors.value.some(err => err.field === fieldKey);
+}
+
 /* Valider et sauvegarder avant chaque changement d'étape */
 async function validateAndSaveStep(prev: number, next: number): Promise<boolean> {
-    let data: any;
-    if (prev === 0) data = state.step1Data;
-    else data = state.comptages[prev - 1];
+    // Activer l'affichage des erreurs seulement après avoir cliqué sur Suivant
+    showValidationErrors.value = true;
 
-    return await onStepComplete(prev, data);
+    // Forcer la validation avant de vérifier
+    forceValidation();
+
+    // Attendre un tick pour que la validation soit mise à jour
+    await nextTick();
+
+    // Vérifier s'il y a des erreurs de validation
+    if (validationErrors.value.length > 0) {
+        return false;
+    }
+
+    // Vérifier que isValid est true
+    if (!isValid.value) {
+        return false;
+    }
+
+    let data: any;
+    if (prev === 0) {
+        data = state.step1Data;
+    } else {
+        data = state.comptages[prev - 1];
+    }
+
+    const result = await onStepComplete(prev, data);
+    return result;
 }
 
 /* Soumission finale */
@@ -425,5 +528,11 @@ async function handleSubmit() {
         // Erreur de notification
         console.error('Erreur lors de la soumission:', error);
     }
+}
+
+/* Fonction pour obtenir le label d'un type d'inventaire */
+function getInventoryTypeLabel(value: string | undefined): string {
+    const type = inventoryTypeOptions.value.find(option => option.value === value);
+    return type ? type.label : value || 'Type non défini';
 }
 </script>

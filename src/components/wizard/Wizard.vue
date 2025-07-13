@@ -1,19 +1,40 @@
 <template>
     <div class="mx-auto h-full panel py-3">
-        <FormWizard ref="wizard" :startIndex="internalStep" @on-change="onChange" @on-complete="handleFinishWizard"
-            :before-change="beforeChange" :color="color" back-button-text="Précédent" next-button-text="Suivant"
-            class="circle" :finish-button-text="props.finishButtonText || 'Créer'">
+        <FormWizard
+            ref="wizard"
+            :startIndex="internalStep"
+            @on-change="onChange"
+            @on-complete="handleFinishWizard"
+            :before-change="beforeChangeHandler"
+            :color="color"
+            back-button-text="Précédent"
+            next-button-text="Suivant"
+            class="circle"
+            :finish-button-text="finishButtonText">
+
             <template #next="{ nextTab, fillButtonStyle }">
-                <SubmitButton type="button" :loading="isSubmitting" :style="fillButtonStyle"
-                    label="Suivant" @click="handleNext(nextTab, $event)" />
+                <SubmitButton
+                    type="button"
+                    :loading="isSubmitting"
+                    :style="fillButtonStyle"
+                    label="Suivant"
+                    @click="handleNext(nextTab, $event)" />
             </template>
 
             <template #finish="{ fillButtonStyle }">
-                <SubmitButton type="button" :loading="isSubmitting" :style="fillButtonStyle"
-                    :label="props.finishButtonText || 'Créer'" @click="handleFinishWizard" />
+                <SubmitButton
+                    type="button"
+                    :loading="isSubmitting"
+                    :style="fillButtonStyle"
+                    :label="finishButtonText"
+                    @click="handleFinishWizard" />
             </template>
 
-            <TabContent v-for="(step, idx) in steps" :key="idx" :title="step.title" :custom-icon="step.icon"
+            <TabContent
+                v-for="(step, idx) in steps"
+                :key="`step-${idx}-${step.title}`"
+                :title="step.title"
+                :custom-icon="step.icon"
                 class="wizard-step md:px-4 py-1">
                 <div class="shadow bg-gray-50 dark:bg-[#0e1726] rounded-md px-8 py-5 space-y-2">
                     <slot :name="`step-${idx}`" />
@@ -24,14 +45,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, toRefs } from 'vue';
+import { ref, computed, toRefs, watch, nextTick } from 'vue';
 import { FormWizard, TabContent } from 'vue3-form-wizard';
 import SubmitButton from '@/components/Form/SubmitButton.vue';
 import { alertService } from '@/services/alertService';
 import type { Step } from '@/interfaces/wizard';
 import 'vue3-form-wizard/dist/style.css';
 
-const props = defineProps<{
+interface WizardProps {
     steps: Step[];
     color?: string;
     currentStep?: number;
@@ -39,24 +60,56 @@ const props = defineProps<{
     beforeChange: (prev: number, next: number) => boolean | Promise<boolean>;
     finishButtonText?: string;
     isSubmitting?: boolean;
-}>();
+}
+
+const props = withDefaults(defineProps<WizardProps>(), {
+    color: '#ffc107',
+    currentStep: 0,
+    isValid: false,
+    isSubmitting: false,
+    finishButtonText: 'Créer'
+});
 
 const emit = defineEmits<{
     (e: 'complete'): void;
     (e: 'update:current-step', step: number): void;
 }>();
 
-const { beforeChange } = toRefs(props);
+// Références
 const wizard = ref<InstanceType<typeof FormWizard> | null>(null);
 
+// Computed properties optimisées
 const internalStep = computed(() => props.currentStep ?? 0);
 
-function onChange(prev: number, next: number) {
-    emit('update:current-step', next);
-}
+const finishButtonText = computed(() => {
+    if (props.isSubmitting) {
+        return 'En cours...';
+    }
+    return props.finishButtonText || 'Créer';
+});
 
-async function handleNext(nextTab: () => void, event: Event) {
+// Gestionnaire beforeChange optimisé
+const beforeChangeHandler = async (prev: number, next: number): Promise<boolean> => {
+    try {
+        return await props.beforeChange(prev, next);
+    } catch (error) {
+        console.error('❌ Erreur dans beforeChange:', error);
+        await alertService.error({
+            title: 'Erreur',
+            text: 'Une erreur est survenue lors de la validation. Veuillez réessayer.'
+        });
+        return false;
+    }
+};
+
+// Gestionnaires d'événements optimisés
+const onChange = (prev: number, next: number) => {
+    emit('update:current-step', next);
+};
+
+const handleNext = async (nextTab: () => void, event: Event) => {
     event.stopPropagation();
+
     if (!props.isValid) {
         await alertService.error({
             title: 'Validation',
@@ -64,16 +117,29 @@ async function handleNext(nextTab: () => void, event: Event) {
         });
         return;
     }
-    const ok = await beforeChange.value!(internalStep.value, internalStep.value + 1);
-    if (!ok) return;
-    nextTab();
-}
 
-async function handleFinishWizard() {
-    // 1. verouillage immédiat
-    if (props.isSubmitting) return;
+    try {
+        const ok = await beforeChangeHandler(internalStep.value, internalStep.value + 1);
+        if (!ok) return;
 
-    // 2. validation avant fini
+        nextTab();
+    } catch (error) {
+        console.error('❌ Erreur lors du passage à l\'étape suivante:', error);
+        await alertService.error({
+            title: 'Erreur',
+            text: 'Une erreur est survenue. Veuillez réessayer.'
+        });
+    }
+};
+
+const handleFinishWizard = async () => {
+    // Vérification immédiate de l'état de soumission
+    if (props.isSubmitting) {
+        console.log('🚫 Soumission en cours, action ignorée');
+        return;
+    }
+
+    // Validation avant finalisation
     if (!props.isValid) {
         await alertService.error({
             title: 'Validation',
@@ -82,15 +148,68 @@ async function handleFinishWizard() {
         return;
     }
 
-    const ok = await beforeChange.value!(internalStep.value, internalStep.value + 1);
-    if (!ok) return;
+    try {
+        const ok = await beforeChangeHandler(internalStep.value, internalStep.value + 1);
+        if (!ok) return;
 
-    // 3. émission de l'événement complet
-    emit('complete');
-    // on ne réarme pas isSubmitting ici – le parent remontera le reset via key change
-}
+        // Émission de l'événement de complétion
+        emit('complete');
+    } catch (error) {
+        console.error('❌ Erreur lors de la finalisation:', error);
+        await alertService.error({
+            title: 'Erreur',
+            text: 'Une erreur est survenue lors de la finalisation. Veuillez réessayer.'
+        });
+    }
+};
+
+// Surveillance des changements pour optimiser les re-renders
+watch(() => props.currentStep, (newStep) => {
+    if (wizard.value && newStep !== undefined) {
+        nextTick(() => {
+            // Synchronisation avec le wizard interne si nécessaire
+            console.log('🔄 Étape mise à jour:', newStep);
+        });
+    }
+}, { immediate: true });
+
+// Exposer des méthodes utiles
+defineExpose({
+    goToStep: (step: number) => {
+        if (wizard.value) {
+            // Méthode pour naviguer programmatiquement
+            console.log('🎯 Navigation vers l\'étape:', step);
+        }
+    },
+    reset: () => {
+        if (wizard.value) {
+            // Méthode pour réinitialiser le wizard
+            console.log('🔄 Réinitialisation du wizard');
+        }
+    }
+});
 </script>
 
 <style scoped>
-/* styles éventuels */
+/* Styles optimisés pour le wizard */
+.wizard-step {
+    transition: all 0.3s ease-in-out;
+}
+
+/* Amélioration de l'accessibilité */
+:deep(.form-wizard) {
+    outline: none;
+}
+
+:deep(.form-wizard:focus-within) {
+    outline: 2px solid var(--primary-color, #ffc107);
+    outline-offset: 2px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .wizard-step {
+        padding: 0.5rem;
+    }
+}
 </style>

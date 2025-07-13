@@ -1,37 +1,38 @@
-import type { Component } from 'vue';
-
-/**
- * Represents a store with planning management data
- */
+// Interfaces pour le planning management
 export interface Store {
-  id: number;
-  store_name: string;
-  teams_count: number;
-  jobs_count: number;
-  [key: string]: unknown;
+    id: number;
+    store_name: string;
+    teams_count: number;
+    jobs_count: number;
+    reference: string;
 }
 
-/**
- * Action available for each planning item
- */
 export interface PlanningAction {
-  label: string;
-  icon?: Component;
-  handler: (store: Store) => void;
-}
-// src/interfaces/planningManagement.ts
-export interface Job {
-  id: number;
-  name: string;
-  status: string;
+    label: string;
+    icon: any;
+    handler: (store: Store) => void;
 }
 
-/**
- * Available display modes
- */
-export interface ViewMode {
-  table: 'table';
-  grid: 'grid';
+export type ViewModeType = 'table' | 'grid';
+
+export interface GridDataItem {
+    id: number;
+    store_name: string;
+    teams_count: number;
+    jobs_count: number;
+    reference: string;
 }
 
-export type ViewModeType = keyof ViewMode;
+export interface Action<T> {
+    label: string;
+    icon: any;
+    handler: (item: T) => void;
+    variant?: 'primary' | 'secondary' | 'danger';
+}
+
+export interface ActionConfig {
+    label: string;
+    icon: any;
+    onClick: (row: Record<string, unknown>) => void;
+    color: 'primary' | 'secondary' | 'danger';
+}

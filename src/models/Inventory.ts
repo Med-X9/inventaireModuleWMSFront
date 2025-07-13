@@ -50,9 +50,10 @@ export interface InventoryTable extends TableRow {
     label: string;
     date: string;
     status: string;
+    inventory_type: string;
     en_preparation_status_date: string | null;
     en_realisation_status_date: string | null;
-    ternime_status_date: string | null;
+    termine_status_date: string | null;
     cloture_status_date: string | null;
     account_id: number;
     account_name: string;
@@ -63,6 +64,7 @@ export interface InventoryTable extends TableRow {
 export interface CreateInventoryRequest {
     label: string;
     date: string;
+    inventory_type: string;
     account_id: number;
     warehouse: InventoryWarehouse[];
     comptages: CreateCountRequest[];

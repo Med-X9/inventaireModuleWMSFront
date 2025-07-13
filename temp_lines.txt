@@ -1,0 +1,8 @@
+﻿// Fonction pour formater les dates pour l'input
+const formatDateForInput = (dateValue: any) => {
+    if (!dateValue) return ''
+
+    try {
+        const date = new Date(dateValue)
+        if (isNaN(date.getTime())) return ''
+        return date.toISOString().split('T')[0]

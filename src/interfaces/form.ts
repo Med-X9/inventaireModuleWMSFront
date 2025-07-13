@@ -7,7 +7,8 @@ export interface FieldConfig {
     searchable?: boolean;
     clearable?: boolean;
     props?: Record<string, unknown>;
-    validators?: Array<{ key: string; fn: (value: unknown) => boolean; msg: string }>;
+    validators?: Array<{ fn: (value: unknown) => boolean; msg: string }>;
+    required?: boolean;
     min?: string;
     max?: string;
     defaultDate?: string;

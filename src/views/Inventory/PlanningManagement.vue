@@ -1,7 +1,19 @@
 <template>
     <div>
+        <!-- En-tête moderne -->
+        <div class="flex flex-col sm:flex-row justify-between items-center mb-8 pb-4 border-b border-gray-200">
+            <h1 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <IconCalendar class="w-7 h-7 text-yellow-400" />
+                Planning des magasins
+            </h1>
+            <ToggleButtons v-model="viewMode" :options="viewOptions" class="mt-4 sm:mt-0" />
+        </div>
+
+        <!-- Raccourci vers le détail de l'inventaire -->
         <div class="flex justify-end mb-6">
-            <ToggleButtons v-model="viewMode" :options="viewOptions" />
+            <button class="shortcut-detail-btn flex items-center gap-2" @click="goToInventoryDetail">
+                <IconEye class="w-5 h-5" />
+            </button>
         </div>
 
         <!-- Chargement de l'inventaire -->
@@ -38,52 +50,57 @@
 
         <!-- Contenu principal -->
         <template v-else>
-            <div v-if="viewMode === 'table'" class="panel py-4 animate-fade-in">
-                <DataTable :columns="columns" :rowDataProp="stores" :actions="actions" pagination enableFiltering
-                    :showColumnSelector="false" storageKey="planning_table" />
+            <div v-if="viewMode === 'table'" class="panel py-4 animate-fade-in bg-white rounded-2xl shadow-md border border-gray-100">
+                <DataTableNew
+                    :columns="adaptedColumns"
+                    :rowDataProp="stores"
+                    :actions="adaptedActions"
+                    :pagination="true"
+                    :enableFiltering="true"
+                    :rowSelection="true"
+                    :inlineEditing="false"
+                    :exportTitle="'Planning Management'"
+                    :showColumnSelector="false"
+                    storageKey="planning_table"
+                />
             </div>
-            <GridView v-else class="panel animate-fade-in border border-white-dark/20" :data="stores"
-                titleField="store_name" :selectedItem="selectedStore" :onItemClick="handleItemClick" enableStats :stats="[
-                    { label: 'Équipes', value: 'teams_count', suffix: 'équipes' },
-                    { label: 'Jobs', value: 'jobs_count', suffix: 'jobs' }
-                ]" enableActions :actions="gridActions" showActionsIcon @actionsClick="handleActionsClick"
-                :itemsPerPage="6" enablePagination>
+            <GridView v-else class="panel animate-fade-in border border-white-dark/20 bg-white rounded-2xl shadow-md"
+                :data="stores"
+                titleField="store_name"
+                :selectedItem="selectedStore"
+                :onItemClick="adaptedHandleItemClick"
+                enableStats
+                :stats="[]"
+                enableActions
+                :actions="adaptedGridActions"
+                showActionsIcon
+                @actionsClick="adaptedHandleActionsClick"
+                :itemsPerPage="6"
+                enablePagination>
                 <template #header>
                     <h2 class="text-xl font-semibold mb-6 text-gray-800">Magasins</h2>
                 </template>
             </GridView>
         </template>
 
-        <Teleport to="body">
-            <div v-if="showActionsMenu" ref="menuRef" :style="menuStyle" class="fixed z-50">
-                <div class="bg-white dark:bg-gray-800 rounded-md shadow-lg ring-1 ring-black/10 py-1 min-w-[160px]">
-                    <button @click="handleEditItem(selectedActionItem)"
-                        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100">Modifier</button>
-                    <button @click="handleDeleteItem(selectedActionItem)"
-                        class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-100">Supprimer</button>
-                </div>
-            </div>
-        </Teleport>
+        <!-- Suppression du menu contextuel car les fonctions ne sont pas implémentées -->
     </div>
 </template>
 
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import DataTable from '@/components/DataTable/DataTable.vue';
+import DataTableNew from '@/components/DataTable/DataTableNew.vue';
 import ToggleButtons from '@/components/ToggleButtons/ToggleButtons.vue';
-import GridView, {
-    type GridDataItem,
-    type Action
-} from '@/components/GridView/GridView.vue';
-import IconUser from '@/components/icon/icon-user.vue';
+import GridView from '@/components/GridView/GridView.vue';
 import IconCalendar from '@/components/icon/icon-calendar.vue';
 import IconListCheck from '@/components/icon/icon-list-check.vue';
 import IconLayoutGrid from '@/components/icon/icon-layout-grid.vue';
+import IconEye from '@/components/icon/icon-eye.vue';
 import { useRouter, useRoute } from 'vue-router';
-import { usePlanningManagement } from '@/composables/usePlanningManagement';
 import { useInventoryStore } from '@/stores/inventory';
-import type { Store } from '@/interfaces/planningManagement';
+import type { Store, GridDataItem } from '@/interfaces/planningManagement';
+import { usePlanningManagement } from '@/composables/usePlanningManagement';
 
 // Props
 interface Props {
@@ -95,19 +112,92 @@ const router = useRouter();
 const route = useRoute();
 const inventoryStore = useInventoryStore();
 
+// Utiliser le nouveau composable usePlanning
 const {
-    viewMode,
-    selectedStore,
+    // États du planning management
     stores,
+    selectedStore,
     loading,
-    columns,
-    actions,
     inventoryStatus,
+    inventoryReference,
+
+    // Colonnes et actions
+    actions,
+
+    // Fonctions
     fetchStores,
     selectStore,
     setInventoryStatus,
-    setInventoryReference
+    setInventoryReference,
 } = usePlanningManagement();
+
+// Ajouter viewMode manuellement car il n'est pas dans usePlanning
+const viewMode = ref<'table' | 'grid'>('table');
+
+// Adapter les colonnes pour supprimer les propriétés non reconnues
+const adaptedColumns = computed(() => [
+    {
+        field: 'store_name',
+        headerName: 'Nom du magasin',
+        sortable: true,
+        width: 200,
+        editable: false
+    },
+    {
+        field: 'teams_count',
+        headerName: 'Équipes',
+        sortable: true,
+        width: 100,
+        editable: false
+    },
+    {
+        field: 'jobs_count',
+        headerName: 'Jobs',
+        sortable: true,
+        width: 100,
+        editable: false
+    },
+    {
+        field: 'reference',
+        headerName: 'Référence',
+        sortable: true,
+        width: 150,
+        editable: false
+    }
+]);
+
+// Adapter les actions pour DataTableNew
+const adaptedActions = computed(() =>
+    actions.value.map(action => ({
+        label: action.label,
+        icon: action.icon,
+        onClick: (row: Record<string, unknown>) => action.handler(row as unknown as Store),
+        color: 'primary' as const
+    }))
+);
+
+// Adapter les actions pour GridView
+const adaptedGridActions = computed(() =>
+    actions.value.map(action => ({
+        label: action.label,
+        icon: action.icon,
+        handler: (item: any) => action.handler(item),
+        variant: 'primary' as const
+    }))
+);
+
+// Adapter le handler pour GridView
+const adaptedHandleItemClick = (item: any) => {
+    // This function is not directly used in the new usePlanningManagement,
+    // but keeping it for now as it might be used elsewhere or for future compatibility.
+    // The actual item click handling is now part of the actions.
+};
+
+const adaptedHandleActionsClick = (item: any, e: MouseEvent) => {
+    // This function is not directly used in the new usePlanningManagement,
+    // but keeping it for now as it might be used elsewhere or for future compatibility.
+    // The actual actions click handling is now part of the actions.
+};
 
 // Récupérer l'ID d'inventaire à partir de la référence
 const inventoryId = ref<number | null>(null);
@@ -163,107 +253,63 @@ const viewOptions = [
     { value: 'grid', icon: IconLayoutGrid }
 ];
 
-// Menu contextuel
-const showActionsMenu = ref(false);
-const selectedActionItem = ref<Store | null>(null);
-const menuPosition = ref({ x: 0, y: 0 });
-const menuRef = ref<HTMLElement | null>(null);
-
-const menuStyle = computed(() => {
-    const pad = 10;
-    let { x, y } = menuPosition.value;
-    if (menuRef.value) {
-        const r = menuRef.value.getBoundingClientRect();
-        const W = window.innerWidth, H = window.innerHeight;
-        x = Math.min(Math.max(x, pad), W - r.width - pad);
-        y = Math.min(Math.max(y, pad), H - r.height - pad);
-    }
-    return { top: `${y}px`, left: `${x}px` };
-});
-
-function isStore(item: GridDataItem): item is Store {
-    return (
-        typeof item.id === 'number' &&
-        typeof item.store_name === 'string'
-    );
-}
-
-const handleItemClick = (item: GridDataItem) => {
-    if (isStore(item)) selectStore(item);
+const goToInventoryDetail = () => {
+    router.push({ name: 'inventory-results', params: { reference: props.reference } });
 };
-
-const handlePlanningAction = (item: GridDataItem) => {
-    if (isStore(item)) actions.value[0]?.handler(item);
-};
-
-const handleAssignTeams = (item: GridDataItem) => {
-    if (!isStore(item)) return;
-    const a = actions.value.find(act =>
-        typeof act.label === 'string' &&
-        (act.label.includes('Affecter') || act.label.includes('Transférer'))
-    );
-    a?.handler(item);
-};
-
-const handleActionsClick = (item: GridDataItem, e: MouseEvent) => {
-    if (!isStore(item)) return;
-    selectedActionItem.value = item;
-    showActionsMenu.value = true;
-    const r = (e.target as HTMLElement).getBoundingClientRect();
-    menuPosition.value = { x: r.left, y: r.bottom + 5 };
-    setTimeout(() => window.addEventListener('click', closeActionsMenu), 0);
-};
-
-const closeActionsMenu = (e?: MouseEvent) => {
-    if (e && menuRef.value?.contains(e.target as Node)) return;
-    showActionsMenu.value = false;
-    selectedActionItem.value = null;
-    window.removeEventListener('click', closeActionsMenu);
-};
-
-const handleEditItem = (item: Store | null) => {
-    if (item) {
-        closeActionsMenu();
-        // Rediriger vers la page d'édition de l'inventaire
-        router.push({
-            name: 'inventory-edit',
-            params: { reference: props.reference }
-        });
-    }
-};
-const handleDeleteItem = (item: Store | null) => {
-    if (item) { closeActionsMenu() }
-};
-
-// ─── gridActions : on utilise le type Action<GridDataItem> ───
-const gridActions = computed<Action<GridDataItem>[]>(() => {
-    const list: Action<GridDataItem>[] = [];
-
-    if (inventoryStatus.value !== 'EN REALISATION') {
-        list.push({
-            label: 'Planifier',
-            icon: IconCalendar,
-            handler: handlePlanningAction,
-            variant: 'primary'
-        });
-    }
-
-    list.push({
-        label: inventoryStatus.value === 'EN REALISATION' ? 'Transférer' : 'Affecter',
-        icon: IconUser,
-        handler: handleAssignTeams,
-        variant: 'primary'
-    });
-
-    return list;
-});
-
-onUnmounted(() => window.removeEventListener('click', closeActionsMenu));
 </script>
 
 
 
 <style scoped>
+/* Modernisation UI */
+.panel {
+    background: #fff;
+    border-radius: 1.5rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+    border: 1px solid #f3f4f6;
+    padding: 2rem 1.5rem;
+}
+
+.DataTableNew__row:hover, .grid-card:hover {
+    background: #fef9c3;
+    box-shadow: 0 2px 12px rgba(250,204,21,0.08);
+    transition: all 0.2s;
+}
+
+.btn-outline-primary {
+    border: 1px solid #FACC15;
+    color: #FACC15;
+    background: #fff;
+    border-radius: 8px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+.btn-outline-primary:hover {
+    background: #fef9c3;
+    color: #b45309;
+    border-color: #eab308;
+}
+
+.shortcut-detail-btn {
+    background: linear-gradient(90deg, #FACC15 0%, #EAB308 100%);
+    color: #1e293b;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    padding: 0.6rem 1.3rem;
+    font-size: 1rem;
+    box-shadow: 0 2px 8px rgba(250,204,21,0.10);
+    transition: all 0.2s;
+    cursor: pointer;
+}
+.shortcut-detail-btn:hover {
+    background: linear-gradient(90deg, #fde047 0%, #facc15 100%);
+    color: #b45309;
+    box-shadow: 0 4px 16px rgba(250,204,21,0.18);
+    transform: translateY(-2px) scale(1.03);
+}
+
 .animate-fade-in {
     animation: fadeIn 0.4s ease;
 }

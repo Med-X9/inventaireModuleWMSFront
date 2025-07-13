@@ -1,62 +1,62 @@
 <template>
-    <div class="select-field-wrapper">
-        <label v-if="label" :for="fieldId" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            <span class="flex items-center gap-1">
-                {{ label }}
-                <span v-if="required" class="text-red-500">*</span>
-                <Tooltip v-if="tooltip" :text="tooltip" position="top" :delay="300">
-                    <svg class="w-3 h-3 text-gray-400 cursor-help" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                </Tooltip>
-            </span>
-        </label>
-
-        <v-select :id="fieldId" :model-value="selected" :options="formattedOptions" :multiple="multiple"
-            :searchable="searchable" :clearable="clearable" :placeholder="placeholder" :disabled="disabled"
-            :loading="loading" label="label" :reduce="(option) => option.value" :class="[
-                'vs-custom',
+    <div>
+        <v-select :key="`v-select-${fieldId}-${JSON.stringify(selected)}`" :id="fieldId" :model-value="selected"
+            :options="formattedOptions" :multiple="multiple" :searchable="searchable" :clearable="clearable"
+            :placeholder="placeholder" :disabled="disabled" :loading="loading" label="label"
+            :reduce="(option: any) => option.value" :class="[
+                'form-input',
+                'px-4',
+                'py-3',
+                'bg-white',
+                'border',
+                'border-gray-200',
+                'rounded-lg',
+                'transition-all',
+                'duration-200',
+                'focus:border-primary',
+                'focus:ring-2',
+                'focus:ring-primary',
+                'focus:ring-opacity-10',
+                'outline-none',
                 compact ? 'vs-compact' : '',
                 multiple ? 'vs-multi' : 'vs-single',
                 searchable ? 'vs-search-enhanced' : '',
                 error ? 'vs-error' : '',
                 'dark'
-            ]" :filter="customFilter" @update:model-value="$emit('update:modelValue', $event)"
-            @search="$emit('search', $event)" @open="$emit('open')" @close="$emit('close')">
+            ]" :filter="customFilter" @update:model-value="handleModelValueUpdate" @search="$emit('search', $event)"
+            @open="handleOpen" @close="handleClose">
+
             <!-- Custom option template with tooltip support -->
-            <template #option="slotProps: any">
-                <div v-if="slotProps?.option" class="vs-option-with-tooltip relative w-full">
+            <template #option="{ option }">
+                <div v-if="option" class="vs-option-with-tooltip relative w-full">
                     <div class="vs-option-content flex items-center justify-between w-full">
-                        <span>{{ slotProps.option.label }}</span>
-                        <svg v-if="slotProps.option.tooltip"
-                            class="w-3 h-3 text-gray-400 cursor-help vs-tooltip-trigger ml-2" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24"
-                            @mouseenter="handleMouseEnter($event, slotProps.option)" @mouseleave="handleMouseLeave">
+                        <span>{{ option.label }}</span>
+                        <svg v-if="option.tooltip" class="w-3 h-3 text-gray-400 cursor-help vs-tooltip-trigger ml-2"
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            @mouseenter="handleMouseEnter($event, option)" @mouseleave="handleMouseLeave">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
 
                     <!-- Tooltip affiché sous le label, pleine largeur -->
-                    <div v-if="showTooltip === String(slotProps.option.value) && slotProps.option.tooltip"
-                        class="tooltip-content w-full mt-1 p-1.5 bg-primary text-white text-xs rounded  border border-primary z-50 absolute left-0"
+                    <div v-if="showTooltip === String(option.value) && option.tooltip"
+                        class="tooltip-content w-full mt-1 p-1.5 bg-primary text-white text-xs rounded border border-primary z-50 absolute left-0"
                         :style="{ top: '100%' }">
-                        {{ slotProps.option.tooltip }}
+                        {{ option.tooltip }}
                     </div>
                 </div>
             </template>
 
             <!-- Template pour afficher les valeurs sélectionnées -->
-            <template #selected-option="slotProps: any">
-                <span v-if="slotProps?.option">{{ slotProps.option.label }}</span>
+            <template #selected-option="{ option }">
+                <span v-if="option">{{ option.label }}</span>
             </template>
 
             <!-- Template pour afficher la valeur sélectionnée dans les selects simples -->
-            <template #value="slotProps: any">
-                <span v-if="slotProps?.option">
-                    {{ typeof slotProps.option === 'object' ? slotProps.option.label : slotProps.option }}
+            <template #value="{ option }">
+                <span v-if="option">
+                    {{ typeof option === 'object' ? option.label : option }}
                 </span>
             </template>
 
@@ -68,8 +68,8 @@
             </template>
 
             <!-- Custom search input template for enhanced search -->
-            <template v-if="enhancedSearch" #search="slotProps: any">
-                <input v-bind="slotProps.attributes" v-on="slotProps.events" class="vs-search-input"
+            <template v-if="enhancedSearch" #search="{ attributes, events }">
+                <input v-bind="attributes" v-on="events" class="vs-search-input"
                     :placeholder="searchPlaceholder || 'Rechercher...'" />
             </template>
         </v-select>
@@ -87,14 +87,41 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, nextTick, watch } from 'vue';
 import vSelect from 'vue-select';
 import Tooltip from '@/components/Tooltip.vue';
 import 'vue-select/dist/vue-select.css';
 import '@/assets/css/select2.css';
-import type { SelectOption, SelectFieldProps, SelectFieldEmits } from '@/interfaces/form';
+import type { SelectOption, FieldConfig } from '@/interfaces/form';
 
-const props = withDefaults(defineProps<SelectFieldProps>(), {
+// Props pour compatibilité avec FormBuilder
+const props = withDefaults(defineProps<{
+    // Props FormBuilder
+    field?: FieldConfig;
+    value?: unknown;
+    error?: boolean;
+    errorMessage?: string;
+    disabled?: boolean;
+
+    // Props SelectField originales
+    modelValue?: string | number | string[] | number[] | null;
+    selected?: string | number | string[] | number[] | null;
+    options?: Array<string | SelectOption>;
+    label?: string;
+    placeholder?: string;
+    searchable?: boolean;
+    clearable?: boolean;
+    multiple?: boolean;
+    loading?: boolean;
+    required?: boolean;
+    helperText?: string;
+    tooltip?: string;
+    compact?: boolean;
+    enhancedSearch?: boolean;
+    searchPlaceholder?: string;
+    noOptionsText?: string;
+    customFilter?: (option: SelectOption, label: string, search: string) => boolean;
+}>(), {
     searchable: true,
     clearable: true,
     multiple: false,
@@ -107,24 +134,76 @@ const props = withDefaults(defineProps<SelectFieldProps>(), {
     customFilter: undefined
 });
 
-const emit = defineEmits<SelectFieldEmits>();
+// Émettre les événements
+const emit = defineEmits<{
+    'update:value': [value: unknown];
+    'change': [];
+    'update:modelValue': [value: string | number | string[] | number[] | null];
+    'search': [query: string];
+    'open': [];
+    'close': [];
+}>();
 
-// Generate unique field ID
+// Générer un ID unique pour le champ
 const fieldId = ref(`select-${Math.random().toString(36).substr(2, 9)}`);
 
-// Tooltip state
+// État du tooltip
 const showTooltip = ref<string | null>(null);
 
-// Format options consistently
+// Formater les options de manière cohérente
 const formattedOptions = computed((): SelectOption[] => {
-    return props.options.map(opt =>
+    // Si on a un field avec des options, les utiliser
+    if (props.field?.options) {
+        const options = props.field.options.map(opt =>
+            typeof opt === 'string' ? { label: opt, value: opt } : opt
+        );
+        return options;
+    }
+    // Sinon utiliser les options directes
+    const options = (props.options || []).map(opt =>
         typeof opt === 'string' ? { label: opt, value: opt } : opt
     );
+    return options;
 });
 
-// Use selected prop if provided, otherwise fall back to modelValue
+// Watcher pour forcer la mise à jour quand les options changent
+watch(() => props.field?.options, () => {
+    // Forcer un recalcul
+    nextTick(() => {
+        // Recalcul automatique
+    });
+}, { deep: true });
+
+// Watcher pour les options directes
+watch(() => props.options, () => {
+    nextTick(() => {
+        // Recalcul automatique
+    });
+}, { deep: true });
+
+// Utiliser la prop value si fournie (FormBuilder), sinon utiliser selected ou modelValue
 const selected = computed(() => {
+    if (props.value !== undefined) {
+        return props.value;
+    }
     return props.selected !== undefined ? props.selected : props.modelValue;
+});
+
+// Extraire les propriétés du field pour la compatibilité avec FormBuilder
+const multiple = computed(() => {
+    return props.field?.multiple || props.multiple || false;
+});
+
+const searchable = computed(() => {
+    return props.field?.searchable || props.searchable || true;
+});
+
+const clearable = computed(() => {
+    return props.field?.clearable || props.clearable || true;
+});
+
+const placeholder = computed(() => {
+    return props.field?.props?.placeholder || props.placeholder || '';
 });
 
 // Fonction pour obtenir le label à partir d'une value
@@ -141,6 +220,27 @@ const handleMouseEnter = (event: MouseEvent, option: SelectOption) => {
 const handleMouseLeave = () => {
     showTooltip.value = null;
 };
+
+// Gestion sécurisée des événements
+const handleModelValueUpdate = (value: any) => {
+    console.log('🔍 SelectField - Valeur reçue:', value, typeof value, Array.isArray(value));
+    console.log('🔍 SelectField - Multiple:', multiple.value);
+
+    // Émettre pour FormBuilder
+    emit('update:value', value);
+    emit('change');
+
+    // Émettre pour compatibilité avec v-select
+    emit('update:modelValue', value);
+};
+
+const handleOpen = () => {
+    emit('open');
+};
+
+const handleClose = () => {
+    emit('close');
+};
 </script>
 
 <style scoped>
@@ -156,6 +256,12 @@ const handleMouseLeave = () => {
     z-index: 1;
     width: 100%;
 }
+
+.v-select {
+    box-shadow: none !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+  }
 
 /* Tooltip pleine largeur sous l'option */
 .tooltip-content {

@@ -49,8 +49,8 @@ onMounted(async () => {
     await fetchJobs();
 });
 
-// Surveiller les changements dans le store
-watch(jobs, (newJobs) => {
-    console.log('📊 Jobs mis à jour:', newJobs.length, 'éléments');
-}, { deep: true });
+// Supprimer le watcher qui peut causer des boucles infinies
+// watch(jobs, (newJobs) => {
+//     console.log('📊 Jobs mis à jour:', newJobs.length, 'éléments');
+// }, { deep: true });
 </script>

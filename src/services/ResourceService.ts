@@ -15,10 +15,10 @@ export class ResourceService {
     /**
      * Récupérer toutes les ressources avec pagination
      */
-    static async getResources(page: number = 1, limit: number = 10): Promise<ResourcesResponse> {
+    static async getResources(): Promise<ResourcesResponse> {
         try {
             const response: AxiosResponse<ResourcesResponse> = await axiosInstance.get(
-                `${API.endpoints.resource.base}?page=${page}&limit=${limit}`
+                `${API.endpoints.resource.base}`
             );
             return response.data;
         } catch (error) {

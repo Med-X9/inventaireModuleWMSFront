@@ -16,6 +16,17 @@ export const useInventoryStore = defineStore('inventory', () => {
     const loading = ref(false);
     const error = ref<string | null>(null);
 
+    // États pour la pagination
+    const totalItems = ref(0);
+    const totalPages = ref(1);
+    const currentPage = ref(1);
+    const pageSize = ref(10);
+
+    // États pour le tri et le filtrage
+    const currentSortModel = ref<Array<{ colId: string; sort: 'asc' | 'desc' }>>([]);
+    const currentFilterModel = ref<Record<string, { filter: string }>>({});
+    const currentGlobalSearch = ref<string>('');
+
     // Getters
     const getCurrentInventory = computed(() => currentInventory.value);
     const getCurrentInventoryDetail = computed(() => currentInventoryDetail.value);
@@ -24,111 +35,159 @@ export const useInventoryStore = defineStore('inventory', () => {
 
     // Actions
     const fetchInventories = async (params?: {
-        sort?: any[];
-        filter?: any;
+        sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>;
+        filter?: Record<string, { filter: string }>;
         page?: number;
         pageSize?: number;
+        globalSearch?: string;
     }) => {
         loading.value = true;
         error.value = null;
         try {
+            // Mettre à jour les modèles actuels si fournis
+            if (params?.sort) currentSortModel.value = params.sort;
+            if (params?.filter) currentFilterModel.value = params.filter;
+            if (params?.globalSearch !== undefined) currentGlobalSearch.value = params.globalSearch;
+
             // Construire les paramètres de requête pour Django
             const queryParams: any = {};
 
-            if (params?.sort && params.sort.length > 0) {
-                // Convertir le modèle de tri AG Grid (getColumnState) en format Django REST Framework
-                const sortParams = params.sort.map(sort => {
+            // Gestion du tri
+            if (currentSortModel.value.length > 0) {
+                const sortParams = currentSortModel.value.map(sort => {
                     const field = sort.colId;
                     const direction = sort.sort === 'asc' ? field : `-${field}`;
                     return direction;
                 });
-                // Django REST Framework utilise un seul paramètre ordering
                 queryParams.ordering = sortParams.join(',');
             }
 
-            if (params?.filter) {
-                Object.keys(params.filter).forEach(field => {
-                    const filter = params.filter[field];
-                    if (filter) {
-                        // Pour les filtres de type number/date
-                        if (filter.type) {
-                            let op: string | null = '';
-                            switch (filter.type) {
-                                case 'equals':
-                                case 'exact':
-                                    op = '';
-                                    break;
-                                case 'greaterThan':
-                                    op = '__gt';
-                                    break;
-                                case 'greaterThanOrEqual':
-                                    op = '__gte';
-                                    break;
-                                case 'lessThan':
-                                    op = '__lt';
-                                    break;
-                                case 'lessThanOrEqual':
-                                    op = '__lte';
-                                    break;
-                                case 'inRange':
-                                    // Pour les dates
-                                    if (filter.dateFrom !== undefined && filter.dateFrom !== null && filter.dateFrom !== '') {
-                                        queryParams[`${field}__gte`] = filter.dateFrom;
-                                    }
-                                    if (filter.dateTo !== undefined && filter.dateTo !== null && filter.dateTo !== '') {
-                                        queryParams[`${field}__lte`] = filter.dateTo;
-                                    }
-                                    // Pour les nombres
-                                    if (filter.filter !== undefined && filter.filter !== null && filter.filter !== '') {
-                                        queryParams[`${field}__gte`] = filter.filter;
-                                    }
-                                    if (filter.filterTo !== undefined && filter.filterTo !== null && filter.filterTo !== '') {
-                                        queryParams[`${field}__lte`] = filter.filterTo;
-                                    }
-                                    op = null; // On ne traite pas la suite
-                                    break;
-                                default:
-                                    op = '';
-                            }                            // Pour les dates, AG Grid utilise dateFrom
-
-                            const value = filter.filter ?? filter.dateFrom;
-                            if (op !== null && value !== undefined && value !== null && value !== '') {
-                                queryParams[`${field}${op}`] = value;
-                            }
-                        } else if (filter.filter) {
-                            // Filtres texte classiques
-                            queryParams[field] = filter.filter;
-                        }
+            // Gestion du filtrage
+            if (currentFilterModel.value && Object.keys(currentFilterModel.value).length > 0) {
+                Object.keys(currentFilterModel.value).forEach(field => {
+                    const filter = currentFilterModel.value[field];
+                    if (filter && filter.filter) {
+                        queryParams[field] = filter.filter;
                     }
                 });
             }
 
-            if (params?.page) {
-                queryParams.page = params.page;
+            // Gestion de la recherche globale
+            if (currentGlobalSearch.value) {
+                queryParams.search = currentGlobalSearch.value;
             }
 
+            // Toujours mettre à jour pageSize AVANT le fetch
             if (params?.pageSize) {
+                pageSize.value = params.pageSize;
                 queryParams.page_size = params.pageSize;
             }
 
+            // On ne met à jour currentPage que si fourni, sinon on garde la valeur actuelle
+            if (params?.page) {
+                currentPage.value = params.page;
+                queryParams.page = params.page;
+            } else {
+                queryParams.page = currentPage.value;
+            }
 
-            // Construire l'URL pour l'affichage
-            const baseUrl = API.endpoints.inventory.base;
-            const queryString = new URLSearchParams(queryParams).toString();
-            const fullUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;
+            console.log('🔍 Paramètres de requête:', queryParams);
 
             const response: AxiosResponse<{ count: number; results: InventoryTable[]; next: string | null; previous: string | null }> = await InventoryService.getAll(queryParams);
 
-            // Extraire les données du champ 'results' de la réponse paginée
             const inventoryData = response.data.results || response.data;
-
             inventories.value = inventoryData;
+
+            // Mettre à jour la pagination
+            if (response.data.count !== undefined) {
+                totalItems.value = response.data.count;
+                // Utiliser le pageSize courant (celui envoyé à l'API)
+                const usedPageSize = params?.pageSize ?? pageSize.value;
+                totalPages.value = Math.max(1, Math.ceil(response.data.count / usedPageSize));
+                // Si la page demandée est hors limite, revenir à la dernière page existante
+                if (currentPage.value > totalPages.value) {
+                    currentPage.value = totalPages.value;
+                }
+                // Si la page demandée est < 1, revenir à la première page
+                if (currentPage.value < 1) {
+                    currentPage.value = 1;
+                }
+                // Log du calcul de pagination
+                console.log('[Pagination] totalItems:', totalItems.value, '| pageSize:', usedPageSize, '| totalPages:', totalPages.value, '| currentPage:', currentPage.value);
+            }
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erreur lors de la récupération des inventaires';
             throw err;
         } finally {
             loading.value = false;
         }
+    };
+
+    // Méthodes pour gérer le tri
+    const updateSortModel = (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }>) => {
+        currentSortModel.value = sortModel;
+        // Recharger les données avec le nouveau tri
+        return fetchInventories({
+            page: 1, // Retour à la première page lors d'un nouveau tri
+            pageSize: pageSize.value,
+            sort: sortModel,
+            filter: currentFilterModel.value,
+            globalSearch: currentGlobalSearch.value
+        });
+    };
+
+    // Méthodes pour gérer le filtrage
+    const updateFilterModel = (filterModel: Record<string, { filter: string }>) => {
+        currentFilterModel.value = filterModel;
+        // Recharger les données avec le nouveau filtre
+        return fetchInventories({
+            page: 1, // Retour à la première page lors d'un nouveau filtre
+            pageSize: pageSize.value,
+            sort: currentSortModel.value,
+            filter: filterModel,
+            globalSearch: currentGlobalSearch.value
+        });
+    };
+
+    // Méthodes pour gérer la recherche globale
+    const updateGlobalSearch = (searchTerm: string) => {
+        currentGlobalSearch.value = searchTerm;
+        // Recharger les données avec la nouvelle recherche
+        return fetchInventories({
+            page: 1, // Retour à la première page lors d'une nouvelle recherche
+            pageSize: pageSize.value,
+            sort: currentSortModel.value,
+            filter: currentFilterModel.value,
+            globalSearch: searchTerm
+        });
+    };
+
+    // Méthodes pour gérer la pagination
+    const updatePagination = (page: number, newPageSize?: number) => {
+        if (newPageSize) {
+            pageSize.value = newPageSize;
+        }
+        currentPage.value = page;
+        return fetchInventories({
+            page,
+            pageSize: newPageSize || pageSize.value,
+            sort: currentSortModel.value,
+            filter: currentFilterModel.value,
+            globalSearch: currentGlobalSearch.value
+        });
+    };
+
+    // Méthodes pour réinitialiser les filtres
+    const clearFilters = () => {
+        currentFilterModel.value = {};
+        currentGlobalSearch.value = '';
+        return fetchInventories({
+            page: 1,
+            pageSize: pageSize.value,
+            sort: currentSortModel.value,
+            filter: {},
+            globalSearch: ''
+        });
     };
 
     const fetchInventoryById = async (id: number | string) => {
@@ -257,6 +316,10 @@ export const useInventoryStore = defineStore('inventory', () => {
         currentInventoryDetail,
         loading,
         error,
+        totalItems,
+        totalPages,
+        currentPage,
+        pageSize,
 
         // Getters
         getCurrentInventory,
@@ -266,6 +329,11 @@ export const useInventoryStore = defineStore('inventory', () => {
 
         // Actions
         fetchInventories,
+        updateSortModel,
+        updateFilterModel,
+        updateGlobalSearch,
+        updatePagination,
+        clearFilters,
         fetchInventoryById,
         fetchInventoryDetail,
         createInventory,

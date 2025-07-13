@@ -52,16 +52,15 @@ export const useResourceStore = defineStore('resource', () => {
     };
 
     // Fetch all resources with pagination
-    const fetchResources = async (page: number = 1, limit: number = 10) => {
+    const fetchResources = async () => {
         try {
             setLoading(true);
             clearError();
 
-            const response = await ResourceService.getResources(page, limit);
-            resources.value = response.data;
-            totalCount.value = response.count;
-            currentPage.value = page;
-            itemsPerPage.value = limit;
+            const response = await ResourceService.getResources();
+            resources.value = response.data || response;
+
+            totalCount.value = response.count || response.data?.length || 0;
         } catch (err: any) {
             const errorMessage = err.response?.data?.message || 'Erreur lors de la récupération des ressources';
             setError(errorMessage);

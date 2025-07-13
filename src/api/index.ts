@@ -10,7 +10,9 @@ const API = {
         auth: {
             login: '/api/auth/login/',
             refresh: '/api/auth/login/refresh/',
-            logout: '/api/auth/logout/'
+            logout: '/api/auth/logout/',
+            verify: '/api/auth/verify/',
+            session:'/api/auth/mobile-users/'
         },
         inventory: {
             base: '/web/api/inventory/'
@@ -30,6 +32,7 @@ const API = {
         resource: {
             base: 'masterdata/api/ressources'
         },
+
         location: {
             base: '/masterdata/api/locations/'
         }

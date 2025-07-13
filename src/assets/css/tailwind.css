@@ -69,7 +69,7 @@
            checked:bg-primary checked:border-primary checked:text-white
            focus:ring-0 focus:outline-none transition-all duration-200;
   }
-  
+
   .radio-primary {
     @apply appearance-none w-4 h-4 border border-secondary rounded-full bg-white accent-primary
            checked:bg-primary checked:border-primary checked:text-white
@@ -95,7 +95,7 @@
   }
 
 
-  
+
 
     /* Panel */
     .panel {
@@ -541,7 +541,7 @@ hover:text-primary hover:before:!bg-primary ltr:before:mr-2 rtl:before:ml-2 dark
         @apply w-full;
     }
 
-    
+
     /* code hightlight */
     pre {
         direction: ltr;

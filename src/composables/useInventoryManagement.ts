@@ -1,119 +1,252 @@
-import { ref, markRaw, watch, computed } from 'vue'
+import { ref, markRaw, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import type { InventoryTable } from '@/models/Inventory'
-import type { DataTableColumn, ActionConfig } from '@/interfaces/dataTable'
-import { inventoryManagementService } from '../services/inventoryManagementService'
+import type { DataTableColumn, ActionConfig } from '@/types/dataTable'
 import { alertService } from '@/services/alertService'
 import { useInventoryStore } from '@/stores/inventory'
+import { useGenericDataTable } from '@/composables/useGenericDataTable'
+import type { DataTableParams } from '@/composables/useDataTableFilters'
 
-import IconEdit from '@/components/icon/icon-edit.vue'
-import IconTrashLines from '@/components/icon/icon-trash-lines.vue'
+// Import des icônes pour les actions
 import IconEye from '@/components/icon/icon-eye.vue'
-import IconCalendar from '@/components/icon/icon-calendar.vue'
-import IconSquareCheck from '@/components/icon/icon-square-check.vue'
+import IconEdit from '@/components/icon/icon-edit.vue'
+import IconTrash from '@/components/icon/icon-trash.vue'
 import IconUpload from '@/components/icon/icon-upload.vue'
+import IconCalendar from '@/components/icon/icon-calendar.vue'
+import IconCheck from '@/components/icon/icon-check.vue'
 
 export function useInventoryManagement() {
     const router = useRouter()
-    const inventoryStore = useInventoryStore();
+    const inventoryStore = useInventoryStore()
+
+    // Fonction de fetch spécifique pour les inventaires
+    const fetchInventories = async (params: DataTableParams): Promise<InventoryTable[]> => {
+        await inventoryStore.fetchInventories(params)
+        return inventoryStore.inventories
+    }
+
+    // Utiliser le composable générique
+    const dataTable = useGenericDataTable(fetchInventories, {
+        initialPageSize: 10,
+        initialPage: 1
+    })
 
     // ✅ Utilise un computed pour surveiller le store
-    const inventories = computed(() => inventoryStore.inventories);
-    const loading = inventoryStore.isLoading;
+    const inventories = computed(() => inventoryStore.inventories)
+    const loading = computed(() => inventoryStore.isLoading)
 
-    // États pour les paramètres de tri et filtre
-    const currentSortModel = ref<Array<{ colId: string; sort: 'asc' | 'desc' }>>([]);
-    const currentFilterModel = ref<Record<string, { filter: string }>>({});
-
-    // Charger les inventaires via store avec paramètres
-    const fetchInventories = async (params?: {
-        sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>;
-        filter?: Record<string, { filter: string }>;
-        page?: number;
-        pageSize?: number;
-    }) => {
-        try {
-            // Mettre à jour les modèles actuels si fournis
-            if (params?.sort) currentSortModel.value = params.sort;
-            if (params?.filter) currentFilterModel.value = params.filter;
-
-            await inventoryStore.fetchInventories(params);
-        } catch (err) {
-            console.error('Erreur chargement inventaires:', err);
-        }
-    };
-
-    // Handler pour les changements de pagination
-    const handlePaginationChanged = async ({ page, pageSize }: { page: number, pageSize: number }) => {
-        console.log('🔄 Pagination inventaires changée:', { page, pageSize });
-        await fetchInventories({
-            page,
-            pageSize,
-            sort: currentSortModel.value,
-            filter: currentFilterModel.value
-        });
-    };
-
-    // Handler pour les changements de tri
-    const handleSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }>) => {
-        currentSortModel.value = sortModel;
-        await fetchInventories({
-            sort: sortModel,
-            filter: currentFilterModel.value
-        });
-    };
-
-    // Handler pour les changements de filtre
-    const handleFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
-        currentFilterModel.value = filterModel;
-        await fetchInventories({
-            sort: currentSortModel.value,
-            filter: filterModel
-        });
-    };
+    // États pour la pagination côté serveur - utiliser les valeurs du store
+    const currentPage = computed(() => inventoryStore.currentPage)
+    const totalPages = computed(() => inventoryStore.totalPages)
+    const totalItems = computed(() => inventoryStore.totalItems)
 
     const columns: DataTableColumn<InventoryTable>[] = [
-        { headerName: 'ID', field: 'id', sortable: true, filter: 'agNumberColumnFilter', description: 'Identifiant' },
-        { headerName: 'Référence', field: 'reference', sortable: true, filter: 'agTextColumnFilter', description: 'Référence unique' },
-        { headerName: 'Libellé', field: 'label', sortable: true, filter: 'agTextColumnFilter', description: 'Libellé' },
-        { headerName: 'Date', field: 'date', sortable: true, filter: 'agDateColumnFilter', description: 'Date inventaire' },
         {
-            headerName: 'Status',
+            headerName: 'ID',
+            field: 'id',
+            sortable: true,
+            dataType: 'number',
+            filterable: true,
+            width: 80,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-info',
+            description: 'Identifiant'
+        },
+        {
+            headerName: 'Référence',
+            field: 'reference',
+            sortable: true,
+            dataType: 'text',
+            filterable: true,
+            width: 150,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            hide: true,
+            icon: 'icon-search',
+            description: 'Référence unique'
+        },
+        {
+            headerName: 'Libellé',
+            field: 'label',
+            sortable: true,
+            dataType: 'text',
+            filterable: true,
+            width: 200,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-edit',
+            description: 'Libellé'
+        },
+        {
+            headerName: 'Date',
+            field: 'date',
+            sortable: true,
+            dataType: 'date',
+            filterable: true,
+            width: 120,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-calendar',
+            description: 'Date inventaire'
+        },
+        {
+            headerName: 'Statut',
             field: 'status',
             sortable: true,
-            filter: 'agTextColumnFilter',
+            dataType: 'select',
+            filterable: true,
+            width: 150,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-check',
             description: 'État',
+            filterConfig: {
+                dataType: 'select',
+                operator: 'equals',
+                options: [
+                    { label: 'EN PREPARATION', value: 'EN PREPARATION' },
+                    { label: 'EN REALISATION', value: 'EN REALISATION' },
+                    { label: 'TERMINE', value: 'TERMINE' },
+                    { label: 'CLOTURE', value: 'CLOTURE' }
+                ]
+            },
+            valueFormatter: (params: any) => {
+                const status = params.value;
+                const statusMap = {
+                    'EN PREPARATION': 'EN PREPARATION',
+                    'EN REALISATION': 'EN REALISATION',
+                    'TERMINE': 'TERMINE',
+                    'CLOTURE': 'CLOTURE'
+                };
+                return statusMap[status] || status;
+            },
             cellRenderer: (params: any) => {
-                let status = params.value;
-                // Mettre en majuscules et supprimer les accents/diacritiques
-                let badgeClass = '';
-                switch(status) {
-                    case 'EN PREPARATION':
-                        badgeClass = 'bg-blue-100 text-blue-800';
-                        break;
-                    case 'EN REALISATION':
-                        badgeClass = 'bg-yellow-100 text-yellow-800';
-                        break;
-                    case 'TERMINE':
-                        badgeClass = 'bg-green-100 text-green-800';
-                        break;
-                    case 'CLOTURE':
-                        badgeClass = 'bg-gray-100 text-gray-800';
-                        break;
-                    default:
-                        badgeClass = 'bg-gray-100 text-gray-800';
+                const status = params.value;
+                let badgeClasses = '';
+                let displayStatus = status;
+
+                // Gestion des cas où le statut est null, undefined ou vide
+                if (!status || status === '' || status === null || status === undefined) {
+                    badgeClasses = '';
+                } else {
+                    // Mapping des statuts vers les classes de badges
+                    switch (status) {
+                        case 'EN PREPARATION':
+                            badgeClasses = 'inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-yellow-600/20 ring-inset'; // Bleu
+                            break;
+                        case 'EN REALISATION':
+                            badgeClasses = 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-600/20 ring-inset'; // Jaune/Orange
+                            break;
+                        case 'TERMINE':
+                            badgeClasses = 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-800 ring-1 ring-green-600/20 ring-inset'; // Vert
+                            break;
+                        case 'CLOTURE':
+                            badgeClasses = 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'; // Gris
+                            break;
+                        default:
+                            badgeClasses = 'badge-light'; // Gris clair pour statuts inconnus
+                    }
                 }
 
-                return `<span class="px-2 py-1 text-xs font-medium rounded-full ${badgeClass}">${status}</span>`;
+                // Retourne le HTML du badge avec les classes CSS appropriées
+                return `<span class="${badgeClasses}">${status}</span>`;
             }
         },
-        { headerName: 'Type', field: 'inventory_type', sortable: true, filter: 'agTextColumnFilter', description: 'Type' },
-        { headerName: 'Date préparation', field: 'en_preparation_status_date', sortable: true, filter: 'agDateColumnFilter', description: 'Date passage en préparation' },
-        { headerName: 'Date réalisation', field: 'en_realisation_status_date', sortable: true, filter: 'agDateColumnFilter', description: 'Date passage en réalisation' },
-        { headerName: 'Date terminé', field: 'termine_status_date', sortable: true, filter: 'agDateColumnFilter', description: 'Date passage terminé' },
-        { headerName: 'Date clôture', field: 'cloture_status_date', sortable: true, filter: 'agDateColumnFilter', description: 'Date passage clôturé' },
-        { headerName: 'Compte', field: 'account_name', sortable: true, filter: 'agTextColumnFilter', description: 'Compte' },
-        // Tu peux ajouter warehouse, comptages, etc. selon besoin
+        {
+            headerName: 'Type',
+            field: 'inventory_type',
+            sortable: true,
+            dataType: 'text',
+            filterable: true,
+            width: 120,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-settings',
+            description: 'Type'
+        },
+        {
+            headerName: 'Date préparation',
+            field: 'en_preparation_status_date',
+            sortable: true,
+            dataType: 'date',
+            filterable: true,
+            width: 140,
+            editable: false,
+            visible: false,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-clock',
+            description: 'Date passage en préparation'
+        },
+        {
+            headerName: 'Date réalisation',
+            field: 'en_realisation_status_date',
+            sortable: true,
+            dataType: 'date',
+            filterable: true,
+            width: 140,
+            editable: false,
+            visible: false,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-clock',
+            description: 'Date passage en réalisation'
+        },
+        {
+            headerName: 'Date terminé',
+            field: 'termine_status_date',
+            sortable: true,
+            dataType: 'date',
+            filterable: true,
+            width: 140,
+            editable: false,
+            visible: false,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-clock',
+            description: 'Date passage terminé'
+        },
+        {
+            headerName: 'Date clôture',
+            field: 'cloture_status_date',
+            sortable: true,
+            dataType: 'date',
+            filterable: true,
+            width: 140,
+            editable: false,
+            visible: false,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-clock',
+            description: 'Date passage clôturé'
+        },
+        {
+            headerName: 'Compte',
+            field: 'account_name',
+            sortable: true,
+            dataType: 'text',
+            filterable: true,
+            width: 150,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-user',
+            description: 'Compte'
+        },
     ]
 
     const handleDelete = async (inv: InventoryTable) => {
@@ -124,9 +257,9 @@ export function useInventoryManagement() {
             })
             if (r.isConfirmed) {
                 if (typeof inv.id === 'number') {
-                await inventoryManagementService.deleteInventory(inv.id)
-                await alertService.success({ text: "Supprimé avec succès" })
-                await fetchInventories()
+                    await inventoryStore.deleteInventory(inv.id)
+                    await alertService.success({ text: "Supprimé avec succès" })
+                    await dataTable.refresh() // Reset pagination after deletion
                 } else {
                     await alertService.error({ text: "ID d'inventaire invalide" })
                 }
@@ -155,7 +288,7 @@ export function useInventoryManagement() {
                 try {
                     await importStockImage(inv.id, formData);
                     await alertService.success({ text: 'Import Excel réussi !' });
-                    await fetchInventories();
+                    await dataTable.refresh(); // Reset pagination after import
                 } catch (e) {
                     // L'alerte d'erreur est déjà gérée
                 }
@@ -171,44 +304,44 @@ export function useInventoryManagement() {
         {
             label: 'Détail',
             icon: markRaw(IconEye),
-            class: 'flex items-center gap-1 px-2 py-1 text-blue-600 hover:text-blue-800 text-md',
-            handler: inv => { void router.push({ name: 'inventory-detail', params: { reference: inv.reference } }) },
-            visible: () => true,
+            color: 'primary',
+            onClick: inv => { void router.push({ name: 'inventory-detail', params: { reference: inv.reference } }) },
+            show: () => true,
         },
         {
             label: 'Importer image de stock',
             icon: markRaw(IconUpload),
-            class: 'flex items-center gap-1 px-2 py-1 text-purple-600 hover:text-purple-800 text-md',
-            handler: handleImportExcel,
-            visible: inv => inv.status === 'EN PREPARATION',
+            color: 'secondary',
+            onClick: handleImportExcel,
+            show: inv => inv.status === 'EN PREPARATION',
         },
         {
             label: inv => inv.status === 'EN REALISATION' ? 'Transférer' : 'Préparer',
             icon: markRaw(IconCalendar),
-            class: 'flex items-center gap-1 px-2 py-1 text-orange-600 hover:text-orange-800 text-md',
-            handler: inv => { void router.push({ name: 'planning-management', params: { reference: inv.reference } }) },
-            visible: inv => ['EN PREPARATION', 'EN REALISATION'].includes(inv.status),
+            color: 'warning',
+            onClick: inv => { void router.push({ name: 'planning-management', params: { reference: inv.reference } }) },
+            show: inv => ['EN PREPARATION', 'EN REALISATION'].includes(inv.status),
         },
         {
             label: 'Modifier',
             icon: markRaw(IconEdit),
-            class: 'flex items-center gap-1 px-2 py-1 text-green-600 hover:text-green-800 text-md',
-            handler: inv => { void router.push({ name: 'inventory-edit', params: { reference: inv.reference } }) },
-            visible: inv => inv.status === 'EN PREPARATION',
+            color: 'success',
+            onClick: inv => { void router.push({ name: 'inventory-edit', params: { reference: inv.reference } }) },
+            show: inv => inv.status === 'EN PREPARATION',
         },
         {
             label: 'Résultats',
-            icon: markRaw(IconSquareCheck),
-            class: 'flex items-center gap-1 px-2 py-1 text-emerald-600 hover:text-emerald-800 text-md',
-            handler: inv => { void router.push({ name: 'inventory-results', params: { reference: inv.reference } }) },
-            visible: inv => ['EN REALISATION', 'TERMINE', 'CLOTURE'].includes(inv.status),
+            icon: markRaw(IconCheck),
+            color: 'info',
+            onClick: inv => { void router.push({ name: 'inventory-results', params: { reference: inv.reference } }) },
+            show: inv => ['EN REALISATION', 'TERMINE', 'CLOTURE'].includes(inv.status),
         },
         {
             label: 'Supprimer',
-            icon: markRaw(IconTrashLines),
-            class: 'flex items-center gap-1 px-2 py-1 text-red-600 hover:text-red-800 text-md',
-            handler: handleDelete,
-            visible: inv => inv.status === 'EN PREPARATION',
+            icon: markRaw(IconTrash),
+            color: 'danger',
+            onClick: handleDelete,
+            show: inv => inv.status === 'EN PREPARATION',
         },
     ]
 
@@ -227,16 +360,39 @@ export function useInventoryManagement() {
         }
     };
 
+    // Nouvelle fonction pour gestion modale/loader/erreur
+    const importStockImageWithModal = async (id: number, formData: FormData, { onStart, onSuccess, onError }: { onStart?: () => void, onSuccess?: () => void, onError?: (msg: string) => void }) => {
+        try {
+            onStart && onStart();
+            await inventoryStore.importStockImage(id, formData);
+            onSuccess && onSuccess();
+        } catch (error) {
+            let message = "Erreur lors de l'import.";
+            const e = error as any;
+            if (e && e.response && e.response.data) {
+                if (typeof e.response.data === 'string') message = e.response.data;
+                else if (e.response.data.message) message = e.response.data.message;
+                else if (e.response.data.detail) message = e.response.data.detail;
+                else message = JSON.stringify(e.response.data, null, 2);
+            } else if (e && e.message) {
+                message = e.message;
+            }
+            onError && onError(message);
+        }
+    };
+
     return {
         inventories,
         loading,
         columns,
         actions,
         redirectToAdd,
-        fetchInventories,
-        handlePaginationChanged,
-        handleSortChanged,
-        handleFilterChanged,
-        importStockImage, // <-- expose la méthode
+        dataTable,
+        importStockImage,
+        importStockImageWithModal,
+        alertService,
+        currentPage,
+        totalPages,
+        totalItems,
     }
 }

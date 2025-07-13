@@ -10,7 +10,10 @@ import type {
     DeleteLocationFromJobResponse,
     UpdateJobStatusResponse,
     DeleteJobResponse,
-    JobPaginatedResponse
+    JobPaginatedResponse,
+    JobAssignmentsTeamRequest,
+    JobAssignmentsResourceRequest,
+    JobManualAssignmentsRequest
 } from '@/models/Job';
 import API from '@/api';
 
@@ -20,8 +23,8 @@ export class JobService {
     private static baseUrlWarehouse = API.endpoints.warehouse?.base;
 
     // Récupérer tous les jobs avec pagination, tri et filtres
-    static async getAll(warehouseId: number, params?: { page?: number; page_size?: number; ordering?: string; [key: string]: any; }): Promise<JobResponse> {
-        const response = await axiosInstance.get<JobResponse>(`${this.baseUrlInventory}${warehouseId}/jobs/`, { params });
+    static async getAll(inventoryId: number, warehouseId: number, params?: { page?: number; page_size?: number; ordering?: string; [key: string]: any; }): Promise<JobResponse> {
+        const response = await axiosInstance.get<JobResponse>(`${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/`, { params });
         return response.data;
     }
 
@@ -114,6 +117,26 @@ export class JobService {
     // Valider un job
     static async validateJob(job_ids: number[]): Promise<UpdateJobStatusResponse> {
         const response = await axiosInstance.post<UpdateJobStatusResponse>(`${this.baseUrlJob}validate/`, { job_ids });
+        return response.data;
+    }
+
+    static async jobPret(job_ids:number[]):Promise<JobAssignmentsTeamRequest>{
+        const response = await axiosInstance.post<JobAssignmentsTeamRequest>(`${this.baseUrlInventory}assign-jobs/`,job_ids);
+        return response.data;
+    }
+
+    static async jobAssignmentsTeam(inventoryId:number,data:JobAssignmentsTeamRequest):Promise<JobAssignmentsTeamRequest>{
+        const response = await axiosInstance.post<JobAssignmentsTeamRequest>(`${this.baseUrlInventory}${inventoryId}/assign-jobs/`,data);
+        return response.data;
+    }
+
+    static async jobAssignmentsResource(data:JobAssignmentsResourceRequest):Promise<JobAssignmentsResourceRequest>{
+        const response = await axiosInstance.post<JobAssignmentsResourceRequest>(`${this.baseUrlInventory}assign-resources/`,data);
+        return response.data;
+    }
+
+    static async jobManualAssignments(data:JobManualAssignmentsRequest):Promise<JobManualAssignmentsRequest>{
+        const response = await axiosInstance.post<JobManualAssignmentsRequest>(`${this.baseUrlInventory}assign-jobs-manual/`,data);
         return response.data;
     }
 

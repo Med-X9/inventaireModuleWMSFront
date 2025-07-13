@@ -38,6 +38,9 @@ export interface DataTableColumn<T = TableRow> extends ColDef {
     field?: string
     headerName?: string
     detailConfig?: DetailConfig
+    // Ajoute ici d'autres propriétés si besoin
+    sortable?: boolean
+    width?: number
 }
 
 // Interface pour les lignes avec détails

@@ -1,10 +1,11 @@
 // src/models/Resource.ts
 
 export interface Resource {
-    id: number;
+    id?: number;
     reference: string;
-    ressource_nom: string;
-    quantity: number;
+    libelle: string;
+    type_ressource?: string;
+    quantity?: number;
     type?: string;
     status?: string;
     unit?: string;
@@ -12,6 +13,8 @@ export interface Resource {
     description?: string;
     created_at?: string;
     updated_at?: string;
+    // Propriété alternative pour compatibilité
+    ressource_nom?: string;
 }
 
 export interface CreateResourceRequest {

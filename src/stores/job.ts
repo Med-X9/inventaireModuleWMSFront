@@ -13,7 +13,10 @@ import type {
     UpdateJobStatusResponse,
     DeleteJobResponse,
     JobPaginatedResponse,
-    JobResult
+    JobResult,
+    JobAssignmentsTeamRequest,
+    JobAssignmentsResourceRequest,
+    JobManualAssignmentsRequest
 } from '@/models/Job';
 
 export const useJobStore = defineStore('job', () => {
@@ -36,7 +39,7 @@ export const useJobStore = defineStore('job', () => {
     const getPageSize = computed(() => pageSize.value);
 
     // Actions
-    const fetchJobs = async (warehouseId: number, params?: {
+    const fetchJobs = async (inventoryId: number, warehouseId: number, params?: {
         sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>;
         filter?: Record<string, { filter: string; type?: string; dateFrom?: string; dateTo?: string; filterTo?: string }>;
         page?: number;
@@ -127,7 +130,7 @@ export const useJobStore = defineStore('job', () => {
             }
 
             // Utiliser l'inventoryId par défaut si non fourni
-            const response = await JobService.getAll(warehouseId, queryParams);
+            const response = await JobService.getAll(inventoryId, warehouseId, queryParams);
 
             // Extraire les données du champ 'results' de la réponse paginée
             const jobData = response.results || response;
@@ -371,8 +374,8 @@ export const useJobStore = defineStore('job', () => {
         }
     };
 
-    const validateJob = async (id: number | string): Promise<UpdateJobStatusResponse> => {
-        return updateJobStatus(id, 'VALIDE');
+    const validateJob = async (id: number[]): Promise<UpdateJobStatusResponse> => {
+        return await JobService.validateJob(id);
     };
 
     const completeJob = async (id: number | string): Promise<UpdateJobStatusResponse> => {
@@ -443,6 +446,81 @@ export const useJobStore = defineStore('job', () => {
         }
     };
 
+    // Assigner des équipes aux jobs
+    const assignTeamsToJobs = async (inventoryId: number, data: JobAssignmentsTeamRequest): Promise<JobAssignmentsTeamRequest> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await JobService.jobAssignmentsTeam(inventoryId, data);
+            return response;
+        } catch (err: any) {
+            // Récupérer le message d'erreur du backend
+            let errorMessage = 'Erreur lors de l\'assignation des équipes aux jobs';
+
+            if (err.response?.data) {
+                const backendData = err.response.data;
+                if (backendData.message) {
+                    errorMessage = backendData.message;
+                } else if (backendData.detail) {
+                    errorMessage = backendData.detail;
+                } else if (backendData.error) {
+                    errorMessage = backendData.error;
+                } else if (typeof backendData === 'string') {
+                    errorMessage = backendData;
+                }
+            }
+
+            error.value = errorMessage;
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    // Assigner des ressources aux jobs
+    const assignResourcesToJobs = async (inventoryId: number, data: JobAssignmentsResourceRequest): Promise<JobAssignmentsResourceRequest> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await JobService.jobAssignmentsResource(data);
+            return response;
+        } catch (err: any) {
+            // Récupérer le message d'erreur du backend
+            let errorMessage = 'Erreur lors de l\'assignation des ressources aux jobs';
+
+            if (err.response?.data) {
+                const backendData = err.response.data;
+                if (backendData.message) {
+                    errorMessage = backendData.message;
+                } else if (backendData.detail) {
+                    errorMessage = backendData.detail;
+                } else if (backendData.error) {
+                    errorMessage = backendData.error;
+                } else if (typeof backendData === 'string') {
+                    errorMessage = backendData;
+                }
+            }
+
+            error.value = errorMessage;
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    const assignJobsManual = async (data: JobManualAssignmentsRequest): Promise<JobManualAssignmentsRequest> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await JobService.jobManualAssignments(data);
+            return response;
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Erreur lors de l\'assignation des jobs manuellement';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
     const clearError = () => {
         error.value = null;
     };
@@ -495,6 +573,9 @@ export const useJobStore = defineStore('job', () => {
         fetchJobsByWarehouse,
         fetchJobsByInventory,
         fetchJobsByStatus,
+        assignTeamsToJobs,
+        assignResourcesToJobs,
+        assignJobsManual,
         clearError,
         clearCurrentJob,
         resetState,

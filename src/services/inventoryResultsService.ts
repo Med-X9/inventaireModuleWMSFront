@@ -17,8 +17,8 @@ const mockResults: InventoryResult[] = [
         premier_contage: 100,
         deuxieme_contage: 105,
         ecart: 5,
-        troisieme_contage: 110,
-        resultats: '110',
+        troisieme_contage: 0,
+        resultats: '',
         inventory: 'inventory_1',
         store: 'store_A'
     },

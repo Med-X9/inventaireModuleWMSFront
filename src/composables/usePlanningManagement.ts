@@ -15,7 +15,7 @@ export function usePlanningManagement() {
     const route = useRoute();
 
     // Récupérer le statut d'inventaire depuis les paramètres de route ou un service
-    const inventoryStatus = ref('En préparation'); // Cette valeur devrait venir d'un service
+    const inventoryStatus = ref('EN REALISATION'); // Cette valeur devrait venir d'un service
 
     // Référence de l'inventaire (à passer depuis la vue)
     const inventoryReference = ref<string>('');
@@ -30,30 +30,25 @@ export function usePlanningManagement() {
     const stores = ref<Store[]>([]);
     const loading = computed(() => inventoryStore.isLoading);
 
-    const columns = [
-        { headerName: 'Nom du magasin', field: 'store_name', sortable: true, filter: 'agTextColumnFilter' },
-        { headerName: 'Équipes', field: 'teams_count', sortable: true, filter: 'agNumberColumnFilter', },
-        { headerName: 'Jobs', field: 'jobs_count', sortable: true, filter: 'agNumberColumnFilter', },
-    ];
 
     const actions = computed<PlanningAction[]>(() => {
         const baseActions: PlanningAction[] = [];
 
-        if (inventoryStatus.value !== 'EN REALISATION') {
-            baseActions.push({
-                label: 'Planifier',
-                icon: IconCalendar,
-                handler: (store: Store) => {
-                    router.push({
-                        name: 'inventory-planning',
-                        params: {
-                            reference: inventoryReference.value || '',
-                            warehouse: (store.reference as string) || ''
-                        }
-                    });
-                },
-            });
-        }
+
+        baseActions.push({
+            label: 'Planifier',
+            icon: IconCalendar,
+            handler: (store: Store) => {
+                router.push({
+                    name: 'inventory-planning',
+                    params: {
+                        reference: inventoryReference.value || '',
+                        warehouse: (store.reference as string) || ''
+                    }
+                });
+            },
+        });
+
 
         baseActions.push({
             label: inventoryStatus.value === 'EN REALISATION' ? 'Transférer' : 'Affecter',
@@ -109,7 +104,6 @@ export function usePlanningManagement() {
         selectedStore,
         stores,
         loading,
-        columns,
         actions,
         inventoryStatus,
         inventoryReference,
