@@ -93,8 +93,8 @@ export function useInventoryDetail(inventoryReference: string) {
     const teamsGridData = computed(() => {
         return inventory.value?.equipe?.map(team => ({
             id: team.id,
-            name: team.name,
-            initial: team.name.charAt(0),
+            name: team.user.username,
+            initial: team.user.username ? team.user.username.charAt(0) : '?',
             type: 'Équipe'
         })) || [];
     });
@@ -234,14 +234,15 @@ export function useInventoryDetail(inventoryReference: string) {
     };
 
     // Fonctions pour les ressources
-    const assignResourceToInventory = async (resourceId: number, quantity: number) => {
+    const assignResourceToInventory = async (resources: Array<{ resource_id: number; quantity: number }>) => {
+        console.log(resources);
         if (!inventoryId.value) {
             console.error('ID d\'inventaire non disponible');
             return null;
         }
 
         try {
-            const result = await resourceStore.assignResourceToInventory(inventoryId.value, resourceId, quantity);
+            const result = await resourceStore.assignResourceToInventory(inventoryId.value, resources);
             if (result) {
                 // Recharger les données de l'inventaire pour avoir les ressources mises à jour
                 await loadDetailData();
@@ -437,7 +438,6 @@ export function useInventoryDetail(inventoryReference: string) {
 
     const exportToPDF = async () => {
         if (!inventory.value) return;
-
         const data: any = {
             inventory: {
                 label: inventory.value.label,
@@ -521,7 +521,6 @@ export function useInventoryDetail(inventoryReference: string) {
         getRemainingJobsCount,
         getTotalJobsCount,
         exportToPDF,
-        // Fonctions pour les ressources
         resources,
         resourcesLoading,
         resourcesError,

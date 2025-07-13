@@ -54,7 +54,6 @@ export interface ResourcesResponse {
 
 // Interface pour l'assignation de ressources à un inventaire
 export interface AssignResourceRequest {
-    inventory_id: number;
     resource_id: number;
     quantity: number;
 }

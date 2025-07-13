@@ -192,8 +192,11 @@ const route = useRoute();
 const inventoryReference = route.params.reference as string;
 const warehouseReference = route.params.warehouse as string;
 
-// Utilisation du composable migré
-const affecter = useAffecter(inventoryReference, warehouseReference);
+// Utilisation du composable migré avec la nouvelle signature
+const affecter = useAffecter({
+    inventoryReference,
+    warehouseReference
+});
 
 // Destructuration des propriétés du composable
 const {

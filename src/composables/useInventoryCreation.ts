@@ -32,7 +32,7 @@ export function useInventoryCreation() {
         step1Data: {
             libelle: '',
             date: '',
-            inventory_type: '',
+            inventory_type: 'GENERAL', // Valeur par défaut
             compte: '',
             magasin: []
         },
@@ -60,7 +60,7 @@ export function useInventoryCreation() {
         Object.assign(state.step1Data, {
             libelle: '',
             date: '',
-            type: '', // Utiliser la valeur au lieu du label
+            inventory_type: '', // Utiliser la valeur au lieu du label
             compte: '',
             magasin: []
         });
@@ -596,7 +596,7 @@ export function useInventoryCreation() {
             // Initialiser explicitement les valeurs par défaut si elles sont vides
             if (!state.step1Data.libelle) state.step1Data.libelle = '';
             if (!state.step1Data.date) state.step1Data.date = '';
-            if (!state.step1Data.inventory_type) state.step1Data.inventory_type = ''; // Utiliser la valeur au lieu du label
+            if (!state.step1Data.inventory_type) state.step1Data.inventory_type = ''; // Valeur par défaut
             if (!state.step1Data.compte) state.step1Data.compte = '';
             if (!Array.isArray(state.step1Data.magasin)) state.step1Data.magasin = [];
         });
@@ -719,7 +719,7 @@ export function useInventoryCreation() {
             const step1Data = {
                 libelle: inventoryDetails.label || '',
                 date: formatDateForFlatpickr(inventoryDetails.date),
-                type: (inventoryDetails.inventory_type as string) ,
+                inventory_type: (inventoryDetails.inventory_type as string) ,
                 compte: inventoryDetails.account_id ? inventoryDetails.account_id.toString() : '',
                 magasin: Array.isArray(inventoryDetails.warehouses)
                     ? inventoryDetails.warehouses.map(wh => ({

@@ -30,49 +30,49 @@
 
         <!-- Cartes de statistiques -->
         <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon stat-jobs">
-                    <IconCheck class="w-6 h-6" />
-                </div>
-                <div class="stat-content">
+            <div class="stat-card small">
+                <div class="stat-header">
+                    <div class="stat-icon stat-jobs">
+                        <IconCheck class="w-4 h-4" />
+                    </div>
                     <div class="stat-value">{{ storeJobs.length }}</div>
-                    <div class="stat-label">Jobs créés</div>
                 </div>
+                <div class="stat-label">Jobs créés</div>
             </div>
 
-            <div class="stat-card">
-                <div class="stat-icon stat-locations">
-                    <IconBox class="w-6 h-6" />
-                </div>
-                <div class="stat-content">
+            <div class="stat-card small">
+                <div class="stat-header">
+                    <div class="stat-icon stat-locations">
+                        <IconBox class="w-4 h-4" />
+                    </div>
                     <div class="stat-value">{{ tableData.length }}</div>
-                    <div class="stat-label">Emplacements</div>
                 </div>
+                <div class="stat-label">Emplacements</div>
             </div>
 
-            <div class="stat-card">
-                <div class="stat-icon stat-selected">
-                    <IconEye class="w-6 h-6" />
-                </div>
-                <div class="stat-content">
+            <div class="stat-card small">
+                <div class="stat-header">
+                    <div class="stat-icon stat-selected">
+                        <IconEye class="w-4 h-4" />
+                    </div>
                     <div class="stat-value">{{ selectedAvailable.length }}</div>
-                    <div class="stat-label">Sélectionnés</div>
                 </div>
+                <div class="stat-label">Sélectionnés</div>
             </div>
 
-            <div class="stat-card">
-                <div class="stat-icon stat-validated">
-                    <IconCircleCheck class="w-6 h-6" />
-                </div>
-                <div class="stat-content">
+            <div class="stat-card small">
+                <div class="stat-header">
+                    <div class="stat-icon stat-validated">
+                        <IconCircleCheck class="w-4 h-4" />
+                    </div>
                     <div class="stat-value">{{ selectedJobs.length }}</div>
-                    <div class="stat-label">À valider</div>
                 </div>
+                <div class="stat-label">À valider</div>
             </div>
         </div>
 
         <!-- Section Jobs créés -->
-        <div class="section-container">
+        <div class="datatable-container">
             <div class="section-header">
                 <h2 class="section-title">Jobs créés</h2>
                 <div class="section-actions">
@@ -87,33 +87,31 @@
                 </div>
             </div>
 
-            <div class="table-container">
-                <DataTableNew
-                    :key="jobsKey"
-                    :columns="adaptedStoreJobsColumns"
-                    :rowDataProp="storeJobs"
-                    :rowSelection="true"
-                    @selection-changed="onJobSelectionChanged"
-                    :showColumnSelector="false"
-                    storageKey="planning_jobs_table"
-                    :actions="[]"
-                    :pagination="true"
-                    :enableFiltering="true"
-                    :inlineEditing="false"
-                    :exportTitle="'Jobs créés'"
-                    enableRowDetails
-                    groupColumn="emplacements"
-                    :loading="loading"
-                    :serverSidePagination="true"
-                    :serverSideFiltering="true"
-                    :serverSideSorting="true"
-                    @pagination-changed="onJobPaginationChanged"
-                    @sort-changed="onJobSortChanged"
-                    @filter-changed="onJobFilterChanged"
-                    ref="jobsTableRef"
-                >
-                </DataTableNew>
-            </div>
+            <DataTableNew
+                :key="jobsKey"
+                :columns="adaptedStoreJobsColumns"
+                :rowDataProp="storeJobs"
+                :rowSelection="true"
+                @selection-changed="onJobSelectionChanged"
+                :showColumnSelector="false"
+                storageKey="planning_jobs_table"
+                :actions="[]"
+                :pagination="true"
+                :enableFiltering="true"
+                :inlineEditing="false"
+                :exportTitle="'Jobs créés'"
+                enableRowDetails
+                groupColumn="emplacements"
+                :loading="loading"
+                :serverSidePagination="true"
+                :serverSideFiltering="true"
+                :serverSideSorting="true"
+                @pagination-changed="onJobPaginationChanged"
+                @sort-changed="onJobSortChanged"
+                @filter-changed="onJobFilterChanged"
+                ref="jobsTableRef"
+            >
+            </DataTableNew>
 
             <div v-if="!storeJobs.length && !loading" class="empty-state">
                 <IconBox class="empty-icon" />
@@ -123,7 +121,7 @@
         </div>
 
         <!-- Section Emplacements disponibles -->
-        <div class="section-container">
+        <div class="datatable-container">
             <div class="section-header">
                 <h2 class="section-title">Emplacements disponibles</h2>
                 <div class="section-actions">
@@ -147,31 +145,28 @@
                 </div>
             </div>
 
-
-            <div class="table-container">
-                <DataTableNew
-                    :key="availableLocationsKey"
-                    :columns="adaptedAvailableLocationColumns"
-                    :rowDataProp="tableData"
-                    :pagination="true"
-                    :rowSelection="true"
-                    @selection-changed="onAvailableSelectionChanged"
-                    storageKey="available_locations"
-                    :showColumnSelector="false"
-                    :actions="[]"
-                    :enableFiltering="true"
-                    :inlineEditing="false"
-                    :exportTitle="'Emplacements disponibles'"
-                    :loading="loading"
-                    :serverSidePagination="true"
-                    :serverSideFiltering="true"
-                    :serverSideSorting="true"
-                    @pagination-changed="onLocationPaginationChanged"
-                    @sort-changed="onLocationSortChanged"
-                    @filter-changed="onLocationFilterChanged"
-                    ref="availableLocationsTableRef"
-                />
-            </div>
+            <DataTableNew
+                :key="availableLocationsKey"
+                :columns="adaptedAvailableLocationColumns"
+                :rowDataProp="tableData"
+                :pagination="true"
+                :rowSelection="true"
+                @selection-changed="onAvailableSelectionChanged"
+                storageKey="available_locations"
+                :showColumnSelector="false"
+                :actions="[]"
+                :enableFiltering="true"
+                :inlineEditing="false"
+                :exportTitle="'Emplacements disponibles'"
+                :loading="loading"
+                :serverSidePagination="true"
+                :serverSideFiltering="true"
+                :serverSideSorting="true"
+                @pagination-changed="onLocationPaginationChanged"
+                @sort-changed="onLocationSortChanged"
+                @filter-changed="onLocationFilterChanged"
+                ref="availableLocationsTableRef"
+            />
         </div>
     </div>
 </template>
@@ -385,14 +380,7 @@ const adaptedAvailableLocationColumns = computed(() => [
     },
 ]);
 
-// Debug: vérifier les données passées au DataTable
-console.log('🔍 Données des emplacements disponibles:', tableData.value);
-console.log('🔍 Premier emplacement:', tableData.value[0]);
 
-// Debug: vérifier les données des jobs
-console.log('🔍 Données des jobs:', storeJobs.value);
-console.log('🔍 Premier job:', storeJobs.value[0]);
-console.log('🔍 Emplacements du premier job:', storeJobs.value[0]?.emplacements);
 
 // Recherche de locations
 async function onSearchLocations() {
@@ -496,8 +484,8 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
     border-radius: 20px;
     padding: 2rem;
     margin-bottom: 2rem;
-    box-shadow: 0 4px 20px rgba(139, 142, 148, 0.08);
-    border: 1px solid #B4B6BA;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e5e7eb;
 }
 
 .header-content {
@@ -517,14 +505,14 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
     gap: 1rem;
     font-size: 2.5rem;
     font-weight: 800;
-    color: #8A8E94;
-    margin: 0 0 1rem 0;
+    color: #1e293b;
+    margin: 0 0 0.5rem 0;
 }
 
 .title-icon {
     width: 2.5rem;
     height: 2.5rem;
-    color: #FECD1C;
+    color: #FACC15;
 }
 
 .context-info {
@@ -539,23 +527,23 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
     gap: 0.5rem;
     padding: 0.5rem 1rem;
     background: #ffffff;
-    border: 1px solid #B4B6BA;
+    border: 1px solid #e5e7eb;
     border-radius: 12px;
     font-size: 0.9rem;
 }
 
 .badge-label {
-    color: #8A8E94;
+    color: #64748b;
     font-weight: 600;
 }
 
 .badge-value {
-    color: #8A8E94;
+    color: #1e293b;
     font-weight: 700;
     padding: 0.25rem 0.75rem;
-    background: #FECD1C;
+    background: #FACC15;
     border-radius: 8px;
-    color: #8A8E94;
+    color: #1e293b;
 }
 
 .refresh-btn {
@@ -563,20 +551,37 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
     align-items: center;
     gap: 0.75rem;
     padding: 1rem 2rem;
-    background: #FECD1C;
-    color: #8A8E94;
+    background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+    color: #1e293b;
     border: none;
     border-radius: 16px;
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 16px rgba(254, 205, 28, 0.3);
+    box-shadow: 0 4px 16px rgba(250, 204, 21, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.refresh-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.refresh-btn:hover::before {
+    left: 100%;
 }
 
 .refresh-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(254, 205, 28, 0.4);
+    box-shadow: 0 8px 24px rgba(250, 204, 21, 0.4);
 }
 
 .refresh-btn:disabled {
@@ -588,21 +593,21 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
 /* Grille de statistiques */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
     margin-bottom: 2rem;
 }
 
 .stat-card {
     background: #ffffff;
-    border-radius: 20px;
-    padding: 1.5rem;
-    box-shadow: 0 4px 20px rgba(139, 142, 148, 0.08);
-    border: 1px solid #B4B6BA;
+    border-radius: 12px;
+    padding: 0.75rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border: 1px solid #e5e7eb;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
-    min-height: 120px;
+    min-height: 60px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -614,46 +619,41 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
     top: 0;
     left: 0;
     right: 0;
-    height: 4px;
-    background: #FECD1C;
+    height: 2px;
+    background: linear-gradient(90deg, var(--stat-color), var(--stat-color-light));
 }
 
 .stat-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 32px rgba(139, 142, 148, 0.12);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
 }
 
-.stat-card:nth-child(1) {
+.stat-card:nth-child(1),
+.stat-card:nth-child(2),
+.stat-card:nth-child(3),
+.stat-card:nth-child(4) {
     --stat-color: #FACC15;
     --stat-color-light: #EAB308;
+    grid-column: span 1;
 }
 
-.stat-card:nth-child(2) {
-    --stat-color: #3b82f6;
-    --stat-color-light: #1d4ed8;
-}
-
-.stat-card:nth-child(3) {
-    --stat-color: #10b981;
-    --stat-color-light: #059669;
-}
-
-.stat-card:nth-child(4) {
-    --stat-color: #f59e0b;
-    --stat-color-light: #d97706;
+/* Variantes de taille pour les cartes */
+.stat-card.small {
+    grid-column: span 1;
+    padding: 0.5rem;
+    min-height: 50px;
 }
 
 .stat-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 12px;
-    margin-bottom: 1rem;
-    background: #FECD1C;
-    color: #8A8E94;
-    box-shadow: 0 4px 12px rgba(139, 142, 148, 0.15);
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 6px;
+    background: linear-gradient(135deg, var(--stat-color) 0%, var(--stat-color-light) 100%);
+    color: #1e293b;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
     flex-shrink: 0;
 }
 
@@ -662,33 +662,42 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
     flex: 1;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: space-between;
+}
+
+.stat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.25rem;
 }
 
 .stat-value {
-    font-size: 2rem;
+    font-size: 1.25rem;
     font-weight: 800;
-    color: #8A8E94;
-    margin-bottom: 0.5rem;
+    color: #1e293b;
     line-height: 1;
+    text-align: right;
 }
 
 .stat-label {
-    font-size: 0.9rem;
-    color: #B4B6BA;
+    font-size: 0.625rem;
+    color: #64748b;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.2px;
+    line-height: 1.2;
+    text-align: left;
 }
 
-/* Sections */
-.section-container {
+/* Container du tableau */
+.datatable-container {
     background: #ffffff;
     border-radius: 20px;
     padding: 2rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e5e7eb;
     margin-bottom: 2rem;
-    box-shadow: 0 4px 20px rgba(139, 142, 148, 0.08);
-    border: 1px solid #B4B6BA;
 }
 
 .section-header {
@@ -697,13 +706,13 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
     align-items: center;
     margin-bottom: 2rem;
     padding-bottom: 1rem;
-    border-bottom: 1px solid #B4B6BA;
+    border-bottom: 1px solid #e5e7eb;
 }
 
 .section-title {
     font-size: 1.5rem;
     font-weight: 700;
-    color: #8A8E94;
+    color: #1e293b;
     margin: 0;
 }
 
@@ -728,36 +737,36 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
 }
 
 .validate-btn {
-    background: #FECD1C;
-    color: #8A8E94;
-    box-shadow: 0 4px 12px rgba(254, 205, 28, 0.3);
+    background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+    color: #1e293b;
+    box-shadow: 0 4px 12px rgba(250, 204, 21, 0.3);
 }
 
 .validate-btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(254, 205, 28, 0.4);
+    box-shadow: 0 6px 16px rgba(250, 204, 21, 0.4);
 }
 
 .return-btn {
-    background: #B4B6BA;
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%);
     color: #ffffff;
-    box-shadow: 0 4px 12px rgba(180, 182, 186, 0.3);
+    box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);
 }
 
 .return-btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(180, 182, 186, 0.4);
+    box-shadow: 0 6px 16px rgba(100, 116, 139, 0.4);
 }
 
 .create-btn {
-    background: #FECD1C;
-    color: #8A8E94;
-    box-shadow: 0 4px 12px rgba(254, 205, 28, 0.3);
+    background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+    color: #1e293b;
+    box-shadow: 0 4px 12px rgba(250, 204, 21, 0.3);
 }
 
 .create-btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(254, 205, 28, 0.4);
+    box-shadow: 0 6px 16px rgba(250, 204, 21, 0.4);
 }
 
 .action-btn:disabled {
@@ -771,57 +780,6 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
     min-width: 250px;
 }
 
-/* Search container */
-.search-container {
-    margin-bottom: 1.5rem;
-}
-
-.search-wrapper {
-    position: relative;
-    max-width: 400px;
-}
-
-.search-icon {
-    position: absolute;
-    left: 1rem;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 1rem;
-    height: 1rem;
-    color: #B4B6BA;
-    z-index: 1;
-}
-
-.search-input {
-    width: 100%;
-    padding: 0.75rem 1rem 0.75rem 2.5rem;
-    border: 2px solid #B4B6BA;
-    border-radius: 12px;
-    font-size: 0.9rem;
-    background-color: #ffffff;
-    transition: all 0.2s ease;
-    color: #8A8E94;
-}
-
-.search-input:focus {
-    outline: none;
-    border-color: #FECD1C;
-    background-color: #ffffff;
-    box-shadow: 0 0 0 3px rgba(254, 205, 28, 0.1);
-}
-
-.search-input::placeholder {
-    color: #B4B6BA;
-}
-
-/* Table container */
-.table-container {
-    background: #ffffff;
-    border-radius: 16px;
-    overflow: hidden;
-    border: 1px solid #B4B6BA;
-}
-
 /* Empty state */
 .empty-state {
     display: flex;
@@ -830,7 +788,7 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
     justify-content: center;
     padding: 4rem 2rem;
     text-align: center;
-    border: 2px dashed #B4B6BA;
+    border: 2px dashed #e5e7eb;
     border-radius: 16px;
     background: #ffffff;
 }
@@ -838,19 +796,19 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
 .empty-icon {
     width: 4rem;
     height: 4rem;
-    color: #B4B6BA;
+    color: #64748b;
     margin-bottom: 1rem;
 }
 
 .empty-title {
     font-size: 1.25rem;
     font-weight: 600;
-    color: #8A8E94;
+    color: #1e293b;
     margin-bottom: 0.5rem;
 }
 
 .empty-description {
-    color: #B4B6BA;
+    color: #64748b;
     font-size: 0.9rem;
     max-width: 400px;
 }
@@ -878,7 +836,20 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
 
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
-        gap: 1rem;
+        gap: 0.5rem;
+    }
+
+    .stat-card {
+        padding: 0.5rem;
+        min-height: 45px;
+    }
+
+    .stat-value {
+        font-size: 1.125rem;
+    }
+
+    .stat-label {
+        font-size: 0.5rem;
     }
 
     .section-header {
@@ -899,78 +870,64 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
     .job-selector {
         min-width: auto;
     }
+
+    .datatable-container {
+        padding: 1rem;
+    }
 }
 
 @media (max-width: 480px) {
     .stats-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.375rem;
+    }
+
+    .stat-card {
+        padding: 0.375rem;
+        min-height: 40px;
+    }
+
+    .stat-value {
+        font-size: 1rem;
+    }
+
+    .stat-label {
+        font-size: 0.45rem;
     }
 
     .page-title {
         font-size: 1.75rem;
     }
-}
 
-/* Styles pour les emplacements avec icône */
-.emplacements-cell {
-    padding: 0.5rem 0;
-}
-
-.emplacements-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
-    padding: 0.25rem 0;
-    border-radius: 6px;
-    transition: all 0.2s ease;
-}
-
-.emplacements-header:hover {
-    background-color: rgba(254, 205, 28, 0.1);
-}
-
-.chevron-icon {
-    transition: transform 0.2s ease;
-    flex-shrink: 0;
-}
-
-.chevron-icon.chevron-down {
-    transform: rotate(90deg);
-}
-
-.chevron-icon.chevron-right {
-    transform: rotate(0deg);
-}
-
-.emplacements-count {
-    font-size: 0.9rem;
-    color: #8A8E94;
-    font-weight: 600;
-}
-
-.emplacements-list {
-    margin-top: 0.5rem;
-    padding-left: 1.5rem;
-    border-left: 2px solid #FECD1C;
-    animation: slideDown 0.3s ease;
-}
-
-.emplacement-item {
-    padding: 0.25rem 0;
-    font-size: 0.85rem;
-    color: #8A8E94;
-    font-family: 'Courier New', monospace;
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
+    .refresh-btn {
+        padding: 0.75rem 1.5rem;
+        font-size: 0.9rem;
     }
-    to {
-        opacity: 1;
-        transform: translateY(0);
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+    .planning-page {
+        background: #ffffff;
+    }
+
+    .page-header,
+    .stat-card,
+    .datatable-container {
+        background: #ffffff;
+        border-color: #e5e7eb;
+    }
+
+    .page-title {
+        color: #1e293b;
+    }
+
+    .stat-value {
+        color: #1e293b;
+    }
+
+    .stat-label {
+        color: #64748b;
     }
 }
 </style>

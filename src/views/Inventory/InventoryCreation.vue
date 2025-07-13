@@ -371,13 +371,13 @@ const formFields = computed(() => {
             ]
         },
         {
-            key: 'type',
+            key: 'inventory_type',
             label: 'Type',
             type: 'select',
             options: inventoryTypeOptions.value,
             props: {
                 disabled: false,
-                'data-error': hasFieldError('type') ? 'true' : 'false'
+                'data-error': hasFieldError('inventory_type') ? 'true' : 'false'
             },
             searchable: false,
             clearable: false,

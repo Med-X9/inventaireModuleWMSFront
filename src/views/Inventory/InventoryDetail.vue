@@ -119,7 +119,7 @@
                                 <span class="mt-1 text-base font-medium text-gray-700 dark:text-gray-200">
                                     {{ inventory.en_preparation_status_date ?
                                         formatDate(inventory.en_preparation_status_date) :
-                                    'Non défini' }}
+                                        'Non défini' }}
                                 </span>
                             </div>
                             <div class="flex flex-col">
@@ -127,7 +127,7 @@
                                 <span class="mt-1 text-base font-medium text-gray-700 dark:text-gray-200">
                                     {{ inventory.en_realisation_status_date ?
                                         formatDate(inventory.en_realisation_status_date) :
-                                    'Non défini' }}
+                                        'Non défini' }}
                                 </span>
                             </div>
                             <div class="flex flex-col">
@@ -139,7 +139,7 @@
                             <div class="flex flex-col">
                                 <span class="text-sm text-gray-500 dark:text-gray-400">Clôturé</span>
                                 <span class="mt-1 text-base font-medium text-gray-700 dark:text-gray-200">
-                                    {{ inventory.cloture_status_date ? formatDate(inventory.cloture_status_date) : 'Non défini' }}
+                                    {{ inventory.cloture_status_date ? formatDate(inventory.cloture_status_date) : 'Non défini'}}
                                 </span>
                             </div>
                         </div>
@@ -317,7 +317,7 @@
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <span class="text-sm text-gray-500 dark:text-gray-400">{{ inventory.magasins.length
-                                        }}
+                                    }}
                                         magasin(s)</span>
                                     <div class="w-2 h-2 bg-green-500 rounded-full"></div>
                                 </div>
@@ -418,8 +418,7 @@
                                 <h4 class="text-lg font-medium text-gray-900 dark:text-white-light mb-2">Aucun magasin
                                     associé
                                 </h4>
-                                <p class="text-gray-500 dark:text-gray-400">Aucun magasin n'a été associé à cet
-                                    inventaire pour
+                                <p class="text-gray-500 dark:text-gray-400">Aucun magasin n'a été associé à cet inventaire pour
                                     le moment.</p>
                             </div>
                         </div>
@@ -432,48 +431,45 @@
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-3">
                                     <div
-                                        class="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path
-                                                d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
+                                        class="w-8 h-8 bg-gradient-to-br bg-blue-100 bg-blue-600 rounded-lg flex items-center justify-center">
+                                        <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
                                         </svg>
                                     </div>
                                     <div>
                                         <h3 class="text-lg font-semibold text-gray-800 dark:text-white-light">Équipes
                                             assignées
                                         </h3>
-                                        <p class="text-sm text-gray-500 dark:text-gray-400">Équipes responsables de
-                                            l'inventaire
+                                        <p class="text-sm text-gray-500 dark:text-gray-400">Équipes responsables de l'inventaire
                                         </p>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <span class="text-sm text-gray-500 dark:text-gray-400">{{ inventory.equipe.length }}
+                                    <span class="text-sm text-gray-500 dark:text-gray-400">{{ (inventory.equipe &&
+                                        Array.isArray(inventory.equipe) ? inventory.equipe.length : 0) }}
                                         équipe(s)</span>
                                     <div class="w-2 h-2 bg-primary rounded-full"></div>
                                 </div>
                             </div>
                         </div>
                         <div class="p-6">
-                            <!-- Grille des équipes avec design moderne -->
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <div v-for="(team, index) in inventory.equipe" :key="index"
+                                <div v-for="(team, index) in (inventory.equipe && Array.isArray(inventory.equipe) ? inventory.equipe : [])"
+                                    :key="index"
                                     class="group relative bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 rounded-xl p-4 border border-gray-200/60 dark:border-gray-600/60 hover:shadow-lg hover:border-primary-300 dark:hover:border-primary-600 transition-all duration-300 hover:-translate-y-1">
 
-                                    <!-- Badge de statut -->
                                     <div class="absolute top-3 right-3">
                                         <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                                     </div>
 
-                                    <!-- Avatar et informations principales -->
                                     <div class="flex items-start gap-3 mb-3">
                                         <div class="relative">
                                             <!-- Avatar avec gradient -->
                                             <div
-                                                class="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-lg">
-                                                <span class="text-white font-bold text-lg">{{
-                                                    team.name.charAt(0).toUpperCase()
-                                                    }}</span>
+                                                class="w-8 h-8 w-8 h-8 bg-gradient-to-br bg-blue-100 bg-blue-400 rounded-lg flex items-center justify-center">
+                                                <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+                                                </svg>
                                             </div>
                                             <!-- Indicateur de statut -->
                                             <div
@@ -484,7 +480,7 @@
                                         <div class="flex-1 min-w-0">
                                             <h4
                                                 class="font-semibold text-gray-800 dark:text-white-light text-base truncate">
-                                                {{ team.name }}
+                                                {{ team.user && team.user.username ? team.user.username : 'Équipe sans nom' }}
                                             </h4>
                                             <p class="text-sm text-gray-500 dark:text-gray-400 truncate">
                                                 Équipe {{ index + 1 }}
@@ -521,12 +517,12 @@
                             </div>
 
                             <!-- Message si aucune équipe -->
-                            <div v-if="inventory.equipe.length === 0" class="text-center py-8">
+                            <div v-if="!inventory.equipe || !Array.isArray(inventory.equipe) || inventory.equipe.length === 0"
+                                class="text-center py-8">
                                 <div
-                                    class="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                                    <svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                                        <path
-                                            d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
+                                    class="w-8 h-8 w-8 h-8 bg-gradient-to-br bg-blue-100 bg-blue-400 rounded-lg flex items-center justify-center">
+                                    <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
                                     </svg>
                                 </div>
                                 <h4 class="text-lg font-medium text-gray-900 dark:text-white-light mb-2">Aucune équipe
@@ -554,6 +550,7 @@
                                     </div>
                                     <div>
                                         <h3 class="text-lg font-semibold text-gray-800 dark:text-white-light">Ressources
+                                            (Optionnel)
                                         </h3>
                                         <p class="text-sm text-gray-500 dark:text-gray-400">Ressources nécessaires pour
                                             l'inventaire</p>
@@ -570,7 +567,8 @@
                                         Ajouter des ressources
                                     </button>
                                     <span class="text-sm text-gray-500 dark:text-gray-400">{{
-                                        inventory.ressources.length }}
+                                        (inventory.ressources && Array.isArray(inventory.ressources) ?
+                                        inventory.ressources.length : 0) }}
                                         ressource(s)</span>
                                     <div class="w-2 h-2 bg-purple-500 rounded-full"></div>
                                 </div>
@@ -579,17 +577,16 @@
                         <div class="p-6">
                             <!-- Grille des ressources avec design moderne -->
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <div v-for="(ressource, index) in inventory.ressources" :key="index"
+                                <div v-for="(ressource, index) in (inventory.ressources && Array.isArray(inventory.ressources) ? inventory.ressources : [])"
+                                    :key="index"
                                     class="group relative bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 rounded-xl p-4 border border-gray-200/60 dark:border-gray-600/60 hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-600 transition-all duration-300 hover:-translate-y-1">
-
                                     <!-- Badge de quantité -->
                                     <div class="absolute top-3 right-3">
                                         <div class="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 rounded-full">
                                             <span class="text-xs font-bold text-purple-600 dark:text-purple-400">{{
-                                                ressource.quantity }}</span>
+                                                ressource.quantity || 0 }}</span>
                                         </div>
                                     </div>
-
                                     <!-- Icône et informations principales -->
                                     <div class="flex items-start gap-3 mb-3">
                                         <div class="relative">
@@ -610,10 +607,10 @@
                                         <div class="flex-1 min-w-0">
                                             <h4
                                                 class="font-semibold text-gray-800 dark:text-white-light text-base truncate">
-                                                {{ ressource.ressource_nom }}
+                                                {{ ressource.ressource_nom || 'Ressource sans nom' }}
                                             </h4>
                                             <p class="text-sm text-gray-500 dark:text-gray-400 truncate">
-                                                {{ ressource.reference }}
+                                                {{ ressource.reference || 'Référence non définie' }}
                                             </p>
                                         </div>
                                     </div>
@@ -623,7 +620,7 @@
                                         <div class="flex items-center justify-between">
                                             <span class="text-xs text-gray-500 dark:text-gray-400">Quantité</span>
                                             <span class="text-sm font-semibold text-purple-600 dark:text-purple-400">{{
-                                                ressource.quantity }}</span>
+                                                ressource.quantity || 0 }}</span>
                                         </div>
                                         <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                                             <div class="bg-gradient-to-r from-purple-500 to-purple-600 h-2 rounded-full transition-all duration-500"
@@ -660,7 +657,8 @@
                             </div>
 
                             <!-- Message si aucune ressource -->
-                            <div v-if="inventory.ressources.length === 0" class="text-center py-8">
+                            <div v-if="!inventory.ressources || !Array.isArray(inventory.ressources) || inventory.ressources.length === 0"
+                                class="text-center py-8">
                                 <div
                                     class="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
                                     <svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
@@ -711,8 +709,7 @@
                                         class="flex items-center justify-between bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-lg px-4 hover:shadow-md transition-all duration-300 hover:-translate-y-0.3 h-9.5">
                                         <div class="flex items-center">
                                             <div class="flex items-center space-x-1">
-                                                <div
-                                                    class="w-1.5 h-1.5 bg-info rounded-full animate-bounce">
+                                                <div class="w-1.5 h-1.5 bg-info rounded-full animate-bounce">
                                                 </div>
                                                 <div class="w-1.5 h-1.5 bg-info rounded-full animate-bounce"
                                                     style="animation-delay: 0.1s"></div>
@@ -740,8 +737,7 @@
                                                 </div>
                                                 <div class="w-2 h-0.5 bg-success ml-1"></div>
                                             </div>
-                                            <span
-                                                class="text-sm font-medium text-gray-600 ml-3">Terminés</span>
+                                            <span class="text-sm font-medium text-gray-600 ml-3">Terminés</span>
                                         </div>
                                         <div class="flex items-center">
                                             <span class="text-lg font-medium text-gray-800 mr-2">{{
@@ -997,13 +993,14 @@ const onAddResources = async () => {
             return;
         }
 
-        // Assigner chaque ressource
-        for (const line of validLines) {
-            await assignResourceToInventory(
-                parseInt(line.resource),
-                line.quantity
-            );
-        }
+        // Préparer le tableau de ressources à assigner
+        const resourcesToAssign = validLines.map(line => ({
+            resource_id: parseInt(line.resource),
+            quantity: line.quantity
+        }));
+
+        // Assigner toutes les ressources en une seule fois
+        await assignResourceToInventory(resourcesToAssign);
 
         // Réinitialiser le modal
         showAddResourceModal.value = false;

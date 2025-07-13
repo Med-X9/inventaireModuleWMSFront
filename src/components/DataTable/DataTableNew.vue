@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useDataTable } from '@/composables/useDataTable'
 import type { DataTableProps } from '@/types/dataTable'
+import { cellRenderersService } from '@/services/cellRenderers'
 import DataTableHeader from './DataTableHeader.vue'
 import DataTableToolbar from './DataTableToolbar.vue'
 import DataTableBody from './DataTableBody.vue'
@@ -100,6 +101,24 @@ const formattedColumns = computed(() => {
     const columnsWithRowNumber = [rowNumberColumn, ...props.columns];
 
     return columnsWithRowNumber.map(column => {
+        // Utiliser le service cellRenderers pour détecter et appliquer les renderers appropriés
+        const renderer = cellRenderersService.getRenderer(column);
+
+        if (renderer) {
+            return {
+                ...column,
+                valueFormatter: (params: any) => {
+                    // Si la colonne a déjà un formateur personnalisé, l'utiliser
+                    if (column.valueFormatter) {
+                        return column.valueFormatter(params)
+                    }
+                    // Sinon, utiliser le renderer du service
+                    return renderer(params.value, column, params.data, params.rowIndex)
+                }
+            }
+        }
+
+        // Fallback pour les colonnes de type date
         if (column.dataType === 'date' || column.dataType === 'datetime') {
             return {
                 ...column,
@@ -113,6 +132,7 @@ const formattedColumns = computed(() => {
                 }
             }
         }
+
         return column
     })
 })

@@ -24,10 +24,8 @@
             <thead>
                 <tr>
                     <th v-if="rowSelection" class="selection-header">
-                        <input type="checkbox"
-                               :checked="selectAll"
-                               @change="toggleAllSelection"
-                               class="select-all-checkbox-input" />
+                        <input type="checkbox" :checked="selectAll" @change="toggleAllSelection"
+                            class="select-all-checkbox-input" />
                     </th>
                     <th v-for="col in columns" :key="col.field" class="column-header">
                         <div class="header-content">
@@ -36,15 +34,12 @@
                             <!-- Contrôles de tri et filtrage -->
                             <div class="header-controls">
                                 <!-- Bouton de tri avec icônes à trois états -->
-                                <button v-if="col.sortable !== false"
-                                        @click="handleSort(col.field)"
-                                        class="sort-btn"
-                                        :class="{
-                                            'active': currentSortField === col.field,
-                                            'sort-asc': currentSortField === col.field && currentSortDirection === 'asc',
-                                            'sort-desc': currentSortField === col.field && currentSortDirection === 'desc'
-                                        }"
-                                        :title="getSortTooltip(col.field)">
+                                <button v-if="col.sortable !== false" @click="handleSort(col.field)" class="sort-btn"
+                                    :class="{
+                                        'active': currentSortField === col.field,
+                                        'sort-asc': currentSortField === col.field && currentSortDirection === 'asc',
+                                        'sort-desc': currentSortField === col.field && currentSortDirection === 'desc'
+                                    }" :title="getSortTooltip(col.field)">
 
                                     <IconSortBoth v-if="currentSortField !== col.field" class="w-3 h-3" />
                                     <!-- Icône ascendant -->
@@ -54,24 +49,17 @@
                                 </button>
 
                                 <!-- Bouton de filtre -->
-                                <button v-if="col.filterable !== false"
-                                        @click="toggleFilter(col.field)"
-                                        class="filter-btn"
-                                        :class="{ 'active': showFilter === col.field }"
-                                        title="Filtrer">
+                                <button v-if="col.filterable !== false" @click="toggleFilter(col.field)"
+                                    class="filter-btn" :class="{ 'active': showFilter === col.field }" title="Filtrer">
                                     <IconFilter class="w-3 h-3" />
                                 </button>
                             </div>
                         </div>
 
                         <!-- Filtre inline -->
-                        <FilterDropdown
-                            v-if="showFilter === col.field"
-                            :column="col"
-                            :isVisible="showFilter === col.field"
-                            :currentFilter="activeFilters[col.field]"
-                            @apply="applyFilter"
-                            @clear="() => clearFilter(col.field)"
+                        <FilterDropdown v-if="showFilter === col.field" :column="col"
+                            :isVisible="showFilter === col.field" :currentFilter="activeFilters[col.field]"
+                            @apply="applyFilter" @clear="() => clearFilter(col.field)"
                             @close="() => closeFilter(col.field)" />
                     </th>
                     <th v-if="actions.length > 0" class="actions-header">Actions</th>
@@ -87,70 +75,54 @@
                     <!-- Ligne principale -->
                     <tr>
                         <td v-if="rowSelection" class="selection-cell">
-                            <input type="checkbox"
-                                   :checked="isRowSelected(row.id || row.reference || rowIndex)"
-                                   @change="toggleRowSelection(row.id || row.reference || rowIndex)" />
+                            <input type="checkbox" :checked="isRowSelected(row.id || row.reference || rowIndex)"
+                                @change="toggleRowSelection(row.id || row.reference || rowIndex)" />
                         </td>
                         <td v-for="col in columns" :key="col.field" class="data-cell">
                             <!-- Utilisation du composant NestedDataExpander pour les colonnes avec données imbriquées -->
-                            <NestedDataExpander
-                                v-if="hasNestedData(row[col.field], col)"
-                                :row="row"
-                                :column="col"
-                                :value="row[col.field]"
-                                :isExpanded="isRowExpanded(row.id || row.reference || rowIndex)"
-                                :nestedLevel="0"
-                                @toggle="toggleExpansion(row.id || row.reference || rowIndex)">
+                            <NestedDataExpander v-if="hasNestedData(row[col.field], col)" :row="row" :column="col"
+                                :value="row[col.field]" :isExpanded="isRowExpanded(row.id || row.reference || rowIndex)"
+                                :nestedLevel="0" @toggle="toggleExpansion(row.id || row.reference || rowIndex)">
 
                                 <template #parent-content="{ row, column, value }">
-                                    <EditableCell
-                                        :value="value"
-                                        :column="column"
-                                        :row="row"
+                                    <EditableCell :value="value" :column="column" :row="row"
                                         :isEditing="isEditingCell(row.id || row.reference || rowIndex, column.field)"
                                         @start-edit="startEditCell(row.id || row.reference || rowIndex, column.field)"
-                                        @save-edit="saveEditCell"
-                                        @cancel-edit="cancelEditCell" />
+                                        @save-edit="saveEditCell" @cancel-edit="cancelEditCell" />
                                 </template>
 
                                 <template #nested-rows="{ nestedItems, parentRow, column, nestedLevel }">
-                                    <tr v-for="(item, index) in nestedItems"
-                                        :key="`nested-${parentRow.id}-${column.field}-${index}`"
-                                        class="nested-row">
-                                        <td v-for="otherCol in columns" :key="otherCol.field"
-                                            :class="{ 'nested-cell': otherCol.field === column.field }">
-                                            <div v-if="otherCol.field === column.field" class="nested-item-content">
-                                                <span class="nested-indicator">└─</span>
-                                                <span>{{ getNestedItemDisplay(item, column) }}</span>
-                                            </div>
-                                            <span v-else class="nested-empty">-</span>
-                                        </td>
-                                        <td v-if="actions.length > 0" class="actions-cell">
-                                            <!-- Actions pour les lignes imbriquées si nécessaire -->
-                                        </td>
-                                    </tr>
-                                </template>
-                            </NestedDataExpander>
-
-                            <!-- Affichage normal pour les colonnes sans données imbriquées -->
-                            <EditableCell
-                                v-else
-                                :value="row[col.field]"
-                                :column="col"
-                                :row="row"
-                                :isEditing="isEditingCell(row.id || row.reference || rowIndex, col.field)"
-                                @start-edit="startEditCell(row.id || row.reference || rowIndex, col.field)"
-                                @save-edit="saveEditCell"
-                                @cancel-edit="cancelEditCell" />
+                    <tr v-for="(item, index) in nestedItems" :key="`nested-${parentRow.id}-${column.field}-${index}`"
+                        class="nested-row">
+                        <td v-for="otherCol in columns" :key="otherCol.field"
+                            :class="{ 'nested-cell': otherCol.field === column.field }">
+                            <div v-if="otherCol.field === column.field" class="nested-item-content">
+                                <span class="nested-indicator">└─</span>
+                                <span>{{ getNestedItemDisplay(item, column) }}</span>
+                            </div>
+                            <span v-else class="nested-empty">-</span>
                         </td>
                         <td v-if="actions.length > 0" class="actions-cell">
-                            <ActionMenu :actions="actions" :row="row" />
+                            <!-- Actions pour les lignes imbriquées si nécessaire -->
                         </td>
                     </tr>
                 </template>
-            </tbody>
-        </table>
-    </div>
+                </NestedDataExpander>
+
+                <!-- Affichage normal pour les colonnes sans données imbriquées -->
+                <EditableCell v-else :value="row[col.field]" :column="col" :row="row"
+                    :isEditing="isEditingCell(row.id || row.reference || rowIndex, col.field)"
+                    @start-edit="startEditCell(row.id || row.reference || rowIndex, col.field)"
+                    @save-edit="saveEditCell" @cancel-edit="cancelEditCell" />
+                </td>
+                <td v-if="actions.length > 0" class="actions-cell">
+                    <ActionMenu :actions="actions" :row="row" />
+                </td>
+                </tr>
+</template>
+</tbody>
+</table>
+</div>
 </template>
 
 <script setup lang="ts">
@@ -756,6 +728,7 @@ tbody tr:hover {
     0% {
         background-position: -200% 0;
     }
+
     100% {
         background-position: 200% 0;
     }

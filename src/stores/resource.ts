@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import ResourceService from '@/services/ResourceService';
-import type { Resource, CreateResourceRequest, UpdateResourceRequest } from '@/models/Resource';
+import type { Resource, CreateResourceRequest, UpdateResourceRequest, AssignResourceRequest } from '@/models/Resource';
 import { alertService } from '@/services/alertService';
 
 export const useResourceStore = defineStore('resource', () => {
@@ -211,16 +211,12 @@ export const useResourceStore = defineStore('resource', () => {
     };
 
     // Assign resource to inventory
-    const assignResourceToInventory = async (inventoryId: number, resourceId: number, quantity: number) => {
+    const assignResourceToInventory = async (inventoryId: number, data: AssignResourceRequest[]) => {
         try {
             setLoading(true);
             clearError();
 
-            const result = await ResourceService.assignResourceToInventory({
-                inventory_id: inventoryId,
-                resource_id: resourceId,
-                quantity
-            });
+            const result = await ResourceService.assignResourceToInventory(inventoryId, data);
 
             await alertService.success({ text: 'Ressource assignée avec succès' });
             return result;

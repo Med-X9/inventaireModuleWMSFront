@@ -1,7 +1,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useJobStore } from '@/stores/job';
 import { useResourceStore } from '@/stores/resource';
 import { useWarehouseStore } from '@/stores/warehouse';
+import { useInventoryStore } from '@/stores/inventory';
 import { useSessionStore } from '@/stores/session';
 import { alertService } from '@/services/alertService';
 import { useDataTableFilters, type DataTableParams } from '@/composables/useDataTableFilters';
@@ -10,7 +12,10 @@ import type { FieldConfig } from '@/interfaces/form';
 const jobStore = useJobStore();
 const resourceStore = useResourceStore();
 const warehouseStore = useWarehouseStore();
+const inventoryStore = useInventoryStore();
 const sessionStore = useSessionStore();
+const route = useRoute();
+const router = useRouter();
 
 export interface RowNode {
     id: string;
@@ -47,17 +52,71 @@ export interface RowAction {
     onClick: (row: Record<string, unknown>) => void;
 }
 
-async function getInventoryIdFromReference(reference: string): Promise<number> {
-    return Number(reference) || 1;
-}
+// Fonction pour récupérer l'ID de l'inventaire par sa référence
+const fetchInventoryIdByReference = async (reference: string): Promise<number | null> => {
+    try {
+        // Charger la liste des inventaires si pas déjà fait
+        if (inventoryStore.inventories.length === 0) {
+            await inventoryStore.fetchInventories();
+        }
 
-async function getWarehouseIdFromReference(reference: string): Promise<number> {
-    return Number(reference) || 1;
-}
+        const inventory = inventoryStore.inventories.find(inv => inv.reference === reference);
 
-export function useAffecter(inventoryReference: string, warehouseReference: string) {
-    const inventoryId = ref<number|null>(null);
-    const warehouseId = ref<number|null>(null);
+        if (inventory) {
+            return inventory.id;
+        } else {
+            return null;
+        }
+    } catch (error) {
+        return null;
+    }
+};
+
+// Fonction pour récupérer l'ID de l'entrepôt par sa référence
+const fetchWarehouseIdByReference = async (reference: string): Promise<number | null> => {
+    try {
+        // Utiliser directement l'API warehouse par référence
+        const warehouseId = await warehouseStore.fetchWarehouseByReference(reference);
+
+        if (warehouseId) {
+            return warehouseId;
+        }
+
+        return null;
+    } catch (error) {
+        return null;
+    }
+};
+
+export function useAffecter(options?: { inventoryReference?: string, warehouseReference?: string }) {
+    // Priorité aux options, sinon fallback sur la route
+    const inventoryReference = options?.inventoryReference ?? (route.params.reference as string);
+    const warehouseReference = options?.warehouseReference ?? (route.params.warehouse as string);
+
+    // IDs récupérés depuis les références
+    const inventoryId = ref<number | null>(null);
+    const warehouseId = ref<number | null>(null);
+
+    // Fonction pour initialiser les IDs depuis les références
+    const initializeIdsFromReferences = async () => {
+        if (inventoryReference) {
+            inventoryId.value = await fetchInventoryIdByReference(inventoryReference);
+        }
+        if (warehouseReference) {
+            warehouseId.value = await fetchWarehouseIdByReference(warehouseReference);
+        }
+    };
+
+    // Fonction pour forcer la réinitialisation des IDs
+    const refreshIdsFromReferences = async () => {
+        // Réinitialiser les IDs
+        inventoryId.value = null;
+        warehouseId.value = null;
+
+        // Réinitialiser depuis les références
+        await initializeIdsFromReferences();
+    };
+
     const selectedRows = ref<RowNode[]>([]);
     const pendingChanges = ref<Map<string, Map<string, any>>>(new Map());
     const hasUnsavedChanges = computed(() => pendingChanges.value.size > 0);
@@ -640,8 +699,7 @@ export function useAffecter(inventoryReference: string, warehouseReference: stri
     onMounted(async () => {
         await initializeStores();
 
-        inventoryId.value = await getInventoryIdFromReference(inventoryReference);
-        warehouseId.value = await getWarehouseIdFromReference(warehouseReference);
+        await initializeIdsFromReferences();
 
         await fetchJobsValidated({
             page: 1,
@@ -694,6 +752,13 @@ export function useAffecter(inventoryReference: string, warehouseReference: stri
         handlePaginationChanged,
         handleSortChanged,
         handleFilterChanged,
-        handleGlobalSearchChanged
+        handleGlobalSearchChanged,
+        // Nouvelles fonctions pour la gestion des IDs
+        initializeIdsFromReferences,
+        refreshIdsFromReferences,
+        inventoryId: computed(() => inventoryId.value),
+        warehouseId: computed(() => warehouseId.value),
+        inventoryReference: computed(() => inventoryReference),
+        warehouseReference: computed(() => warehouseReference)
     };
 }

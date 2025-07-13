@@ -1,6 +1,5 @@
 <template>
     <div class="inventory-management-page">
-        <!-- Header avec statistiques -->
         <div class="page-header">
             <div class="header-content">
                 <div class="header-left">
@@ -18,9 +17,7 @@
             </div>
         </div>
 
-        <!-- Cartes de statistiques avec skeleton -->
         <div class="stats-grid">
-            <!-- Skeleton pour les statistiques pendant le chargement -->
             <template v-if="loading">
                 <div v-for="i in 4" :key="`stat-skeleton-${i}`" class="stat-card small skeleton-stat">
                     <div class="skeleton-stat-icon"></div>
@@ -31,51 +28,49 @@
                 </div>
             </template>
 
-            <!-- Statistiques réelles quand pas de chargement -->
             <template v-else>
                 <div class="stat-card small">
-                    <div class="stat-icon stat-total">
-                        <IconInfo class="w-6 h-6" />
-                    </div>
-                    <div class="stat-content">
+                    <div class="stat-header">
+                        <div class="stat-icon stat-total">
+                            <IconInfo class="w-4 h-4" />
+                        </div>
                         <div class="stat-value">{{ totalItems }}</div>
-                        <div class="stat-label">Total inventaires</div>
                     </div>
+                    <div class="stat-label">Total inventaires</div>
                 </div>
 
                 <div class="stat-card small">
-                    <div class="stat-icon stat-preparation">
-                        <IconCalendar class="w-6 h-6" />
-                    </div>
-                    <div class="stat-content">
+                    <div class="stat-header">
+                        <div class="stat-icon stat-preparation">
+                            <IconCalendar class="w-4 h-4" />
+                        </div>
                         <div class="stat-value">{{ getStatusCount('EN PREPARATION') }}</div>
-                        <div class="stat-label">En préparation</div>
                     </div>
+                    <div class="stat-label">En préparation</div>
                 </div>
 
                 <div class="stat-card small">
-                    <div class="stat-icon stat-realisation">
-                        <IconCheck class="w-6 h-6" />
-                    </div>
-                    <div class="stat-content">
+                    <div class="stat-header">
+                        <div class="stat-icon stat-realisation">
+                            <IconCheck class="w-4 h-4" />
+                        </div>
                         <div class="stat-value">{{ getStatusCount('EN REALISATION') }}</div>
-                        <div class="stat-label">En réalisation</div>
                     </div>
+                    <div class="stat-label">En réalisation</div>
                 </div>
 
                 <div class="stat-card small">
-                    <div class="stat-icon stat-completed">
-                        <IconLock class="w-6 h-6" />
-                    </div>
-                    <div class="stat-content">
+                    <div class="stat-header">
+                        <div class="stat-icon stat-completed">
+                            <IconLock class="w-4 h-4" />
+                        </div>
                         <div class="stat-value">{{ getStatusCount('TERMINE') + getStatusCount('CLOTURE') }}</div>
-                        <div class="stat-label">Terminés</div>
                     </div>
+                    <div class="stat-label">Terminés</div>
                 </div>
             </template>
         </div>
 
-        <!-- Tableau de données avec design amélioré -->
         <div class="datatable-container">
             <DataTableNew :columns="columns as DataTableColumnAny[]" :rowDataProp="inventories"
                 :actions="actions as ActionConfigAny[]" :pagination="true" :rowSelection="false" :enableFiltering="true"
@@ -89,7 +84,6 @@
             </DataTableNew>
         </div>
 
-        <!-- Modale d'import avec loader et erreur -->
         <Modal v-if="showImportModal" :model-value="showImportModal" @update:modelValue="showImportModal = $event"
             title="Import d'image de stock" size="md">
             <div v-if="isImporting" class="import-loading">
@@ -469,6 +463,13 @@ const testLoading = async () => {
     min-height: 70px;
 }
 
+.stat-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
 .stat-icon {
     display: flex;
     align-items: center;
@@ -476,7 +477,6 @@ const testLoading = async () => {
     width: 2rem;
     height: 2rem;
     border-radius: 8px;
-    margin-bottom: 0.75rem;
     background: linear-gradient(135deg, var(--stat-color) 0%, var(--stat-color-light) 100%);
     color: #1e293b;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);

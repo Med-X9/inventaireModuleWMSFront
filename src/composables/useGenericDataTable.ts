@@ -49,8 +49,8 @@ export function useGenericDataTable<T>(
             } else {
                 // Cas d'une réponse paginée
                 data.value = result.data || []
-                totalItems.value = result.totalItems || result.count || 0
-                totalPages.value = result.totalPages || Math.ceil(totalItems.value / pageSize.value)
+            totalItems.value = result.totalItems || result.count || 0
+            totalPages.value = result.totalPages || Math.ceil(totalItems.value / pageSize.value)
             }
 
             currentPage.value = params.page || 1

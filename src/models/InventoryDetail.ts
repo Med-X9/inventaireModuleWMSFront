@@ -8,7 +8,16 @@ export interface InventoryComptage {
 
 export interface InventoryEquipe {
     id: number;
-    name: string;
+    reference: string;
+    user: {
+        id: number;
+        username: string;
+        email: string;
+        nom: string;
+        prenom: string;
+        type: string;
+    }
+
 }
 
 export interface InventoryMagasin {

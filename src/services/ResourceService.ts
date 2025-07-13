@@ -119,12 +119,9 @@ export class ResourceService {
     /**
      * Assigner une ressource à un inventaire
      */
-    static async assignResourceToInventory(assignData: AssignResourceRequest): Promise<AssignResourceResponse> {
+    static async assignResourceToInventory(inventoryId: number, assignData: AssignResourceRequest[]): Promise<AssignResourceResponse> {
         try {
-            const response: AxiosResponse<AssignResourceResponse> = await axiosInstance.post(
-                `${API.endpoints.resource.base}/assign`,
-                assignData
-            );
+            const response: AxiosResponse<AssignResourceResponse> = await axiosInstance.post(`${API.endpoints.inventory.base}${inventoryId}/assign-resources-inventory/`,assignData);
             return response.data;
         } catch (error) {
             console.error('❌ Erreur lors de l\'assignation de la ressource:', error);

@@ -48,6 +48,7 @@ export function useInventoryManagement() {
             dataType: 'number',
             filterable: true,
             width: 80,
+            hide: true,
             editable: false,
             visible: true,
             draggable: true,
@@ -90,7 +91,7 @@ export function useInventoryManagement() {
             sortable: true,
             dataType: 'date',
             filterable: true,
-            width: 120,
+            width: 100,
             editable: false,
             visible: true,
             draggable: true,
@@ -101,6 +102,25 @@ export function useInventoryManagement() {
         {
             headerName: 'Statut',
             field: 'status',
+            badgeStyles: [
+                {
+                    value: 'EN PREPARATION',
+                    class: 'inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-yellow-600/20 ring-inset'
+                },
+                {
+                    value: 'EN REALISATION',
+                    class: 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-600/20 ring-inset'
+                },
+                {
+                    value: 'TERMINE',
+                    class: 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-800 ring-1 ring-green-600/20 ring-inset'
+                },
+                {
+                    value: 'CLOTURE',
+                    class: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+                }
+            ],
+            badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
             sortable: true,
             dataType: 'select',
             filterable: true,
@@ -121,47 +141,7 @@ export function useInventoryManagement() {
                     { label: 'CLOTURE', value: 'CLOTURE' }
                 ]
             },
-            valueFormatter: (params: any) => {
-                const status = params.value;
-                const statusMap = {
-                    'EN PREPARATION': 'EN PREPARATION',
-                    'EN REALISATION': 'EN REALISATION',
-                    'TERMINE': 'TERMINE',
-                    'CLOTURE': 'CLOTURE'
-                };
-                return statusMap[status] || status;
-            },
-            cellRenderer: (params: any) => {
-                const status = params.value;
-                let badgeClasses = '';
-                let displayStatus = status;
 
-                // Gestion des cas où le statut est null, undefined ou vide
-                if (!status || status === '' || status === null || status === undefined) {
-                    badgeClasses = '';
-                } else {
-                    // Mapping des statuts vers les classes de badges
-                    switch (status) {
-                        case 'EN PREPARATION':
-                            badgeClasses = 'inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-yellow-600/20 ring-inset'; // Bleu
-                            break;
-                        case 'EN REALISATION':
-                            badgeClasses = 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-600/20 ring-inset'; // Jaune/Orange
-                            break;
-                        case 'TERMINE':
-                            badgeClasses = 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-800 ring-1 ring-green-600/20 ring-inset'; // Vert
-                            break;
-                        case 'CLOTURE':
-                            badgeClasses = 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'; // Gris
-                            break;
-                        default:
-                            badgeClasses = 'badge-light'; // Gris clair pour statuts inconnus
-                    }
-                }
-
-                // Retourne le HTML du badge avec les classes CSS appropriées
-                return `<span class="${badgeClasses}">${status}</span>`;
-            }
         },
         {
             headerName: 'Type',
@@ -169,7 +149,7 @@ export function useInventoryManagement() {
             sortable: true,
             dataType: 'text',
             filterable: true,
-            width: 120,
+            width: 90,
             editable: false,
             visible: true,
             draggable: true,
@@ -183,7 +163,7 @@ export function useInventoryManagement() {
             sortable: true,
             dataType: 'date',
             filterable: true,
-            width: 140,
+            width: 90,
             editable: false,
             visible: false,
             draggable: true,
@@ -197,7 +177,7 @@ export function useInventoryManagement() {
             sortable: true,
             dataType: 'date',
             filterable: true,
-            width: 140,
+            width: 90,
             editable: false,
             visible: false,
             draggable: true,
@@ -211,7 +191,7 @@ export function useInventoryManagement() {
             sortable: true,
             dataType: 'date',
             filterable: true,
-            width: 140,
+            width: 90,
             editable: false,
             visible: false,
             draggable: true,
@@ -225,7 +205,7 @@ export function useInventoryManagement() {
             sortable: true,
             dataType: 'date',
             filterable: true,
-            width: 140,
+            width: 90,
             editable: false,
             visible: false,
             draggable: true,
@@ -239,7 +219,7 @@ export function useInventoryManagement() {
             sortable: true,
             dataType: 'text',
             filterable: true,
-            width: 150,
+            width: 100,
             editable: false,
             visible: true,
             draggable: true,
