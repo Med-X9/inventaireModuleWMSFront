@@ -768,43 +768,20 @@
                 <div v-for="(line, index) in resourceLines" :key="index"
                     class="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
 
-                    <!-- Sélecteur de ressource -->
-                    <div class="flex-1">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Ressource {{ index + 1 }}
-                        </label>
-                        <select v-model="line.resource"
-                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                            required>
-                            <option value="">Choisissez une ressource</option>
-                            <option v-for="option in getAvailableResourceOptions(index)" :key="option.value"
-                                :value="option.value">
-                                {{ option.label }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <!-- Champ quantité -->
-                    <div class="w-32">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Quantité
-                        </label>
-                        <input v-model.number="line.quantity" type="number" min="1"
-                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                            required>
-                    </div>
-
-                    <!-- Bouton supprimer -->
-                    <div class="flex items-end">
-                        <button v-if="resourceLines.length > 1" @click="removeResourceLine(index)" type="button"
-                            class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors">
-                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd"
-                                    d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                                    clip-rule="evenodd" />
-                            </svg>
-                        </button>
-                    </div>
+                    <FormBuilder
+                        v-model="resourceLines[index]"
+                        :fields="resourceFields(index)"
+                        :columns="2"
+                        hide-submit
+                    />
+                    <button v-if="resourceLines.length > 1" @click="removeResourceLine(index)" type="button"
+                        class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd"
+                                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                                clip-rule="evenodd" />
+                        </svg>
+                    </button>
                 </div>
             </div>
 
@@ -840,7 +817,6 @@
 import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import DataTableNew from '@/components/DataTable/DataTableNew.vue';
-import GridView from '@/components/GridView/GridView.vue';
 import Modal from '@/components/Modal.vue';
 import { useInventoryDetail } from '@/composables/useInventoryDetail';
 import IconDownload from '@/components/icon/icon-download.vue';
@@ -849,7 +825,10 @@ import IconEdit from '@/components/icon/icon-edit.vue';
 import IconCancel from '@/components/icon/icon-cancel.vue';
 import IconCheck from '@/components/icon/icon-check.vue';
 import IconLock from '@/components/icon/icon-lock.vue';
-import type { ComptageConfig } from '@/interfaces/inventoryCreation';
+import { useResourceStore } from '@/stores/resource';
+import { computed } from 'vue';
+import FormBuilder from '@/components/Form/FormBuilder.vue';
+import type { FieldConfig } from '@/interfaces/form';
 
 const route = useRoute();
 const inventoryReference = route.params.reference as string;
@@ -894,6 +873,15 @@ const {
     removeResourceFromInventory,
     getAvailableResources
 } = useInventoryDetail(inventoryReference);
+
+const resourceStore = useResourceStore();
+
+const resourceOptions = computed(() => {
+    return resourceStore.getResources.map(resource => ({
+        value: resource.id?.toString() || resource.reference,
+        label: resource.ressource_nom || resource.reference || `Ressource ${resource.reference}`
+    }));
+});
 
 // Helper function to check if comptage has any option enabled
 const hasAnyOption = (comptage: any): boolean => {
@@ -959,19 +947,33 @@ const removeResourceLine = (index: number) => {
     }
 };
 
-const getAvailableResourceOptions = (currentIndex: number) => {
-    // Filtrer les ressources déjà sélectionnées dans les autres lignes
-    const selectedResources = resourceLines.value
-        .map((line, index) => index !== currentIndex ? line.resource : null)
-        .filter(Boolean);
+// Exemple d'options pour le select (à remplacer par les vraies ressources du store)
+// resourceOptions est déjà utilisé dans le projet, on suppose qu'il est accessible
 
-    return availableResources.value
-        .filter(resource => resource && resource.id !== undefined && resource.id !== null && !selectedResources.includes(resource.id.toString()))
-        .map(resource => ({
-            value: resource.id.toString(),
-            label: `${resource.ressource_nom} (${resource.reference})`
-        }));
+// Fonction pour filtrer les options disponibles pour chaque ligne (éviter les doublons)
+const getAvailableResourceOptions = (currentIndex) => {
+  const selected = resourceLines.value.map((line, idx) => idx !== currentIndex ? line.resource : null).filter(Boolean);
+  return resourceOptions.value.filter(opt => !selected.includes(opt.value));
 };
+
+// Champs dynamiques pour FormBuilder (select + input number)
+const resourceFields = (index: number): FieldConfig[] => [
+  {
+    key: 'resource',
+    label: 'Ressource',
+    type: 'select',
+    options: getAvailableResourceOptions(index),
+    required: true,
+    props: { placeholder: 'Choisissez une ressource' }
+  },
+  {
+    key: 'quantity',
+    label: 'Quantité',
+    type: 'number',
+    required: true,
+    props: { min: 1, type: 'number', inputmode: 'numeric', placeholder: 'Quantité' }
+  }
+];
 
 // Fonction pour charger les ressources disponibles
 const loadAvailableResources = async () => {
@@ -1016,13 +1018,15 @@ const onAddResources = async () => {
 
 // Fonction pour ouvrir le modal d'ajout de ressources
 const openAddResourceModal = async () => {
+    await resourceStore.fetchResources(); // S'assurer que les ressources sont chargées
     await loadAvailableResources();
     // Toujours réinitialiser à une seule ligne vide à chaque ouverture
     resourceLines.value = [{ resource: '', quantity: 1 }];
     showAddResourceModal.value = true;
 };
 
-onMounted(() => {
+onMounted(async () => {
+    await resourceStore.fetchResources(); // Charger les ressources au montage
     loadDetailData();
 });
 </script>

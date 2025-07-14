@@ -100,7 +100,7 @@ const isFieldRequired = (field: FieldConfig): boolean => {
 };
 
 // Composant à utiliser selon le type de champ
-const getFieldComponent = (type: string) => {
+const getFieldComponent = (type: FieldConfig["type"]) => {
     const componentMap: Record<string, any> = {
         'text': TextInput,
         'email': TextInput,
@@ -109,7 +109,8 @@ const getFieldComponent = (type: string) => {
         'radio-group': RadioGroupInput,
         'select': SelectField,
         'multi-select-with-dates': MultiSelectWithDates,
-        'button-group': ButtonGroupInput
+        'button-group': ButtonGroupInput,
+        'number': TextInput // Ajout pour supporter les champs numériques
     };
     return componentMap[type] || TextInput;
 };

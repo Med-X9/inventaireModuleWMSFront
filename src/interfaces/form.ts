@@ -1,7 +1,7 @@
 export interface FieldConfig {
     key: string;
     label: string;
-    type: 'text' | 'email' | 'date' | 'select' | 'checkbox' | 'radio' | 'button-group' | 'radio-group' | 'multi-select-with-dates';
+    type: 'text' | 'email' | 'date' | 'select' | 'checkbox' | 'radio' | 'button-group' | 'radio-group' | 'multi-select-with-dates' | 'number';
     options?: Array<string | SelectOption>;
     multiple?: boolean;
     searchable?: boolean;
