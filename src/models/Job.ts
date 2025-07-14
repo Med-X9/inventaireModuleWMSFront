@@ -87,6 +87,12 @@ export interface DeleteJobResponse {
     };
 }
 
+export interface JobReadyResponse {
+    success: boolean;
+    message: string;
+    
+}
+
 export interface JobErrorResponse {
     success: false;
     message: string;

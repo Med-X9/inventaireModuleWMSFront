@@ -59,7 +59,7 @@ export class InventoryService {
 
     static async update(id: number | string, data: Partial<InventoryTable>): Promise<AxiosResponse<InventoryTable>> {
         try {
-            return await axiosInstance.put<InventoryTable>(`${API.endpoints.inventory.base}${id}/`, data);
+            return await axiosInstance.put<InventoryTable>(`${API.endpoints.inventory.base}${id}/update/`, data);
         } catch (error) {
             throw error;
         }

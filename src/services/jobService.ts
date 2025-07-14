@@ -13,7 +13,8 @@ import type {
     JobPaginatedResponse,
     JobAssignmentsTeamRequest,
     JobAssignmentsResourceRequest,
-    JobManualAssignmentsRequest
+    JobManualAssignmentsRequest,
+    JobReadyResponse
 } from '@/models/Job';
 import API from '@/api';
 
@@ -64,6 +65,16 @@ export class JobService {
     // Supprimer un job
     static async delete(job_ids: number[]): Promise<DeleteJobResponse> {
         const response = await axiosInstance.delete<DeleteJobResponse>(`${this.baseUrlJob}delete/`, { data: { job_ids } });
+        return response.data;
+    }
+
+    static async jobReady(job_ids: number[]): Promise<JobReadyResponse> {
+        const response = await axiosInstance.post<JobReadyResponse>(`${this.baseUrlJob}ready/`, { job_ids:  job_ids  });
+        return response.data;
+    }
+
+    static async jobReset(job_ids: number[]): Promise<JobReadyResponse> {
+        const response = await axiosInstance.post<JobReadyResponse>(`${this.baseUrlJob}reset-assignments/`, { job_ids:  job_ids  });
         return response.data;
     }
 
@@ -120,10 +131,7 @@ export class JobService {
         return response.data;
     }
 
-    static async jobPret(job_ids:number[]):Promise<JobAssignmentsTeamRequest>{
-        const response = await axiosInstance.post<JobAssignmentsTeamRequest>(`${this.baseUrlInventory}assign-jobs/`,job_ids);
-        return response.data;
-    }
+
 
     static async jobAssignmentsTeam(inventoryId:number,data:JobAssignmentsTeamRequest):Promise<JobAssignmentsTeamRequest>{
         const response = await axiosInstance.post<JobAssignmentsTeamRequest>(`${this.baseUrlInventory}${inventoryId}/assign-jobs/`,data);
@@ -135,7 +143,7 @@ export class JobService {
         return response.data;
     }
 
-    static async jobManualAssignments(data:JobManualAssignmentsRequest):Promise<JobManualAssignmentsRequest>{
+    static async jobManualAssignments(data:JobManualAssignmentsRequest[]):Promise<JobManualAssignmentsRequest>{
         const response = await axiosInstance.post<JobManualAssignmentsRequest>(`${this.baseUrlInventory}assign-jobs-manual/`,data);
         return response.data;
     }

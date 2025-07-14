@@ -3,19 +3,19 @@
         <!-- En-tête -->
         <div class="flex flex-wrap gap-2 mb-4 justify-end">
             <!-- Buttons for "En préparation" status -->
-            <template v-if="inventory?.status?.toLowerCase() === 'EN PREPARATION'">
+            <template v-if="inventory?.status == 'EN PREPARATION'">
                 <button class="btn btn-primary p-2 px-4 flex items-center gap-2" @click="launchInventory">
                     <IconPlay class="w-4 h-4" />
                     Lancer
                 </button>
-                <button class="btn btn-primary p-2 px-4 flex items-center gap-2" @click="editInventory">
+                <button class="btn btn-outline-primary p-2 px-4 flex items-center gap-2" @click="editInventory">
                     <IconEdit class="w-4 h-4" />
                     Modifier
                 </button>
             </template>
 
             <!-- Buttons for "En réalisation" status -->
-            <template v-else-if="inventory?.status?.toLowerCase() === 'EN REALISATION'">
+            <template v-else-if="inventory?.status === 'EN REALISATION'">
                 <button class="btn btn-danger p-2 px-4 flex items-center gap-2" @click="cancelInventory">
                     <IconCancel class="w-4 h-4" />
                     Annuler
@@ -31,7 +31,7 @@
             </template>
 
             <!-- Buttons for "Terminé" status -->
-            <template v-else-if="inventory?.status?.toLowerCase() === 'TERMINE'">
+            <template v-else-if="inventory?.status === 'TERMINE'">
                 <button class="btn btn-primary p-2 px-4 flex items-center gap-2" @click="closeInventory">
                     <IconLock class="w-4 h-4" />
                     Clôturer
@@ -39,7 +39,7 @@
             </template>
 
             <!-- PDF button - always visible except for "Clôturé" status where it's the only button -->
-            <button type="button" @click="exportToPDF" class="btn btn-primary p-2 px-4 flex items-center gap-2">
+            <button type="button" @click="exportToPDF" class="btn btn-secondary p-2 px-4 flex items-center gap-2">
                 <IconDownload class="w-4 h-4" />
                 PDF
             </button>

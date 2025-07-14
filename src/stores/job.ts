@@ -16,7 +16,8 @@ import type {
     JobResult,
     JobAssignmentsTeamRequest,
     JobAssignmentsResourceRequest,
-    JobManualAssignmentsRequest
+    JobManualAssignmentsRequest,
+    JobReadyResponse
 } from '@/models/Job';
 
 export const useJobStore = defineStore('job', () => {
@@ -508,7 +509,7 @@ export const useJobStore = defineStore('job', () => {
         }
     };
 
-    const assignJobsManual = async (data: JobManualAssignmentsRequest): Promise<JobManualAssignmentsRequest> => {
+    const assignJobsManual = async (data: JobManualAssignmentsRequest[]): Promise<JobManualAssignmentsRequest> => {
         loading.value = true;
         error.value = null;
         try {
@@ -521,6 +522,15 @@ export const useJobStore = defineStore('job', () => {
             loading.value = false;
         }
     };
+
+    const jobReady = async (job_ids: number[]): Promise<JobReadyResponse> => {
+        return await JobService.jobReady(job_ids);
+    };
+
+    const jobReset = async (job_ids: number[]): Promise<JobReadyResponse> => {
+        return await JobService.jobReset(job_ids);
+    };
+
     const clearError = () => {
         error.value = null;
     };
@@ -579,5 +589,7 @@ export const useJobStore = defineStore('job', () => {
         clearError,
         clearCurrentJob,
         resetState,
+        jobReady,
+        jobReset,
     };
 });

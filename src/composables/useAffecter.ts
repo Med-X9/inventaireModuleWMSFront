@@ -8,6 +8,7 @@ import { useSessionStore } from '@/stores/session';
 import { alertService } from '@/services/alertService';
 import { useDataTableFilters, type DataTableParams } from '@/composables/useDataTableFilters';
 import type { FieldConfig } from '@/interfaces/form';
+import { JobManualAssignmentsRequest } from '@/models/Job';
 
 const jobStore = useJobStore();
 const resourceStore = useResourceStore();
@@ -203,7 +204,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             value: resource.id?.toString() || resource.reference,
             label: resource.libelle || resource.reference || `Ressource ${resource.reference}`
         }));
-        console.log('🔍 Options des ressources:', options);
         return options;
     });
 
@@ -239,7 +239,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             },
             validators: [{
                 fn: v => {
-                    console.log('🔍 Validation des ressources:', v, typeof v, Array.isArray(v));
                     return Array.isArray(v) && v.length > 0;
                 },
                 msg: 'Sélectionnez au moins une ressource'
@@ -304,18 +303,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         pendingChanges.value.get(jobId)!.set(field, value);
     }
 
-    async function saveToDatabase(jobId: string, field: string, value: any): Promise<void> {
-        try {
-            await new Promise(resolve => setTimeout(resolve, 500));
-        } catch (error) {
-            console.error('Erreur lors de la sauvegarde:', error);
-            alertService.error({
-                title: 'Erreur de sauvegarde',
-                text: 'Les modifications n\'ont pas pu être sauvegardées en base de données.'
-            });
-            throw error;
-        }
-    }
 
     async function saveAllChanges() {
         if (pendingChanges.value.size === 0) {
@@ -327,10 +314,10 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             alertService.info({ text: 'Sauvegarde en cours...' });
 
             // Préparer les données pour assignJobsManual
-            const manualAssignments: any[] = [];
+            const manualAssignments: JobManualAssignmentsRequest[] = [];
 
             for (const [jobId, changes] of pendingChanges.value.entries()) {
-                const jobData: any = {
+                const jobData: JobManualAssignmentsRequest = {
                     job_id: parseInt(jobId),
                     team1: null,
                     date1: null,
@@ -359,9 +346,22 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                             jobData.date2 = value;
                             break;
                         case 'resources':
-                            // Les ressources sont maintenant des IDs directement
+                            // Les ressources peuvent être des IDs ou des références
                             if (Array.isArray(value)) {
-                                const resourceIds = value.map(id => parseInt(id)).filter(id => !isNaN(id));
+                                const resourceIds: number[] = [];
+                                for (const resourceValue of value) {
+                                    // Essayer d'abord de convertir en ID numérique
+                                    const numericId = parseInt(resourceValue);
+                                    if (!isNaN(numericId)) {
+                                        resourceIds.push(numericId);
+                                    } else {
+                                        // Si ce n'est pas un ID numérique, chercher la ressource par référence
+                                        const resource = resourceStore.getResources.find(r => r.reference === resourceValue);
+                                        if (resource && resource.id) {
+                                            resourceIds.push(resource.id);
+                                        }
+                                    }
+                                }
                                 jobData.resources = resourceIds;
                             }
                             break;
@@ -372,9 +372,9 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             }
 
             // Envoyer les modifications via assignJobsManual
-            for (const assignment of manualAssignments) {
-                await jobStore.assignJobsManual(assignment);
-            }
+
+            await jobStore.assignJobsManual(manualAssignments);
+
 
             pendingChanges.value.clear();
 
@@ -439,7 +439,11 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                     const validResourceIds = resourceStore.getResources
                         .filter(resource => resource && resource.id !== undefined && resource.id !== null)
                         .map(r => r.id!.toString());
-                    const invalidResources = newValue.filter(resource => !validResourceIds.includes(resource));
+                    const validResourceReferences = resourceStore.getResources
+                        .filter(resource => resource && resource.reference)
+                        .map(r => r.reference);
+                    const allValidValues = [...validResourceIds, ...validResourceReferences];
+                    const invalidResources = newValue.filter(resource => !allValidValues.includes(resource));
                     if (invalidResources.length > 0) {
                         isValid = false;
                         errorMessage = `Ressources invalides: ${invalidResources.join(', ')}`;
@@ -611,18 +615,65 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         selectedRows.value = [];
     }
 
+    async function handleReadyClick() {
+        if (!selectedRows.value.length) {
+            alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
+            return;
+        }
+        const jobIds: number[] = selectedRows.value.map(r => parseInt(r.id));
+        await jobStore.jobReady(jobIds);
+        alertService.success({ text: `${jobIds.length} job(s) mis en statut 'Prêt' avec succès !` });
+        selectedRows.value = [];
+        await fetchJobsValidated({
+            page: currentPage.value,
+            pageSize: pageSize.value,
+            sort: dataTableFilters.currentSortModel.value,
+            filter: dataTableFilters.currentFilterModel.value,
+            globalSearch: dataTableFilters.currentGlobalSearch.value
+        });
+    }
+
+    async function handleResetClick() {
+        if (!selectedRows.value.length) {
+            alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
+            return;
+        }
+        const jobIds: number[] = selectedRows.value.map(r => parseInt(r.id));
+        await jobStore.jobReset(jobIds);
+        alertService.success({ text: `${jobIds.length} job(s) réinitialisés avec succès !` });
+        selectedRows.value = [];
+        await fetchJobsValidated({
+            page: currentPage.value,
+            pageSize: pageSize.value,
+            sort: dataTableFilters.currentSortModel.value,
+            filter: dataTableFilters.currentFilterModel.value,
+            globalSearch: dataTableFilters.currentGlobalSearch.value
+        });
+    }
+
     async function handleResourceSubmit(data: Record<string, unknown>) {
         const { resources } = data as { resources: string[] };
-        console.log('🔍 Données reçues dans handleResourceSubmit:', data);
-        console.log('🔍 Ressources sélectionnées:', resources);
+
 
         const jobIds = selectedRows.value.map(r => r.id);
 
         try {
-            // Les ressources sont maintenant des IDs directement
-            const resourceIds = resources.map(id => parseInt(id)).filter(id => !isNaN(id));
+            // Les ressources peuvent être des IDs ou des références
+            const resourceIds: number[] = [];
+            for (const resourceValue of resources) {
+                // Essayer d'abord de convertir en ID numérique
+                const numericId = parseInt(resourceValue);
+                if (!isNaN(numericId)) {
+                    resourceIds.push(numericId);
+                } else {
+                    // Si ce n'est pas un ID numérique, chercher la ressource par référence
+                    const resource = resourceStore.getResources.find(r => r.reference === resourceValue);
+                    if (resource && resource.id) {
+                        resourceIds.push(resource.id);
+                    }
+                }
+            }
 
-            console.log('🔍 IDs de ressources convertis:', resourceIds);
 
             if (resourceIds.length === 0) {
                 alertService.error({
@@ -745,6 +796,8 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         handleResourceSubmit,
         handleTeamSubmit,
         loadSessionsIfNeeded,
+        handleReadyClick,
+        handleResetClick,
         currentPage: computed(() => currentPage.value),
         totalPages: computed(() => totalPages.value),
         totalItems: computed(() => totalItems.value),

@@ -32,7 +32,7 @@ export function useInventoryCreation() {
         step1Data: {
             libelle: '',
             date: '',
-            inventory_type: 'GENERAL', // Valeur par défaut
+            inventory_type: '', // Valeur par défaut
             compte: '',
             magasin: []
         },
@@ -104,12 +104,6 @@ export function useInventoryCreation() {
             const firstComptage = state.comptages[0];
             const secondComptage = state.comptages[1];
 
-            console.log('🔍 Vérification du 3e comptage:', {
-                thirdComptageMode: thirdComptage?.mode,
-                firstComptageMode: firstComptage?.mode,
-                secondComptageMode: secondComptage?.mode,
-                modesDisponibles: modes
-            });
 
             // Vérifier que les comptages précédents existent
             if (!firstComptage?.mode || !secondComptage?.mode) {
@@ -119,21 +113,17 @@ export function useInventoryCreation() {
 
             // Si le 3e comptage n'a pas de mode défini et qu'il y a des modes disponibles
             if (!thirdComptage.mode && modes.length > 0) {
-                console.log('🎯 Initialisation automatique du 3e comptage');
 
                 // Scénario 1: 1er comptage = "image de stock"
                 if (firstComptage.mode === 'image de stock' && secondComptage.mode) {
-                    console.log('🎯 Forçage du mode pour image de stock');
                     thirdComptage.mode = secondComptage.mode;
                 }
                 // Scénario 2: 1er et 2e = "en vrac"
                 else if (firstComptage.mode === 'en vrac' && secondComptage.mode === 'en vrac') {
-                    console.log('🎯 Forçage du mode pour double en vrac');
                     thirdComptage.mode = 'en vrac';
                 }
                 // Scénario 3: 1er et 2e = "par article"
                 else if (firstComptage.mode === 'par article' && secondComptage.mode === 'par article') {
-                    console.log('🎯 Forçage du mode pour double par article');
                     thirdComptage.mode = 'par article';
                 }
                 // Scénario 4: Modes mixtes (en vrac + par article)
@@ -156,7 +146,6 @@ export function useInventoryCreation() {
             }
         }
 
-        console.log(`✅ Modes disponibles pour l'étape ${stepIndex}:`, modes);
         return modes;
     }
 

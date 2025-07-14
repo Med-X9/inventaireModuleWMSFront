@@ -188,7 +188,7 @@ export function useInventoryDetail(inventoryReference: string) {
     const getStatusClass = (status: string | undefined): string => {
         if (!status) return 'bg-secondary';
 
-        switch (status.toLowerCase()) {
+        switch (status) {
             case 'EN PREPARATION': return 'bg-warning-light text-warning';
             case 'EN REALISATION': return 'bg-info-light text-info';
             case 'TERMINEE': return 'bg-success-light text-success';

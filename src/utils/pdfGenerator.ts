@@ -1,6 +1,6 @@
 // src/utils/pdfGenerator.ts
 
-import { InventoryMagasin, InventoryRessource } from '@/models/InventoryDetail';
+import { InventoryEquipe, InventoryMagasin, InventoryRessource } from '@/models/InventoryDetail';
 import { jsPDF } from 'jspdf';
 import autoTable, { UserOptions } from 'jspdf-autotable';
 
@@ -15,10 +15,7 @@ interface Comptage {
 
 
 
-interface Team {
-    id: number;
-    name: string;
-}
+
 
 interface InventoryData {
     inventory: {
@@ -27,7 +24,7 @@ interface InventoryData {
         inventory_date: string;
         statut: string;
         contages?: Comptage[];
-        teams?: Team[];
+        teams?: InventoryEquipe[];
     };
     magasins?: InventoryMagasin[];
     resources?: InventoryRessource[];
@@ -111,19 +108,19 @@ export const generatePDF = async (data: InventoryData, filename: string) => {
 
     // Fonction pour dessiner une section avec fond coloré
     const drawSectionHeader = (title: string, y: number) => {
-        // Fond coloré pour l'en-tête de section
-        doc.setFillColor(colors.lightGray[0], colors.lightGray[1], colors.lightGray[2]);
+        // Fond blanc pour l'en-tête de section
+        doc.setFillColor(255, 255, 255);
         doc.rect(40, y - 15, pageWidth - 80, 25, 'F');
 
-        // Bordure
+        // Bordure jaune
         doc.setDrawColor(colors.primary[0], colors.primary[1], colors.primary[2]);
         doc.setLineWidth(2);
         doc.line(40, y - 15, pageWidth - 40, y - 15);
 
-        // Titre
+        // Titre en noir
         doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+        doc.setTextColor(0, 0, 0);
         doc.text(title, 50, y);
 
         return y + 20;
@@ -309,13 +306,15 @@ export const generatePDF = async (data: InventoryData, filename: string) => {
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(colors.white[0], colors.white[1], colors.white[2]);
-            doc.text(team.name.charAt(0).toUpperCase(), 60, cursorY + 12, { align: 'center' });
+            const initiale = team && team.user && team.user.username ? team.user.username.charAt(0).toUpperCase() : '?';
+            doc.text(initiale, 60, cursorY + 12, { align: 'center' });
 
             // Nom de l'équipe
             doc.setFontSize(11);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-            doc.text(team.name, 75, cursorY + 12);
+            const nomEquipe = team && team.user && team.user.username ? team.user.username : 'Équipe sans nom';
+            doc.text(nomEquipe, 75, cursorY + 12);
 
             cursorY += 25;
         });

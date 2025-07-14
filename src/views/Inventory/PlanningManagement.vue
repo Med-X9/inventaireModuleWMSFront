@@ -254,7 +254,7 @@ const viewOptions = [
 ];
 
 const goToInventoryDetail = () => {
-    router.push({ name: 'inventory-results', params: { reference: props.reference } });
+    router.push({ name: 'inventory-detail', params: { reference: props.reference } });
 };
 </script>
 

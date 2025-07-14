@@ -114,14 +114,7 @@
                         </transition>
                     </div>
 
-                    <!-- Bouton Pret -->
-                    <button @click="handleValiderClick"
-                        class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>Pret</span>
-                    </button>
+
 
                     <!-- Bouton Sauvegarder -->
                     <button @click="saveAllChanges" :disabled="!hasUnsavedChanges"
@@ -136,6 +129,24 @@
                         <span v-if="hasUnsavedChanges" class="bg-white text-green-600 px-2 py-0.5 rounded-full text-xs font-bold">
                             {{ Array.from(pendingChanges.values()).reduce((total, changes) => total + changes.size, 0) }}
                         </span>
+                    </button>
+
+                    <!-- Bouton Pret -->
+                    <button @click="handleReadyClick"
+                        class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#FECD1C] to-[#fec31c] hover:from-[#fec31c] hover:to-[#feb91c] text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#FECD1C] focus:ring-offset-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>Pret</span>
+                    </button>
+
+                    <!-- Bouton Annuler -->
+                    <button @click="handleResetClick"
+                        class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <span>Annuler</span>
                     </button>
                 </div>
             </div>
@@ -230,6 +241,8 @@ const {
     handleValiderClick,
     handleResourceSubmit,
     handleTeamSubmit,
+    handleReadyClick,
+    handleResetClick,
     // Pagination et filtrage
     currentPage,
     totalPages,
@@ -258,7 +271,7 @@ const sessionOptions = computed(() => {
 
 const resourceOptions = computed(() => {
     return resourceStore.getResources.map(resource => ({
-        value: resource.reference,
+        value: resource.id?.toString() || resource.reference,
         label: resource.ressource_nom || resource.reference || `Ressource ${resource.reference}`
     }));
 });
