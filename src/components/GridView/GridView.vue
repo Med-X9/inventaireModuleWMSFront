@@ -1,0 +1,224 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue';
+import type { Component } from 'vue';
+
+export type GridDataItem = Record<string, unknown>;
+
+export interface Stat<T> {
+  label: string;
+  value: keyof T;
+  suffix?: string;
+}
+
+export interface Action<T> {
+  label: string;
+  icon?: Component;
+  handler: (item: T) => void;
+  variant?: 'primary' | 'secondary';
+}
+
+const props = withDefaults(
+  defineProps<{
+    data: GridDataItem[];
+    titleField: keyof GridDataItem;
+    enableStats?: boolean;
+    stats?: Stat<GridDataItem>[];
+    enableActions?: boolean;
+    actions?: Action<GridDataItem>[];
+    showActionsIcon?: boolean;
+    selectedItem: GridDataItem | null;
+    onItemClick?: (item: GridDataItem) => void;
+    columns?: number;
+    itemsPerPage?: number;
+    enablePagination?: boolean;
+  }>(),
+  {
+    columns: 3,
+    stats: () => [],
+    enableStats: true,
+    titleField: '',
+    enableActions: true,
+    actions: () => [],
+    showActionsIcon: false,
+    selectedItem: null,
+    itemsPerPage: 6,
+    enablePagination: true,
+  }
+);
+
+const emit = defineEmits<{
+  (e: 'actionsClick', item: GridDataItem, event: MouseEvent): void;
+}>();
+
+const currentPage = ref(1);
+const totalPages = computed(() =>
+  Math.ceil(props.data.length / props.itemsPerPage)
+);
+const paginatedData = computed(() => {
+  if (!props.enablePagination) return props.data;
+  const start = (currentPage.value - 1) * props.itemsPerPage;
+  return props.data.slice(start, start + props.itemsPerPage);
+});
+
+watch(
+  () => props.data,
+  () => {
+    currentPage.value = 1;
+  }
+);
+
+const gridColsClass = computed(() => {
+  const base = 'grid grid-cols-1 gap-6';
+  const map: Record<number, string> = {
+    1: 'sm:grid-cols-1',
+    2: 'sm:grid-cols-2',
+    3: 'sm:grid-cols-2 lg:grid-cols-3',
+    4: 'sm:grid-cols-2 lg:grid-cols-4',
+  };
+  return `${base} ${map[props.columns] || map[3]}`;
+});
+
+const handleActionsClick = (item: GridDataItem, event: MouseEvent) => {
+  event.stopPropagation();
+  emit('actionsClick', item, event);
+};
+
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) currentPage.value++;
+};
+const prevPage = () => {
+  if (currentPage.value > 1) currentPage.value--;
+};
+
+const pageNumbers = computed(() => {
+  const pages: number[] = [];
+  const maxVisible = 5;
+  const half = Math.floor(maxVisible / 2);
+  let start = Math.max(1, currentPage.value - half);
+  let end = Math.min(totalPages.value, start + maxVisible - 1);
+  if (end - start + 1 < maxVisible) {
+    start = Math.max(1, end - maxVisible + 1);
+  }
+  for (let i = start; i <= end; i++) pages.push(i);
+  return pages;
+});
+
+const goToPage = (page: number) => {
+  currentPage.value = page;
+};
+</script>
+
+<template>
+  <div>
+    <slot name="header"></slot>
+
+    <div :class="gridColsClass">
+      <div
+        v-for="item in paginatedData"
+        :key="String(item.id ?? JSON.stringify(item))"
+        class="group relative border p-4 rounded-lg cursor-pointer transition hover:shadow-lg hover:-translate-y-1"
+        :class="{ 'bg-bg-white shadow-md': selectedItem?.id === item.id }"
+        @click="onItemClick?.(item)"
+      >
+        <div v-if="showActionsIcon" class="absolute top-2 right-2">
+          <button
+            @click="handleActionsClick(item, $event)"
+            class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700/20"
+          >
+            ⋮
+          </button>
+        </div>
+
+        <h3
+          v-if="titleField"
+          class="font-semibold text-lg mb-2 dark:text-white-light text-secondary"
+        >
+          {{ String(item[titleField]) }}
+        </h3>
+
+        <slot name="content" :item="item">
+          <div
+            v-if="enableStats && stats.length"
+            class="mt-4 pt-3 border-t grid grid-cols-2 gap-4 text-sm text-gray-600 dark:text-white-light"
+          >
+            <div v-for="(stat, idx) in stats" :key="idx">
+              <span class="font-medium">{{ String(item[stat.value]) }}</span>
+              {{ stat.suffix || '' }}
+            </div>
+          </div>
+
+          <div v-if="enableActions && actions.length" class="mt-4 flex flex-wrap gap-2">
+            <button
+              v-for="(action, idx) in actions"
+              :key="idx"
+              @click.stop="action.handler(item)"
+              class="flex items-center justify-center gap-2 px-4 py-2 rounded shadow-sm flex-1 min-w-0"
+              :class="action.variant === 'primary'
+                ? ' btn bg-primary text-white rounded-xl'
+                : 'btn btn-primary rounded-xl'"
+            >
+              <component
+                :is="action.icon"
+                class="w-4 h-4"
+                v-if="action.icon"
+              />
+              <span class="truncate">{{ action.label }}</span>
+            </button>
+          </div>
+        </slot>
+      </div>
+    </div>
+
+    <div v-if="enablePagination && totalPages > 1" class="mt-4">
+      <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <p class="text-sm text-gray-700 dark:text-gray-400">
+          Affichage de
+          <span class="font-medium">{{
+            (currentPage - 1) * itemsPerPage + 1
+          }}</span>
+          à
+          <span class="font-medium">{{
+            Math.min(currentPage * itemsPerPage, data.length)
+          }}</span>
+          sur <span class="font-medium">{{ data.length }}</span>
+        </p>
+        <div class="flex items-center justify-center space-x-2">
+          <button
+            @click="prevPage"
+            :disabled="currentPage === 1"
+            class="px-3 py-2 rounded-md text-sm font-medium"
+          >
+            Précédent
+          </button>
+          <button
+            v-for="page in pageNumbers"
+            :key="page"
+            @click="goToPage(page)"
+            class="px-3 py-1 rounded-md text-sm font-medium"
+            :class="currentPage === page
+              ? 'bg-primary text-white'
+              : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700'"
+          >
+            {{ page }}
+          </button>
+          <button
+            @click="nextPage"
+            :disabled="currentPage === totalPages"
+            class="px-3 py-2 rounded-md text-sm font-medium"
+          >
+            Suivant
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+</style>

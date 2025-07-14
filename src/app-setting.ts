@@ -5,41 +5,44 @@ export default {
     init() {
         const store = useAppStore();
 
-        // set default styles
-        let val: any = localStorage.getItem('theme'); // light, dark, system
+        // Theme
+        let val: any = localStorage.getItem('theme');
         val = val || $themeConfig.theme;
         store.toggleTheme(val);
 
-        val = localStorage.getItem('menu'); // vertical, collapsible-vertical, horizontal
+        // Menu
+        val = localStorage.getItem('menu');
         val = val || $themeConfig.menu;
         store.toggleMenu(val);
 
-        val = localStorage.getItem('layout'); // full, boxed-layout
+        // Layout
+        val = localStorage.getItem('layout');
         val = val || $themeConfig.layout;
         store.toggleLayout(val);
 
-        val = localStorage.getItem('i18n_locale'); // en, da, de, el, es, fr, hu, it, ja, pl, pt, ru, sv, tr, zh
-
-        val = val || $themeConfig.locale;
-
+        // 👉 Force toujours la langue en français
         const list = store.languageList;
-        const item = list.find((item: any) => item.code === val);
+        const item = list.find((item: any) => item.code === 'fr');
         if (item) {
             this.toggleLanguage(item);
         }
 
-        val = localStorage.getItem('rtlClass'); // rtl, ltr
+        // RTL / LTR
+        val = localStorage.getItem('rtlClass');
         val = val || $themeConfig.rtlClass;
         store.toggleRTL(val);
 
-        val = localStorage.getItem('animation'); // animate__fadeIn, animate__fadeInDown, animate__fadeInUp, animate__fadeInLeft, animate__fadeInRight, animate__slideInDown, animate__slideInLeft, animate__slideInRight, animate__zoomIn
+        // Animation
+        val = localStorage.getItem('animation');
         val = val || $themeConfig.animation;
         store.toggleAnimation(val);
 
-        val = localStorage.getItem('navbar'); // navbar-sticky, navbar-floating, navbar-static
+        // Navbar
+        val = localStorage.getItem('navbar');
         val = val || $themeConfig.navbar;
         store.toggleNavbar(val);
 
+        // Semi-dark
         val = localStorage.getItem('semidark');
         val = val === 'true' ? true : $themeConfig.semidark;
         store.toggleSemidark(val);
@@ -54,9 +57,8 @@ export default {
         } else {
             let code = store.locale || null;
             if (!code) {
-                code = localStorage.getItem('i18n_locale');
+                code = 'fr'; // Force "fr" ici aussi pour être sûr
             }
-
             item = store.languageList.find((d: any) => d.code === code);
             if (item) {
                 lang = item;
@@ -64,7 +66,7 @@ export default {
         }
 
         if (!lang) {
-            lang = store.languageList.find((d: any) => d.code === 'en');
+            lang = store.languageList.find((d: any) => d.code === 'fr');
         }
 
         store.toggleLocale(lang.code);

@@ -3,24 +3,34 @@
         "target": "ESNext",
         "useDefineForClassFields": true,
         "module": "ESNext",
-        "moduleResolution": "Node",
+        "moduleResolution": "node",
+        "allowImportingTsExtensions": true,
         "strict": true,
-        "jsx": "react",
+        "jsx": "preserve",
+        "allowSyntheticDefaultImports": true,
         "sourceMap": true,
-        "resolveJsonModule": true,
         "isolatedModules": true,
         "esModuleInterop": true,
         "lib": ["ESNext", "DOM"],
         "skipLibCheck": true,
-        "baseUrl": "./",
+        "baseUrl": ".",
         "paths": {
-            "@/*": ["src/*"]
+            "@/*": ["src/*"],
+            "@/components/*": ["src/components/*"],
+            "@/composables/*": ["src/composables/*"],
+            "@/interfaces/*": ["src/interfaces/*"],
+            "@/utils/*": ["src/utils/*"],
+            "@/services/*": ["src/services/*"]
         },
         "noImplicitAny": false,
         "allowJs": true,
-        "types": ["@intlify/vite-plugin-vue-i18n/client"]
+        "types": ["vite/client"],
+        "verbatimModuleSyntax": false,
+        "forceConsistentCasingInFileNames": true,
+        "noEmit": true
     },
-    "include": ["src/**/*.js", "src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
+    "include": ["src/**/*.js", "src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue", "src/types/global.d.ts", "vite.config.ts"],
+    "exclude": ["node_modules", "dist"],
     "references": [
         {
             "path": "./tsconfig.node.json"

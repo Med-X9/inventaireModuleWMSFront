@@ -7,7 +7,7 @@
         <!-- screen loader -->
         <div
             v-show="store.isShowMainLoader"
-            class="screen_loader fixed inset-0 bg-[#fafafa] dark:bg-[#060818] z-[60] grid place-content-center animate__animated"
+            class="screen_loader  fixed inset-0 bg-[#fafafa] dark:bg-[#060818] z-[60] grid place-content-center animate__animated"
         >
             <svg width="64" height="64" viewBox="0 0 135 135" xmlns="http://www.w3.org/2000/svg" fill="#4361ee">
                 <path
@@ -48,7 +48,7 @@
         </div>
 
         <!-- BEGIN APP SETTING LAUNCHER -->
-        <Setting />
+     
         <!-- END APP SETTING LAUNCHER -->
 
         <div class="main-container text-black dark:text-white-dark min-h-screen" :class="[store.navbar]">

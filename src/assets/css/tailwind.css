@@ -1,14 +1,14 @@
+
 /* animation */
 @import 'animate.css';
 
 /* quill editor */
 @import 'quill-editor.css';
 
-/* full calendar */
-@import 'fullcalendar.css';
-
 /* swiper */
 @import 'swiper.css';
+@import 'select2.css';
+
 
 /* sweetalert */
 @import 'sweetalert.css';
@@ -28,14 +28,10 @@
 /* markdown-editor */
 @import 'markdown-editor.css';
 
-/* select2 */
-@import 'select2.css';
-
 /* wizard */
 @import 'wizard.css';
 
-/* vue3-datatable */
-@import 'datatable.css';
+
 
 /* lightbox */
 @import 'lightbox.css';
@@ -46,12 +42,12 @@
 /* dragndrop */
 @import 'dragndrop.css';
 
-/* form element*/
-@import 'form-elements.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
 
 @layer components {
     html {
@@ -65,6 +61,41 @@
     body.dark {
         @apply bg-[#060818];
     }
+
+/* form */
+
+.input-primary {
+    @apply  w-5 h-5 border border-secondary rounded bg-white accent-primary
+           checked:bg-primary checked:border-primary checked:text-white
+           focus:ring-0 focus:outline-none transition-all duration-200;
+  }
+
+  .radio-primary {
+    @apply appearance-none w-4 h-4 border border-secondary rounded-full bg-white accent-primary
+           checked:bg-primary checked:border-primary checked:text-white
+           focus:ring-0 focus:outline-none transition-all duration-200;
+  }
+
+
+
+  .btn-modern {
+    @apply w-full flex items-center justify-center px-2 py-2 rounded text-sm font-medium shadow-lg transition-all duration-200;
+  }
+  .btn-add {
+    @apply bg-primary text-black hover:bg-primary-600;
+  }
+  .btn-remove {
+    @apply bg-secondary text-white hover:bg-secondary;
+  }
+  .btn-icon {
+    @apply w-8 h-8 flex items-center justify-center rounded-full text-xl font-bold bg-gray-100 text-gray-600 hover:bg-gray-200;
+  }
+  .badge {
+    @apply px-3 py-1 rounded-full text-sm font-medium bg-yellow-400 text-black;
+  }
+
+
+
 
     /* Panel */
     .panel {
@@ -331,7 +362,7 @@ hover:text-primary hover:before:!bg-primary ltr:before:mr-2 rtl:before:ml-2 dark
     }
 
     .btn-gradient {
-        @apply bg-gradient-to-r from-[#EF1262] to-[#4361EE] hover:to-[#EF1262] hover:from-[#4361EE] text-white;
+        @apply bg-gradient-to-r from-primary to-secondary hover:to-primary/10 hover:from-primary text-white;
     }
 
     /* Badge */
@@ -510,43 +541,6 @@ hover:text-primary hover:before:!bg-primary ltr:before:mr-2 rtl:before:ml-2 dark
         @apply w-full;
     }
 
-    /* tables */
-    .table-responsive {
-        @apply overflow-auto;
-    }
-    table {
-        @apply w-full !border-collapse;
-    }
-    table thead tr,
-    table tfoot tr {
-        @apply border-b-0 !bg-[#f6f8fa]  dark:!bg-[#1a2941];
-    }
-    table thead tr th,
-    table tfoot tr th,
-    table tbody tr td {
-        @apply py-3 px-4 ltr:text-left rtl:text-right;
-    }
-    table thead tr th,
-    table tfoot tr th {
-        @apply font-semibold;
-    }
-    table tbody tr {
-        @apply border-b !border-white-light/40 dark:!border-[#191e3a];
-    }
-    table.table-hover tbody tr {
-        @apply hover:!bg-white-light/20 dark:hover:!bg-[#1a2941]/40;
-    }
-    table.table-striped tbody tr:nth-child(odd) {
-        @apply !bg-white-light/20 dark:!bg-[#1a2941]/40;
-    }
-
-    table.dataTable-table tbody tr th,
-    table.dataTable-table tbody tr td {
-        @apply border-b border-white-light/40 py-3 px-4 ltr:text-left rtl:text-right dark:border-[#191e3a];
-    }
-    table.dataTable-table tbody tr:last-child td {
-        @apply border-b-0;
-    }
 
     /* code hightlight */
     pre {

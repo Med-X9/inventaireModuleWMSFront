@@ -124,5 +124,10 @@
     "coming_soon_boxed": "Bientôt en boîte",
     "coming_soon_cover": "Prochainement Couverture",
     "contact_us_boxed": "Contactez-nous",
-    "contact_us_cover": "Contactez-nous Couverture"
+    "contact_us_cover": "Contactez-nous Couverture",
+    "inventory_creation": "Création d'inventaire",
+  "inventory_management": "Gestion d'inventaire",
+  "inventory_results": "Résultats d'inventaire",
+  "inventaire": "Inventaire"
+
 }
