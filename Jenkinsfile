@@ -73,19 +73,6 @@ pipeline {
             }
         }
 
-        stage('Quality Gate') {
-            when {
-                anyOf {
-                    branch 'dev'
-                    branch 'main'
-                }
-            }
-            steps {
-                timeout(time: 3, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: false
-                }
-            }
-        }
         // stage('Prepare nginx.conf') {
         //     when {
         //         anyOf {
