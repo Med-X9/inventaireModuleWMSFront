@@ -9,6 +9,10 @@ pipeline {
         DEPLOY_HOST = "${env.BRANCH_NAME == 'main' ? '31.97.158.68' : (env.BRANCH_NAME == 'dev' ? '147.93.55.221' : '')}"
         DEPLOY_CREDS = "${env.BRANCH_NAME == 'main' ? 'prod-creds' : (env.BRANCH_NAME == 'dev' ? 'dev-test-creds' : '')}"
         ENV_NAME = "${env.BRANCH_NAME == 'main' ? 'production' : (env.BRANCH_NAME == 'dev' ? 'development' : '')}"
+
+        // SonarQube configuration
+        SONAR_PROJECT_KEY = "inventaire-module-wms-front-${env.BRANCH_NAME}"
+        SONAR_PROJECT_NAME = "InventaireModuleWMSFront-${env.BRANCH_NAME}"
     }
 
     stages {
@@ -39,6 +43,32 @@ pipeline {
                         rm -rf /tmp/frontend
                         git clone --single-branch --branch ${BRANCH_NAME} https://$GIT_USER:$GIT_PASS@github.com/Med-X9/inventaireModuleWMSFront.git /tmp/frontend
                     '''
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            when {
+                anyOf {
+                    branch 'dev'
+                    branch 'main'
+                }
+            }
+            steps {
+                dir('/tmp/frontend') {
+                    script {
+                        def scannerHome = tool 'sonar-scanner'
+                        withSonarQubeEnv(credentialsId: 'sonar-token', installationName: 'SonarQube-Server') {
+                            sh """
+                                ${scannerHome}/bin/sonar-scanner \\
+                                    -Dsonar.projectKey=${SONAR_PROJECT_KEY} \\
+                                    -Dsonar.projectName='${SONAR_PROJECT_NAME}' \\
+                                    -Dsonar.sources=src \\
+                                    -Dsonar.exclusions='**/node_modules/**,**/dist/**,**/*.spec.ts,**/*.test.ts,**/coverage/**,**/*.d.ts,**/vite.config.ts,**/tailwind.config.cjs,**/postcss.config.cjs' \\
+                                    -Dsonar.sourceEncoding=UTF-8
+                            """
+                        }
+                    }
                 }
             }
         }
