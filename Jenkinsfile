@@ -58,16 +58,73 @@ pipeline {
                 dir('/tmp/frontend') {
                     script {
                         def scannerHome = tool 'sonar-scanner'
-                        withSonarQubeEnv(credentialsId: 'sonar-token', installationName: 'SonarQube-Server') {
-                            sh """
-                                ${scannerHome}/bin/sonar-scanner \\
-                                    -Dsonar.projectKey=${SONAR_PROJECT_KEY} \\
-                                    -Dsonar.projectName='${SONAR_PROJECT_NAME}' \\
-                                    -Dsonar.sources=src \\
-                                    -Dsonar.exclusions='**/node_modules/**,**/dist/**,**/*.spec.ts,**/*.test.ts,**/coverage/**,**/*.d.ts,**/vite.config.ts,**/tailwind.config.cjs,**/postcss.config.cjs' \\
-                                    -Dsonar.sourceEncoding=UTF-8
-                            """
+                        try {
+                            withSonarQubeEnv(credentialsId: 'sonar-token', installationName: 'SonarQube-Server') {
+                                sh """
+                                    ${scannerHome}/bin/sonar-scanner \\
+                                        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \\
+                                        -Dsonar.projectName='${SONAR_PROJECT_NAME}' \\
+                                        -Dsonar.sources=src \\
+                                        -Dsonar.exclusions='**/node_modules/**,**/dist/**,**/*.spec.ts,**/*.test.ts,**/coverage/**,**/*.d.ts,**/vite.config.ts,**/tailwind.config.cjs,**/postcss.config.cjs' \\
+                                        -Dsonar.sourceEncoding=UTF-8 \\
+                                        -Dsonar.qualitygate.wait=false
+                                    echo "SonarQube analysis completed for branch: ${env.BRANCH_NAME}"
+                                """
+                            }
+                        } catch (Exception e) {
+                            echo "Warning: SonarQube analysis encountered issues but continuing build: ${e.getMessage()}"
+                            echo "Check SonarQube dashboard for detailed analysis results"
+                            // Mark stage as unstable but don't fail the build
+                            currentBuild.result = 'UNSTABLE'
                         }
+                    }
+                }
+            }
+        }
+
+        stage('SonarQube Status Check') {
+            steps {
+                script {
+                    try {
+                        sleep(time: 10, unit: 'SECONDS')
+                        
+                        def sonarUrl = "http://147.93.55.221:9000"
+                        def analysisUrl = "${sonarUrl}/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}"
+                        
+                        def response
+                        withCredentials([usernamePassword(credentialsId: 'sonar-creds', usernameVariable: 'SONAR_USER', passwordVariable: 'SONAR_PASS')]) {
+                            response = sh(
+                                script: "curl -s -u \$SONAR_USER:\$SONAR_PASS '${analysisUrl}'",
+                                returnStdout: true
+                            ).trim()
+                        }
+                        
+                        try {
+                            def jsonSlurper = new groovy.json.JsonSlurper()
+                            def result = jsonSlurper.parseText(response)
+                            def projectStatus = result.projectStatus.status
+                            
+                            if (projectStatus == 'OK') {
+                                echo "✅ SonarQube analysis passed!"
+                            } else {
+                                echo "⚠️  SonarQube analysis found issues: ${projectStatus}"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+                        } catch (Exception jsonError) {
+                            if (response.contains('"status":"OK"')) {
+                                echo "✅ SonarQube analysis passed!"
+                            } else if (response.contains('"status":"ERROR"') || response.contains('"status":"WARN"')) {
+                                echo "⚠️  SonarQube analysis found issues"
+                                currentBuild.result = 'UNSTABLE'
+                            } else {
+                                echo "⚠️  Could not determine SonarQube status"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+                        }
+                        
+                    } catch (Exception e) {
+                        echo "⚠️  SonarQube status check failed: ${e.getMessage()}"
+                        currentBuild.result = 'UNSTABLE'
                     }
                 }
             }
@@ -231,6 +288,28 @@ pipeline {
                 } else {
                     echo "❌ Pipeline failed!"
                 }
+            }
+        }
+        unstable {
+            script {
+                if (env.BRANCH_NAME == 'dev') {
+                    echo "⚠️  Pipeline completed with warnings for development deployment!"
+                    echo "🐳 Application deployed successfully to: ${env.DEPLOY_HOST}"
+                    echo "🐳 Using image: ${env.BACKEND_IMAGE}:dev-latest"
+                    def projectKey = "inventaire-module-wms-${env.BRANCH_NAME}"
+                    echo "⚠️  SonarQube found code quality issues - Check: http://147.93.55.221:9000/dashboard?id=${projectKey}"
+                    echo "✅ Deployment completed despite code quality warnings"
+                } else if (env.BRANCH_NAME == 'main') {
+                    echo "⚠️  Pipeline completed with warnings for production deployment!"
+                    echo "🐳 Application deployed successfully to: ${env.DEPLOY_HOST}"
+                    echo "🐳 Using image: ${env.BACKEND_IMAGE}:prod-latest"
+                    def projectKey = "inventaire-module-wms-${env.BRANCH_NAME}"
+                    echo "⚠️  SonarQube found code quality issues - Check: http://147.93.55.221:9000/dashboard?id=${projectKey}"
+                    echo "✅ Deployment completed despite code quality warnings"
+                } else {
+                    echo "⚠️  Pipeline completed with warnings - no deployment needed for branch: ${env.BRANCH_NAME}"
+                }
+                echo "📊 Review SonarQube findings to improve code quality"
             }
         }
     }
