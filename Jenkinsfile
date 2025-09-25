@@ -271,14 +271,18 @@ pipeline {
             script {
                 if (env.BRANCH_NAME == 'dev') {
                     echo "✅ Successfully deployed to development environment (${env.DEPLOY_HOST})!"
-                    echo "🐳 Using image: ${env.FRONTEND_IMAGE}:dev-latest"
+                    echo "🐳 Using image: ${env.BACKEND_IMAGE}:dev-latest"
+                    def projectKey = "inventaire-module-wms-${env.BRANCH_NAME}"
+                    echo "SonarQube analysis results for ${env.BRANCH_NAME}: http://147.93.55.221:9000/dashboard?id=${projectKey}"
                 } else if (env.BRANCH_NAME == 'main') {
                     echo "✅ Successfully deployed to production environment (${env.DEPLOY_HOST})!"
-                    echo "🐳 Using image: ${env.FRONTEND_IMAGE}:prod-latest"
+                    echo "🐳 Using image: ${env.BACKEND_IMAGE}:prod-latest"
+                    def projectKey = "inventaire-module-wms-${env.BRANCH_NAME}"
+                    echo "SonarQube analysis results for ${env.BRANCH_NAME}: http://147.93.55.221:9000/dashboard?id=${projectKey}"
                 } else {
                     echo "✅ Pipeline completed - no deployment needed for branch: ${env.BRANCH_NAME}"
                 }
-                echo "📁 Transferred files: Dockerfile, config/, .env"
+                echo "📁 Transferred files: docker-compose.yml, nginx/, .env"
             }
         }
         failure {
