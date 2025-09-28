@@ -2,25 +2,62 @@ pipeline {
     agent any
 
     environment {
-        FRONTEND_REPO = 'https://github.com/Med-X9/inventaireModuleWMSFront.git'
-        IMAGE_PREFIX = 'smatchdigital'
-        FRONTEND_IMAGE = "${IMAGE_PREFIX}/frontend-app"
-        
-        DEPLOY_HOST = "${env.BRANCH_NAME == 'main' ? '31.97.158.68' : (env.BRANCH_NAME == 'dev' ? '147.93.55.221' : '')}"
-        DEPLOY_CREDS = "${env.BRANCH_NAME == 'main' ? 'prod-creds' : (env.BRANCH_NAME == 'dev' ? 'dev-test-creds' : '')}"
-        ENV_NAME = "${env.BRANCH_NAME == 'main' ? 'production' : (env.BRANCH_NAME == 'dev' ? 'development' : '')}"
-
-        // SonarQube configuration
-        SONAR_PROJECT_KEY = "inventaire-module-wms-front-${env.BRANCH_NAME}"
-        SONAR_PROJECT_NAME = "InventaireModuleWMSFront-${env.BRANCH_NAME}"
+        // These will be loaded from YAML config
+        CONFIG_FILE = 'jenkins-config.yml'
     }
 
     stages {
+        stage('Load Configuration') {
+            steps {
+                script {
+                    // Load and parse YAML configuration
+                    if (!fileExists(env.CONFIG_FILE)) {
+                        error("Configuration file ${env.CONFIG_FILE} not found!")
+                    }
+                    
+                    def configText = readFile(env.CONFIG_FILE)
+                    // Use readYaml step instead of creating Yaml object to avoid serialization issues
+                    def config = readYaml text: configText
+                    
+                    // Store config in global variable for access in other stages
+                    env.PROJECT_CONFIG = writeJSON returnText: true, json: config
+                    
+                    // Set dynamic environment variables based on branch
+                    def branchConfig = config.environments[env.BRANCH_NAME]
+                    if (branchConfig) {
+                        env.DEPLOY_HOST = branchConfig.deploy_host ?: ''
+                        env.DEPLOY_CREDS = branchConfig.deploy_creds ?: ''
+                        env.ENV_NAME = branchConfig.env_name ?: ''
+                        env.IMAGE_TAG_SUFFIX = branchConfig.image_tag_suffix ?: 'latest'
+                    }
+                    
+                    // Set common variables
+                    env.BACKEND_REPO = config.repository.url
+                    env.IMAGE_PREFIX = config.docker.image_prefix
+                    env.BACKEND_IMAGE = "${env.IMAGE_PREFIX}/${config.docker.image_name}"
+                    env.IMAGE_TAG = "latest"
+                    
+                    // SonarQube configuration
+                    env.SONAR_PROJECT_KEY = "${config.sonarqube.project_key}-${env.BRANCH_NAME}"
+                    env.SONAR_PROJECT_NAME = "${config.sonarqube.project_name}-${env.BRANCH_NAME}"
+                    env.SONAR_PROJECT_VERSION = config.sonarqube.project_version
+                    
+                    echo "Configuration loaded successfully for branch: ${env.BRANCH_NAME}"
+                    echo "Deploy target: ${env.DEPLOY_HOST}"
+                    echo "Environment: ${env.ENV_NAME}"
+                }
+            }
+        }
+
         stage('Check Branch') {
             steps {
                 script {
-                    if (env.BRANCH_NAME != 'dev' && env.BRANCH_NAME != 'main') {
-                        echo "Skipping deployment - not on dev or main branch. Current branch: ${env.BRANCH_NAME}"
+                    def config = readJSON text: env.PROJECT_CONFIG
+                    def allowedBranches = config.environments.keySet() as List
+                    
+                    if (!allowedBranches.contains(env.BRANCH_NAME)) {
+                        echo "Skipping deployment - branch '${env.BRANCH_NAME}' not configured for deployment."
+                        echo "Configured branches: ${allowedBranches.join(', ')}"
                         currentBuild.result = 'SUCCESS'
                         return
                     }
@@ -32,49 +69,65 @@ pipeline {
 
         stage('Clone Repositories') {
             when {
-                anyOf {
-                    branch 'dev'
-                    branch 'main'
+                expression {
+                    def config = readJSON text: env.PROJECT_CONFIG
+                    return config.environments.containsKey(env.BRANCH_NAME)
                 }
             }
             steps {
-                withCredentials([usernamePassword(credentialsId: 'git-cred', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
-                    sh '''
-                        rm -rf /tmp/frontend
-                        git clone --single-branch --branch ${BRANCH_NAME} https://$GIT_USER:$GIT_PASS@github.com/Med-X9/inventaireModuleWMSFront.git /tmp/frontend
-                    '''
+                script {
+                    def config = readJSON text: env.PROJECT_CONFIG
+                    def gitCredentials = config.credentials.git_credentials_id
+                    
+                    withCredentials([usernamePassword(credentialsId: gitCredentials, usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
+                        sh """
+                            rm -rf /tmp/backend
+                            git clone --single-branch --branch ${env.BRANCH_NAME} https://\$GIT_USER:\$GIT_PASS@${env.BACKEND_REPO.replace('https://', '')} /tmp/backend
+                        """
+                    }
                 }
             }
         }
 
         stage('SonarQube Analysis') {
+            environment {
+                scannerHome = tool 'sonar-scanner'
+            }
             when {
-                anyOf {
-                    branch 'dev'
-                    branch 'main'
+                expression {
+                    def config = readJSON text: env.PROJECT_CONFIG
+                    return config.sonarqube.enabled && config.sonarqube.analysis_branches.contains(env.BRANCH_NAME)
                 }
             }
             steps {
-                dir('/tmp/frontend') {
+                dir('/tmp/backend') {
                     script {
-                        def scannerHome = tool 'sonar-scanner'
+                        def config = readJSON text: env.PROJECT_CONFIG
+                        def sonarConfig = config.sonarqube
+                        
+                        // Run SonarQube analysis
                         try {
-                            withSonarQubeEnv(credentialsId: 'sonar-token', installationName: 'SonarQube-Server') {
+                            withSonarQubeEnv(credentialsId: sonarConfig.credentials_id, installationName: sonarConfig.server_name) {
+                                def sonarArgs = [
+                                    "-Dsonar.projectKey=${env.SONAR_PROJECT_KEY}",
+                                    "-Dsonar.projectName=\"${env.SONAR_PROJECT_NAME}\"",
+                                    "-Dsonar.projectVersion=${env.SONAR_PROJECT_VERSION}",
+                                    "-Dsonar.sources=${sonarConfig.sources}",
+                                    "-Dsonar.sourceEncoding=${sonarConfig.source_encoding}",
+                                    "-Dsonar.test.inclusions=\"${sonarConfig.test_inclusions}\"",
+                                    "-Dsonar.exclusions=\"${sonarConfig.exclusions}\"",
+                                    "-Dsonar.qualitygate.wait=${sonarConfig.quality_gate_wait}"
+                                ]
+                                
                                 sh """
-                                    ${scannerHome}/bin/sonar-scanner \\
-                                        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \\
-                                        -Dsonar.projectName='${SONAR_PROJECT_NAME}' \\
-                                        -Dsonar.sources=src \\
-                                        -Dsonar.exclusions='**/node_modules/**,**/dist/**,**/*.spec.ts,**/*.test.ts,**/coverage/**,**/*.d.ts,**/vite.config.ts,**/tailwind.config.cjs,**/postcss.config.cjs' \\
-                                        -Dsonar.sourceEncoding=UTF-8 \\
-                                        -Dsonar.qualitygate.wait=false
+                                    echo "Starting SonarQube analysis for branch: ${env.BRANCH_NAME}"
+                                    \${scannerHome}/bin/sonar-scanner ${sonarArgs.join(' \\\n                                        ')}
                                     echo "SonarQube analysis completed for branch: ${env.BRANCH_NAME}"
                                 """
                             }
                         } catch (Exception e) {
                             echo "Warning: SonarQube analysis encountered issues but continuing build: ${e.getMessage()}"
                             echo "Check SonarQube dashboard for detailed analysis results"
-                            // Mark stage as unstable but don't fail the build
                             currentBuild.result = 'UNSTABLE'
                         }
                     }
@@ -83,16 +136,25 @@ pipeline {
         }
 
         stage('SonarQube Status Check') {
+            when {
+                expression {
+                    def config = readJSON text: env.PROJECT_CONFIG
+                    return config.sonarqube.enabled && config.sonarqube.status_check_enabled
+                }
+            }
             steps {
                 script {
+                    def config = readJSON text: env.PROJECT_CONFIG
+                    def sonarConfig = config.sonarqube
+                    
                     try {
-                        sleep(time: 10, unit: 'SECONDS')
+                        sleep(time: sonarConfig.status_check_delay ?: 10, unit: 'SECONDS')
                         
-                        def sonarUrl = "http://147.93.55.221:9000"
-                        def analysisUrl = "${sonarUrl}/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}"
+                        def sonarUrl = sonarConfig.server_url
+                        def analysisUrl = "${sonarUrl}/api/qualitygates/project_status?projectKey=${env.SONAR_PROJECT_KEY}"
                         
                         def response
-                        withCredentials([usernamePassword(credentialsId: 'sonar-creds', usernameVariable: 'SONAR_USER', passwordVariable: 'SONAR_PASS')]) {
+                        withCredentials([usernamePassword(credentialsId: sonarConfig.api_credentials_id, usernameVariable: 'SONAR_USER', passwordVariable: 'SONAR_PASS')]) {
                             response = sh(
                                 script: "curl -s -u \$SONAR_USER:\$SONAR_PASS '${analysisUrl}'",
                                 returnStdout: true
@@ -130,37 +192,19 @@ pipeline {
             }
         }
 
-
-        // stage('Prepare nginx.conf') {
-        //     when {
-        //         anyOf {
-        //             branch 'dev'
-        //             branch 'main'
-        //         }
-        //     }
-        //     steps {
-        //         sh '''
-        //             if [ -f /tmp/backend/nginx/nginx.conf ]; then
-        //                 cp /tmp/backend/nginx/nginx.conf /tmp/frontend/nginx.conf
-        //             else
-        //                 echo "Backend nginx.conf not found, using default frontend nginx.conf"
-        //             fi
-        //         '''
-        //     }
-        // }
-
-        stage('Build Frontend Docker Image') {
+        stage('Build Backend Docker Image') {
             when {
-                anyOf {
-                    branch 'dev'
-                    branch 'main'
+                expression {
+                    def config = readJSON text: env.PROJECT_CONFIG
+                    return config.environments.containsKey(env.BRANCH_NAME)
                 }
             }
             steps {
-                dir('/tmp/frontend') {
+                dir('/tmp/backend') {
                     script {
-                        def imageTag = env.BRANCH_NAME == 'main' ? 'prod-latest' : 'dev-latest'
-                        sh "docker build -t ${FRONTEND_IMAGE}:${imageTag} ."
+                        def imageTag = "${env.IMAGE_TAG_SUFFIX}"
+                        sh "docker build -t ${env.BACKEND_IMAGE}:${imageTag} ."
+                        sh "docker tag ${env.BACKEND_IMAGE}:${imageTag} ${env.BACKEND_IMAGE}:${env.IMAGE_TAG}"
                     }
                 }
             }
@@ -168,51 +212,82 @@ pipeline {
 
         stage('Push Docker Images') {
             when {
-                anyOf {
-                    branch 'dev'
-                    branch 'main'
+                expression {
+                    def config = readJSON text: env.PROJECT_CONFIG
+                    return config.environments.containsKey(env.BRANCH_NAME)
                 }
             }
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'docker-hub-company', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
-                        sh "echo $PASS | docker login -u $USER --password-stdin"
+                    def config = readJSON text: env.PROJECT_CONFIG
+                    def dockerCredentials = config.credentials.docker_credentials_id
+                    
+                    withCredentials([usernamePassword(credentialsId: dockerCredentials, passwordVariable: 'PASS', usernameVariable: 'USER')]) {
+                        sh "echo \$PASS | docker login -u \$USER --password-stdin"
                     }
-                    def imageTag = env.BRANCH_NAME == 'main' ? 'prod-latest' : 'dev-latest'
-                    sh "docker push ${FRONTEND_IMAGE}:${imageTag}"
+                    def imageTag = "${env.IMAGE_TAG_SUFFIX}"
+                    sh "docker push ${env.BACKEND_IMAGE}:${imageTag}"
+                    sh "docker push ${env.BACKEND_IMAGE}:${env.IMAGE_TAG}"
                 }
             }
         }
 
         stage('Upload Essential Files') {
             when {
-                anyOf {
-                    branch 'dev'
-                    branch 'main'
+                expression {
+                    def config = readJSON text: env.PROJECT_CONFIG
+                    return config.environments.containsKey(env.BRANCH_NAME)
                 }
             }
             steps {
                 script {
-                    def imageTag = env.BRANCH_NAME == 'main' ? 'prod-latest' : 'dev-latest'
-                    echo "Preparing deployment files for ${env.ENV_NAME} environment with image: ${FRONTEND_IMAGE}:${imageTag}"
+                    def config = readJSON text: env.PROJECT_CONFIG
+                    def deployConfig = config.deployment
+                    def imageTag = "${env.IMAGE_TAG_SUFFIX}"
+                    
+                    echo "Preparing deployment files for ${env.ENV_NAME} environment with image: ${env.BACKEND_IMAGE}:${imageTag}"
+                    
+                    if (!env.DEPLOY_CREDS) {
+                        error("DEPLOY_CREDS environment variable is not set!")
+                    }
+                    if (!env.DEPLOY_HOST) {
+                        error("DEPLOY_HOST environment variable is not set!")
+                    }
                     
                     withCredentials([usernamePassword(credentialsId: env.DEPLOY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                        sh '''
-                            # Create deployment directory on remote server
-                            sshpass -p "$PASS" ssh -o StrictHostKeyChecking=no "$USER@$DEPLOY_HOST" "rm -rf /tmp/deployment/frontend && mkdir -p /tmp/deployment/frontend/config"
-                            
-                            # Upload only essential files that exist
-                            sshpass -p "$PASS" scp -o StrictHostKeyChecking=no /tmp/frontend/Dockerfile "$USER@$DEPLOY_HOST:/tmp/deployment/frontend/"
-                            sshpass -p "$PASS" scp -r -o StrictHostKeyChecking=no /tmp/frontend/config/* "$USER@$DEPLOY_HOST:/tmp/deployment/frontend/config/" 2>/dev/null || echo "config directory empty or not found, skipping"
-                        '''
+                        // Create deployment directory
+                        sh """
+                            sshpass -p "\$PASS" ssh -o StrictHostKeyChecking=no "\$USER@\$DEPLOY_HOST" "rm -rf ${deployConfig.remote_path} && mkdir -p ${deployConfig.remote_path}/nginx"
+                        """
                         
-                        // Create .env file with IMAGE_TAG variable on remote server
+                        // Upload files specified in config
+                        deployConfig.files_to_upload.each { file ->
+                            if (file.contains('/')) {
+                                // Directory upload
+                                sh """
+                                    sshpass -p "\$PASS" scp -r -o StrictHostKeyChecking=no /tmp/backend/${file} "\$USER@\$DEPLOY_HOST:${deployConfig.remote_path}/"
+                                """
+                            } else {
+                                // Single file upload
+                                sh """
+                                    sshpass -p "\$PASS" scp -o StrictHostKeyChecking=no /tmp/backend/${file} "\$USER@\$DEPLOY_HOST:${deployConfig.remote_path}/"
+                                """
+                            }
+                        }
+                        
+                        // Handle environment file
+                        if (deployConfig.env_file) {
+                            sh """
+                                sshpass -p "\$PASS" scp -o StrictHostKeyChecking=no "/tmp/backend/${deployConfig.env_file.source}" "\$USER@\$DEPLOY_HOST:${deployConfig.remote_path}/${deployConfig.env_file.target}"
+                            """
+                        }
+                        
+                        // Add IMAGE_TAG to .env file
                         sh """
                             sshpass -p "\$PASS" ssh -o StrictHostKeyChecking=no "\$USER@\$DEPLOY_HOST" "
-                                cd /tmp/deployment/frontend &&
-                                echo 'IMAGE_TAG=${imageTag}' > .env &&
-                                echo 'FRONTEND_IMAGE=${FRONTEND_IMAGE}' >> .env &&
-                                echo 'Added deployment variables to .env file'
+                                cd ${deployConfig.remote_path} &&
+                                echo 'IMAGE_TAG=${imageTag}' >> .env &&
+                                echo 'Added IMAGE_TAG=${imageTag} to .env file'
                             "
                         """
                     }
@@ -220,37 +295,29 @@ pipeline {
             }
         }
 
-        stage('Deploy Frontend on Remote Server') {
+        stage('Deploy Backend on Remote Server') {
             when {
-                anyOf {
-                    branch 'dev'
-                    branch 'main'
+                expression {
+                    def config = readJSON text: env.PROJECT_CONFIG
+                    return config.environments.containsKey(env.BRANCH_NAME)
                 }
             }
             steps {
                 script {
-                    def imageTag = env.BRANCH_NAME == 'main' ? 'prod-latest' : 'dev-latest'
+                    def config = readJSON text: env.PROJECT_CONFIG
+                    def deployConfig = config.deployment
+                    
+                    if (!env.DEPLOY_CREDS) {
+                        error("DEPLOY_CREDS environment variable is not set!")
+                    }
+                    if (!env.DEPLOY_HOST) {
+                        error("DEPLOY_HOST environment variable is not set!")
+                    }
+                    
                     withCredentials([usernamePassword(credentialsId: env.DEPLOY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                        def deployCommands = deployConfig.deploy_commands.join(' && ')
                         sh """
-                            sshpass -p "\$PASS" ssh -o StrictHostKeyChecking=no "\$USER@\$DEPLOY_HOST" "
-                                # Stop and remove existing container if it exists
-                                docker stop frontend-app || true
-                                docker rm frontend-app || true
-                                
-                                # Pull the latest image
-                                docker pull ${FRONTEND_IMAGE}:${imageTag}
-                                
-                                # Run the new container
-                                docker run -d \\
-                                    --name frontend-app \\
-                                    --network inventaire-net \\
-                                    -p 8080:80 \\
-                                    --restart unless-stopped \\
-                                    ${FRONTEND_IMAGE}:${imageTag}
-                                
-                                echo 'Frontend deployment completed successfully'
-                                docker ps | grep frontend-app || echo 'Container not found in running processes'
-                            "
+                            sshpass -p "\$PASS" ssh "\$USER@\$DEPLOY_HOST" "bash -c 'cd ${deployConfig.remote_path} && ${deployCommands}'"
                         """
                     }
                 }
@@ -261,61 +328,75 @@ pipeline {
     post {
         always {
             script {
-                // Clean up temporary files
-                sh '''
-                    rm -rf /tmp/frontend || true
-                    docker system prune -f || true
-                '''
+                try {
+                    // Check if PROJECT_CONFIG exists and is not empty
+                    if (env.PROJECT_CONFIG && env.PROJECT_CONFIG != 'null' && env.PROJECT_CONFIG.trim() != '') {
+                        def config = readJSON text: env.PROJECT_CONFIG
+                        def cleanupCommands = config.cleanup?.commands ?: [
+                            'rm -rf /tmp/backend || true',
+                            'docker system prune -f || true'
+                        ]
+                        
+                        cleanupCommands.each { command ->
+                            sh "${command}"
+                        }
+                    } else {
+                        echo "No config loaded, using default cleanup..."
+                        sh 'rm -rf /tmp/backend || true'
+                        sh 'docker system prune -f || true'
+                    }
+                } catch (Exception e) {
+                    echo "Cleanup configuration failed: ${e.getMessage()}"
+                    echo "Using default cleanup commands..."
+                    sh 'rm -rf /tmp/backend || true'
+                    sh 'docker system prune -f || true'
+                }
             }
         }
         success {
             script {
-                if (env.BRANCH_NAME == 'dev') {
-                    echo "✅ Successfully deployed to development environment (${env.DEPLOY_HOST})!"
-                    echo "🐳 Using image: ${env.FRONTEND_IMAGE}:dev-latest"
-                    def projectKey = "inventaire-module-wms-front-${env.BRANCH_NAME}"
-                    echo "SonarQube analysis results for ${env.BRANCH_NAME}: http://147.93.55.221:9000/dashboard?id=${projectKey}"
-                } else if (env.BRANCH_NAME == 'main') {
-                    echo "✅ Successfully deployed to production environment (${env.DEPLOY_HOST})!"
-                    echo "🐳 Using image: ${env.FRONTEND_IMAGE}:prod-latest"
-                    def projectKey = "inventaire-module-wms-front-${env.BRANCH_NAME}"
-                    echo "SonarQube analysis results for ${env.BRANCH_NAME}: http://147.93.55.221:9000/dashboard?id=${projectKey}"
-                } else {
-                    echo "✅ Pipeline completed - no deployment needed for branch: ${env.BRANCH_NAME}"
+                try {
+                    if (env.PROJECT_CONFIG && env.PROJECT_CONFIG != 'null' && env.PROJECT_CONFIG.trim() != '') {
+                        def config = readJSON text: env.PROJECT_CONFIG
+                        def branchConfig = config.environments[env.BRANCH_NAME]
+                        
+                        if (branchConfig) {
+                            echo "✅ Successfully deployed to ${env.ENV_NAME} environment (${env.DEPLOY_HOST})!"
+                            echo "🐳 Using image: ${env.BACKEND_IMAGE}:${env.IMAGE_TAG_SUFFIX}"
+                            
+                            if (config.sonarqube.enabled) {
+                                echo "SonarQube analysis results for ${env.BRANCH_NAME}: ${config.sonarqube.server_url}/dashboard?id=${env.SONAR_PROJECT_KEY}"
+                            }
+                            
+                            def uploadedFiles = config.deployment.files_to_upload.join(', ')
+                            echo "📁 Transferred files: ${uploadedFiles}"
+                        } else {
+                            echo "✅ Pipeline completed - no deployment needed for branch: ${env.BRANCH_NAME}"
+                        }
+                    } else {
+                        echo "✅ Pipeline completed successfully!"
+                    }
+                } catch (Exception e) {
+                    echo "Success message configuration failed: ${e.getMessage()}"
+                    echo "✅ Pipeline completed successfully!"
                 }
-                echo "📁 Transferred files: Dockerfile, nginx/, .env"
             }
         }
         failure {
             script {
-                if (env.BRANCH_NAME == 'dev' || env.BRANCH_NAME == 'main') {
-                    echo "❌ Pipeline failed for ${env.ENV_NAME} deployment!"
-                } else {
+                try {
+                    if (env.ENV_NAME) {
+                        echo "❌ Pipeline failed for ${env.ENV_NAME} deployment!"
+                    } else {
+                        echo "❌ Pipeline failed!"
+                    }
+                } catch (Exception e) {
                     echo "❌ Pipeline failed!"
                 }
             }
         }
         unstable {
-            script {
-                if (env.BRANCH_NAME == 'dev') {
-                    echo "⚠️  Pipeline completed with warnings for development deployment!"
-                    echo "🐳 Application deployed successfully to: ${env.DEPLOY_HOST}"
-                    echo "🐳 Using image: ${env.FRONTEND_IMAGE}:dev-latest"
-                    def projectKey = "inventaire-module-wms-front-${env.BRANCH_NAME}"
-                    echo "⚠️  SonarQube found code quality issues - Check: http://147.93.55.221:9000/dashboard?id=${projectKey}"
-                    echo "✅ Deployment completed despite code quality warnings"
-                } else if (env.BRANCH_NAME == 'main') {
-                    echo "⚠️  Pipeline completed with warnings for production deployment!"
-                    echo "🐳 Application deployed successfully to: ${env.DEPLOY_HOST}"
-                    echo "🐳 Using image: ${env.FRONTEND_IMAGE}:prod-latest"
-                    def projectKey = "inventaire-module-wms-front-${env.BRANCH_NAME}"
-                    echo "⚠️  SonarQube found code quality issues - Check: http://147.93.55.221:9000/dashboard?id=${projectKey}"
-                    echo "✅ Deployment completed despite code quality warnings"
-                } else {
-                    echo "⚠️  Pipeline completed with warnings - no deployment needed for branch: ${env.BRANCH_NAME}"
-                }
-                echo "📊 Review SonarQube findings to improve code quality"
-            }
+            echo 'Pipeline completed with warnings. Check SonarQube Quality Gate results.'
         }
     }
 }
