@@ -56,7 +56,6 @@ deployment:
   
   # Files to upload to remote server
   files_to_upload: # Change based on project
-    - "docker-compose.yml"
     - "Dockerfile"
     - "config/*"
   
