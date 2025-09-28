@@ -275,19 +275,13 @@ pipeline {
                             }
                         }
                         
-                        // Handle environment file
-                        if (deployConfig.env_file) {
-                            sh """
-                                sshpass -p "\$PASS" scp -o StrictHostKeyChecking=no "/tmp/frontend/${deployConfig.env_file.source}" "\$USER@\$DEPLOY_HOST:${deployConfig.remote_path}/${deployConfig.env_file.target}"
-                            """
-                        }
-                        
-                        // Add IMAGE_TAG to .env file
+                        // Create .env file with IMAGE_TAG variable on remote server
                         sh """
                             sshpass -p "\$PASS" ssh -o StrictHostKeyChecking=no "\$USER@\$DEPLOY_HOST" "
-                                cd ${deployConfig.remote_path} &&
-                                echo 'IMAGE_TAG=${imageTag}' >> .env &&
-                                echo 'Added IMAGE_TAG=${imageTag} to .env file'
+                                cd /tmp/deployment/frontend &&
+                                echo 'IMAGE_TAG=${imageTag}' > .env &&
+                                echo 'FRONTEND_IMAGE=${env.FRONTEND_IMAGE}' >> .env &&
+                                echo 'Added deployment variables to .env file'
                             "
                         """
                     }

@@ -58,11 +58,6 @@ deployment:
   files_to_upload: # Change based on project
     - "Dockerfile"
     - "config/*"
-  
-  # Environment file configuration
-  env_file: # Change based on project
-    source: ".env copy"
-    target: ".env"
 
 # Cleanup Configuration
 cleanup:
