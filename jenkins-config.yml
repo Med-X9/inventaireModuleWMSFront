@@ -52,27 +52,21 @@ sonarqube:
 
 # Deployment Configuration
 deployment:
-  remote_path: "/tmp/deployment/backend"
+  remote_path: "/tmp/deployment/frontend"
   
   # Files to upload to remote server
   files_to_upload: # Change based on project
     - "docker-compose.yml"
     - "Dockerfile"
-    - "nginx/*"
+    - "config/*"
   
   # Environment file configuration
   env_file: # Change based on project
     source: ".env copy"
     target: ".env"
-  
-  # Commands to run for deployment
-  deploy_commands:
-    - "docker-compose down -v"
-    - "docker-compose pull"
-    - "docker-compose up -d"
 
 # Cleanup Configuration
 cleanup:
   commands:
-    - "rm -rf /tmp/backend || true"
+    - "rm -rf /tmp/frontend || true"
     - "docker system prune -f || true"

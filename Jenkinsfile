@@ -32,9 +32,9 @@ pipeline {
                     }
                     
                     // Set common variables
-                    env.BACKEND_REPO = config.repository.url
+                    env.FRONTEND_REPO = config.repository.url
                     env.IMAGE_PREFIX = config.docker.image_prefix
-                    env.BACKEND_IMAGE = "${env.IMAGE_PREFIX}/${config.docker.image_name}"
+                    env.FRONTEND_IMAGE = "${env.IMAGE_PREFIX}/${config.docker.image_name}"
                     env.IMAGE_TAG = "latest"
                     
                     // SonarQube configuration
@@ -81,8 +81,8 @@ pipeline {
                     
                     withCredentials([usernamePassword(credentialsId: gitCredentials, usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
                         sh """
-                            rm -rf /tmp/backend
-                            git clone --single-branch --branch ${env.BRANCH_NAME} https://\$GIT_USER:\$GIT_PASS@${env.BACKEND_REPO.replace('https://', '')} /tmp/backend
+                            rm -rf /tmp/frontend
+                            git clone --single-branch --branch ${env.BRANCH_NAME} https://\$GIT_USER:\$GIT_PASS@${env.FRONTEND_REPO.replace('https://', '')} /tmp/frontend
                         """
                     }
                 }
@@ -100,7 +100,7 @@ pipeline {
                 }
             }
             steps {
-                dir('/tmp/backend') {
+                dir('/tmp/frontend') {
                     script {
                         def config = readJSON text: env.PROJECT_CONFIG
                         def sonarConfig = config.sonarqube
@@ -192,7 +192,7 @@ pipeline {
             }
         }
 
-        stage('Build Backend Docker Image') {
+        stage('Build Frontend Docker Image') {
             when {
                 expression {
                     def config = readJSON text: env.PROJECT_CONFIG
@@ -200,11 +200,11 @@ pipeline {
                 }
             }
             steps {
-                dir('/tmp/backend') {
+                dir('/tmp/frontend') {
                     script {
                         def imageTag = "${env.IMAGE_TAG_SUFFIX}"
-                        sh "docker build -t ${env.BACKEND_IMAGE}:${imageTag} ."
-                        sh "docker tag ${env.BACKEND_IMAGE}:${imageTag} ${env.BACKEND_IMAGE}:${env.IMAGE_TAG}"
+                        sh "docker build -t ${env.FRONTEND_IMAGE}:${imageTag} ."
+                        sh "docker tag ${env.FRONTEND_IMAGE}:${imageTag} ${env.FRONTEND_IMAGE}:${env.IMAGE_TAG}"
                     }
                 }
             }
@@ -226,8 +226,8 @@ pipeline {
                         sh "echo \$PASS | docker login -u \$USER --password-stdin"
                     }
                     def imageTag = "${env.IMAGE_TAG_SUFFIX}"
-                    sh "docker push ${env.BACKEND_IMAGE}:${imageTag}"
-                    sh "docker push ${env.BACKEND_IMAGE}:${env.IMAGE_TAG}"
+                    sh "docker push ${env.FRONTEND_IMAGE}:${imageTag}"
+                    sh "docker push ${env.FRONTEND_IMAGE}:${env.IMAGE_TAG}"
                 }
             }
         }
@@ -245,7 +245,7 @@ pipeline {
                     def deployConfig = config.deployment
                     def imageTag = "${env.IMAGE_TAG_SUFFIX}"
                     
-                    echo "Preparing deployment files for ${env.ENV_NAME} environment with image: ${env.BACKEND_IMAGE}:${imageTag}"
+                    echo "Preparing deployment files for ${env.ENV_NAME} environment with image: ${env.FRONTEND_IMAGE}:${imageTag}"
                     
                     if (!env.DEPLOY_CREDS) {
                         error("DEPLOY_CREDS environment variable is not set!")
@@ -257,7 +257,7 @@ pipeline {
                     withCredentials([usernamePassword(credentialsId: env.DEPLOY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                         // Create deployment directory
                         sh """
-                            sshpass -p "\$PASS" ssh -o StrictHostKeyChecking=no "\$USER@\$DEPLOY_HOST" "rm -rf ${deployConfig.remote_path} && mkdir -p ${deployConfig.remote_path}/nginx"
+                            sshpass -p "\$PASS" ssh -o StrictHostKeyChecking=no "\$USER@\$DEPLOY_HOST" "rm -rf ${deployConfig.remote_path} && mkdir -p ${deployConfig.remote_path}/config"
                         """
                         
                         // Upload files specified in config
@@ -265,12 +265,12 @@ pipeline {
                             if (file.contains('/')) {
                                 // Directory upload
                                 sh """
-                                    sshpass -p "\$PASS" scp -r -o StrictHostKeyChecking=no /tmp/backend/${file} "\$USER@\$DEPLOY_HOST:${deployConfig.remote_path}/"
+                                    sshpass -p "\$PASS" scp -r -o StrictHostKeyChecking=no /tmp/frontend/${file} "\$USER@\$DEPLOY_HOST:${deployConfig.remote_path}/"
                                 """
                             } else {
                                 // Single file upload
                                 sh """
-                                    sshpass -p "\$PASS" scp -o StrictHostKeyChecking=no /tmp/backend/${file} "\$USER@\$DEPLOY_HOST:${deployConfig.remote_path}/"
+                                    sshpass -p "\$PASS" scp -o StrictHostKeyChecking=no /tmp/frontend/${file} "\$USER@\$DEPLOY_HOST:${deployConfig.remote_path}/"
                                 """
                             }
                         }
@@ -278,7 +278,7 @@ pipeline {
                         // Handle environment file
                         if (deployConfig.env_file) {
                             sh """
-                                sshpass -p "\$PASS" scp -o StrictHostKeyChecking=no "/tmp/backend/${deployConfig.env_file.source}" "\$USER@\$DEPLOY_HOST:${deployConfig.remote_path}/${deployConfig.env_file.target}"
+                                sshpass -p "\$PASS" scp -o StrictHostKeyChecking=no "/tmp/frontend/${deployConfig.env_file.source}" "\$USER@\$DEPLOY_HOST:${deployConfig.remote_path}/${deployConfig.env_file.target}"
                             """
                         }
                         
@@ -295,7 +295,7 @@ pipeline {
             }
         }
 
-        stage('Deploy Backend on Remote Server') {
+        stage('Deploy Frontend on Remote Server') {
             when {
                 expression {
                     def config = readJSON text: env.PROJECT_CONFIG
@@ -305,7 +305,7 @@ pipeline {
             steps {
                 script {
                     def config = readJSON text: env.PROJECT_CONFIG
-                    def deployConfig = config.deployment
+                    def imageTag = "${env.IMAGE_TAG_SUFFIX}"
                     
                     if (!env.DEPLOY_CREDS) {
                         error("DEPLOY_CREDS environment variable is not set!")
@@ -315,9 +315,26 @@ pipeline {
                     }
                     
                     withCredentials([usernamePassword(credentialsId: env.DEPLOY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                        def deployCommands = deployConfig.deploy_commands.join(' && ')
                         sh """
-                            sshpass -p "\$PASS" ssh "\$USER@\$DEPLOY_HOST" "bash -c 'cd ${deployConfig.remote_path} && ${deployCommands}'"
+                            sshpass -p "\$PASS" ssh -o StrictHostKeyChecking=no "\$USER@\$DEPLOY_HOST" "
+                                # Stop and remove existing container if it exists
+                                docker stop frontend-app || true
+                                docker rm frontend-app || true
+                                
+                                # Pull the latest image
+                                docker pull ${env.FRONTEND_IMAGE}:${imageTag}
+                                
+                                # Run the new container
+                                docker run -d \\
+                                    --name frontend-app \\
+                                    --network inventaire-net \\
+                                    -p 8080:80 \\
+                                    --restart unless-stopped \\
+                                    ${env.FRONTEND_IMAGE}:${imageTag}
+                                
+                                echo 'Frontend deployment completed successfully'
+                                docker ps | grep frontend-app || echo 'Container not found in running processes'
+                            "
                         """
                     }
                 }
@@ -333,7 +350,7 @@ pipeline {
                     if (env.PROJECT_CONFIG && env.PROJECT_CONFIG != 'null' && env.PROJECT_CONFIG.trim() != '') {
                         def config = readJSON text: env.PROJECT_CONFIG
                         def cleanupCommands = config.cleanup?.commands ?: [
-                            'rm -rf /tmp/backend || true',
+                            'rm -rf /tmp/frontend || true',
                             'docker system prune -f || true'
                         ]
                         
@@ -342,13 +359,13 @@ pipeline {
                         }
                     } else {
                         echo "No config loaded, using default cleanup..."
-                        sh 'rm -rf /tmp/backend || true'
+                        sh 'rm -rf /tmp/frontend || true'
                         sh 'docker system prune -f || true'
                     }
                 } catch (Exception e) {
                     echo "Cleanup configuration failed: ${e.getMessage()}"
                     echo "Using default cleanup commands..."
-                    sh 'rm -rf /tmp/backend || true'
+                    sh 'rm -rf /tmp/frontend || true'
                     sh 'docker system prune -f || true'
                 }
             }
@@ -362,7 +379,7 @@ pipeline {
                         
                         if (branchConfig) {
                             echo "✅ Successfully deployed to ${env.ENV_NAME} environment (${env.DEPLOY_HOST})!"
-                            echo "🐳 Using image: ${env.BACKEND_IMAGE}:${env.IMAGE_TAG_SUFFIX}"
+                            echo "🐳 Using image: ${env.FRONTEND_IMAGE}:${env.IMAGE_TAG_SUFFIX}"
                             
                             if (config.sonarqube.enabled) {
                                 echo "SonarQube analysis results for ${env.BRANCH_NAME}: ${config.sonarqube.server_url}/dashboard?id=${env.SONAR_PROJECT_KEY}"
