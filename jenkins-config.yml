@@ -1,0 +1,66 @@
+# Repository Configuration
+repository:
+  url: "https://github.com/Med-X9/inventaireModuleWMSFront.git"
+
+# Docker Configuration
+docker:
+  image_prefix: "smatchdigital" # DO NOT CHANGE
+  image_name: "frontend-app" # Change based on project
+
+# Environment-specific Configuration
+environments:
+  # Development Environment
+  dev:
+    deploy_host: "147.93.55.221" # dev server IP
+    deploy_creds: "dev-test-creds" # Jenkins credential ID for dev server
+    env_name: "development" # Environment name
+    image_tag_suffix: "dev-latest" # Docker image tag suffix
+  
+  # Production Environment
+  main:
+    deploy_host: "31.97.158.68" # prod server IP
+    deploy_creds: "prod-creds" # Jenkins credential ID for prod server
+    env_name: "production" # Environment name
+    image_tag_suffix: "prod-latest"  # Docker image tag suffix
+
+# Credentials Configuration
+credentials:
+  git_credentials_id: "git-cred-company-tk" # Github creds via Jenkins
+  docker_credentials_id: "docker-hub-company" # Docker Hub creds via Jenkins
+
+# SonarQube Configuration
+sonarqube:
+  enabled: true
+  project_key: "inventaire-module-wms-front" # Change based on project
+  project_name: "InventaireModuleWMSFront" # Change based on project
+  project_version: "1.0"
+  server_name: "SonarQube-Server" # DO NOT CHANGE
+  server_url: "http://147.93.55.221:9000" # DO NOT CHANGE
+  credentials_id: "sonar-token" # DO NOT CHANGE
+  api_credentials_id: "sonar-creds" # DO NOT CHANGE
+  
+  # Analysis Configuration
+  analysis_branches: ["main", "dev"]
+  sources: "src"
+  source_encoding: "UTF-8"
+  exclusions: "**/node_modules/**,**/dist/**,**/*.spec.ts,**/*.test.ts,**/coverage/**,**/*.d.ts,**/vite.config.ts,**/tailwind.config.cjs,**/postcss.config.cjs" # Change based on project
+  quality_gate_wait: false
+  
+  # Status Check Configuration
+  status_check_enabled: true
+  status_check_delay: 10  # seconds
+
+# Deployment Configuration
+deployment:
+  remote_path: "/tmp/deployment/frontend"
+  
+  # Files to upload to remote server
+  files_to_upload: # Change based on project
+    - "Dockerfile"
+    - "config/*"
+
+# Cleanup Configuration
+cleanup:
+  commands:
+    - "rm -rf /tmp/frontend || true"
+    - "docker system prune -f || true"
