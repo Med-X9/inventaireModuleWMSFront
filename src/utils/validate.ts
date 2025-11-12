@@ -120,25 +120,31 @@ comptageResult: ComptageValidationResult;
 }
 
 export const validateCreation = (state: InventoryCreationState): CreationValidationResult => {
-const step1Errors: Record<string, string> = {};
+    const step1Errors: Record<string, string> = {};
 
-if (!required().fn(state.step1Data.libelle)) {
-step1Errors.libelle = required().msg;
-}
-if (!date().fn(state.step1Data.date)) {
-step1Errors.date = date().msg;
-}
-if (!selectRequired().fn(state.step1Data.compte)) {
-step1Errors.compte = selectRequired().msg;
-}
-// Utiliser la validation avec dates obligatoires pour magasins
-if (!magasinWithDatesRequired().fn(state.step1Data.magasin)) {
-step1Errors.magasin = magasinWithDatesRequired().msg;
-}
+    if (!state.step1Data) {
+        step1Errors.general = 'Les données de l\'étape 1 sont manquantes';
+        const comptageResult = validateComptages(state.comptages);
+        return { isValid: false, step1Errors, comptageResult };
+    }
 
-const comptageResult = validateComptages(state.comptages);
+    if (!required().fn(state.step1Data.libelle)) {
+        step1Errors.libelle = required().msg;
+    }
+    if (!date().fn(state.step1Data.date)) {
+        step1Errors.date = date().msg;
+    }
+    if (!selectRequired().fn(state.step1Data.compte)) {
+        step1Errors.compte = selectRequired().msg;
+    }
+    // Utiliser la validation avec dates obligatoires pour magasins
+    if (!magasinWithDatesRequired().fn(state.step1Data.magasin)) {
+        step1Errors.magasin = magasinWithDatesRequired().msg;
+    }
 
-const isValid = Object.keys(step1Errors).length === 0 && comptageResult.isValid;
+    const comptageResult = validateComptages(state.comptages);
 
-return { isValid, step1Errors, comptageResult };
+    const isValid = Object.keys(step1Errors).length === 0 && comptageResult.isValid;
+
+    return { isValid, step1Errors, comptageResult };
 };

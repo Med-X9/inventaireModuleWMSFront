@@ -21,6 +21,7 @@ export interface FieldConfig {
     dateLabel?: string; // Label for the dates section (default: 'Dates par élément')
     tooltip?: string;
     optionTooltips?: Record<string, string>; // Tooltips for individual options
+    disabled?: boolean; // For disabling fields
 }
 
 export interface SelectOption {

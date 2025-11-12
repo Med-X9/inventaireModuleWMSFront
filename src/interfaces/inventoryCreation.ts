@@ -1,46 +1,78 @@
-export type ComptageMode =
-    | 'image de stock'
-    | 'en vrac'
-    | 'par article'
-    | '';
+// Types pour les inventaires - Fichier unifié
+export type ComptageMode = 'image de stock' | 'en vrac' | 'par article';
 
 export interface ComptageConfig {
-    mode: ComptageMode;
-    // Options pour "en vrac" - maintenant comme string pour radio group
-    inputMethod?: 'saisie' | 'scanner' | ''; // Radio group pour saisie quantité vs scanner unitaire
-    guideQuantite: boolean;
-    // Options pour "par article"
-    isVariante: boolean;
-    guideArticle: boolean;
-    dlc: boolean;
-    numeroSerie: boolean;
-    numeroLot: boolean;
-    // Legacy props (deprecated mais nécessaires pour la synchronisation)
-    saisieQuantite: boolean;
-    scannerUnitaire: boolean;
-    // Props pour compatibilité avec l'ancien système
-    useScanner?: boolean;
-    useSaisie?: boolean;
-    // Propriété pour le mode "image de stock"
+    mode: ComptageMode | '';
+    inputMethod?: '' | 'saisie' | 'scanner';
+    saisieQuantite?: boolean;
+    scannerUnitaire?: boolean;
+    dlc?: boolean;
+    numeroSerie?: boolean;
+    numeroLot?: boolean;
+    guideQuantite?: boolean;
+    guideArticle?: boolean;
+    isVariante?: boolean;
     stock_situation?: boolean;
 }
 
-export interface InventoryCreationStep1 {
-    libelle: string;
-    date: string;
-    inventory_type: string;
-    compte: string; // ID du compte (string pour le moment, sera converti en number)
-    magasin: Array<{ magasin: string; date: string }>; // magasin contient l'ID du magasin
+export interface StepConfig {
+    step: number;
+    modes: ComptageMode[];
+    options: string[];
+}
+
+// Types pour les comptes et magasins
+export interface Account {
+    id?: number;
+    label?: string;
+    name?: string;
+}
+
+export interface Warehouse {
+    id?: number;
+    label?: string;
+    warehouse_name?: string;
+    date?: string;
+}
+
+// Interface étendue pour l'en-tête d'inventaire
+export interface InventoryHeader {
+    libelle?: string;
+    date?: string;
+    inventory_type?: string;
+    compte?: Account | string; // Accepte soit un objet Account soit une string
+    magasin?: Warehouse[];
 }
 
 export interface InventoryCreationState {
-    step1Data: InventoryCreationStep1;
+    header: InventoryHeader;
     comptages: ComptageConfig[];
-    currentStep: number;
+    step?: number;
+    step1Data?: InventoryHeader;
 }
 
-export const COMPTAGE_MODES = {
-    IMAGE_STOCK: 'image de stock' as ComptageMode,
-    EN_VRAC: 'en vrac' as ComptageMode,
-    PAR_ARTICLE: 'par article' as ComptageMode,
-} as const;
+// Types pour les réponses API
+export interface LaunchResponse {
+    message?: string;
+    error?: string;
+    errors?: string[];
+    infos?: string[];
+}
+
+// Types pour les alertes
+export type AlertType = 'error' | 'warning' | 'success' | 'info';
+
+export interface AlertMessageProps {
+    show: boolean;
+    type: AlertType;
+    title: string;
+    subtitle: string;
+    message: string;
+    primaryActionText?: string;
+    secondaryActionText?: string;
+    primaryAction?: () => void;
+    secondaryAction?: () => void;
+}
+
+// Alias pour la compatibilité
+export type Comptage = ComptageConfig;

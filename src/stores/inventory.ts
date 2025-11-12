@@ -6,6 +6,12 @@ import type { InventoryDetail, InventoryDetailResponse } from '@/models/Inventor
 import type { AxiosResponse } from 'axios';
 import API from '@/api';
 import { PlanningManagementResponse } from '@/models/PlanningManagement';
+import {
+    buildDataTableParams,
+    processDataTableResponse,
+    type DataTableParams,
+    type DataTableResponse
+} from '@/utils/dataTableUtils';
 
 export const useInventoryStore = defineStore('inventory', () => {
     // State
@@ -20,11 +26,11 @@ export const useInventoryStore = defineStore('inventory', () => {
     const totalItems = ref(0);
     const totalPages = ref(1);
     const currentPage = ref(1);
-    const pageSize = ref(10);
+    const pageSize = ref(20);
 
     // États pour le tri et le filtrage
     const currentSortModel = ref<Array<{ colId: string; sort: 'asc' | 'desc' }>>([]);
-    const currentFilterModel = ref<Record<string, { filter: string }>>({});
+    const currentFilterModel = ref<Record<string, any>>({}); // Changé pour accepter les filtres transformés
     const currentGlobalSearch = ref<string>('');
 
     // Getters
@@ -34,87 +40,37 @@ export const useInventoryStore = defineStore('inventory', () => {
     const getError = computed(() => error.value);
 
     // Actions
-    const fetchInventories = async (params?: {
-        sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>;
-        filter?: Record<string, { filter: string }>;
-        page?: number;
-        pageSize?: number;
-        globalSearch?: string;
-    }) => {
+    const fetchInventories = async (params?: DataTableParams): Promise<DataTableResponse<InventoryTable>> => {
         loading.value = true;
         error.value = null;
         try {
-            // Mettre à jour les modèles actuels si fournis
-            if (params?.sort) currentSortModel.value = params.sort;
-            if (params?.filter) currentFilterModel.value = params.filter;
-            if (params?.globalSearch !== undefined) currentGlobalSearch.value = params.globalSearch;
+            // Construire les paramètres DataTable au format Django
+            const queryParams = buildDataTableParams({
+                page: params?.page || currentPage.value,
+                pageSize: params?.pageSize || pageSize.value,
+                globalSearch: params?.globalSearch,
+                sort: params?.sort,
+                filter: params?.filter
+            });
 
-            // Construire les paramètres de requête pour Django
-            const queryParams: any = {};
+            // Construire l'URL avec les paramètres DataTable
+            const baseUrl = API.endpoints.inventory?.base;
+            const url = `${baseUrl}?${queryParams.toString()}`;
 
-            // Gestion du tri
-            if (currentSortModel.value.length > 0) {
-                const sortParams = currentSortModel.value.map(sort => {
-                    const field = sort.colId;
-                    const direction = sort.sort === 'asc' ? field : `-${field}`;
-                    return direction;
-                });
-                queryParams.ordering = sortParams.join(',');
-            }
+            // Appeler l'API avec les paramètres DataTable
+            const responseData = await InventoryService.getAllByUrl(url);
 
-            // Gestion du filtrage
-            if (currentFilterModel.value && Object.keys(currentFilterModel.value).length > 0) {
-                Object.keys(currentFilterModel.value).forEach(field => {
-                    const filter = currentFilterModel.value[field];
-                    if (filter && filter.filter) {
-                        queryParams[field] = filter.filter;
-                    }
-                });
-            }
-
-            // Gestion de la recherche globale
-            if (currentGlobalSearch.value) {
-                queryParams.search = currentGlobalSearch.value;
-            }
-
-            // Toujours mettre à jour pageSize AVANT le fetch
-            if (params?.pageSize) {
-                pageSize.value = params.pageSize;
-                queryParams.page_size = params.pageSize;
-            }
-
-            // On ne met à jour currentPage que si fourni, sinon on garde la valeur actuelle
-            if (params?.page) {
-                currentPage.value = params.page;
-                queryParams.page = params.page;
-            } else {
-                queryParams.page = currentPage.value;
-            }
-
-            console.log('🔍 Paramètres de requête:', queryParams);
-
-            const response: AxiosResponse<{ count: number; results: InventoryTable[]; next: string | null; previous: string | null }> = await InventoryService.getAll(queryParams);
-
-            const inventoryData = response.data.results || response.data;
+            const inventoryData = responseData.data || [];
             inventories.value = inventoryData;
+            totalItems.value = responseData.recordsFiltered || inventoryData.length;
 
-            // Mettre à jour la pagination
-            if (response.data.count !== undefined) {
-                totalItems.value = response.data.count;
-                // Utiliser le pageSize courant (celui envoyé à l'API)
-                const usedPageSize = params?.pageSize ?? pageSize.value;
-                totalPages.value = Math.max(1, Math.ceil(response.data.count / usedPageSize));
-                // Si la page demandée est hors limite, revenir à la dernière page existante
-                if (currentPage.value > totalPages.value) {
-                    currentPage.value = totalPages.value;
-                }
-                // Si la page demandée est < 1, revenir à la première page
-                if (currentPage.value < 1) {
-                    currentPage.value = 1;
-                }
-                // Log du calcul de pagination
-                console.log('[Pagination] totalItems:', totalItems.value, '| pageSize:', usedPageSize, '| totalPages:', totalPages.value, '| currentPage:', currentPage.value);
-            }
+            // Retourner le format attendu par useGenericDataTable
+            return {
+                draw: responseData.draw || 1,
+                data: inventoryData,
+                recordsTotal: responseData.recordsTotal || 0,
+                recordsFiltered: responseData.recordsFiltered || inventoryData.length
+            };
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erreur lors de la récupération des inventaires';
             throw err;
@@ -137,7 +93,7 @@ export const useInventoryStore = defineStore('inventory', () => {
     };
 
     // Méthodes pour gérer le filtrage
-    const updateFilterModel = (filterModel: Record<string, { filter: string }>) => {
+    const updateFilterModel = (filterModel: Record<string, any>) => { // Changé pour accepter les filtres transformés
         currentFilterModel.value = filterModel;
         // Recharger les données avec le nouveau filtre
         return fetchInventories({
@@ -195,6 +151,22 @@ export const useInventoryStore = defineStore('inventory', () => {
         error.value = null;
         try {
             const response: AxiosResponse<ResponseInventoryDetails> = await InventoryService.getById(id);
+            currentInventoryDetails.value = response.data.data;
+            return response.data.data;
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Erreur lors de la récupération de l\'inventaire';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+
+    const fetchInventoryByReference = async (reference: string) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response: AxiosResponse<ResponseInventoryDetails> = await InventoryService.getByReference(reference);
             currentInventoryDetails.value = response.data.data;
             return response.data.data;
         } catch (err: any) {
@@ -274,6 +246,71 @@ export const useInventoryStore = defineStore('inventory', () => {
         }
     };
 
+
+    const launchInventory = async (id: number | string) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await InventoryService.launch(id);
+
+            // Vérifier si c'est une réponse de succès avec des infos
+            if (response.data && response.data.message) {
+                // Si il y a des infos, les afficher
+                if (response.data.infos && response.data.infos.length > 0) {
+                }
+            }
+
+            fetchInventories();
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Erreur lors du lancement de l\'inventaire';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    const cancelInventory = async (id: number | string) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            await InventoryService.cancel(id);
+            fetchInventories();
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Erreur lors de l\'annulation de l\'inventaire';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    const terminateInventory = async (id: number | string) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            await InventoryService.terminate(id);
+            fetchInventories();
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Erreur lors de la terminaison de l\'inventaire';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    const closeInventory = async (id: number | string) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            await InventoryService.close(id);
+            fetchInventories();
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Erreur lors de la clôture de l\'inventaire';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
     const fetchPlanningManagement = async (id: number) => {
         loading.value = true;
         error.value = null;
@@ -339,9 +376,14 @@ export const useInventoryStore = defineStore('inventory', () => {
         createInventory,
         updateInventory,
         deleteInventory,
+        launchInventory,
+        cancelInventory,
+        terminateInventory,
+        closeInventory,
         fetchPlanningManagement,
         importStockImage,
         clearError,
         clearCurrentInventory,
+        fetchInventoryByReference,
     };
 });

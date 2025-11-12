@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { AccountService } from '@/services/AccountService';
 import type { Account } from '@/models/Account';
+import { logger } from '@/services/loggerService';
 
 export const useAccountStore = defineStore('account', () => {
     const accounts = ref<Account[]>([]);
@@ -17,7 +18,7 @@ export const useAccountStore = defineStore('account', () => {
         } catch (err) {
             error.value = err instanceof Error ? err.message : 'Erreur lors du chargement des comptes';
             accounts.value = []; // S'assurer que c'est toujours un tableau
-            console.error('Erreur lors du chargement des comptes:', err);
+            logger.error('Erreur lors du chargement des comptes', err);
         } finally {
             loading.value = false;
         }

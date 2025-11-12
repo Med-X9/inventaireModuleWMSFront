@@ -8,29 +8,83 @@ import type {
     LocationResponse,
     LocationQueryParams
 } from '@/models/Location';
+import type { DataTableResponse } from '@/utils/dataTableUtils';
 import API from '@/api';
+import { logger } from '@/services/loggerService';
+
+// Extension pour LocationResponse pour supporter DataTable
+export interface DataTableLocationResponse extends LocationResponse {}
+
+// Interface pour les paramètres DataTable
+export interface DataTableParams {
+    draw?: number;
+    start?: number;
+    length?: number;
+    [key: string]: any;
+}
+
+// Interface combinant les paramètres de Location et DataTable
+export interface LocationDataTableParams extends Partial<LocationQueryParams> {
+    draw?: number;
+    start?: number;
+    length?: number;
+    [key: string]: any;
+}
 
 export class LocationService {
-    // Récupérer toutes les locations avec pagination et filtres
-    static async getAll(params?: LocationQueryParams): Promise<AxiosResponse<LocationResponse>> {
+    /**
+     * Récupérer toutes les locations avec pagination
+     * @param params - Paramètres de requête optionnels (supporte DataTable et filtres)
+     * @returns Promise avec la réponse paginée de locations
+     */
+    static async getAll(params?: LocationDataTableParams): Promise<AxiosResponse<LocationResponse>> {
         try {
-            return await axiosInstance.get<LocationResponse>(`${API.endpoints.location?.base}`, {
+            return await axiosInstance.get<LocationResponse>(API.endpoints.location?.base, {
                 params: params
             });
         } catch (error) {
-            console.error('Erreur lors de la récupération des locations:', error);
+            logger.error('Erreur lors de la récupération des locations', error);
             throw error;
         }
     }
 
-    // Récupérer les locations non assignées
-    static async getUnassigned(warehouseId: number, params?: LocationQueryParams): Promise<AxiosResponse<LocationResponse>> {
+    /**
+     * Récupérer les locations via une URL complète (pour DataTable)
+     * @param url - URL complète de la requête
+     * @returns Promise avec la réponse paginée de locations
+     */
+    static async getAllByUrl(url: string): Promise<AxiosResponse<LocationResponse>> {
         try {
-            return await axiosInstance.get<LocationResponse>(`${API.endpoints.warehouse?.base}${warehouseId}/locations/unassigned/`, {
+            return await axiosInstance.get<LocationResponse>(url);
+        } catch (error) {
+            logger.error('Erreur lors de la récupération des locations', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Récupérer les locations non assignées pour un entrepôt et un inventaire
+     * @param account_id - ID du compte
+     * @param inventory_id - ID de l'inventaire
+     * @param warehouse_id - ID de l'entrepôt
+     * @param params - Paramètres de requête optionnels (supporte DataTable et filtres)
+     * @returns Promise avec la réponse paginée de locations non assignées
+     */
+    static async getUnassigned(
+        account_id: number,
+        inventory_id: number,
+        warehouse_id: number,
+        params?: LocationDataTableParams
+    ): Promise<AxiosResponse<LocationResponse | DataTableResponse<Location>>> {
+        try {
+            const url = `${API.endpoints.warehouse?.base}${account_id}/warehouse/${warehouse_id}/inventory/${inventory_id}/locations/unassigned/`;
+            logger.debug('LocationService.getUnassigned - URL et params:', { url, params });
+
+            return await axiosInstance.get<LocationResponse | DataTableResponse<Location>>(url, {
                 params: params
             });
         } catch (error) {
-            console.error('Erreur lors de la récupération des locations non assignées:', error);
+            logger.error('Erreur lors de la récupération des locations non assignées', error);
             throw error;
         }
     }
@@ -40,7 +94,7 @@ export class LocationService {
         try {
             return await axiosInstance.get<Location>(`${API.endpoints.location?.base}${id}/`);
         } catch (error) {
-            console.error('Erreur lors de la récupération de la location:', error);
+            logger.error('Erreur lors de la récupération de la location', error);
             throw error;
         }
     }
@@ -50,7 +104,7 @@ export class LocationService {
         try {
             return await axiosInstance.get<Location>(`${API.endpoints.location?.base}by-reference/${reference}/`);
         } catch (error) {
-            console.error('Erreur lors de la récupération de la location par référence:', error);
+            logger.error('Erreur lors de la récupération de la location par référence', error);
             throw error;
         }
     }
@@ -60,7 +114,7 @@ export class LocationService {
         try {
             return await axiosInstance.post<Location>(`${API.endpoints.location?.base}`, data);
         } catch (error) {
-            console.error('Erreur lors de la création de la location:', error);
+            logger.error('Erreur lors de la création de la location', error);
             throw error;
         }
     }
@@ -70,7 +124,7 @@ export class LocationService {
         try {
             return await axiosInstance.put<Location>(`${API.endpoints.location?.base}${id}/`, data);
         } catch (error) {
-            console.error('Erreur lors de la mise à jour de la location:', error);
+            logger.error('Erreur lors de la mise à jour de la location', error);
             throw error;
         }
     }
@@ -80,59 +134,69 @@ export class LocationService {
         try {
             return await axiosInstance.delete<void>(`${API.endpoints.location?.base}${id}/`);
         } catch (error) {
-            console.error('Erreur lors de la suppression de la location:', error);
+            logger.error('Erreur lors de la suppression de la location', error);
             throw error;
         }
     }
 
     // Rechercher des locations
-    static async search(query: string, params?: LocationQueryParams): Promise<AxiosResponse<LocationResponse>> {
+    static async search(query: string, params?: LocationDataTableParams): Promise<AxiosResponse<LocationResponse>> {
         try {
             const searchParams = { ...params, search: query };
             return await axiosInstance.get<LocationResponse>(`${API.endpoints.location?.base}search/`, {
                 params: searchParams
             });
         } catch (error) {
-            console.error('Erreur lors de la recherche de locations:', error);
+            logger.error('Erreur lors de la recherche de locations', error);
             throw error;
         }
     }
 
     // Récupérer les locations par sous-zone
-    static async getBySousZone(sousZoneId: number, params?: LocationQueryParams): Promise<AxiosResponse<LocationResponse>> {
+    static async getBySousZone(sousZoneId: number, params?: LocationDataTableParams): Promise<AxiosResponse<LocationResponse>> {
         try {
             const zoneParams = { ...params, sous_zone_id: sousZoneId };
             return await axiosInstance.get<LocationResponse>(`${API.endpoints.location?.base}by-sous-zone/`, {
                 params: zoneParams
             });
         } catch (error) {
-            console.error('Erreur lors de la récupération des locations par sous-zone:', error);
+            logger.error('Erreur lors de la récupération des locations par sous-zone', error);
             throw error;
         }
     }
 
     // Récupérer les locations par zone
-    static async getByZone(zoneId: number, params?: LocationQueryParams): Promise<AxiosResponse<LocationResponse>> {
+    static async getByZone(zoneId: number, params?: LocationDataTableParams): Promise<AxiosResponse<LocationResponse>> {
         try {
             const zoneParams = { ...params, zone_id: zoneId };
             return await axiosInstance.get<LocationResponse>(`${API.endpoints.location?.base}by-zone/`, {
                 params: zoneParams
             });
         } catch (error) {
-            console.error('Erreur lors de la récupération des locations par zone:', error);
+            logger.error('Erreur lors de la récupération des locations par zone', error);
             throw error;
         }
     }
 
     // Récupérer les locations par entrepôt
-    static async getByWarehouse(warehouseId: number, params?: LocationQueryParams): Promise<AxiosResponse<LocationResponse>> {
+    static async getByWarehouse(warehouseId: number, params?: LocationDataTableParams): Promise<AxiosResponse<LocationResponse>> {
         try {
             const warehouseParams = { ...params, warehouse_id: warehouseId };
             return await axiosInstance.get<LocationResponse>(`${API.endpoints.location?.base}by-warehouse/`, {
                 params: warehouseParams
             });
         } catch (error) {
-            console.error('Erreur lors de la récupération des locations par entrepôt:', error);
+            logger.error('Erreur lors de la récupération des locations par entrepôt', error);
+            throw error;
+        }
+    }
+
+    // Récupérer les locations par entrepôt avec URL complète (pour DataTable)
+    static async getByWarehouseByUrl(url: string): Promise<AxiosResponse<LocationResponse>> {
+        try {
+            return await axiosInstance.get<LocationResponse>(url);
+        } catch (error) {
+            logger.error('Erreur lors de la récupération des locations par entrepôt', error);
             throw error;
         }
     }
@@ -148,7 +212,7 @@ export class LocationService {
         try {
             return await axiosInstance.get(`${API.endpoints.location?.base}stats/`);
         } catch (error) {
-            console.error('Erreur lors de la récupération des statistiques des locations:', error);
+            logger.error('Erreur lors de la récupération des statistiques des locations', error);
             throw error;
         }
     }
@@ -163,20 +227,20 @@ export class LocationService {
                 locations: locations
             });
         } catch (error) {
-            console.error('Erreur lors de l\'import en lot des locations:', error);
+            logger.error('Erreur lors de l\'import en lot des locations', error);
             throw error;
         }
     }
 
     // Exporter les locations
-    static async export(format: 'csv' | 'excel' | 'json' = 'csv', params?: LocationQueryParams): Promise<AxiosResponse<Blob>> {
+    static async export(format: 'csv' | 'excel' | 'json' = 'csv', params?: LocationDataTableParams): Promise<AxiosResponse<Blob>> {
         try {
             return await axiosInstance.get(`${API.endpoints.location?.base}export/`, {
                 params: { ...params, format },
                 responseType: 'blob'
             });
         } catch (error) {
-            console.error('Erreur lors de l\'export des locations:', error);
+            logger.error('Erreur lors de l\'export des locations', error);
             throw error;
         }
     }

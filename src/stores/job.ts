@@ -19,6 +19,13 @@ import type {
     JobManualAssignmentsRequest,
     JobReadyResponse
 } from '@/models/Job';
+import {
+    buildDataTableParams,
+    processDataTableResponse,
+    type DataTableParams,
+    type DataTableResponse
+} from '@/utils/dataTableUtils';
+import API from '@/api';
 
 export const useJobStore = defineStore('job', () => {
     // State
@@ -40,104 +47,35 @@ export const useJobStore = defineStore('job', () => {
     const getPageSize = computed(() => pageSize.value);
 
     // Actions
-    const fetchJobs = async (inventoryId: number, warehouseId: number, params?: {
-        sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>;
-        filter?: Record<string, { filter: string; type?: string; dateFrom?: string; dateTo?: string; filterTo?: string }>;
-        page?: number;
-        pageSize?: number;
-        inventoryId?: number;
-    }) => {
+    // Exemple d'utilisation des utilitaires DataTable pour fetchJobs
+    const fetchJobsDataTable = async (inventoryId: number, warehouseId: number, params?: DataTableParams) => {
         loading.value = true;
         error.value = null;
         try {
-            // Construire les paramètres de requête pour Django
-            const queryParams: any = {};
+            // Construire les paramètres DataTable avec les utilitaires
+            const queryParams = buildDataTableParams({
+                page: params?.page || currentPage.value,
+                pageSize: params?.pageSize || pageSize.value,
+                globalSearch: params?.globalSearch,
+                sort: params?.sort,
+                filter: params?.filter
+            });
 
-            if (params?.sort && params.sort.length > 0) {
-                // Convertir le modèle de tri AG Grid en format Django REST Framework
-                const sortParams = params.sort.map(sort => {
-                    const field = sort.colId;
-                    const direction = sort.sort === 'asc' ? field : `-${field}`;
-                    return direction;
-                });
-                queryParams.ordering = sortParams.join(',');
-            }
+            // Ajouter les paramètres spécifiques au job
+            queryParams.append('inventory_id', inventoryId.toString());
+            queryParams.append('warehouse_id', warehouseId.toString());
 
-            if (params?.filter) {
-                Object.keys(params.filter).forEach(field => {
-                    const filter = params.filter![field];
-                    if (filter) {
-                        // Pour les filtres de type number/date
-                        if (filter.type) {
-                            let op: string | null = '';
-                            switch (filter.type) {
-                                case 'equals':
-                                case 'exact':
-                                    op = '';
-                                    break;
-                                case 'greaterThan':
-                                    op = '__gt';
-                                    break;
-                                case 'greaterThanOrEqual':
-                                    op = '__gte';
-                                    break;
-                                case 'lessThan':
-                                    op = '__lt';
-                                    break;
-                                case 'lessThanOrEqual':
-                                    op = '__lte';
-                                    break;
-                                case 'inRange':
-                                    // Pour les dates
-                                    if (filter.dateFrom !== undefined && filter.dateFrom !== null && filter.dateFrom !== '') {
-                                        queryParams[`${field}__gte`] = filter.dateFrom;
-                                    }
-                                    if (filter.dateTo !== undefined && filter.dateTo !== null && filter.dateTo !== '') {
-                                        queryParams[`${field}__lte`] = filter.dateTo;
-                                    }
-                                    // Pour les nombres
-                                    if (filter.filter !== undefined && filter.filter !== null && filter.filter !== '') {
-                                        queryParams[`${field}__gte`] = filter.filter;
-                                    }
-                                    if (filter.filterTo !== undefined && filter.filterTo !== null && filter.filterTo !== '') {
-                                        queryParams[`${field}__lte`] = filter.filterTo;
-                                    }
-                                    op = null; // On ne traite pas la suite
-                                    break;
-                                default:
-                                    op = '';
-                            }
-
-                            const value = filter.filter ?? filter.dateFrom;
-                            if (op !== null && value !== undefined && value !== null && value !== '') {
-                                queryParams[`${field}${op}`] = value;
-                            }
-                        } else if (filter.filter) {
-                            // Filtres texte classiques
-                            queryParams[field] = filter.filter;
-                        }
-                    }
-                });
-            }
-
-            if (params?.page) {
-                queryParams.page = params.page;
-                currentPage.value = params.page;
-            }
-
-            if (params?.pageSize) {
-                queryParams.page_size = params.pageSize;
-                pageSize.value = params.pageSize;
-            }
-
-            // Utiliser l'inventoryId par défaut si non fourni
-            const response = await JobService.getAll(inventoryId, warehouseId, queryParams);
-
-            // Extraire les données du champ 'results' de la réponse paginée
-            const jobData = response.results || response;
-            totalCount.value = response.count || jobData.length;
-
+            // Appeler l'API avec les paramètres DataTable
+            const response = await JobService.getAll(inventoryId, warehouseId, {
+                page: params?.page || currentPage.value,
+                pageSize: params?.pageSize || pageSize.value,
+                search: params?.globalSearch,
+                sort: params?.sort,
+                filter: params?.filter
+            });
+            const jobData = response.results || [];
             jobs.value = jobData;
+            totalCount.value = response.count || jobData.length;
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erreur lors de la récupération des jobs';
             throw err;
@@ -146,104 +84,78 @@ export const useJobStore = defineStore('job', () => {
         }
     };
 
-    const fetchJobsValidated = async (inventoryId: number, warehouseId: number, params?: {
-        sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>;
-        filter?: Record<string, { filter: string; type?: string; dateFrom?: string; dateTo?: string; filterTo?: string }>;
-        page?: number;
-        pageSize?: number;
-        inventoryId?: number;
-    }) => {
+    const fetchJobs = async (inventoryId: number, warehouseId: number, params?: DataTableParams): Promise<DataTableResponse<JobTable>> => {
         loading.value = true;
         error.value = null;
         try {
-            // Construire les paramètres de requête pour Django
-            const queryParams: any = {};
+            // Construire les paramètres DataTable au format Django
+            const queryParams = buildDataTableParams({
+                page: params?.page || currentPage.value,
+                pageSize: params?.pageSize || pageSize.value,
+                globalSearch: params?.globalSearch,
+                sort: params?.sort,
+                filter: params?.filter
+            });
 
-            if (params?.sort && params.sort.length > 0) {
-                // Convertir le modèle de tri AG Grid en format Django REST Framework
-                const sortParams = params.sort.map(sort => {
-                    const field = sort.colId;
-                    const direction = sort.sort === 'asc' ? field : `-${field}`;
-                    return direction;
-                });
-                queryParams.ordering = sortParams.join(',');
-            }
+            // Construire l'URL avec les paramètres DataTable
+            const baseUrl = `${API.endpoints.inventory?.base}${inventoryId}/warehouse/${warehouseId}/jobs/`;
+            const url = `${baseUrl}?${queryParams.toString()}`;
 
-            if (params?.filter) {
-                Object.keys(params.filter).forEach(field => {
-                    const filter = params.filter![field];
-                    if (filter) {
-                        // Pour les filtres de type number/date
-                        if (filter.type) {
-                            let op: string | null = '';
-                            switch (filter.type) {
-                                case 'equals':
-                                case 'exact':
-                                    op = '';
-                                    break;
-                                case 'greaterThan':
-                                    op = '__gt';
-                                    break;
-                                case 'greaterThanOrEqual':
-                                    op = '__gte';
-                                    break;
-                                case 'lessThan':
-                                    op = '__lt';
-                                    break;
-                                case 'lessThanOrEqual':
-                                    op = '__lte';
-                                    break;
-                                case 'inRange':
-                                    // Pour les dates
-                                    if (filter.dateFrom !== undefined && filter.dateFrom !== null && filter.dateFrom !== '') {
-                                        queryParams[`${field}__gte`] = filter.dateFrom;
-                                    }
-                                    if (filter.dateTo !== undefined && filter.dateTo !== null && filter.dateTo !== '') {
-                                        queryParams[`${field}__lte`] = filter.dateTo;
-                                    }
-                                    // Pour les nombres
-                                    if (filter.filter !== undefined && filter.filter !== null && filter.filter !== '') {
-                                        queryParams[`${field}__gte`] = filter.filter;
-                                    }
-                                    if (filter.filterTo !== undefined && filter.filterTo !== null && filter.filterTo !== '') {
-                                        queryParams[`${field}__lte`] = filter.filterTo;
-                                    }
-                                    op = null; // On ne traite pas la suite
-                                    break;
-                                default:
-                                    op = '';
-                            }
+            // Appeler l'API avec les paramètres DataTable
+            const responseData = await JobService.getAllByUrl(url);
 
-                            const value = filter.filter ?? filter.dateFrom;
-                            if (op !== null && value !== undefined && value !== null && value !== '') {
-                                queryParams[`${field}${op}`] = value;
-                            }
-                        } else if (filter.filter) {
-                            // Filtres texte classiques
-                            queryParams[field] = filter.filter;
-                        }
-                    }
-                });
-            }
+            const jobData = responseData.data || [];
+            jobs.value = jobData;
+            totalCount.value = responseData.recordsFiltered || jobData.length;
 
-            if (params?.page) {
-                queryParams.page = params.page;
-                currentPage.value = params.page;
-            }
+            // Retourner le format attendu par useGenericDataTable
+            return {
+                draw: responseData.draw || 1,
+                data: jobData,
+                recordsTotal: responseData.recordsTotal || 0,
+                recordsFiltered: responseData.recordsFiltered || jobData.length
+            };
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Erreur lors de la récupération des jobs';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
 
-            if (params?.pageSize) {
-                queryParams.page_size = params.pageSize;
-                pageSize.value = params.pageSize;
-            }
+    const fetchJobsValidated = async (inventoryId: number, warehouseId: number, params?: DataTableParams) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            // Construire les paramètres DataTable au format Django
+            const queryParams = buildDataTableParams({
+                page: params?.page || currentPage.value,
+                pageSize: params?.pageSize || pageSize.value,
+                globalSearch: params?.globalSearch,
+                sort: params?.sort,
+                filter: params?.filter
+            });
 
-            // Utiliser l'inventoryId par défaut si non fourni
-            const response = await JobService.getAllValidated(inventoryId, warehouseId, queryParams);
+            // Construire l'URL avec les paramètres DataTable
+            const baseUrl = `${API.endpoints.job?.base}valid/warehouse/${warehouseId}/inventory/${inventoryId}/`;
+            const url = `${baseUrl}?${queryParams.toString()}`;
 
-            // Extraire les données du champ 'results' de la réponse paginée
-            const jobData = response.results || response;
-            totalCount.value = response.count || jobData.length;
+            // Appeler l'API avec les paramètres DataTable
+            const responseData = await JobService.getAllValidatedByUrl(url);
 
+            const jobData = responseData.data || [];
             jobsValidated.value = jobData;
+
+            // Utiliser recordsFiltered pour la pagination
+            totalCount.value = responseData.recordsFiltered || jobData.length;
+
+            // Retourner le format attendu par useGenericDataTable
+            return {
+                draw: responseData.draw || 1,
+                data: jobData,
+                recordsTotal: responseData.recordsTotal || 0,
+                recordsFiltered: responseData.recordsFiltered || jobData.length
+            };
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erreur lors de la récupération des jobs';
             throw err;
@@ -346,6 +258,18 @@ export const useJobStore = defineStore('job', () => {
         error.value = null;
         try {
             const response = await JobService.delete(id);
+
+            // Vérifier si la réponse indique un échec
+            if (response.success === false) {
+                // Créer un objet d'erreur qui sera intercepté par le catch
+                const errorData = {
+                    response: {
+                        data: response
+                    }
+                };
+                throw errorData;
+            }
+
             // Rafraîchir la liste des jobs
             return response;
         } catch (err: any) {
@@ -531,6 +455,10 @@ export const useJobStore = defineStore('job', () => {
         return await JobService.jobReset(job_ids);
     };
 
+    const jobTransfer = async (job_ids: number[], counting_order: number[]): Promise<any> => {
+        return await JobService.jobTransfer({ job_ids, counting_order });
+    };
+
     const clearError = () => {
         error.value = null;
     };
@@ -570,6 +498,7 @@ export const useJobStore = defineStore('job', () => {
 
         // Actions
         fetchJobs,
+        fetchJobsDataTable,
         fetchJobsValidated,
         fetchJobById,
         createJob,
@@ -591,5 +520,6 @@ export const useJobStore = defineStore('job', () => {
         resetState,
         jobReady,
         jobReset,
+        jobTransfer,
     };
 });

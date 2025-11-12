@@ -1,1385 +1,973 @@
-import { ref, computed, watch, onMounted, nextTick, onUnmounted, toRaw } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { useLocationStore } from '@/stores/location';
-import { useJobStore } from '@/stores/job';
-import { useInventoryStore } from '@/stores/inventory';
-import { alertService } from '@/services/alertService';
-import { useWarehouseStore } from '@/stores/warehouse';
-import { useDataTableFilters, type DataTableParams } from '@/composables/useDataTableFilters';
+import { ref, computed, markRaw, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useBackendDataTable } from '@/components/DataTable/composables/useBackendDataTable'
+import { logger } from '@/services/loggerService'
+import { alertService } from '@/services/alertService'
+import { useJobStore } from '@/stores/job'
+import { useLocationStore } from '@/stores/location'
+import { useInventoryStore } from '@/stores/inventory'
+import { useWarehouseStore } from '@/stores/warehouse'
+import type { DataTableColumn, ColumnDataType, ActionConfig } from '@/types/dataTable'
+import type { Job, JobTable } from '@/models/Job'
+import type { Location } from '@/models/Location'
+import type { LocationDataTableParams } from '@/services/LocationService'
 
-// Import des icônes pour les actions
-import IconEye from '@/components/icon/icon-eye.vue';
-import IconCalendar from '@/components/icon/icon-calendar.vue';
-import IconUser from '@/components/icon/icon-user.vue';
+// Import des icônes
+import IconCheck from '@/components/icon/icon-check.vue'
+import IconTrash from '@/components/icon/icon-trash.vue'
 
-// Interfaces pour la migration depuis PlanningManagement.vue
-interface Store {
-    id: number;
-    store_name: string;
-    teams_count: number;
-    jobs_count: number;
-    reference: string;
+/**
+ * Options pour initialiser le composable de planning
+ */
+interface PlanningOptions {
+    inventoryReference?: string
+    warehouseReference?: string
 }
 
-interface PlanningAction {
-    label: string;
-    icon: any;
-    handler: (store: Store) => void;
-}
+/**
+ * Composable pour la gestion du planning d'inventaire
+ * Gère les jobs et les locations disponibles
+ * Utilise useBackendDataTable pour l'intégration avec Pinia
+ */
+export function usePlanning(options?: PlanningOptions) {
+    const route = useRoute()
+    const jobStore = useJobStore()
+    const locationStore = useLocationStore()
+    const inventoryStore = useInventoryStore()
+    const warehouseStore = useWarehouseStore()
 
-type ViewModeType = 'table' | 'grid';
+    // ===== ÉTAT LOCAL =====
+    const inventoryReference = options?.inventoryReference ?? (route.params.reference as string)
+    const warehouseReference = options?.warehouseReference ?? (route.params.warehouse as string)
 
-interface GridDataItem {
-    id: number;
-    store_name: string;
-    teams_count: number;
-    jobs_count: number;
-    reference: string;
-}
+    const inventoryId = ref<number | null>(null)
+    const warehouseId = ref<number | null>(null)
+    const accountId = ref<number | null>(null)
+    const isInitialized = ref(false)
 
-interface Action<T> {
-    label: string;
-    icon: any;
-    handler: (item: T) => void;
-    variant?: 'primary' | 'secondary' | 'danger';
-}
+    // Sélections
+    const selectedAvailableLocations = ref<string[]>([])
+    const selectedJobs = ref<string[]>([])
 
-interface ActionConfig {
-    label: string;
-    icon: any;
-    onClick: (row: Record<string, unknown>) => void;
-    color: 'primary' | 'secondary' | 'danger';
-}
+    // ===== INITIALISATION DES DATATABLES =====
 
-// Interface locale pour les jobs du planning (différente du store)
-interface PlanningJob {
-    id: string;
-    reference: string;
-    locations: string[];
-    isValidated: boolean;
-    createdAt: string;
-    validatedAt?: string;
-}
+    /**
+     * DataTable pour les jobs
+     */
+    const {
+        data: jobs,
+        loading: jobsLoading,
+        currentPage: jobsCurrentPage,
+        pageSize: jobsPageSize,
+        searchQuery: jobsSearchQuery,
+        sortModel: jobsSortModel,
+        setPage: setJobsPage,
+        setPageSize: setJobsPageSize,
+        setSearch: setJobsSearch,
+        setSortModel: setJobsSortModel,
+        setFilters: setJobsFilters,
+        resetFilters: resetJobsFilters,
+        refresh: _refreshJobsDataTable,
+        pagination: jobsPagination
+    } = useBackendDataTable<Job>('', {
+        piniaStore: jobStore,
+        storeId: 'job',
+        autoLoad: false,
+        pageSize: 20
+    })
 
-export function usePlanning(options?: { inventoryReference?: string, warehouseReference?: string }) {
-    const locationStore = useLocationStore();
-    const jobStore = useJobStore();
-    const inventoryStore = useInventoryStore();
-    const warehouseStore = useWarehouseStore();
-    const route = useRoute();
-    const router = useRouter();
+    /**
+     * DataTable pour les locations disponibles
+     */
+    const {
+        data: locations,
+        loading: locationsLoading,
+        currentPage: locationsCurrentPage,
+        pageSize: locationsPageSize,
+        searchQuery: locationsSearchQuery,
+        sortModel: locationsSortModel,
+        setPage: setLocationsPage,
+        setPageSize: setLocationsPageSize,
+        setSearch: setLocationsSearch,
+        setSortModel: setLocationsSortModel,
+        setFilters: setLocationsFilters,
+        resetFilters: resetLocationsFilters,
+        refresh: _refreshLocationsDataTable,
+        pagination: locationsPagination
+    } = useBackendDataTable<Location>('', {
+        piniaStore: locationStore,
+        storeId: 'location',
+        autoLoad: false,
+        pageSize: 20
+    })
 
-    // Utiliser le composable générique pour les jobs
-    const jobDataTableFilters = useDataTableFilters();
+    // ===== COMPUTED =====
 
-    // Priorité aux options, sinon fallback sur la route
-    const inventoryReference = options?.inventoryReference ?? (route.params.reference as string);
-    const warehouseReference = options?.warehouseReference ?? (route.params.warehouse as string);
+    const loading = computed(() => jobsLoading.value || locationsLoading.value)
 
-    // Récupérer les paramètres de route
-    const storeId = route.query.storeId as string;
+    /**
+     * Transformer les jobs pour aplatir les propriétés imbriquées des locations
+     * Cela permet à la DataTable nested d'afficher correctement zone et sous_zone
+     */
+    const dedupeJobLocations = (job: Job | JobTable) => {
+        const rawLocations = ((job as any).locations ?? (job as any).emplacements ?? []) as Array<Record<string, any>>
+        const uniqueLocations = new Map<string | number | symbol, Record<string, any>>()
 
-    // IDs récupérés depuis les références
-    const inventoryId = ref<number | null>(null);
-    const warehouseId = ref<number | null>(null);
+        rawLocations.forEach((loc, index) => {
+            const key =
+                loc.id ??
+                loc.location_id ??
+                loc.location_reference ??
+                loc.reference ??
+                Symbol(`job-location-${index}`)
+            if (!uniqueLocations.has(key)) {
+                uniqueLocations.set(key, {
+                    ...loc,
+                    zone_name: loc.zone?.zone_name || loc.zone_name || 'N/A',
+                    sous_zone_name: loc.sous_zone?.sous_zone_name || loc.sous_zone_name || 'N/A'
+                })
+            }
+        })
 
-    // Jobs locaux pour le planning (différents des jobs du store)
-    const planningJobs = ref<PlanningJob[]>([]);
-    const locationSearchQuery = ref('');
-    const isSubmitting = ref(false);
-    const selectedAvailable = ref<string[]>([]);
-    const selectedJobs = ref<string[]>([]);
-    const selectedJobToAddLocation = ref<string>('');
-    const showJobDropdown = ref(false);
+        return Array.from(uniqueLocations.values())
+    }
 
-    // Paramètres pour le dataTable des locations
-    const currentPage = ref(1);
-    const pageSize = ref(20);
-    const sortBy = ref('reference');
-    const sortOrder = ref<'asc' | 'desc'>('asc');
-    const filters = ref<any>({}); // Assuming LocationQueryParams is no longer needed or replaced
+    const transformedJobs = computed(() => {
+        return jobs.value.map(job => ({
+            ...job,
+            locations: dedupeJobLocations(job)
+        }))
+    })
 
-    // États pour les paramètres de tri et filtre
-    const sortModel = ref<Array<{ colId: string; sort: 'asc' | 'desc' }>>([]);
-    const filterModel = ref<Record<string, { filter: string }>>({});
+    const mappedLocations = computed(() => {
+        return locations.value.map(loc => ({
+            ...loc,
+            location_reference: (loc as any).location_reference ?? (loc as any).reference ?? loc.reference ?? '',
+            zone_name: loc.zone?.zone_name || (loc as any).zone_name || 'N/A',
+            sous_zone_name: loc.sous_zone?.sous_zone_name || (loc as any).sous_zone_name || 'N/A'
+        }))
+    })
 
-    // État pour gérer l'expansion des jobs
-    const expandedJobIds = ref<Set<string>>(new Set());
-
-    // Computed pour les locations disponibles (non assignées)
     const availableLocations = computed(() => {
-        const allLocations = locationStore.getLocations;
-        const query = locationSearchQuery.value.toLowerCase().trim();
+        // Exclure les locations déjà utilisées dans les jobs
+        const usedLocationIds = new Set<number | string>()
 
-        let filtered = allLocations;
+        transformedJobs.value.forEach(job => {
+            job.locations?.forEach(loc => {
+                const key = loc.id ?? loc.location_id ?? (loc as any).location_reference ?? loc.reference
+                if (key !== undefined && key !== null) {
+                    usedLocationIds.add(key)
+                }
+            })
+        })
 
-        // Filtrage par recherche
-        if (query) {
-            filtered = filtered.filter(loc =>
-                loc.reference.toLowerCase().includes(query) ||
-                loc.location_reference.toLowerCase().includes(query) ||
-                loc.description.toLowerCase().includes(query) ||
-                loc.sous_zone.sous_zone_name.toLowerCase().includes(query) ||
-                loc.zone.zone_name.toLowerCase().includes(query) ||
-                loc.warehouse.warehouse_name.toLowerCase().includes(query)
-            );
+        return mappedLocations.value.filter(loc => {
+            const key = loc.id ?? (loc as any).location_id ?? (loc as any).location_reference ?? loc.reference
+            return key === undefined || key === null ? true : !usedLocationIds.has(key)
+        })
+    })
+
+    const resetJobsDataTable = async () => {
+        setJobsSortModel([])
+        resetJobsFilters()
+        setJobsSearch('')
+        await refreshJobs()
+    }
+
+    const resetLocationsDataTable = async () => {
+        setLocationsSortModel([])
+        resetLocationsFilters()
+        setLocationsSearch('')
+        await refreshLocations()
+    }
+
+    const hasSelectedLocations = computed(() => selectedAvailableLocations.value.length > 0)
+    const hasSelectedJobs = computed(() => selectedJobs.value.length > 0)
+
+
+
+    const jobsColumns = computed<DataTableColumn[]>(() => [
+        {
+            headerName: 'ID',
+            field: 'id',
+            sortable: true,
+            dataType: 'number' as ColumnDataType,
+            filterable: true,
+            width: 80,
+            editable: false,
+            visible: false,
+            draggable: true,
+            autoSize: true,
+            description: 'Identifiant unique du job'
+        },
+        {
+            headerName: 'Référence',
+            field: 'reference',
+            sortable: true,
+            dataType: 'text' as ColumnDataType,
+            filterable: true,
+            width: 200,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-file-text',
+            description: 'Référence du job'
+        },
+        {
+            headerName: 'Statut',
+            field: 'status',
+            sortable: true,
+            dataType: 'text' as ColumnDataType,
+            filterable: true,
+            width: 150,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-status',
+            description: 'Statut du job',
+            badgeStyles: [
+                {
+                    value: 'EN ATTENTE',
+                    class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
+                },
+                {
+                    value: 'VALIDE',
+                    class: 'inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
+                },
+                {
+                    value: 'AFFECTE',
+                    class: 'inline-flex items-center rounded-md bg-orange-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-orange-600/20 ring-inset'
+                },
+                {
+                    value: 'PRET',
+                    class: 'inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-800 ring-1 ring-purple-600/20 ring-inset'
+                },
+                {
+                    value: 'TRANSFERET',
+                    class: 'inline-flex items-center rounded-md bg-orange-50 px-2 py-1 text-xs font-medium text-orange-800 ring-1 ring-orange-600/20 ring-inset'
+                },
+                {
+                    value: 'TERMINE',
+                    class: 'inline-flex items-center rounded-md bg-green-900 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-600/20 ring-inset'
+                },
+                {
+                    value: 'ENTAME',
+                    class: 'inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset'
+                }
+            ],
+            badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+        },
+        {
+            headerName: 'Emplacements',
+            field: 'locations',
+            sortable: false,
+            dataType: 'text' as ColumnDataType,
+            filterable: false,
+            width: 200,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-map-pin',
+            description: 'Emplacements du job',
+            nestedData: {
+                key: 'locations',
+                displayKey: 'location_reference',
+                countSuffix: 'emplacements',
+                expandable: true,
+                showCount: true,
+                title: 'Emplacements du job',
+                columns: [
+                    {
+                        field: 'location_reference',
+                        headerName: 'Référence',
+                        sortable: true,
+                        filterable: true,
+                        width: 150
+                    },
+                    {
+                        field: 'zone_name',
+                        headerName: 'Zone',
+                        sortable: true,
+                        filterable: true,
+                        width: 150
+                    },
+                    {
+                        field: 'sous_zone_name',
+                        headerName: 'Sous-zone',
+                        sortable: true,
+                        filterable: true,
+                        width: 150
+                    },
+                ]
+            }
+        },
+        {
+            headerName: 'Date création',
+            field: 'created_at',
+            sortable: true,
+            dataType: 'date' as ColumnDataType,
+            filterable: true,
+            width: 150,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-calendar',
+            description: 'Date de création du job',
+            dateFormat: 'fr-FR',
+            dateOptions: {
+                year: 'numeric' as const,
+                month: '2-digit' as const,
+                day: '2-digit' as const
+            }
+        }
+    ])
+
+    // ===== COLONNES POUR LES LOCATIONS DISPONIBLES =====
+
+    const locationsColumns = computed<DataTableColumn[]>(() => [
+        {
+            headerName: 'ID',
+            field: 'id',
+            sortable: true,
+            dataType: 'number' as ColumnDataType,
+            filterable: true,
+            width: 80,
+            editable: false,
+            visible: false,
+            draggable: true,
+            autoSize: true,
+            description: 'Identifiant unique'
+        },
+        {
+            headerName: 'Référence',
+            field: 'reference',
+            sortable: true,
+            dataType: 'text' as ColumnDataType,
+            filterable: true,
+            width: 150,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-file-text',
+            description: 'Référence de la location'
+        },
+        {
+            headerName: 'Réf. Location',
+            field: 'location_reference',
+            sortable: true,
+            dataType: 'text' as ColumnDataType,
+            filterable: true,
+            width: 150,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-map-pin',
+            description: 'Référence de localisation'
+        },
+        {
+            headerName: 'Zone',
+            field: 'zone_name',
+            sortable: true,
+            dataType: 'text' as ColumnDataType,
+            filterable: true,
+            width: 150,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-layers',
+            description: 'Zone'
+        },
+        {
+            headerName: 'Sous-zone',
+            field: 'sous_zone_name',
+            sortable: true,
+            dataType: 'text' as ColumnDataType,
+            filterable: true,
+            width: 150,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-layers',
+            description: 'Sous-zone'
+        }
+    ])
+
+    // ===== ACTIONS POUR LES JOBS =====
+
+    const jobsActions: ActionConfig<Job>[] = [
+        {
+            label: 'Valider',
+            icon: markRaw(IconCheck),
+            color: 'success',
+            onClick: async (job: Job) => {
+                try {
+                    const result = await alertService.confirm({
+                        title: 'Confirmer la validation',
+                        text: `Voulez-vous vraiment valider le job "${job.reference}" ?`
+                    })
+
+                    if (result.isConfirmed) {
+                        await jobStore.validateJob([job.id])
+                        await alertService.success({ text: 'Job validé avec succès' })
+                        await refreshJobs()
+                    }
+                } catch (error) {
+                    logger.error('Erreur lors de la validation du job', error)
+                    await alertService.error({ text: 'Erreur lors de la validation du job' })
+                }
+            },
+            show: (job: Job) => job.status === 'EN ATTENTE'
+        },
+        {
+            label: 'Supprimer',
+            icon: markRaw(IconTrash),
+            color: 'danger',
+            onClick: async (job: Job) => {
+                try {
+                    const result = await alertService.confirm({
+                        title: 'Confirmer la suppression',
+                        text: `Voulez-vous vraiment supprimer le job "${job.reference}" ?`
+                    })
+
+                    if (result.isConfirmed) {
+                        await jobStore.deleteJob([job.id])
+                        await alertService.success({ text: 'Job supprimé avec succès' })
+                        await refreshData()
+                    }
+                } catch (error) {
+                    logger.error('Erreur lors de la suppression du job', error)
+                    await alertService.error({ text: 'Erreur lors de la suppression du job' })
+                }
+            },
+            show: () => true
+        }
+    ]
+
+    // ===== MÉTHODES DE RÉSOLUTION DES IDS =====
+
+    /**
+     * Résoudre les IDs d'inventaire, compte et entrepôt à partir des références
+     */
+    const resolveContextIds = async () => {
+        try {
+            logger.debug('Résolution des IDs de contexte...', { inventoryReference, warehouseReference })
+
+            // Résoudre l'inventaire et récupérer l'account_id
+            if (inventoryReference) {
+                const inventory = await inventoryStore.fetchInventoryByReference(inventoryReference)
+                inventoryId.value = inventory?.id ?? null
+                accountId.value = inventory?.account_id ?? null
+                logger.debug('IDs inventaire et compte résolus', { inventoryId: inventoryId.value, accountId: accountId.value })
+            }
+
+            // Résoudre l'entrepôt
+            if (warehouseReference) {
+                warehouseId.value = await warehouseStore.fetchWarehouseByReference(warehouseReference)
+                logger.debug('ID entrepôt résolu', { warehouseId: warehouseId.value })
+            }
+
+            // Validation
+            if (!inventoryId.value || !warehouseId.value) {
+                throw new Error(`IDs de contexte manquants - inventaire: ${inventoryId.value}, entrepôt: ${warehouseId.value}`)
+            }
+
+            if (!accountId.value) {
+                logger.warn('ID de compte non résolu, certaines fonctionnalités peuvent être limitées')
+            }
+
+            logger.debug('Résolution des IDs terminée avec succès', {
+                inventoryId: inventoryId.value,
+                accountId: accountId.value,
+                warehouseId: warehouseId.value
+            })
+        } catch (error) {
+            logger.error('Erreur lors de la résolution des IDs de contexte', error)
+            throw error
+        }
+    }
+
+    // ===== MÉTHODES DE CHARGEMENT DES DONNÉES =====
+
+    /**
+     * Charger les jobs pour l'inventaire et l'entrepôt actuels
+     */
+    const loadJobs = async (params?: LocationDataTableParams) => {
+        if (!inventoryId.value || !warehouseId.value) {
+            logger.warn('Impossible de charger les jobs, IDs manquants')
+            return
         }
 
-        // Exclure les locations déjà utilisées dans les jobs
-        const currentJobs = Array.isArray(planningJobs.value) ? planningJobs.value : [];
-        const usedLocationIds = new Set(currentJobs.flatMap(job => job.locations || []));
-        return filtered.filter(loc => !usedLocationIds.has(loc.reference));
-    });
+        try {
+            await jobStore.fetchJobs(inventoryId.value, warehouseId.value, params)
+        } catch (error) {
+            logger.error('Erreur lors du chargement des jobs', error)
+            await alertService.error({ text: 'Erreur lors du chargement des jobs' })
+        }
+    }
 
-    // Computed pour les jobs non validés disponibles pour ajouter des emplacements
-    const availableJobsForLocation = computed(() => {
-        // Utiliser les jobs du store backend qui ne sont pas terminés
-        return jobStore.jobs.filter(job => job.status !== 'TERMINE');
-    });
+    /**
+     * Charger les locations disponibles pour l'entrepôt actuel
+     */
+    const loadLocations = async (params?: LocationDataTableParams) => {
+        if (!accountId.value || !inventoryId.value || !warehouseId.value) {
+            logger.warn('Impossible de charger les locations, IDs manquants')
+            return
+        }
 
-    // Computed pour vérifier si on a des jobs disponibles
-    const hasAvailableJobs = computed(() => {
-        return availableJobsForLocation.value && availableJobsForLocation.value.length > 0;
-    });
+        try {
+            // Si pas de paramètres, utiliser les valeurs par défaut au format DataTable
+            const defaultParams: LocationDataTableParams = params || {
+                draw: 1,
+                start: 0,
+                length: locationsPageSize.value
+            }
 
-    // Computed pour les options de sélection de jobs
-    const jobSelectOptions = computed(() => {
-        return availableJobsForLocation.value.map(job => ({
+            logger.debug('Chargement des locations avec paramètres DataTable:', {
+                accountId: accountId.value,
+                warehouseId: warehouseId.value,
+                params: defaultParams
+            })
+
+            await locationStore.fetchUnassignedLocations(accountId.value, inventoryId.value, warehouseId.value, defaultParams)
+        } catch (error) {
+            logger.error('Erreur lors du chargement des locations', error)
+            await alertService.error({ text: 'Erreur lors du chargement des locations' })
+        }
+    }
+
+    const refreshJobs = async (params?: LocationDataTableParams) => {
+        await loadJobs(params)
+    }
+
+    const refreshLocations = async (params?: LocationDataTableParams) => {
+        await loadLocations(params)
+    }
+
+    /**
+     * Recharger toutes les données
+     */
+    const refreshData = async () => {
+        await Promise.all([
+            resetJobsDataTable(),
+            resetLocationsDataTable()
+        ])
+    }
+
+    // ===== MÉTHODES D'ACTION =====
+
+    /**
+     * Créer un nouveau job avec les locations sélectionnées
+     */
+    const createJobFromSelectedLocations = async (): Promise<boolean> => {
+        if (!hasSelectedLocations.value) {
+            await alertService.warning({ text: 'Veuillez sélectionner au moins une location' })
+            return false
+        }
+
+        if (!inventoryId.value || !warehouseId.value) {
+            await alertService.error({ text: 'IDs de contexte manquants' })
+            return false
+        }
+
+        try {
+            const result = await alertService.confirm({
+                title: 'Créer un job',
+                text: `Créer un job avec ${selectedAvailableLocations.value.length} emplacement(s) ?`
+            })
+
+            if (result.isConfirmed) {
+                const locationIds = selectedAvailableLocations.value.map(id => parseInt(id))
+                await jobStore.createJob(inventoryId.value, warehouseId.value, { emplacements: locationIds } as any)
+
+                await alertService.success({ text: 'Job créé avec succès' })
+
+                // Réinitialiser la sélection et recharger
+                selectedAvailableLocations.value = []
+                await refreshData()
+                return true
+            }
+            return false
+        } catch (error) {
+            logger.error('Erreur lors de la création du job', error)
+            await alertService.error({ text: 'Erreur lors de la création du job' })
+            return false
+        }
+    }
+
+    /**
+     * Valider les jobs sélectionnés en masse
+     */
+    const bulkValidateJobs = async () => {
+        if (!hasSelectedJobs.value) {
+            await alertService.warning({ text: 'Veuillez sélectionner au moins un job' })
+            return
+        }
+
+        try {
+            const result = await alertService.confirm({
+                title: 'Valider les jobs',
+                text: `Valider ${selectedJobs.value.length} job(s) ?`
+            })
+
+            if (result.isConfirmed) {
+                const jobIds = selectedJobs.value.map(id => parseInt(id))
+                await jobStore.validateJob(jobIds)
+
+                await alertService.success({ text: `${jobIds.length} job(s) validé(s) avec succès` })
+
+                // Réinitialiser la sélection et recharger
+                selectedJobs.value = []
+                await refreshData()
+            }
+        } catch (error) {
+            logger.error('Erreur lors de la validation des jobs', error)
+            await alertService.error({ text: 'Erreur lors de la validation des jobs' })
+        }
+    }
+
+    /**
+     * Supprimer les jobs sélectionnés en masse
+     */
+    const bulkDeleteJobs = async () => {
+        if (!hasSelectedJobs.value) {
+            await alertService.warning({ text: 'Veuillez sélectionner au moins un job' })
+            return
+        }
+
+        try {
+            const result = await alertService.confirm({
+                title: 'Supprimer les jobs',
+                text: `Supprimer ${selectedJobs.value.length} job(s) ?`
+            })
+
+            if (result.isConfirmed) {
+                const jobIds = selectedJobs.value.map(id => parseInt(id))
+                await jobStore.deleteJob(jobIds)
+
+                await alertService.success({ text: `${jobIds.length} job(s) supprimé(s) avec succès` })
+
+                // Réinitialiser la sélection et recharger
+                selectedJobs.value = []
+                await refreshData()
+            }
+        } catch (error) {
+            logger.error('Erreur lors de la suppression des jobs', error)
+            await alertService.error({ text: 'Erreur lors de la suppression des jobs' })
+        }
+    }
+
+    // ===== HANDLERS DATATABLE =====
+
+    /**
+     * Convertir les paramètres de pagination au format DataTable
+     */
+    const convertToDataTableParams = (params: { page: number; pageSize: number }): LocationDataTableParams => {
+        return {
+            draw: params.page,
+            start: (params.page - 1) * params.pageSize,
+            length: params.pageSize
+        }
+    }
+
+    const onJobPaginationChanged = async (params: { page: number; pageSize: number }) => {
+        const dataTableParams = convertToDataTableParams(params)
+        await loadJobs(dataTableParams)
+    }
+
+    const onJobSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }>) => {
+        await loadJobs({ sort: sortModel } as LocationDataTableParams)
+    }
+
+    const onJobFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
+        await loadJobs(filterModel as any)
+    }
+
+    const onLocationPaginationChanged = async (params: { page: number; pageSize: number }) => {
+        const dataTableParams = convertToDataTableParams(params)
+        await loadLocations(dataTableParams)
+    }
+
+    const onLocationSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }>) => {
+        await loadLocations({ sort: sortModel } as LocationDataTableParams)
+    }
+
+    const onLocationFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
+        await loadLocations(filterModel as any)
+    }
+
+    const onAvailableSelectionChanged = (selectedRows: Set<string>) => {
+        selectedAvailableLocations.value = Array.from(selectedRows)
+    }
+
+    const onJobSelectionChanged = (selectedRows: Set<string>) => {
+        selectedJobs.value = Array.from(selectedRows)
+    }
+
+    // ===== INITIALISATION =====
+
+    const initialize = async () => {
+        if (isInitialized.value) return
+
+        try {
+            logger.debug('Initialisation du planning', { inventoryReference, warehouseReference })
+
+            // Vérifier les références
+            if (!inventoryReference || !warehouseReference) {
+                throw new Error('Références d\'inventaire ou d\'entrepôt manquantes')
+            }
+
+            // Résoudre les IDs
+            await resolveContextIds()
+
+            // Charger les données initiales
+            await refreshData()
+
+            isInitialized.value = true
+            logger.debug('Initialisation du planning terminée avec succès')
+        } catch (error) {
+            logger.error('Erreur lors de l\'initialisation du planning', error)
+            await alertService.error({ text: 'Erreur lors de l\'initialisation du planning' })
+        }
+    }
+
+    // Initialiser au montage
+    onMounted(() => {
+        void initialize()
+    })
+
+    // ===== COMPUTED ADDITIONNELS POUR COMPATIBILITÉ =====
+
+    // États pour compatibilité avec Planning.vue
+    const planningState = computed(() => ({
+        selectedAvailable: selectedAvailableLocations.value,
+        selectedJobs: selectedJobs.value,
+        selectedJobToAddLocation: '',
+        expandedJobIds: new Set<string>(),
+        isSubmitting: false
+    }))
+
+    const paginationState = computed(() => ({
+        currentPage: jobsCurrentPage.value,
+        pageSize: jobsPageSize.value,
+        sortBy: '',
+        sortOrder: 'asc' as 'asc' | 'desc'
+    }))
+
+    const filterState = computed(() => ({
+        sortModel: jobsSortModel.value || [],
+        filterModel: {},
+        locationSearchQuery: locationsSearchQuery.value || ''
+    }))
+
+    const hasAvailableJobs = computed(() => transformedJobs.value.length > 0)
+
+    const jobSelectOptions = computed(() =>
+        transformedJobs.value.map(job => ({
             value: job.id.toString(),
             label: job.reference || `Job ${job.id}`
-        }));
-    });
+        }))
+    )
 
-    // Computed pour les données du dataTable
-    const tableData = computed(() => {
-        return locationStore.getLocations.map(location => ({
-            id: location.id,
-            reference: location.reference,
-            location_reference: location.location_reference,
-            description: location.description,
-            sous_zone: location.sous_zone.sous_zone_name,
-            zone: location.zone.zone_name,
-            warehouse: location.warehouse.warehouse_name,
-            status: location.sous_zone.sous_zone_status,
-            created_at: location.created_at
-        }));
-    });
+    // Colonnes adaptées pour compatibilité
+    const adaptedStoreJobsColumns = jobsColumns
+    const adaptedAvailableLocationColumns = locationsColumns
 
-    // Computed pour les données des jobs avec expansion
-    const displayJobsData = computed(() => {
-        const rows: any[] = [];
-        planningJobs.value.forEach((job, idx) => {
-            rows.push({
-                id: job.id,
-                jobId: job.id,
-                reference: job.reference,
-                isChild: false,
-                isValidated: job.isValidated,
-                status: job.isValidated ? 'VALIDE' : 'EN ATTENTE'
-            });
-            if (expandedJobIds.value.has(job.id)) {
-                job.locations.forEach((loc, i) => {
-                    // Maintenant loc est une référence de location, on peut la chercher dans availableLocations
-                    const locationData = availableLocations.value.find(l => l.reference === loc);
-                    if (locationData) {
-                        rows.push({
-                            id: `${job.id}-${i}`,
-                            jobId: job.id,
-                            reference: locationData.reference,
-                            zone: locationData.zone.zone_name,
-                            sousZone: locationData.sous_zone.sous_zone_name,
-                            isChild: true,
-                            originalLocation: loc,
-                            parentJobValidated: job.isValidated
-                        });
-                    } else {
-                        // Fallback si la location n'est pas trouvée
-                        rows.push({
-                            id: `${job.id}-${i}`,
-                            jobId: job.id,
-                            reference: loc,
-                            zone: 'N/A',
-                            sousZone: 'N/A',
-                            isChild: true,
-                            originalLocation: loc,
-                            parentJobValidated: job.isValidated
-                        });
-                    }
-                });
-            }
-        });
-        return rows;
-    });
+    // ===== MÉTHODES ADDITIONNELLES POUR COMPATIBILITÉ =====
 
-    const loading = ref(false);
+    const applyJobFilters = async (filterModel: Record<string, { filter: string }>) => {
+        await onJobFilterChanged(filterModel)
+    }
 
-    // Charger les locations depuis le store
-    const loadLocations = async (params?: any) => {
-        try {
-            loading.value = true;
-            if (warehouseId.value !== null) {
-                await locationStore.fetchUnassignedLocations(warehouseId.value, {
-                    page: currentPage.value,
-                    page_size: pageSize.value,
-                    ordering: sortOrder.value === 'desc' ? `-${sortBy.value}` : sortBy.value,
-                    ...filters.value,
-                    ...params
-                });
-            }
-        } catch (error) {
-            // Erreur déjà gérée
-        } finally {
-            loading.value = false;
-        }
-    };
+    const applyLocationFilters = async (filterModel: Record<string, { filter: string }>) => {
+        await onLocationFilterChanged(filterModel)
+    }
 
-    // Gestion du tri des locations
-    const handleLocationSort = async (column: string, order: 'asc' | 'desc') => {
-        sortBy.value = column;
-        sortOrder.value = order;
-        await loadLocations();
-    };
-
-    // Gestion de la pagination des locations
-    const handleLocationPageChange = async (page: number) => {
-        currentPage.value = page;
-        await loadLocations();
-    };
-
-    // Gestion du changement de taille de page des locations
-    const handleLocationPageSizeChange = async (size: number) => {
-        pageSize.value = size;
-        currentPage.value = 1;
-        await loadLocations();
-    };
-
-    // Gestion des filtres des locations
-    const handleLocationFilterChange = async (newFilters: any) => { // Assuming LocationQueryParams is no longer needed or replaced
-        filters.value = { ...filters.value, ...newFilters };
-        currentPage.value = 1;
-        await loadLocations();
-    };
-
-    // Recherche de locations
-    const searchLocations = async (query: string) => {
-        locationSearchQuery.value = query;
-        if (query.trim()) {
-            try {
-                await locationStore.searchLocations(query, {
-                    page: currentPage.value,
-                    page_size: pageSize.value,
-                    ordering: sortOrder.value === 'desc' ? `-${sortBy.value}` : sortBy.value,
-                    ...filters.value
-                });
-            } catch (error) {
-                // Erreur déjà gérée
-            }
+    const updateSelection = (type: 'available' | 'jobs', selection: string[]) => {
+        if (type === 'available') {
+            selectedAvailableLocations.value = selection
         } else {
-            await loadLocations();
-        }
-    };
-
-    // Watcher pour s'assurer que les computed se mettent à jour
-    watch(() => jobStore.jobs, (newJobs) => {
-        // Les computed se mettent à jour automatiquement
-    }, { deep: true });
-
-    onMounted(async () => {
-        await initializeIdsFromReferences();
-        await loadLocations();
-        await loadJobsFromStore();
-    });
-
-
-    // Fonction utilitaire pour recharger les deux tables
-    const reloadBothTables = async () => {
-        await Promise.all([
-            loadLocations(),
-            loadJobsFromStore({
-                page: 1,
-                pageSize: 20
-            })
-        ]);
-    };
-
-    // Fonction pour créer un job directement depuis les emplacements sélectionnés
-    async function createJobFromSelectedLocations() {
-        try {
-            if (selectedAvailable.value.length === 0) {
-                await alertService.error({ text: 'Veuillez sélectionner au moins un emplacement.' });
-                return false;
-            }
-
-            // Vérifier que nous avons les IDs nécessaires, sinon réessayer de les récupérer
-            if (!inventoryId.value) {
-                if (inventoryReference) {
-                    inventoryId.value = await fetchInventoryIdByReference(inventoryReference);
-                }
-            }
-
-            if (!warehouseId.value) {
-                if (warehouseReference) {
-                    warehouseId.value = await fetchWarehouseIdByReference(warehouseReference);
-                }
-            }
-
-            // Vérifications finales
-            if (!inventoryId.value) {
-                await alertService.error({ text: 'ID d\'inventaire non disponible. Veuillez actualiser la page.' });
-                return false;
-            }
-
-            if (!warehouseId.value) {
-                await alertService.error({ text: 'ID d\'entrepôt non disponible. Veuillez actualiser la page.' });
-                return false;
-            }
-
-            // Convertir les IDs strings en numbers et récupérer les informations des locations
-            const locationIds: number[] = [];
-            const locationDetails: number[] = [];
-
-            for (const locationIdStr of selectedAvailable.value) {
-                const locationId = parseInt(locationIdStr);
-                if (isNaN(locationId)) {
-                    continue;
-                }
-
-                const location = locationStore.getLocations.find(loc => loc.id === locationId);
-                if (location) {
-                    locationIds.push(location.id);
-                    locationDetails.push(location.id);
-                } else {
-                    console.warn(`Location with ID ${locationId} not found in store.`);
-                }
-            }
-
-            if (locationIds.length === 0) {
-                await alertService.error({ text: 'Aucune location valide trouvée pour créer le job' });
-                return false;
-            }
-
-            // Créer le job dans le store backend avec les IDs récupérés
-            const jobData = {
-                emplacements: locationIds
-            };
-
-            const response = await jobStore.createJob(
-                inventoryId.value,
-                warehouseId.value,
-                jobData
-            );
-
-            // Vider la sélection après création
-            selectedAvailable.value = [];
-
-            // Recharger les deux tables
-            await reloadBothTables();
-
-            await alertService.success({
-                text: `Job créé avec succès avec ${locationIds.length} emplacement(s)`
-            });
-
-            return true;
-        } catch (error) {
-            await alertService.error({ text: 'Erreur lors de la création du job.' });
-            return false;
+            selectedJobs.value = selection
         }
     }
 
-    // Fonction pour créer un job dans le store backend
-    async function createJobInStore(planningJob: PlanningJob) {
-        try {
-            // Utiliser les emplacements sélectionnés dans la table au lieu des emplacements du job local
-            if (selectedAvailable.value.length === 0) {
-                throw new Error('Aucun emplacement sélectionné pour créer le job');
-            }
-
-            // Récupérer les informations de l'entrepôt et de l'inventaire depuis les locations
-            const firstLocation = locationStore.getLocations.find(loc => loc.reference === selectedAvailable.value[0]);
-            if (!firstLocation) {
-                throw new Error('Location introuvable pour créer le job');
-            }
-
-            // Convertir les références de locations sélectionnées en IDs
-            const locationIds: number[] = [];
-            for (const locationRef of selectedAvailable.value) {
-                const location = locationStore.getLocations.find(loc => loc.reference === locationRef);
-                if (location) {
-                    locationIds.push(location.id);
-                }
-            }
-
-            if (locationIds.length === 0) {
-                throw new Error('Aucune location valide trouvée pour créer le job');
-            }
-
-            // Créer le job dans le store backend
-            const jobData = {
-                emplacements: locationIds
-            };
-
-            await jobStore.createJob(
-                1,
-                firstLocation.warehouse.id,
-                jobData
-            );
-        } catch (error) {
-            throw error;
-        }
-    }
-
-    // Handler pour la pagination des jobs
-    const onJobPaginationChanged = async ({ page, pageSize, sort, filter }: {
-        page: number,
-        pageSize: number,
-        sort?: any,
-        filter?: any
-    }) => {
-        await loadJobsFromStore({ page, pageSize, sort, filter });
-    };
-
-    // Handler pour les changements de tri des jobs
-    const onJobSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }>) => {
-        await loadJobsFromStore({ sort: sortModel });
-    };
-
-    // Handler pour les changements de filtre des jobs
-    const onJobFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
-        await loadJobsFromStore({ filter: filterModel });
-    };
-
-    // Fonction pour charger les jobs du store backend
-    async function loadJobsFromStore(params?: {
-        page?: number;
-        pageSize?: number;
-        sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>;
-        filter?: Record<string, { filter: string }>;
-    }) {
-        try {
-            loading.value = true;
-            if (warehouseId.value !== null && inventoryId.value !== null) {
-                await jobStore.fetchJobs(inventoryId.value, warehouseId.value, {
-                    page: params?.page || 1,
-                    pageSize: params?.pageSize || 20,
-                    sort: params?.sort,
-                    filter: params?.filter
-                });
-            }
-        } catch (error) {
-            // Erreur déjà gérée
-        } finally {
-            loading.value = false;
-        }
-    }
-
-
-    // Fonction améliorée pour supprimer un emplacement d'un job
-    async function removeLocationFromJob(jobId: string, location: string) {
-        try {
-            // Convertir le jobId en nombre pour la comparaison avec les jobs du store
-            const numericJobId = parseInt(jobId);
-
-            // Vérifier si c'est un job du store backend ou un job local
-            const storeJob = jobStore.jobs.find(job => job.id === numericJobId);
-
-            if (storeJob) {
-                // C'est un job du store backend - utiliser la méthode du store
-                const locationToRemove = storeJob.locations?.find(loc =>
-                    loc.location_reference === location
-                );
-
-                if (!locationToRemove) {
-                    await alertService.error({ text: 'Emplacement introuvable dans ce job.' });
-                    return;
-                }
-
-                // Demander confirmation avant suppression
-                const result = await alertService.confirm({
-                    title: 'Confirmer la suppression',
-                    text: `Voulez-vous vraiment supprimer l'emplacement "${locationToRemove.location_reference}" du job "${storeJob.reference}" ?`
-                });
-
-                if (!result.isConfirmed) {
-                    await alertService.info({ text: 'Suppression annulée.' });
-                    return;
-                }
-
-                // Utiliser location_id au lieu de id
-                const locationId = locationToRemove.location_id;
-                if (!locationId) {
-                    await alertService.error({ text: 'ID d\'emplacement invalide.' });
-                    return;
-                }
-
-                // Appeler la méthode du store pour supprimer l'emplacement
-                const response = await jobStore.deleteLocationFromJob(
-                    storeJob.id,
-                    locationId
-                );
-
-                // Recharger les données des deux tables
-                await reloadBothTables();
-
-                // Afficher le message du backend dans l'alerte de succès
-                const successMessage = response.message || `Emplacement "${locationToRemove.location_reference}" supprimé du job "${storeJob.reference}" avec succès.`;
-                await alertService.success({
-                    text: successMessage
-                });
-            } else {
-                // C'est un job local du planning - logique existante
-                const jobIndex = planningJobs.value.findIndex(job => job.id === jobId);
-                if (jobIndex === -1) {
-                    await alertService.error({ text: 'Job introuvable.' });
-                    return;
-                }
-
-                const job = planningJobs.value[jobIndex];
-                if (job.isValidated) {
-                    await alertService.error({
-                        text: 'Impossible de supprimer un emplacement d\'un job validé.'
-                    });
-                    return;
-                }
-
-                const locationIndex = job.locations.findIndex(loc => loc === location);
-                if (locationIndex === -1) {
-                    await alertService.error({ text: 'Emplacement introuvable dans ce job.' });
-                    return;
-                }
-
-                // Demander confirmation avant suppression
-                const result = await alertService.confirm({
-                    title: 'Confirmer la suppression',
-                    text: `Voulez-vous vraiment supprimer l'emplacement "${location}" du job "${job.reference}" ?`
-                });
-
-                if (!result.isConfirmed) {
-                    await alertService.info({ text: 'Suppression annulée.' });
-                    return;
-                }
-
-                job.locations.splice(locationIndex, 1);
-
-                // Si le job n'a plus d'emplacements, le supprimer
-                if (job.locations.length === 0) {
-                    planningJobs.value.splice(jobIndex, 1);
-                }
-
-                await alertService.success({
-                    text: `Emplacement "${location}" supprimé du job "${job.reference}" avec succès.`
-                });
-            }
-        } catch (error) {
-            // Récupérer le message d'erreur du backend si disponible
-            let errorMessage = 'Erreur lors de la suppression de l\'emplacement du job.';
-
-            if (error && typeof error === 'object') {
-                // Essayer de récupérer le message d'erreur du backend
-                const backendError = (error as any).response?.data;
-                if (backendError) {
-                    if (backendError.message) {
-                        errorMessage = backendError.message;
-                    } else if (backendError.detail) {
-                        errorMessage = backendError.detail;
-                    } else if (backendError.error) {
-                        errorMessage = backendError.error;
-                    } else if (typeof backendError === 'string') {
-                        errorMessage = backendError;
-                    }
-                }
-            }
-
-            await alertService.error({
-                text: errorMessage
-            });
-        }
-    }
-
-    // Fonction pour retourner les jobs sélectionnés
-    async function returnSelectedJobs() {
-        if (!selectedJobs.value.length) {
-            await alertService.error({ text: 'Veuillez sélectionner au moins un job.' });
-            return;
-        }
-
-        const selectedJobIds = new Set(selectedJobs.value);
-        const hasValidated = planningJobs.value.some(job => selectedJobIds.has(job.id) && job.isValidated);
-
-        if (hasValidated) {
-            await alertService.error({
-                title: 'Jobs validés',
-                text: 'Impossible de retourner un job validé. Vous avez besoin de permission pour cette action dans l\'affectation.'
-            });
-            return;
-        }
-
-        const locationsToRestore: string[] = [];
-        planningJobs.value.forEach(job => {
-            if (selectedJobIds.has(job.id)) {
-                locationsToRestore.push(...job.locations);
-            }
-        });
-
-        planningJobs.value = planningJobs.value.filter(job => !selectedJobIds.has(job.id));
-        selectedJobs.value = [];
-
-        await nextTick();
-
-        await alertService.success({
-            text: `${selectedJobIds.size} job(s) retourné(s). ${locationsToRestore.length} emplacement(s) remis en disponible.`
-        });
-    }
-
-    async function validateJob(jobId: string) {
-        const job = planningJobs.value.find(j => j.id === jobId);
-        if (!job) {
-            await alertService.error({ text: 'Job introuvable.' });
-            return;
-        }
-
-        if (job.isValidated) {
-            await alertService.info({ text: 'Ce job est déjà validé.' });
-            return;
-        }
-
-        const result = await alertService.confirm({
-            text: `Voulez-vous vraiment valider le job ${job.reference} ?`
-        });
-
-        if (!result.isConfirmed) {
-            await alertService.info({ text: 'Validation annulée.' });
-            return;
-        }
-
-        isSubmitting.value = true;
-        try {
-            job.isValidated = true;
-            job.validatedAt = new Date().toISOString();
-
-            // Créer le job dans le store backend
-            await createJobInStore(job);
-
-            await alertService.success({
-                title: 'Succès',
-                text: `Job ${job.reference} validé avec succès.`
-            });
-        } catch (error) {
-            job.isValidated = false;
-            delete job.validatedAt;
-            await alertService.error({ text: 'Erreur lors de la validation du job' });
-        } finally {
-            isSubmitting.value = false;
-        }
-    }
-
-    // Computed pour les jobs du store (pour le premier DataTable)
-    const storeJobs = computed(() => {
-        const jobs = jobStore.jobs;
-        // On mappe directement les champs attendus pour la table AG Grid
-        return jobs.map(job => ({
-            id: job.id,
-            reference: job.reference,
-            status: job.status,
-            warehouse_name: (job as any).warehouse_name, // optionnel si présent
-            inventory_reference: (job as any).inventory_reference, // optionnel si présent
-            created_at: job.created_at,
-            emplacements_count: job.locations?.length || 0,
-            assignments_count: (job as any).assignments_count || 0,
-            // Pour la nested table, on mappe les vrais emplacements avec l'ID du job parent
-            emplacements: (job.locations || []).map(loc => ({
-                id: loc.id,
-                reference: loc.reference,
-                location_reference: loc.location_reference,
-                zone: loc.zone?.zone_name || '',
-                sous_zone: loc.sous_zone?.sous_zone_name || '',
-                description: '', // Ajoutez ici un champ si besoin
-                status: loc.status,
-                jobId: job.id, // Ajouter l'ID du job parent
-                parentRow: { id: job.id } // Ajouter la référence parentRow pour compatibilité
-            }))
-        }));
-    });
-
-    // Handler pour les changements de taille de page
-    const onPageSizeChanged = async (size: number) => {
-        pageSize.value = size;
-        currentPage.value = 1; // Retour à la première page
-        await loadLocations({
-            page: 1,
-            page_size: size,
-            ordering: sortOrder.value === 'desc' ? `-${sortBy.value}` : sortBy.value,
-            ...filters.value
-        });
-    };
-
-    // Handler pagination AG Grid pour les locations
-    const onLocationPaginationChanged = async ({ page, pageSize, sort, filter }: {
-        page: number,
-        pageSize: number,
-        sort?: any,
-        filter?: any
-    }) => {
-        // Mettre à jour les modèles de tri et filtre si fournis
-        if (sort) {
-            sortModel.value = sort;
-        }
-        if (filter) {
-            filterModel.value = filter;
-        }
-        // Recharge les données côté backend avec la bonne page et taille
-        await loadLocations({
-            page,
-            page_size: pageSize,
-            ordering: sort && sort.length > 0
-                ? (sort[0].sort === 'desc' ? `-${sort[0].colId}` : sort[0].colId)
-                : undefined,
-            ...filter
-        });
-    };
-
-    // Handler pour les changements de filtre des locations
-    const onLocationFilterChanged = async (model: Record<string, { filter: string }>) => {
-        filterModel.value = model;
-
-        // Convertir le modèle de filtre en paramètres pour le store
-        const newFilters: any = {};
-        Object.entries(model).forEach(([key, value]) => {
-            if (value.filter) {
-                newFilters[key] = value.filter;
-            }
-        });
-
-        await loadLocations({
-            ...newFilters,
-            ordering: sortModel.value.length > 0
-                ? (sortModel.value[0].sort === 'desc' ? `-${sortModel.value[0].colId}` : sortModel.value[0].colId)
-                : undefined
-        });
-    };
-
-    // Fonction pour gérer la pagination côté serveur des locations
-    const handleLocationServerPagination = async (newPage: number, newPageSize?: number) => {
-        if (newPageSize && newPageSize !== pageSize.value) {
-            pageSize.value = newPageSize;
-            currentPage.value = 1;
+    const clearSelection = (type: 'available' | 'jobs') => {
+        if (type === 'available') {
+            selectedAvailableLocations.value = []
         } else {
-            currentPage.value = newPage;
+            selectedJobs.value = []
         }
-
-        // Préparer les paramètres de requête
-        const params: any = { // Assuming LocationQueryParams is no longer needed or replaced
-            page: currentPage.value,
-            page_size: pageSize.value,
-            ...filters.value
-        };
-
-        // Ajouter l'ordering si un tri est défini
-        if (sortModel.value.length > 0) {
-            const sortItem = sortModel.value[0];
-            params.ordering = sortItem.sort === 'desc' ? `-${sortItem.colId}` : sortItem.colId;
-        } else if (sortBy.value) {
-            params.ordering = sortOrder.value === 'desc' ? `-${sortBy.value}` : sortBy.value;
-        }
-
-        await loadLocations(params);
-    };
-
-    // Fonction pour gérer la sélection des emplacements disponibles
-    function onAvailableSelectionChanged(selectedRows: Set<string>) {
-        console.log('🔍 Sélection des emplacements disponibles:', selectedRows);
-
-        // Convertir le Set en tableau de strings
-        const selectedIds = Array.from(selectedRows).map(id => String(id));
-
-        selectedAvailable.value = selectedIds;
     }
 
-    // Fonction pour gérer la sélection des jobs
-    function onJobSelectionChanged(selectedRows: Set<string>) {
-        console.log('🔍 Sélection des jobs:', selectedRows);
-
-        // Convertir le Set en tableau de strings
-        const selectedIds = Array.from(selectedRows).map(id => String(id));
-
-        selectedJobs.value = selectedIds;
+    const updatePagination = (newState: Partial<{ currentPage: number; pageSize: number; sortBy: string; sortOrder: 'asc' | 'desc' }>) => {
+        if (newState.currentPage) setJobsPage(newState.currentPage)
+        if (newState.pageSize) setJobsPageSize(newState.pageSize)
     }
 
-    // Fonction pour sélectionner un job pour ajouter des emplacements
-    async function onSelectJobForLocation(value: string | number | string[] | number[] | null) {
+    const updateFilters = (newFilters: any) => {
+        // Logique de mise à jour des filtres si nécessaire
+    }
+
+    const onSelectJobForLocation = async (value: string | number | string[] | number[] | null) => {
         if (!value || typeof value !== 'string' || value.trim() === '') {
-            selectedJobToAddLocation.value = '';
-            return;
+            return
         }
 
-        const jobId = value as string;
-
-        const selectedJob = availableJobsForLocation.value?.find(job => job && job.id.toString() === jobId);
-        if (!selectedJob) {
-            await alertService.error({ text: 'Job sélectionné introuvable. Veuillez actualiser la page.' });
-            selectedJobToAddLocation.value = '';
-            return;
-        }
-
-        const jobReference = selectedJob.reference || `Job ${selectedJob.id}`;
-
-        if (!selectedAvailable.value || selectedAvailable.value.length === 0) {
-            await alertService.warning({ text: 'Veuillez sélectionner des emplacements avant d\'ajouter au job.' });
-            selectedJobToAddLocation.value = '';
-            return;
-        }
-
-        const result = await alertService.confirm({
-            title: 'Confirmer l\'ajout',
-            text: `Ajouter ${selectedAvailable.value.length} emplacement(s) au job "${jobReference}" ?`
-        });
-
-        if (!result.isConfirmed) {
-            selectedJobToAddLocation.value = '';
-            return alertService.info({ text: 'Ajout annulé.' });
+        if (!hasSelectedLocations.value) {
+            await alertService.warning({ text: 'Veuillez sélectionner des emplacements avant d\'ajouter au job.' })
+            return
         }
 
         try {
-            // Utiliser la nouvelle fonction pour ajouter des emplacements aux jobs du store
-            await addLocationToStoreJob(jobId, selectedAvailable.value);
-            selectedJobToAddLocation.value = '';
+            const result = await alertService.confirm({
+                title: 'Ajouter au job',
+                text: `Ajouter ${selectedAvailableLocations.value.length} emplacement(s) au job ?`
+            })
 
-            await alertService.success({
-                text: `${selectedAvailable.value.length} emplacement(s) ajouté(s) au job "${jobReference}" avec succès.`
-            });
+            if (result.isConfirmed) {
+                const jobId = parseInt(value as string)
+                const locationIds = selectedAvailableLocations.value.map(id => parseInt(id))
+                await jobStore.addLocationToJob(jobId, locationIds)
+
+                await alertService.success({ text: 'Emplacements ajoutés avec succès' })
+                selectedAvailableLocations.value = []
+                await refreshData()
+            }
         } catch (error) {
-            await alertService.error({ text: 'Erreur lors de l\'ajout au job.' });
-            selectedJobToAddLocation.value = '';
+            logger.error('Erreur lors de l\'ajout d\'emplacements au job', error)
+            await alertService.error({ text: 'Erreur lors de l\'ajout d\'emplacements au job' })
         }
     }
 
-    // Nouvelle fonction pour ajouter des emplacements aux jobs du store backend
-    async function addLocationToStoreJob(jobId: string, selectedLocations: string[]) {
-        if (!selectedLocations.length) {
-            await alertService.error({ text: 'Veuillez sélectionner au moins un emplacement.' });
-            return false;
-        }
-
-        if (!jobId) {
-            await alertService.error({ text: 'Veuillez sélectionner un job.' });
-            return false;
-        }
-
-        try {
-            // Convertir les IDs de locations en numbers
-            const locationIds: number[] = [];
-            const foundLocations: any[] = [];
-
-            for (const locationIdStr of selectedLocations) {
-                const locationId = parseInt(locationIdStr);
-                if (isNaN(locationId)) {
-                    continue;
-                }
-
-                // Vérifier que la location existe dans le store
-                const location = locationStore.getLocations.find(loc => loc.id === locationId);
-                if (location) {
-                    locationIds.push(locationId);
-                    foundLocations.push(location);
-                }
-            }
-
-            if (locationIds.length === 0) {
-                await alertService.error({
-                    text: `Aucune location valide trouvée parmi les sélections: ${selectedLocations.join(', ')}`
-                });
-                return false;
-            }
-
-            // Convertir jobId en number
-            const numericJobId = parseInt(jobId);
-            if (isNaN(numericJobId)) {
-                await alertService.error({ text: 'ID de job invalide.' });
-                return false;
-            }
-
-            // Appeler la méthode du store pour ajouter des emplacements au job
-            const response = await jobStore.addLocationToJob(numericJobId, locationIds);
-
-            // Recharger les données des deux tables
-            await reloadBothTables();
-
-            // Afficher le message du backend dans l'alerte de succès
-            const successMessage = response.message || `${locationIds.length} emplacement(s) ajouté(s) au job avec succès.`;
-            await alertService.success({
-                text: successMessage
-            });
-
-            // Vider la sélection
-            selectedAvailable.value = [];
-            selectedJobToAddLocation.value = '';
-
-            return true;
-        } catch (error) {
-            // Récupérer le message d'erreur du backend si disponible
-            let errorMessage = 'Erreur lors de l\'ajout d\'emplacements au job.';
-
-            if (error && typeof error === 'object') {
-                // Essayer de récupérer le message d'erreur du backend
-                const backendError = (error as any).response?.data;
-                if (backendError) {
-                    if (backendError.message) {
-                        errorMessage = backendError.message;
-                    } else if (backendError.detail) {
-                        errorMessage = backendError.detail;
-                    } else if (backendError.error) {
-                        errorMessage = backendError.error;
-                    } else if (typeof backendError === 'string') {
-                        errorMessage = backendError;
-                    }
-                }
-            }
-
-            await alertService.error({
-                text: errorMessage
-            });
-
-            throw error;
-        }
+    const onBulkValidate = async () => {
+        await bulkValidateJobs()
     }
 
-    // Fonction pour valider les jobs en masse
-    async function onBulkValidate() {
-        const result = await alertService.confirm({
-            title: 'Confirmer la validation',
-            text: `Valider ${selectedJobs.value.length} job(s) ?`
-        });
-
-        if (!result.isConfirmed) {
-            return alertService.info({ text: 'Validation annulée.' });
-        }
-
-        isSubmitting.value = true;
-        try {
-            selectedJobs.value.forEach(id => {
-                const j = planningJobs.value.find(x => x.id === id);
-                if (j && !j.isValidated) {
-                    j.isValidated = true;
-                    j.validatedAt = new Date().toISOString();
-                }
-            });
-            await alertService.success({ text: `${selectedJobs.value.length} job(s) validé(s) avec succès.` });
-            selectedJobs.value = [];
-        } catch {
-            await alertService.error({ text: 'Erreur durant la validation en masse.' });
-        } finally {
-            isSubmitting.value = false;
-        }
+    const onReturnSelectedJobs = async () => {
+        await bulkDeleteJobs()
     }
 
-    // Fonction pour retourner les jobs sélectionnés avec confirmation
-    async function onReturnSelectedJobs() {
-        const result = await alertService.confirm({
-            text: `Êtes-vous sûr de vouloir retourner ${selectedJobs.value.length} job(s) ? Cette action ne peut pas être annulée.`
-        });
-
-        if (!result.isConfirmed) {
-            return alertService.info({ text: 'Retour annulé.' });
-        }
-
-        try {
-            await returnSelectedJobs();
-        } catch (error) {
-            await alertService.error({ text: 'Erreur lors du retour des jobs.' });
-        }
-    }
-
-    // Fonction pour actualiser les locations
     const onRefreshLocations = async () => {
-        await loadLocations();
-    };
-
-    // Fonction pour récupérer l'ID de l'inventaire par sa référence
-    const fetchInventoryIdByReference = async (reference: string): Promise<number | null> => {
-        try {
-            // Charger la liste des inventaires si pas déjà fait
-            if (inventoryStore.inventories.length === 0) {
-                await inventoryStore.fetchInventories();
-            }
-
-            const inventory = inventoryStore.inventories.find(inv => inv.reference === reference);
-
-            if (inventory) {
-                return inventory.id;
-            } else {
-                return null;
-            }
-        } catch (error) {
-            return null;
-        }
-    };
-
-    // Fonction pour récupérer l'ID de l'entrepôt par sa référence
-    const fetchWarehouseIdByReference = async (reference: string): Promise<number | null> => {
-        try {
-            // Utiliser directement l'API warehouse par référence
-            const warehouseId = await warehouseStore.fetchWarehouseByReference(reference);
-
-            if (warehouseId) {
-                return warehouseId;
-            }
-
-            // Fallback avec le storeId si disponible
-            if (storeId) {
-                return parseInt(storeId);
-            }
-
-            return null;
-        } catch (error) {
-            return null;
-        }
-    };
-
-    // Fonction pour initialiser les IDs depuis les références
-    const initializeIdsFromReferences = async () => {
-        if (inventoryReference) {
-            inventoryId.value = await fetchInventoryIdByReference(inventoryReference);
-        }
-        if (warehouseReference) {
-            warehouseId.value = await fetchWarehouseIdByReference(warehouseReference);
-        }
-    };
-
-    // Fonction pour forcer la réinitialisation des IDs
-    const refreshIdsFromReferences = async () => {
-        // Réinitialiser les IDs
-        inventoryId.value = null;
-        warehouseId.value = null;
-
-        // Réinitialiser depuis les références
-        await initializeIdsFromReferences();
-    };
-
-    // Ajout d'un gestionnaire d'événement global pour le bouton supprimer emplacement
-    if (typeof window !== 'undefined') {
-        window.addEventListener('click', async (event: Event) => {
-            const target = event.target as HTMLElement;
-            const button = target.closest('.btn-supprimer-emplacement') as HTMLElement;
-
-            if (button) {
-                const jobId = button.getAttribute('data-job-id');
-                const locationId = button.getAttribute('data-location-id');
-
-                if (jobId && locationId) {
-                    try {
-                        await removeLocationFromJob(jobId, locationId);
-                    } catch (error) {
-                        await alertService.error({ text: 'Erreur lors de la suppression de l\'emplacement.' });
-                    }
-                }
-            }
-        });
+        await resetLocationsDataTable()
     }
 
-    // Fonction pour ajouter des emplacements aux jobs locaux (pour compatibilité)
-    async function addLocationToJob(jobId: string, selectedLocations: string[]) {
-        if (!selectedLocations.length) {
-            await alertService.error({ text: 'Veuillez sélectionner au moins un emplacement.' });
-            return false;
-        }
-
-        if (!jobId) {
-            await alertService.error({ text: 'Veuillez sélectionner un job.' });
-            return false;
-        }
-
-        const job = planningJobs.value.find(j => j.id === jobId);
-        if (!job) {
-            await alertService.error({ text: 'Job introuvable.' });
-            return false;
-        }
-
-        if (job.isValidated) {
-            await alertService.error({
-                title: 'Job validé',
-                text: 'Impossible d\'ajouter des emplacements à un job validé.'
-            });
-            return false;
-        }
-
-        // Ajouter les nouveaux emplacements
-        job.locations.push(...selectedLocations);
-
-        await nextTick();
-        selectedAvailable.value = [];
-        selectedJobToAddLocation.value = '';
-        showJobDropdown.value = false;
-
-        await alertService.success({
-            text: `${selectedLocations.length} emplacement(s) ajouté(s) au job ${job.reference}`
-        });
-
-        return true;
+    const onRefreshData = async () => {
+        await refreshData()
     }
 
-    // Fonction pour supprimer les jobs sélectionnés via le store
-    async function onReturnSelectedJobsFromStore() {
-        if (!selectedJobs.value.length) {
-            await alertService.error({ text: 'Veuillez sélectionner au moins un job.' });
-            return;
-        }
-        try {
-            // Convertir les IDs en nombres
-            const jobIds = selectedJobs.value.map(id => Number(id));
-            await jobStore.deleteJob(jobIds);
-            await alertService.success({ text: `${jobIds.length} job(s) supprimé(s) avec succès.` });
-            selectedJobs.value = [];
-            await loadJobsFromStore();
-        } catch (error) {
-            let errorMessage = 'Erreur lors de la suppression des jobs.';
-            if (error && typeof error === 'object') {
-                const backendError = (error as any).response?.data;
-                if (backendError) {
-                    if (backendError.message) errorMessage = backendError.message;
-                    else if (backendError.detail) errorMessage = backendError.detail;
-                    else if (backendError.error) errorMessage = backendError.error;
-                    else if (typeof backendError === 'string') errorMessage = backendError;
-                }
-            }
-            await alertService.error({ text: errorMessage });
-        }
+    const onNestedTableFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
+        await onJobFilterChanged(filterModel)
     }
 
-    async function validateJobs(jobIds: (string | number)[]) {
-        if (!jobIds.length) {
-            await alertService.error({ text: 'Veuillez sélectionner au moins un job.' });
-            return;
-        }
-
-        // Si jobIds est un Proxy (ref ou reactive), on le convertit en tableau natif
-        const rawJobIds = Array.isArray(jobIds) ? jobIds : toRaw(jobIds);
-
-        // Améliorer la conversion des IDs avec validation
-        const jobIdsNum = rawJobIds.map(id => {
-            // Si c'est un objet, essayer d'extraire l'ID
-            if (typeof id === 'object' && id !== null) {
-                const extractedId = (id as any).id || (id as any).jobId || (id as any).job_id;
-                if (extractedId !== undefined) {
-                    const numId = Number(extractedId);
-                    return isNaN(numId) ? null : numId;
-                }
-            }
-
-            // Conversion directe
-            const numId = Number(id);
-            return isNaN(numId) ? null : numId;
-        }).filter(id => id !== null) as number[];
-
-        // Utiliser les jobs du store comme source de vérité
-        const storeJobsSelected = storeJobs.value.filter(sj => jobIdsNum.includes(Number(sj.id)));
-
-        // Vérifier le statut de chaque job - accepter plusieurs statuts valides
-        const validStatuses = ['EN ATTENTE'];
-        const jobsPending = storeJobsSelected.filter(j => validStatuses.includes(j.status));
-        const notPending = storeJobsSelected.filter(j => !validStatuses.includes(j.status));
-
-        if (notPending.length > 0) {
-            const jobRefs = notPending.map(j => j.reference || j.id).join(', ');
-            await alertService.error({
-                title: 'Validation impossible',
-                text: `Les jobs suivants ne sont pas au statut approprié : ${jobRefs}`
-            });
-            // return; // décommente si tu veux bloquer la validation si au moins un n'est pas EN ATTENTE
-        }
-
-        if (!jobsPending.length) {
-            await alertService.info({ text: 'Aucun job à valider.' });
-            return;
-        }
-
-        const result = await alertService.confirm({
-            title: 'Confirmer la validation',
-            text: `Valider ${jobsPending.length} job(s) ?`
-        });
-
-        if (!result.isConfirmed) {
-            await alertService.info({ text: 'Validation annulée.' });
-            return;
-        }
-
-        isSubmitting.value = true;
-        try {
-            for (const job of jobsPending) {
-                // Appel backend pour chaque job du store
-                // Remplace createJobInStore par la méthode de validation réelle si besoin
-                if (jobStore && typeof jobStore.validateJob === 'function') {
-                    await jobStore.validateJob([job.id]);
-                } else {
-                    // Fallback : log ou autre action
-                    console.warn('Aucune méthode de validation backend définie pour le job', job);
-                }
-            }
-            await alertService.success({
-                title: 'Succès',
-                text: `${jobsPending.length} job(s) validé(s) avec succès.`
-            });
-            await loadJobsFromStore();
-        } catch (error) {
-            await alertService.error({ text: 'Erreur lors de la validation des jobs.' });
-        } finally {
-            isSubmitting.value = false;
-        }
-    }
-
-    // ===== FONCTIONS POUR PLANNING MANAGEMENT =====
-
-    // États pour le planning management
-    const planningStores = ref<Store[]>([]);
-    const selectedPlanningStore = ref<Store | null>(null);
-    const planningLoading = ref(false);
-    const planningInventoryStatus = ref('En préparation');
-    const planningInventoryReference = ref<string>('');
-
-
-
-
-
-    // Fonction pour charger les magasins
-
-
-    // Fonction pour sélectionner un magasin
-    function selectPlanningStore(store: Store) {
-        selectedPlanningStore.value = store;
-    }
-
-    // Fonction pour définir le statut d'inventaire
-    function setPlanningInventoryStatus(status: string) {
-        planningInventoryStatus.value = status;
-    }
-
-    // Fonction pour définir la référence d'inventaire
-    function setPlanningInventoryReference(reference: string) {
-        planningInventoryReference.value = reference;
-    }
-
-    // Fonction pour vérifier si un item est un Store
-    function isStore(item: GridDataItem): item is Store {
-        return (
-            typeof item.id === 'number' &&
-            typeof item.store_name === 'string'
-        );
-    }
-
-    // Handlers pour les actions
-    const handlePlanningItemClick = (item: GridDataItem) => {
-        if (isStore(item)) selectPlanningStore(item);
-    };
-
-
-    const handleActionsClick = (item: GridDataItem, e: MouseEvent) => {
-        if (!isStore(item)) return;
-        selectedPlanningStore.value = item;
-        // Logique pour afficher le menu contextuel
-        console.log('Menu contextuel pour:', item);
-    };
-
-    const handleEditItem = (item: Store | null) => {
-        if (item) {
-            console.log('Édition de:', item);
-        }
-    };
-
-    const handleDeleteItem = (item: Store | null) => {
-        if (item) {
-            console.log('Suppression de:', item);
-        }
-    };
+    // ===== RETURN =====
 
     return {
-        // Jobs
-        planningJobs,
-        availableJobsForLocation,
+        // État
+        inventoryId: computed(() => inventoryId.value),
+        accountId: computed(() => accountId.value),
+        warehouseId: computed(() => warehouseId.value),
+        inventoryReference,
+        warehouseReference,
+        isInitialized,
+        loading,
+
+        // États pour compatibilité
+        planningState,
+        paginationState,
+        filterState,
+
+        // Données Jobs
+        jobs: transformedJobs,
+        jobsLoading,
+        jobsCurrentPage,
+        jobsPageSize,
+        jobsSearchQuery,
+        jobsSortModel,
+        jobsPagination,
+        jobsColumns,
+        jobsActions,
+
+        // Données Locations
+        locations: mappedLocations,
+        availableLocations,
+        locationsLoading,
+        locationsCurrentPage,
+        locationsPageSize,
+        locationsSearchQuery,
+        locationsSortModel,
+        locationsPagination,
+        locationsColumns,
+
+        // Sélections
+        selectedAvailableLocations,
+        selectedJobs,
+        hasSelectedLocations,
+        hasSelectedJobs,
+
+        // Computed additionnels
         hasAvailableJobs,
         jobSelectOptions,
-        selectedAvailable,
-        selectedJobs,
-        selectedJobToAddLocation,
-        showJobDropdown,
-        isSubmitting,
-        expandedJobIds,
+
+        // Colonnes adaptées
+        adaptedStoreJobsColumns,
+        adaptedAvailableLocationColumns,
+
+        // Méthodes DataTable Jobs
+        setJobsPage,
+        setJobsPageSize,
+        setJobsSearch,
+        setJobsSortModel,
+        setJobsFilters,
+        resetJobsFilters,
+        refreshJobs,
+
+        // Méthodes DataTable Locations
+        setLocationsPage,
+        setLocationsPageSize,
+        setLocationsSearch,
+        setLocationsSortModel,
+        setLocationsFilters,
+        resetLocationsFilters,
+        refreshLocations,
+
+        // Actions
         createJobFromSelectedLocations,
-        addLocationToJob,
-        removeLocationFromJob,
-        returnSelectedJobs,
-        validateJob,
-        validateJobs, // <-- nouveau
+        bulkValidateJobs,
+        bulkDeleteJobs,
+        refreshData,
+        initialize,
+        resetJobsDataTable,
+        resetLocationsDataTable,
 
-        // DataTable des locations
-        tableData,
-        currentPage,
-        pageSize,
-        sortBy,
-        sortOrder,
-        filters,
-        sortModel,
-        filterModel,
-        locationSearchQuery,
-        availableLocations,
+        // Actions pour compatibilité
+        applyJobFilters,
+        applyLocationFilters,
+        updateSelection,
+        clearSelection,
+        updatePagination,
+        updateFilters,
 
-        // Actions du dataTable
-        loadLocations,
-        handleLocationSort,
-        handleLocationPageChange,
-        handleLocationPageSizeChange,
-        handleLocationFilterChange,
-        searchLocations,
-        handleLocationServerPagination,
-
-        // Store
-        locationStore,
-
-        // Jobs du store
-        storeJobs,
-
-        // Données des jobs avec expansion
-        displayJobsData,
-
-        // Handlers pour les sélections et actions
+        // Handlers DataTable
+        onJobPaginationChanged,
+        onJobSortChanged,
+        onJobFilterChanged,
+        onLocationPaginationChanged,
+        onLocationSortChanged,
+        onLocationFilterChanged,
         onAvailableSelectionChanged,
         onJobSelectionChanged,
         onSelectJobForLocation,
         onBulkValidate,
         onReturnSelectedJobs,
         onRefreshLocations,
-        onLocationPaginationChanged,
-        onJobPaginationChanged,
-        onJobSortChanged,
-        onJobFilterChanged,
-        onLocationFilterChanged,
-
-        // Paramètres de route et IDs
-        storeId,
-        inventoryReference,
-        warehouseReference,
-        inventoryId,
-        warehouseId,
-        initializeIdsFromReferences,
-        refreshIdsFromReferences,
-        onReturnSelectedJobsFromStore,
-
-        // ===== PLANNING MANAGEMENT =====
-        // États
-        planningStores,
-        selectedPlanningStore,
-        planningLoading,
-        planningInventoryStatus,
-        planningInventoryReference,
-
-
-
-        // Fonctions
-        selectPlanningStore,
-        setPlanningInventoryStatus,
-        setPlanningInventoryReference,
-        isStore,
-        handlePlanningItemClick,
-        handleActionsClick,
-        handleEditItem,
-        handleDeleteItem,
-        loading
-    };
+        onRefreshData,
+        onNestedTableFilterChanged
+    }
 }

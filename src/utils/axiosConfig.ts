@@ -16,6 +16,9 @@ const axiosInstance = axios.create({
         'Content-Type': 'application/json',
     },
     timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
+    // withCredentials: true, // ✅ Important pour les cookies CSRF
+    // xsrfCookieName: 'csrftoken', // ✅ Cookie CSRF Django
+    // xsrfHeaderName: 'X-CSRFToken', // ✅ Header CSRF
 });
 
 // Intercepteur de requête pour ajouter le token d'authentification

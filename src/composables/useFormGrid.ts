@@ -18,10 +18,7 @@ export function useFormGrid(props: any) {
 
         // Si un nombre de colonnes spécifique est demandé
         if (requestedCols) {
-            if (fieldCount <= 2) {
-                return 'space-y-6';
-            }
-            return `grid grid-cols-1 md:grid-cols-${Math.min(requestedCols, fieldCount)} gap-6`;
+            return `grid grid-cols-${Math.min(requestedCols, fieldCount)} gap-6`;
         }
 
         // Logique automatique basée sur le nombre de champs

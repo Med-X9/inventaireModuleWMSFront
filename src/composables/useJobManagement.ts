@@ -2,10 +2,9 @@ import { ref, markRaw, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import type { JobTable } from '@/models/Job'
 import type { DataTableColumn, ActionConfig } from '@/interfaces/dataTable'
-import { jobService } from '../services/jobService'
 import { alertService } from '@/services/alertService'
 import { useJobStore } from '@/stores/job'
-import { JobService } from '../services/jobService'
+import { useGenericDataTable } from './useInventoryDataTable'
 
 import IconEdit from '@/components/icon/icon-edit.vue'
 import IconTrashLines from '@/components/icon/icon-trash-lines.vue'
@@ -18,63 +17,28 @@ export function useJobManagement() {
     const router = useRouter()
     const jobStore = useJobStore();
 
-    // ✅ Utilise un computed pour surveiller le store
-    const jobs = computed(() => jobStore.jobs);
-    const loading = jobStore.isLoading;
+    // Paramètres par défaut (à récupérer depuis le contexte ou les props)
+    const warehouseId = 1; // TODO: Récupérer depuis le contexte ou les props
+    const inventoryId = 1; // TODO: Récupérer depuis le contexte ou les props
 
-    // États pour les paramètres de tri et filtre
-    const currentSortModel = ref<Array<{ colId: string; sort: 'asc' | 'desc' }>>([]);
-    const currentFilterModel = ref<Record<string, { filter: string }>>({});
-
-    // Charger les jobs via store avec paramètres
-    const fetchJobs = async (params?: {
-        sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>;
-        filter?: Record<string, { filter: string }>;
-        page?: number;
-        pageSize?: number;
-    }) => {
-        try {
-            // Mettre à jour les modèles actuels si fournis
-            if (params?.sort) currentSortModel.value = params.sort;
-            if (params?.filter) currentFilterModel.value = params.filter;
-
-            // Utiliser un warehouseId et inventoryId par défaut (1) si non spécifié
-            const warehouseId = 1; // TODO: Récupérer depuis le contexte ou les props
-            const inventoryId = 1; // TODO: Récupérer depuis le contexte ou les props
-            await jobStore.fetchJobs(inventoryId, warehouseId, params);
-        } catch (err) {
-            console.error('Erreur chargement jobs:', err);
+    // Utiliser le composable générique DataTable
+    const {
+        data: jobs,
+        loading,
+        handlePaginationChanged,
+        handleSortChanged,
+        handleFilterChanged,
+        refresh,
+        loadData
+    } = useGenericDataTable<JobTable>({
+        store: jobStore,
+        fetchAction: 'fetchJobs',
+        defaultPageSize: 20,
+        additionalParams: {
+            inventoryId,
+            warehouseId
         }
-    };
-
-    // Handler pour les changements de pagination
-    const handlePaginationChanged = async ({ page, pageSize }: { page: number, pageSize: number }) => {
-        console.log('🔄 Pagination jobs changée:', { page, pageSize });
-        await fetchJobs({
-            page,
-            pageSize,
-            sort: currentSortModel.value,
-            filter: currentFilterModel.value
-        });
-    };
-
-    // Handler pour les changements de tri
-    const handleSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }>) => {
-        currentSortModel.value = sortModel;
-        await fetchJobs({
-            sort: sortModel,
-            filter: currentFilterModel.value
-        });
-    };
-
-    // Handler pour les changements de filtre
-    const handleFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
-        currentFilterModel.value = filterModel;
-        await fetchJobs({
-            sort: currentSortModel.value,
-            filter: filterModel
-        });
-    };
+    });
 
     const columns: DataTableColumn<JobTable>[] = [
         { headerName: 'ID', field: 'id', sortable: true, filter: 'agNumberColumnFilter', description: 'Identifiant' },
@@ -121,9 +85,9 @@ export function useJobManagement() {
             })
             if (r.isConfirmed) {
                 if (typeof job.id === 'number') {
-                    await JobService.delete([job.id])
+                    await jobStore.deleteJob([job.id])
                     await alertService.success({ text: "Job supprimé avec succès" })
-                    await fetchJobs()
+                    await refresh()
                 } else {
                     await alertService.error({ text: "ID de job invalide" })
                 }
@@ -142,7 +106,7 @@ export function useJobManagement() {
             if (r.isConfirmed) {
                 await jobStore.validateJob([job.id])
                 await alertService.success({ text: "Job validé avec succès" })
-                await fetchJobs()
+                await refresh()
             }
         } catch {
             await alertService.error({ text: "Erreur lors de la validation" })
@@ -158,7 +122,7 @@ export function useJobManagement() {
             if (r.isConfirmed) {
                 await jobStore.completeJob(job.id)
                 await alertService.success({ text: "Job terminé avec succès" })
-                await fetchJobs()
+                await refresh()
             }
         } catch {
             await alertService.error({ text: "Erreur lors de la terminaison" })
@@ -174,7 +138,7 @@ export function useJobManagement() {
             if (r.isConfirmed) {
                 await jobStore.setJobWaiting(job.id)
                 await alertService.success({ text: "Job mis en attente avec succès" })
-                await fetchJobs()
+                await refresh()
             }
         } catch {
             await alertService.error({ text: "Erreur lors de la mise en attente" })
@@ -229,14 +193,14 @@ export function useJobManagement() {
     const redirectToAdd = () => { void router.push({ name: 'job-create' }) }
 
     return {
-        jobs,
+        jobs: computed(() => jobs.value),
         loading,
         columns,
         actions,
         redirectToAdd,
-        fetchJobs,
         handlePaginationChanged,
         handleSortChanged,
         handleFilterChanged,
+        loadData
     }
 }

@@ -1,538 +1,546 @@
 <template>
-    <div>
-        <!-- Récapitulatif - Version améliorée et compacte -->
-        <div class="w-full mb-1 p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-            <!-- En-tête avec icône -->
-            <div class="flex items-center gap-2  mb-2.5">
-                <svg class="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
-                    </path>
-                </svg>
-                <span class="font-semibold text-xs text-primary">Récapitulatif</span>
-            </div>
-
-            <!-- Informations principales en grille responsive -->
-            <div
-                class="grid grid-cols-1 gap-3 w-full p-2 mb-1.5 text-md border border-gray-200 dark:border-gray-600 rounded-md dark:bg-gray-700">
-                <!-- Première ligne : Libellé, Date, Type, Compte -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-                    <!-- Libellé -->
-                    <div class="flex items-center gap-1.5">
-                        <span class="text-gray-500 dark:text-gray-400">Libellé:</span>
-                        <span class="text-gray-900 dark:text-white-light">{{ state.step1Data?.libelle || 'Sans libellé'
-                        }}</span>
+    <div class="inventory-creation bg-gray-50 min-h-screen w-full">
+        <!-- Header avec navigation -->
+        <div class="bg-white shadow-sm border-b border-gray-200">
+            <div class="w-full px-6 py-4">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-4">
+                        <h1 class="text-3xl font-bold text-gray-900">
+                            <span class="border-b-4 border-yellow-400 pb-2">Création d'inventaire</span>
+                        </h1>
+                        <button
+                            @click="showBusinessRules"
+                            class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-colors duration-200 flex items-center gap-2"
+                            title="Afficher les règles métier"
+                        >
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Règles métier
+                        </button>
                     </div>
-
-                    <!-- Date -->
-                    <div class="flex items-center gap-1.5">
-                        <span class="text-gray-500 dark:text-gray-400">Date:</span>
-                        <span class="text-gray-900 dark:text-white-light">{{ state.step1Data?.date || 'Date non définie'
-                        }}</span>
-                    </div>
-
-                    <!-- Type -->
-                    <div class="flex items-center gap-1.5">
-                        <span class="text-gray-500 dark:text-gray-400">Type:</span>
-                        <span class="text-gray-900 dark:text-white-light">{{ getInventoryTypeLabel(state.step1Data?.inventory_type) }}</span>
-                    </div>
-
-                    <!-- Compte -->
-                    <div class="flex items-center gap-1.5">
-                        <span class="text-gray-500 dark:text-gray-400">Compte:</span>
-                        <span class="text-gray-900 dark:text-white-light">{{ getAccountName(state.step1Data?.compte)
-                            }}</span>
-                    </div>
+                    <button
+                        @click="resetForm"
+                        class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-colors duration-200 flex items-center gap-2"
+                        title="Réinitialiser le formulaire"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Réinitialiser
+                    </button>
                 </div>
+            </div>
+        </div>
 
-                <!-- Deuxième ligne : Magasins -->
-                <div class="flex flex-wrap items-center gap-1.5">
-                    <span class="text-gray-500 dark:text-gray-400 flex-shrink-0">Magasin:</span>
-                    <template v-if="Array.isArray(state.step1Data.magasin) && state.step1Data.magasin.length">
-                        <span class="text-gray-900 dark:text-white-light">
-                            {{state.step1Data.magasin.map(m => getWarehouseName(typeof m === 'string' ? m :
-                            m.magasin)).join(', ')}}
-                        </span>
+        <!-- Contenu principal -->
+        <div class="w-full px-6 py-8">
+            <!-- Affichage en temps réel -->
+            <InventoryCreationRecap
+                :header="state.header"
+                :comptages="state.comptages"
+            />
+
+            <!-- Affichage des erreurs de validation du wizard -->
+            <AlertMessage
+                :show="!!wizardValidationError"
+                type="warning"
+                title="Validation requise"
+                subtitle="Veuillez corriger cette erreur avant de continuer :"
+                :message="wizardValidationError || ''"
+                primary-action-text="J'ai compris"
+                secondary-action-text="Recommencer"
+                :primary-action="() => wizardValidationError = null"
+                :secondary-action="resetForm"
+            />
+
+            <!-- Affichage d'erreur de création -->
+            <AlertMessage
+                :show="!!creationError"
+                type="error"
+                title="Erreur lors de la création"
+                subtitle="Une erreur s'est produite lors de la création de l'inventaire :"
+                :message="creationError || ''"
+                primary-action-text="Réessayer"
+                secondary-action-text="Fermer"
+                :primary-action="resetForm"
+                :secondary-action="() => creationError = null"
+            />
+
+            <!-- Affichage de succès de création -->
+            <AlertMessage
+                :show="!!creationSuccess"
+                type="success"
+                title="Inventaire créé avec succès !"
+                subtitle="Votre inventaire a été créé avec succès :"
+                :message="creationSuccess || ''"
+                primary-action-text="Créer un autre inventaire"
+                secondary-action-text="Fermer"
+                :primary-action="resetForm"
+                :secondary-action="() => creationSuccess = null"
+            />
+
+            <!-- Wizard avec meilleur espacement -->
+            <div class="mt-8 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                <Wizard
+                    :steps="steps"
+                    :isValid="isValid"
+                    :onFinish="() => handleCreateInventory()"
+                    :validateStep="validateStep"
+                    @finish="handleFinish"
+                    @validationError="handleValidationError"
+                >
+                    <template #step-0>
+                        <div class="p-4">
+                            <FormBuilder
+                                :key="JSON.stringify(headerFieldsValue)"
+                                :fields="headerFieldsValue"
+                                v-model="state.header"
+                                :columns="4"
+                                hide-submit
+                            />
+                        </div>
                     </template>
-                    <template v-else>
-                        <span class="text-gray-900 dark:text-white-light">Non défini</span>
+                    <template #step-1>
+                        <div class="p-4">
+                            <FormBuilder
+                                :key="state.comptages[0].mode"
+                                :fields="getFields(0)"
+                                v-model="state.comptages[0]"
+                                :columns="1"
+                                hide-submit
+                            />
+                        </div>
                     </template>
-                </div>
-            </div>
-
-            <!-- Comptages en grille responsive -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-2">
-                <div v-for="(comptage, index) in state.comptages" :key="index"
-                    class="px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-md  dark:bg-gray-700">
-                    <!-- En-tête du comptage -->
-                    <div class="flex items-center justify-between mb-1">
-                        <span class="text-xs text-gray-900 dark:text-white">Comptage {{ index + 1 }}</span>
-                        <span v-if="comptage.mode"
-                            class="px-2 py-0.5 bg-gray-400/10 dark:bg-dark-light/10 dark:text-white-light hover:text-primary rounded-lg text-xs">
-                            {{ comptage.mode }}
-                        </span>
-                        <span v-else class="text-gray-400 italic text-xs">Non configuré</span>
-                    </div>
-
-                    <!-- Options -->
-                    <div class="flex flex-wrap gap-1">
-                        <template v-if="hasActiveOptions(comptage)">
-                            <!-- Options "en vrac" uniquement -->
-                            <template v-if="comptage.mode === 'en vrac'">
-                                <span v-if="comptage.inputMethod === 'saisie' || comptage.saisieQuantite"
-                                    class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
-                                    Saisie quantité
-                                </span>
-                                <span v-if="comptage.inputMethod === 'scanner' || comptage.scannerUnitaire"
-                                    class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
-                                    Scanner unitaire
-                                </span>
-                                <span v-if="comptage.guideQuantite"
-                                    class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
-                                    Guide quantité
-                                </span>
-                            </template>
-
-                            <!-- Options "par article" uniquement -->
-                            <template v-if="comptage.mode === 'par article'">
-                                <span v-if="comptage.guideQuantite"
-                                    class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
-                                    Guide quantité
-                                </span>
-                                <span v-if="comptage.isVariante"
-                                    class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
-                                    Variante
-                                </span>
-                                <span v-if="comptage.guideArticle"
-                                    class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
-                                    Guide Article
-                                </span>
-                                <span v-if="comptage.dlc"
-                                    class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
-                                    DLC
-                                </span>
-                                <span v-if="comptage.numeroSerie"
-                                    class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
-                                    Numéro de série
-                                </span>
-                                <span v-if="comptage.numeroLot"
-                                    class="px-2 py-1 text-primary rounded-full text-xs font-medium border border-primary/20">
-                                    Numéro de lot
-                                </span>
-                            </template>
-                        </template>
-                        <span v-else class="text-gray-400 italic text-xs">Aucune option</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Section des erreurs et champs vides -->
-        <div v-if="showValidationErrors && validationErrors.length > 0"
-            class="w-full mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg">
-            <div class="flex items-center gap-2 mb-3">
-                <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
-                    viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-                <span class="font-semibold text-red-800 dark:text-red-200">Champs à corriger</span>
-            </div>
-
-            <div class="space-y-2">
-                <div v-for="error in validationErrors" :key="error.field" class="flex items-start gap-2">
-                    <svg class="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    <div>
-                        <span class="font-medium text-red-700 dark:text-red-300">{{ error.label }}</span>
-                        <p class="text-sm text-red-600 dark:text-red-400">{{ error.message }}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div v-if="!loaded" class="text-center py-10">
-            Chargement...
-        </div>
-
-        <!-- Indicateur de chargement des données maîtres -->
-        <div v-else-if="warehousesLoading || accountsLoading" class="text-center py-10">
-            <div class="flex items-center justify-center gap-2">
-                <svg class="animate-spin h-5 w-5 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span>Chargement des données de référence...</span>
-            </div>
-        </div>
-
-
-        <DynamicWizard v-else :key="wizardKey" :steps="wizardSteps" v-model:current-step="currentStep"
-            :is-valid="isValid" :beforeChange="validateAndSaveStep" @complete="handleSubmit"
-            :finish-button-text="isSubmitting ? (isEditMode ? 'Modification…' : 'Création…') : (isEditMode ? 'Modifier' : 'Créer')"
-            color="#ffc107">
-
-            <template #step-0>
-                <div>
-                    <DOMErrorBoundary>
-                        <FormBuilder :key="`form-step-0-${state.step1Data.date || 'empty'}`" v-model="state.step1Data"
-                            :fields="formFields" hide-submit :columns="3" />
-                    </DOMErrorBoundary>
-                </div>
-            </template>
-
-            <template #step-1>
-                <div>
-                    <div
-                        class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
-                                Validation des règles métier active
-                            </span>
+                    <template #step-2>
+                        <div class="p-4">
+                            <FormBuilder
+                                :key="state.comptages[1].mode"
+                                :fields="getFields(1)"
+                                v-model="state.comptages[1]"
+                                :columns="1"
+                                hide-submit
+                            />
                         </div>
-                        <p class="text-xs text-blue-600 dark:text-blue-300 mt-1">
-                            Les règles de validation spécifiques au mode de comptage seront vérifiées.
-                        </p>
-                    </div>
-                    <DOMErrorBoundary>
-                        <ParamStep :key="`param-step-1-${state.comptages[0]?.mode || 'empty'}`"
-                            v-model="state.comptages[0]" :step-index="0" :available-modes="availableModesForStep(0)"
-                            :prev-comptages="state.comptages" />
-                    </DOMErrorBoundary>
-                </div>
-            </template>
-            <template #step-2 v-if="state.comptages.length > 1">
-                <div>
-                    <div
-                        class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
-                                Validation des règles métier active
-                            </span>
+                    </template>
+                    <template #step-3>
+                        <div class="p-4">
+                            <FormBuilder
+                                :key="state.comptages[2].mode"
+                                :fields="getFields(2)"
+                                v-model="state.comptages[2]"
+                                :columns="1"
+                                hide-submit
+                            />
                         </div>
-                        <p class="text-xs text-blue-600 dark:text-blue-300 mt-1">
-                            Les règles de validation spécifiques au mode de comptage seront vérifiées.
-                        </p>
-                    </div>
-                    <DOMErrorBoundary>
-                        <ParamStep :key="`param-step-2-${state.comptages[1]?.mode || 'empty'}`"
-                            v-model="state.comptages[1]" :step-index="1" :available-modes="availableModesForStep(1)"
-                            :prev-comptages="state.comptages" />
-                    </DOMErrorBoundary>
-                </div>
-            </template>
-            <template #step-3 v-if="state.comptages.length > 2">
-                <div>
-                    <div
-                        class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
-                                Validation des règles métier active
-                            </span>
-                        </div>
-                        <p class="text-xs text-blue-600 dark:text-blue-300 mt-1">
-                            Les règles de validation spécifiques au mode de comptage seront vérifiées.
-                        </p>
-                    </div>
-                    <DOMErrorBoundary>
-                        <ParamStep :key="`param-step-3-${state.comptages[2]?.mode || 'empty'}`"
-                            v-model="state.comptages[2]" :step-index="2" :available-modes="availableModesForStep(2)"
-                            :prev-comptages="state.comptages" />
-                    </DOMErrorBoundary>
-                </div>
-            </template>
-
-        </DynamicWizard>
-
+                    </template>
+                </Wizard>
+            </div>
+        </div>
     </div>
-
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useInventoryCreation } from '@/composables/useInventoryCreation';
-import DynamicWizard from '@/components/wizard/Wizard.vue';
+import { inventoryCreationService } from '@/services/inventoryCreationService';
+import Wizard from '@/components/wizard/Wizard.vue';
 import FormBuilder from '@/components/Form/FormBuilder.vue';
-import ParamStep from '@/components/ParamStep.vue';
 import type { FieldConfig } from '@/interfaces/form';
-import type { ComptageConfig } from '@/interfaces/inventoryCreation';
-import { required, date, magasinWithDatesRequired } from '@/utils/validate';
-import { alertService } from '@/services/alertService';
+import { useWarehouse } from '@/composables/useWarehouse';
+import { useAccount } from '@/composables/useAccount';
+import Swal from 'sweetalert2';
+import InventoryCreationRecap from './InventoryCreationRecap.vue';
+import AlertMessage from '@/components/AlertMessage.vue';
+import { Validators } from '@/utils/validators';
 
-const router = useRouter();
-const route = useRoute();
-const wizardKey = ref(Date.now());
+const { state, headerFields, getFields, createInventory, updateInventory, loadInventory, resetForm, validateBusinessRules, validateComptage } = useInventoryCreation();
+const { fetchWarehouses } = useWarehouse();
+const { fetchAccounts } = useAccount();
 
-// Variable pour contrôler l'affichage des erreurs
-const showValidationErrors = ref(false);
-
-// Détecter si on est en mode édition
-const isEditMode = computed(() => !!route.params.reference);
-const inventoryReference = computed(() => isEditMode.value ? route.params.reference as string : null);
-
-const {
-    state,
-    currentStep,
-    availableModesForStep,
-    onStepComplete,
-    onComplete,
-    updateInventory,
-    initializeEditMode,
-    loaded,
-    isValid,
-    isSubmitting,
-    warehouses,
-    accounts,
-    warehousesLoading,
-    accountsLoading,
-    accountOptions,
-    warehouseOptions,
-    inventoryTypeOptions,
-    getAccountName,
-    getWarehouseName,
-    validationErrors,
-    forceValidation,
-    goToStep0
-} = useInventoryCreation();
-
-// Fonction pour réinitialiser l'affichage des erreurs
-function resetValidationDisplay() {
-    showValidationErrors.value = false;
-}
-
-// Initialiser en mode édition si nécessaire
-onMounted(async () => {
-    if (isEditMode.value && inventoryReference.value) {
-        try {
-            await initializeEditMode(inventoryReference.value);
-
-        } catch (error) {
-            console.error('❌ Erreur lors de l\'initialisation du mode édition:', error);
-            await alertService.error({
-                title: 'Erreur',
-                text: 'Impossible de charger l\'inventaire à modifier'
-            });
-            router.push({ name: 'inventory-list' });
-        }
-    }
+onMounted(() => {
+    fetchWarehouses();
+    fetchAccounts();
 });
 
-// Watcher pour forcer la validation quand les données changent
-watch([() => state.step1Data, () => state.comptages, currentStep], () => {
-    nextTick(() => {
-        forceValidation();
-        // Réinitialiser l'affichage des erreurs quand les données changent
-        resetValidationDisplay();
+// Fonction pour afficher les règles métier
+function showBusinessRules() {
+    Swal.fire({
+        title: '<div class="flex items-center gap-3"><span class="text-3xl">📋</span><span>Règles métier de comptage</span></div>',
+        html: `
+            <div class="text-left space-y-8 text-base max-h-[70vh] overflow-y-auto">
+                <!-- Section Règles de comptage -->
+                <div class="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200 shadow-sm">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="bg-green-100 p-2 rounded-lg">
+                            <span class="text-2xl">🔢</span>
+                        </div>
+                        <h3 class="font-bold text-green-800 text-xl">Règles de comptage</h3>
+                    </div>
+
+                    <div class="space-y-6">
+                        <!-- Mode En vrac -->
+                        <div class="bg-white p-4 rounded-lg border border-green-100">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                                <h4 class="font-semibold text-green-900 text-lg">Mode "En vrac"</h4>
+                            </div>
+                            <div class="text-green-700 space-y-2">
+                                <p class="flex items-start gap-2">
+                                    <span class="text-green-500 mt-1">•</span>
+                                    <span>La <strong>méthode de saisie</strong> (<span class="bg-green-100 px-2 py-1 rounded">Saisie manuelle</span> ou <span class="bg-green-100 px-2 py-1 rounded">Scanner</span>) est obligatoire.</span>
+                                </p>
+                                <p class="flex items-start gap-2">
+                                    <span class="text-green-500 mt-1">•</span>
+                                    <span>Vous pouvez activer la <strong>saisie de quantité</strong> ou le <strong>scanner unitaire</strong> selon vos besoins.</span>
+                                </p>
+                                <div class="mt-3 p-3 bg-green-50 rounded-lg">
+                                    <p class="text-sm font-medium text-green-800 mb-2">💡 Scénarios possibles :</p>
+                                    <ul class="text-sm text-green-700 space-y-1">
+                                        <li class="flex items-start gap-2">
+                                            <span class="text-green-500 mt-1">→</span>
+                                            <span>Choisir "Saisie manuelle" pour entrer les quantités à la main</span>
+                                        </li>
+                                        <li class="flex items-start gap-2">
+                                            <span class="text-green-500 mt-1">→</span>
+                                            <span>Choisir "Scanner" pour scanner les articles un par un</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Mode Par article -->
+                        <div class="bg-white p-4 rounded-lg border border-green-100">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                                <h4 class="font-semibold text-green-900 text-lg">Mode "Par article"</h4>
+                            </div>
+                            <div class="text-green-700 space-y-2">
+                                <p class="flex items-start gap-2">
+                                    <span class="text-green-500 mt-1">•</span>
+                                    <span>Les options sont <strong>optionnelles</strong> parmi : <span class="bg-green-100 px-2 py-1 rounded">Numéro de série</span>, <span class="bg-green-100 px-2 py-1 rounded">Numéro de lot</span>, <span class="bg-green-100 px-2 py-1 rounded">DLC</span>, <span class="bg-green-100 px-2 py-1 rounded">Variante</span>.</span>
+                                </p>
+                                <div class="mt-3 p-3 bg-green-50 rounded-lg">
+                                    <p class="text-sm font-medium text-green-800 mb-2">✅ Combinaisons valides :</p>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                        <div class="bg-white p-2 rounded border">
+                                            <p class="font-medium text-green-800">Simples :</p>
+                                            <p class="text-green-700">Numéro de série, Numéro de lot, DLC, Variante</p>
+                                        </div>
+                                        <div class="bg-white p-2 rounded border">
+                                            <p class="font-medium text-green-800">Doubles :</p>
+                                            <p class="text-green-700">(Numéro de série + Variante), (Numéro de lot + DLC), etc.</p>
+                                        </div>
+                                        <div class="bg-white p-2 rounded border">
+                                            <p class="font-medium text-green-800">Triples :</p>
+                                            <p class="text-green-700">(Numéro de lot + DLC + Variante)</p>
+                                        </div>
+                                        <div class="bg-white p-2 rounded border">
+                                            <p class="font-medium text-green-800">Quadruples :</p>
+                                            <p class="text-green-700">(Numéro de série + Numéro de lot + DLC + Variante)</p>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
+                                        <p class="text-sm font-medium text-red-800 mb-2">⚠️ Règles importantes :</p>
+                                        <ul class="text-sm text-red-700 space-y-1">
+                                            <li class="flex items-start gap-2">
+                                                <span class="text-red-500 mt-1">•</span>
+                                                <span>Numéro de série ne peut être combiné qu'avec Variante</span>
+                                            </li>
+                                            <li class="flex items-start gap-2">
+                                                <span class="text-red-500 mt-1">•</span>
+                                                <span>Numéro de série et Numéro de lot ne peuvent pas coexister</span>
+                                            </li>
+                                            <li class="flex items-start gap-2">
+                                                <span class="text-red-500 mt-1">•</span>
+                                                <span>Numéro de série et DLC ne peuvent pas coexister</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section Règles de validation -->
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200 shadow-sm">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="bg-blue-100 p-2 rounded-lg">
+                            <span class="text-2xl">✅</span>
+                        </div>
+                        <h3 class="font-bold text-blue-800 text-xl">Règles de validation</h3>
+                    </div>
+
+                    <div class="space-y-6">
+                        <!-- Règles générales -->
+                        <div class="bg-white p-4 rounded-lg border border-blue-100">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
+                                <h4 class="font-semibold text-blue-900 text-lg">Règles générales</h4>
+                            </div>
+                            <div class="text-blue-700 space-y-2">
+                                <p class="flex items-start gap-2">
+                                    <span class="text-blue-500 mt-1">•</span>
+                                    <span>Le <strong>1er comptage</strong> doit toujours avoir un mode défini.</span>
+                                </p>
+                                <p class="flex items-start gap-2">
+                                    <span class="text-blue-500 mt-1">•</span>
+                                    <span>Le <strong>2e comptage</strong> ne peut pas être "Image de stock".</span>
+                                </p>
+                                <p class="flex items-start gap-2">
+                                    <span class="text-blue-500 mt-1">•</span>
+                                    <span>Le <strong>3e comptage</strong> doit correspondre au 1er OU au 2e comptage.</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Règles spécifiques -->
+                        <div class="bg-white p-4 rounded-lg border border-blue-100">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
+                                <h4 class="font-semibold text-blue-900 text-lg">Règles spécifiques</h4>
+                            </div>
+                            <div class="text-blue-700 space-y-2">
+                                <p class="flex items-start gap-2">
+                                    <span class="text-blue-500 mt-1">•</span>
+                                    <span>Si le 1er comptage est "Image de stock", le 3e doit correspondre au 2e.</span>
+                                </p>
+                                <p class="flex items-start gap-2">
+                                    <span class="text-blue-500 mt-1">•</span>
+                                    <span>Si le 1er comptage n'est pas "Image de stock", le 3e peut correspondre au 1er OU au 2e.</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `,
+        showConfirmButton: true,
+        showCancelButton: true,
+        confirmButtonText: 'Compris',
+        confirmButtonColor: '#10b981',
+        width: '800px',
+        customClass: {
+            popup: 'swal-custom-popup',
+            title: 'swal-custom-title',
+            htmlContainer: 'swal-custom-html',
+            confirmButton: 'swal-custom-confirm'
+        },
+        backdrop: 'rgba(0, 0, 0, 0.4)'
     });
-}, { deep: true });
+}
 
-/* Étape 1 (fusion des anciennes étapes 1 et 2) */
-const formFields = computed(() => {
-    const fields: FieldConfig[] = [
-        {
-            key: 'libelle',
-            label: 'Libellé',
-            type: 'text',
-            props: {
-                placeholder: 'Entrer le libellé',
-                'data-error': hasFieldError('libelle') ? 'true' : 'false'
-            },
-            validators: [required('Le libellé est requis')]
-        },
-        {
-            key: 'date',
-            label: 'Date',
-            type: 'date',
-            props: {
-                'data-error': hasFieldError('date') ? 'true' : 'false'
-            },
-            validators: [
-                required('La date est requise'),
-                date('Format de date invalide')
-            ]
-        },
-        {
-            key: 'inventory_type',
-            label: 'Type',
-            type: 'select',
-            options: inventoryTypeOptions.value,
-            props: {
-                disabled: false,
-                'data-error': hasFieldError('inventory_type') ? 'true' : 'false'
-            },
-            searchable: false,
-            clearable: false,
-            validators: []
-        },
-        {
-            key: 'compte',
-            label: 'Compte',
-            type: 'select',
-            options: accountOptions.value,
-            props: {
-                'data-error': hasFieldError('compte') ? 'true' : 'false'
-            },
-            validators: [required('Veuillez sélectionner un compte')]
-        },
-        {
-            key: 'magasin',
-            label: 'Magasin',
-            type: 'multi-select-with-dates',
-            options: warehouseOptions.value,
-            searchable: true,
-            clearable: true,
-            props: {
-                placeholder: 'Sélectionnez des magasins',
-                'data-error': hasFieldError('magasin') ? 'true' : 'false'
-            },
-            itemKey: 'magasin', // Specify the key name for magasin items
-            dateLabel: 'Dates par magasin', // Label indicating dates are required
-            validators: [magasinWithDatesRequired('Veuillez sélectionner au moins un magasin et renseigner toutes les dates')]
+const steps = [
+    { title: 'Informations générales' },
+    { title: 'Comptage 1' },
+    { title: 'Comptage 2' },
+    { title: 'Comptage 3' }
+];
+const finished = ref(false);
+const creationError = ref<string | null>(null);
+const wizardValidationError = ref<string | null>(null);
+const creationSuccess = ref<string | null>(null);
+
+// Watcher pour mettre à jour les erreurs métier
+watch(
+    () => state.comptages,
+    () => {
+        // Ne plus afficher automatiquement les erreurs métier
+        // Les erreurs seront affichées seulement lors de la validation
+    },
+    { deep: true }
+);
+
+// Gestionnaire d'erreur de validation du wizard
+function handleValidationError(error: string) {
+    wizardValidationError.value = error;
+}
+
+// Fonction pour réinitialiser les erreurs de validation
+function clearValidationErrors() {
+    creationError.value = null;
+    creationSuccess.value = null;
+    // Ne pas réinitialiser wizardValidationError automatiquement
+    // Il sera réinitialisé manuellement par l'utilisateur
+}
+
+// Watcher pour nettoyer les erreurs quand l'utilisateur change d'étape
+watch(
+    () => state.step,
+    () => {
+        // Réinitialiser seulement les erreurs de création et succès
+        setTimeout(() => {
+            creationError.value = null;
+            creationSuccess.value = null;
+        }, 1000);
+    }
+);
+
+// Fonction de validation pour chaque étape
+async function validateStep(step: number): Promise<boolean> {
+    try {
+        if (step === 0) {
+            // Validation de l'en-tête
+            const headerErrors = Validators.validateHeader(state.header);
+            if (headerErrors.length > 0) {
+                throw new Error(headerErrors.join(' | '));
+            }
+            return true;
+        } else {
+            // Validation des comptages (étapes 1, 2, 3)
+            const comptageIndex = step - 1;
+            const comptage = state.comptages[comptageIndex];
+
+            const comptageErrors = Validators.validateComptage(comptage, comptageIndex);
+            if (comptageErrors.length > 0) {
+                throw new Error(comptageErrors.join(' | '));
+            }
+
+            // Validation spécifique du comptage via CountingDispatcher
+            // On essaie de capturer le message d'erreur exact
+            try {
+                const isValid = validateComptage(comptageIndex);
+                if (!isValid) {
+                    // Si validateComptage retourne false, on essaie de valider directement pour obtenir le message
+                    try {
+                        inventoryCreationService.validateComptage(comptage);
+                    } catch (validationError) {
+                        const errorMessage = validationError instanceof Error ? validationError.message : String(validationError);
+                        console.error('[validateStep] Message d\'erreur de validation:', errorMessage);
+                        throw new Error(errorMessage || 'Configuration du comptage invalide selon les règles métier');
+                    }
+                    throw new Error('Configuration du comptage invalide selon les règles métier');
+                }
+            } catch (error) {
+                console.error('[validateStep] Erreur de validation du comptage', {
+                    step,
+                    comptageIndex,
+                    comptage: state.comptages[comptageIndex],
+                    error: error instanceof Error ? error.message : String(error)
+                });
+                throw error;
+            }
+
+            // Validation spécifique du 3e comptage selon les nouvelles règles
+            if (step === 3) {
+                const thirdComptageErrors = Validators.validateThirdComptage(state.comptages);
+                if (thirdComptageErrors.length > 0) {
+                    throw new Error(thirdComptageErrors.join(' | '));
+                }
+            }
+
+            // Vérifier les règles métier seulement à la dernière étape
+            if (step === 3) {
+                const businessErrors = Validators.validateBusinessRules(state.comptages);
+                if (businessErrors.length > 0) {
+                    throw new Error(businessErrors.join(' | '));
+                }
+            }
+
+            return true;
         }
-    ];
+    } catch (error) {
+        throw error;
+    }
+}
 
-    return fields;
+const headerFieldsValue = computed(() => headerFields.value);
+
+const isValid = computed(() => {
+    const h = state.header;
+    const hasWarehouses = Array.isArray(h.magasin) && h.magasin.length > 0;
+
+    return (
+        !!h.libelle &&
+        !!h.date &&
+        !!h.inventory_type &&
+        !!h.compte &&
+        hasWarehouses
+    );
 });
 
-/* Définitions des étapes du wizard */
-const wizardSteps = computed(() => [
-    { title: isEditMode.value ? 'Modification' : 'Création' },
-    { title: 'comptage 1/3' },
-    { title: 'comptage 2/3' },
-    { title: 'comptage 3/3' }
-]);
+watch(
+    () => [state.header, isValid.value],
+    ([header, valid]) => {
+    },
+    { deep: true }
+);
 
-/* Fonction helper pour vérifier si un comptage a des options actives selon son mode */
-function hasActiveOptions(comptage: ComptageConfig): boolean {
-    if (comptage.mode === 'en vrac') {
-        return comptage.inputMethod !== '' ||
-            comptage.guideQuantite ||
-            comptage.saisieQuantite ||
-            comptage.scannerUnitaire;
-    } else if (comptage.mode === 'par article') {
-        return comptage.guideQuantite ||
-            comptage.isVariante ||
-            comptage.guideArticle ||
-            comptage.dlc ||
-            comptage.numeroSerie ||
-            comptage.numeroLot;
-    } else if (comptage.mode === 'image de stock') {
-        return false; // Aucune option pour "image de stock"
-    }
-
-    return false;
+function handleFinish() {
+    finished.value = true;
+    creationError.value = null; // Reset error
+    creationSuccess.value = null; // Reset success
+    // Ne pas réinitialiser wizardValidationError ici car il peut contenir des erreurs à afficher
 }
 
-/* Fonction pour identifier les champs avec des erreurs */
-function getFieldError(fieldKey: string): string | null {
-    const error = validationErrors.value.find(err => err.field === fieldKey);
-    return error ? error.message : null;
-}
-
-/* Fonction pour vérifier si un champ a une erreur */
-function hasFieldError(fieldKey: string): boolean {
-    return validationErrors.value.some(err => err.field === fieldKey);
-}
-
-/* Valider et sauvegarder avant chaque changement d'étape */
-async function validateAndSaveStep(prev: number, next: number): Promise<boolean> {
-    // Activer l'affichage des erreurs seulement après avoir cliqué sur Suivant
-    showValidationErrors.value = true;
-
-    // Forcer la validation avant de vérifier
-    forceValidation();
-
-    // Attendre un tick pour que la validation soit mise à jour
-    await nextTick();
-
-    // Vérifier s'il y a des erreurs de validation
-    if (validationErrors.value.length > 0) {
-        return false;
-    }
-
-    // Vérifier que isValid est true
-    if (!isValid.value) {
-        return false;
-    }
-
-    let data: any;
-    if (prev === 0) {
-        data = state.step1Data;
-    } else {
-        data = state.comptages[prev - 1];
-    }
-
-    const result = await onStepComplete(prev, data);
-    return result;
-}
-
-/* Soumission finale */
-async function handleSubmit() {
-    if (isSubmitting.value) return;
-
+// Fonction pour créer un inventaire
+async function handleCreateInventory() {
     try {
-        // Validation et sauvegarde de toutes les étapes
-        for (let i = 0; i < wizardSteps.value.length; i++) {
-            const ok = await validateAndSaveStep(i, i + 1);
-            if (!ok) {
-                await alertService.error({
-                    title: 'Validation',
-                    text: `Erreurs de validation à l'étape ${i + 1}`
-                });
-                return;
-            }
+        // Vérifier les règles métier avant la création
+        const businessErrors = Validators.validateBusinessRules(state.comptages);
+        if (businessErrors.length > 0) {
+            // Afficher les erreurs métier dans l'interface
+            wizardValidationError.value = businessErrors.join(' | ');
+            throw new Error(businessErrors.join(' | '));
         }
 
-        if (isEditMode.value) {
-            // Mode édition : mettre à jour l'inventaire
-            await updateInventory();
+        const result = await createInventory();
 
-            // Alerte de succès pour la modification
-            await alertService.success({
-                title: 'Succès',
-                text: 'Votre inventaire a été modifié avec succès !'
-            });
-        } else {
-            // Mode création : créer un nouvel inventaire
-            await onComplete();
+        // Afficher le message de succès
+        creationSuccess.value = `L'inventaire "${state.header.libelle}" a été créé avec succès !`;
+        creationError.value = null; // Réinitialiser les erreurs
+        wizardValidationError.value = null; // Réinitialiser les erreurs de validation
 
-            // Alerte de succès pour la création
-            await alertService.success({
-                title: 'Succès',
-                text: 'Votre inventaire a été créé avec succès !'
-            });
-        }
+        // Optionnel : rediriger vers la liste des inventaires
+        // router.push('/inventories');
 
-        // → Redirection vers la liste des inventaires
-        router.push({ name: 'inventory-list' });
     } catch (error) {
-        // Erreur de notification
-        console.error('Erreur lors de la soumission:', error);
+        // Si c'est une erreur de validation métier, elle est déjà affichée
+        if (!wizardValidationError.value) {
+            creationError.value = error instanceof Error ? error.message : 'Erreur lors de la création de l\'inventaire';
+        }
+        creationSuccess.value = null; // Réinitialiser le succès
+        throw error; // Re-lancer l'erreur pour que le Wizard puisse la gérer
     }
 }
 
-/* Fonction pour obtenir le label d'un type d'inventaire */
-function getInventoryTypeLabel(value: string | undefined): string {
-    const type = inventoryTypeOptions.value.find(option => option.value === value);
-    return type ? type.label : value || 'Type non défini';
+// Fonction pour modifier un inventaire
+async function handleUpdateInventory(inventoryId: number | string) {
+    try {
+        const result = await updateInventory(inventoryId);
+
+        // Rediriger vers la liste des inventaires ou afficher un message de succès
+        alert('Inventaire modifié avec succès !');
+
+    } catch (error) {
+        alert('Erreur lors de la modification de l\'inventaire');
+    }
 }
 </script>
+
+<style scoped>
+.inventory-creation {
+    width: 100%;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: #f9fafb;
+}
+
+/* Amélioration des transitions */
+.transition-all {
+    transition: all 0.2s ease-in-out;
+}
+
+/* Amélioration des ombres */
+.hover\:shadow-md:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Amélioration des bordures */
+.hover\:border-gray-300:hover {
+    border-color: #d1d5db;
+}
+</style>

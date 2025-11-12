@@ -3,7 +3,7 @@
         <SelectField
             :key="`multi-select-${field.key}-${selectedItems.length || 0}`"
             :selected="selectedItems"
-            :options="getFilteredOptions()"
+            :options="formattedOptions(field.options)"
             :multiple="true"
             :searchable="field.searchable ?? true"
             :clearable="field.clearable ?? true"
@@ -16,7 +16,7 @@
         <!-- Date inputs for selected items -->
         <div v-if="selectedItems.length > 0" class="space-y-2 mt-3">
             <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {{ field.dateLabel || 'Dates par élément' }} :
+                {{ field.dateLabel || 'Dates par magasin' }} :
             </h4>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div v-for="itemValue in selectedItems" :key="itemValue" class="flex flex-col gap-2">
@@ -70,9 +70,10 @@ const initializeData = () => {
     if (Array.isArray(props.value)) {
         const fieldData = props.value as Array<Record<string, string>>;
         const itemKey = props.field.itemKey || 'item';
-        selectedItems.value = fieldData.map(item => item[itemKey]);
+        // Convertir les valeurs en string pour la cohérence
+        selectedItems.value = fieldData.map(item => String(item[itemKey]));
         fieldData.forEach(item => {
-            itemDates[item[itemKey]] = item.date;
+            itemDates[String(item[itemKey])] = item.date;
         });
     }
 };
@@ -98,11 +99,20 @@ const formattedOptions = (options: Array<string | SelectOption> = []): SelectOpt
 
 const getFilteredOptions = (): SelectOption[] => {
     const allOptions = formattedOptions(props.field.options);
-    return allOptions.filter(option => !selectedItems.value.includes(option.value as string));
+    return allOptions.filter(option => {
+        // Comparer les valeurs converties en string
+        const optionValue = String(option.value);
+        return !selectedItems.value.some(selected => String(selected) === optionValue);
+    });
 };
 
 const getLabelForItem = (itemValue: string): string => {
-    const option = formattedOptions(props.field.options).find(opt => opt.value === itemValue);
+    // Convertir itemValue en string pour la comparaison
+    const searchValue = String(itemValue);
+    const option = formattedOptions(props.field.options).find(opt => {
+        // Comparer les valeurs converties en string pour éviter les problèmes de type
+        return String(opt.value) === searchValue;
+    });
     return option?.label || itemValue;
 };
 

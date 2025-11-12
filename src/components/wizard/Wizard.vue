@@ -1,215 +1,346 @@
 <template>
-    <div class="mx-auto h-full panel py-3">
-        <FormWizard
-            ref="wizard"
-            :startIndex="internalStep"
-            @on-change="onChange"
-            @on-complete="handleFinishWizard"
-            :before-change="beforeChangeHandler"
-            :color="color"
-            back-button-text="Précédent"
-            next-button-text="Suivant"
-            class="circle"
-            :finish-button-text="finishButtonText">
-
-            <template #next="{ nextTab, fillButtonStyle }">
-                <SubmitButton
-                    type="button"
-                    :loading="isSubmitting"
-                    :style="fillButtonStyle"
-                    label="Suivant"
-                    @click="handleNext(nextTab, $event)" />
-            </template>
-
-            <template #finish="{ fillButtonStyle }">
-                <SubmitButton
-                    type="button"
-                    :loading="isSubmitting"
-                    :style="fillButtonStyle"
-                    :label="finishButtonText"
-                    @click="handleFinishWizard" />
-            </template>
-
-            <TabContent
+    <div class="wizard-ui">
+        <div class="wizard-steps">
+            <div class="wizard-steps-line"></div>
+            <div
                 v-for="(step, idx) in steps"
-                :key="`step-${idx}-${step.title}`"
-                :title="step.title"
-                :custom-icon="step.icon"
-                class="wizard-step md:px-4 py-1">
-                <div class="shadow bg-gray-50 dark:bg-[#0e1726] rounded-md px-8 py-5 space-y-2">
-                    <slot :name="`step-${idx}`" />
-                </div>
-            </TabContent>
-        </FormWizard>
+                :key="idx"
+                :class="[
+                    'wizard-step',
+                    { active: idx === currentStep, done: idx < currentStep }
+                ]"
+            >
+                <span class="wizard-step-circle">{{ idx + 1 }}</span>
+                <span class="wizard-step-title">{{ step.title }}</span>
+            </div>
+        </div>
+        <div class="wizard-content">
+            <slot :name="`step-${currentStep}`" />
+        </div>
+
+        <!-- Affichage des erreurs de validation -->
+        <div v-if="validationError" class="wizard-validation-error">
+            <div class="error-message">
+                <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>{{ validationError }}</span>
+            </div>
+        </div>
+
+        <div class="wizard-actions">
+            <button @click="prev" :disabled="currentStep === 0">Précédent</button>
+            <button v-if="!isLastStep" @click="next" :disabled="!isValid">Suivant</button>
+            <button v-else @click="finish" :disabled="!isValid">Terminer</button>
+        </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, toRefs, watch, nextTick } from 'vue';
-import { FormWizard, TabContent } from 'vue3-form-wizard';
-import SubmitButton from '@/components/Form/SubmitButton.vue';
-import { alertService } from '@/services/alertService';
-import type { Step } from '@/interfaces/wizard';
-import 'vue3-form-wizard/dist/style.css';
+import { ref, computed, watch } from 'vue';
+import { logger } from '@/services/loggerService';
 
-interface WizardProps {
-    steps: Step[];
-    color?: string;
-    currentStep?: number;
+const props = defineProps<{
+    steps: { title: string }[];
     isValid: boolean;
-    beforeChange: (prev: number, next: number) => boolean | Promise<boolean>;
-    finishButtonText?: string;
-    isSubmitting?: boolean;
-}
-
-const props = withDefaults(defineProps<WizardProps>(), {
-    color: '#ffc107',
-    currentStep: 0,
-    isValid: false,
-    isSubmitting: false,
-    finishButtonText: 'Créer'
-});
-
-const emit = defineEmits<{
-    (e: 'complete'): void;
-    (e: 'update:current-step', step: number): void;
+    onFinish?: () => void | Promise<void>;
+    validateStep?: (step: number) => boolean | Promise<boolean>;
 }>();
 
-// Références
-const wizard = ref<InstanceType<typeof FormWizard> | null>(null);
+const emit = defineEmits(['finish', 'update:currentStep', 'validationError']);
 
-// Computed properties optimisées
-const internalStep = computed(() => props.currentStep ?? 0);
+const currentStep = ref(0);
+const validationError = ref<string | null>(null);
 
-const finishButtonText = computed(() => {
-    if (props.isSubmitting) {
-        return 'En cours...';
-    }
-    return props.finishButtonText || 'Créer';
-});
+const isLastStep = computed(() => currentStep.value === props.steps.length - 1);
 
-// Gestionnaire beforeChange optimisé
-const beforeChangeHandler = async (prev: number, next: number): Promise<boolean> => {
-    try {
-        return await props.beforeChange(prev, next);
-    } catch (error) {
-        console.error('❌ Erreur dans beforeChange:', error);
-        await alertService.error({
-            title: 'Erreur',
-            text: 'Une erreur est survenue lors de la validation. Veuillez réessayer.'
-        });
-        return false;
-    }
-};
-
-// Gestionnaires d'événements optimisés
-const onChange = (prev: number, next: number) => {
-    emit('update:current-step', next);
-};
-
-const handleNext = async (nextTab: () => void, event: Event) => {
-    event.stopPropagation();
-
-    if (!props.isValid) {
-        await alertService.error({
-            title: 'Validation',
-            text: 'Veuillez remplir tous les champs requis avant de continuer.'
-        });
-        return;
-    }
-
-    try {
-        const ok = await beforeChangeHandler(internalStep.value, internalStep.value + 1);
-        if (!ok) return;
-
-        nextTab();
-    } catch (error) {
-        console.error('❌ Erreur lors du passage à l\'étape suivante:', error);
-        await alertService.error({
-            title: 'Erreur',
-            text: 'Une erreur est survenue. Veuillez réessayer.'
-        });
-    }
-};
-
-const handleFinishWizard = async () => {
-    // Vérification immédiate de l'état de soumission
-    if (props.isSubmitting) {
-        console.log('🚫 Soumission en cours, action ignorée');
-        return;
-    }
-
-    // Validation avant finalisation
-    if (!props.isValid) {
-        await alertService.error({
-            title: 'Validation',
-            text: 'Veuillez remplir tous les champs requis avant de terminer.'
-        });
-        return;
-    }
-
-    try {
-        const ok = await beforeChangeHandler(internalStep.value, internalStep.value + 1);
-        if (!ok) return;
-
-        // Émission de l'événement de complétion
-        emit('complete');
-    } catch (error) {
-        console.error('❌ Erreur lors de la finalisation:', error);
-        await alertService.error({
-            title: 'Erreur',
-            text: 'Une erreur est survenue lors de la finalisation. Veuillez réessayer.'
-        });
-    }
-};
-
-// Surveillance des changements pour optimiser les re-renders
-watch(() => props.currentStep, (newStep) => {
-    if (wizard.value && newStep !== undefined) {
-        nextTick(() => {
-            // Synchronisation avec le wizard interne si nécessaire
-            console.log('🔄 Étape mise à jour:', newStep);
-        });
-    }
-}, { immediate: true });
-
-// Exposer des méthodes utiles
-defineExpose({
-    goToStep: (step: number) => {
-        if (wizard.value) {
-            // Méthode pour naviguer programmatiquement
-            console.log('🎯 Navigation vers l\'étape:', step);
+async function next() {
+    // Validation de l'étape actuelle
+    if (props.validateStep) {
+        try {
+            const isValidStep = await props.validateStep(currentStep.value);
+            if (!isValidStep) {
+                validationError.value = 'Veuillez corriger les erreurs avant de continuer';
+                return; // Bloquer la navigation
+            }
+        } catch (error) {
+            validationError.value = error instanceof Error ? error.message : 'Erreur de validation';
+            emit('validationError', validationError.value);
+            return; // Bloquer la navigation
         }
-    },
-    reset: () => {
-        if (wizard.value) {
-            // Méthode pour réinitialiser le wizard
-            console.log('🔄 Réinitialisation du wizard');
+    }
+
+    // Réinitialiser l'erreur de validation
+    validationError.value = null;
+
+    if (currentStep.value < props.steps.length - 1) {
+        currentStep.value++;
+        emit('update:currentStep', currentStep.value);
+    }
+}
+function prev() {
+    if (currentStep.value > 0) {
+        currentStep.value--;
+        emit('update:currentStep', currentStep.value);
+    }
+}
+async function finish() {
+    // Appeler la fonction onFinish si elle existe
+    if (props.onFinish) {
+        try {
+            await props.onFinish();
+        } catch (error) {
+            // Gérer l'erreur sans la laisser non gérée
+            logger.warn('Erreur lors de l\'exécution de onFinish', error);
+            // L'erreur sera gérée par le composant parent
         }
+    }
+
+    emit('finish');
+}
+
+// Synchronisation externe si besoin
+watch(() => props.steps, () => {
+    if (currentStep.value >= props.steps.length) {
+        currentStep.value = props.steps.length - 1;
     }
 });
 </script>
 
 <style scoped>
-/* Styles optimisés pour le wizard */
+.wizard-ui {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 1.5rem 1.5rem 1.25rem 1.5rem;
+    border: 1px solid #eee;
+    border-radius: 12px;
+    background: #fafbfc;
+    box-shadow: 0 4px 24px 0 rgba(0,0,0,0.07);
+}
+.wizard-steps {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    position: relative;
+    width: 100%;
+}
+.wizard-steps-line {
+    position: absolute;
+    top: 27px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: #eee;
+    z-index: 0;
+}
 .wizard-step {
-    transition: all 0.3s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    min-width: 120px;
+    z-index: 1;
+}
+.wizard-step-circle {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: #eee;
+    color: #888;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.5rem;
+    border: 3px solid #eee;
+    transition: background 0.2s, color 0.2s, border 0.2s;
+    margin-bottom: 0.5rem;
+}
+.wizard-step.active .wizard-step-circle {
+    background: #ffc107;
+    color: #222;
+    border: 3px solid #ffc107;
+}
+.wizard-step.done .wizard-step-circle {
+    background: #4caf50;
+    color: #fff;
+    border: 3px solid #4caf50;
+}
+.wizard-step-title {
+    font-size: 1.15rem;
+    color: #888;
+    margin-top: 0.2rem;
+    text-align: center;
+    min-width: 90px;
+    font-weight: 500;
+}
+.wizard-step.active .wizard-step-title {
+    color: #222;
+    font-weight: bold;
+}
+.wizard-step.done .wizard-step-title {
+    color: #4caf50;
+    font-weight: bold;
+}
+.wizard-step-line {
+    width: 100%;
+    height: 3px;
+    background: #eee;
+    position: absolute;
+    left: 0;
+    top: 27px;
+    z-index: 0;
+    transform: none;
+}
+.wizard-step.active ~ .wizard-step-line,
+.wizard-step.done ~ .wizard-step-line {
+    background: #ffc107;
+}
+.wizard-step.done ~ .wizard-step-line {
+    background: #4caf50;
+}
+.wizard-step:last-child .wizard-step-line {
+    display: none;
+}
+.wizard-content {
+    min-height: 180px;
+    margin-bottom: 1.5rem;
+    transition: all 0.3s cubic-bezier(.4,0,.2,1);
+    font-size: 1.15rem;
 }
 
-/* Amélioration de l'accessibilité */
-:deep(.form-wizard) {
-    outline: none;
+.wizard-validation-error {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    animation: slideIn 0.3s ease-out;
 }
 
-:deep(.form-wizard:focus-within) {
-    outline: 2px solid var(--primary-color, #ffc107);
-    outline-offset: 2px;
+.error-message {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #dc2626;
+    font-weight: 500;
 }
 
-/* Responsive design */
-@media (max-width: 768px) {
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.wizard-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-top: 1.5rem;
+}
+button {
+    padding: 0.8rem 2.2rem;
+    border-radius: 6px;
+    border: none;
+    background: #ffc107;
+    color: #222;
+    font-weight: bold;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    box-shadow: 0 2px 8px 0 rgba(0,0,0,0.04);
+}
+button:disabled {
+    background: #eee;
+    color: #aaa;
+    cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .wizard-ui {
+        max-width: 98vw;
+        padding: 2rem 1rem 1.5rem 1rem;
+    }
     .wizard-step {
-        padding: 0.5rem;
+        min-width: 80px;
+    }
+    .wizard-step-circle {
+        width: 40px;
+        height: 40px;
+        font-size: 1.1rem;
+        border-width: 2px;
+    }
+    .wizard-step-line {
+        width: 40px;
+        height: 2px;
+        top: 19px;
+        transform: translateX(13px);
+    }
+    .wizard-step-title {
+        font-size: 1rem;
+        min-width: 60px;
+    }
+}
+@media (max-width: 600px) {
+    .wizard-ui {
+        padding: 1rem 0.2rem 0.5rem 0.2rem;
+    }
+    .wizard-steps {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    .wizard-step {
+        flex-direction: row;
+        min-width: 0;
+        margin-bottom: 0.5rem;
+    }
+    .wizard-step-circle {
+        width: 32px;
+        height: 32px;
+        font-size: 0.95rem;
+        margin-bottom: 0;
+        margin-right: 0.5rem;
+    }
+    .wizard-step-title {
+        font-size: 0.95rem;
+        min-width: 0;
+        margin-top: 0;
+        margin-right: 0.5rem;
+    }
+    .wizard-step-line {
+        display: none;
+    }
+    .wizard-content {
+        min-height: 80px;
+        font-size: 1rem;
+    }
+    .wizard-actions {
+        flex-direction: column;
+        gap: 0.7rem;
+        align-items: stretch;
+        margin-top: 1rem;
+    }
+    button {
+        width: 100%;
+        font-size: 1rem;
+        padding: 0.7rem 0;
+    }
+}
+@media (max-width: 400px) {
+    .wizard-ui {
+        padding: 0.5rem 0.1rem 0.2rem 0.1rem;
+    }
+    .wizard-content {
+        font-size: 0.95rem;
     }
 }
 </style>

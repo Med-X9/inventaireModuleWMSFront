@@ -1,7 +1,8 @@
 import { ref, computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { logger } from '@/services/loggerService';
 
-export type InventoryStatus = 'EN PREPARATION' | 'EN REALISATION' | 'TERMINE' | 'CLOTURE';
+export type InventoryStatus = 'EN PREPARATION' | 'EN REALISATION' | 'CLOTURE';
 
 export interface InventoryStep {
     id: string;
@@ -14,7 +15,7 @@ export interface InventoryStep {
 export function useInventoryStatus() {
     const route = useRoute();
 
-    // États pour les étapes d'inventaire
+    // États pour les étapes d'inventaire (3 étapes seulement)
     const inventorySteps = ref<InventoryStep[]>([
         {
             id: 'preparation',
@@ -31,16 +32,9 @@ export function useInventoryStatus() {
             isCompleted: false
         },
         {
-            id: 'termination',
-            label: 'Termination',
-            order: 3,
-            isActive: false,
-            isCompleted: false
-        },
-        {
             id: 'cloture',
             label: 'Clôture',
-            order: 4,
+            order: 3,
             isActive: false,
             isCompleted: false
         }
@@ -80,22 +74,16 @@ export function useInventoryStatus() {
                     inventorySteps.value[0].isCompleted = true;
                     inventorySteps.value[1].isActive = true;
                     break;
-                case 'TERMINE':
-                    inventorySteps.value[0].isCompleted = true;
-                    inventorySteps.value[1].isCompleted = true;
-                    inventorySteps.value[2].isActive = true;
-                    break;
                 case 'CLOTURE':
                     inventorySteps.value[0].isCompleted = true;
                     inventorySteps.value[1].isCompleted = true;
-                    inventorySteps.value[2].isCompleted = true;
-                    inventorySteps.value[3].isActive = true;
+                    inventorySteps.value[2].isActive = true;
                     break;
                 default:
                     inventorySteps.value[0].isActive = true;
             }
         } catch (error) {
-            console.error('Erreur lors de la mise à jour du statut:', error);
+            logger.error('Erreur lors de la mise à jour du statut', error);
         }
     };
 

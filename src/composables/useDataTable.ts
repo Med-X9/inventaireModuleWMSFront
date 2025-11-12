@@ -140,35 +140,31 @@ export function useDataTable(props: DataTableProps, emit: any) {
 
     // Fonction pour réordonner les colonnes
     const reorderColumns = (fromIndex: number, toIndex: number) => {
-        console.log('🔍 Réordonnancement des colonnes:', { fromIndex, toIndex, currentOrder: visibleColumns.value })
-
         const newVisibleColumns = [...visibleColumns.value]
         const [movedColumn] = newVisibleColumns.splice(fromIndex, 1)
         newVisibleColumns.splice(toIndex, 0, movedColumn)
         visibleColumns.value = newVisibleColumns
-
-        console.log('🔍 Nouvel ordre des colonnes:', newVisibleColumns)
     }
 
     // Fonctions d'export (placeholders pour l'instant)
     const exportToCsv = () => {
-        console.log('Export CSV')
+        // Export CSV implementation
     }
 
     const exportToExcel = () => {
-        console.log('Export Excel')
+        // Export Excel implementation
     }
 
     const exportToPdf = () => {
-        console.log('Export PDF')
+        // Export PDF implementation
     }
 
     const exportSelectedToCsv = () => {
-        console.log('Export sélection CSV')
+        // Export sélection CSV implementation
     }
 
     const exportSelectedToExcel = () => {
-        console.log('Export sélection Excel')
+        // Export sélection Excel implementation
     }
 
     const deselectAll = () => {
@@ -179,7 +175,7 @@ export function useDataTable(props: DataTableProps, emit: any) {
 
         // Forcer la mise à jour de l'état
         nextTick(() => {
-            console.log('All selections cleared from useDataTable, current state:', selectedRows.value)
+            // Sélections effacées
         })
     }
 

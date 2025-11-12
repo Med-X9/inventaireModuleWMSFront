@@ -32,9 +32,16 @@ const routes: RouteRecordRaw[] = [
     {
         path: '/inventory/:reference/results',
         name: 'inventory-results',
-        component: () => import('@/views/Inventory/Results/InventoryResults.vue'),
+        component: () => import(/* webpackChunkName: "inventory-results" */ '@/views/Inventory/Results/InventoryResults.vue'),
         props: route => ({ reference: route.params.reference as string }),
         meta: { requiresAuth: true },
+    },
+    {
+        path: '/inventory/:reference/job-tracking',
+        name: 'inventory-job-tracking',
+        component: () => import(/* webpackChunkName: "inventory-job-tracking" */ '@/views/Inventory/Results/JobTracking.vue'),
+        props: route => ({ reference: route.params.reference as string }),
+        meta: { requiresAuth: true }
     },
 
     {
@@ -88,6 +95,20 @@ const routes: RouteRecordRaw[] = [
         name: 'jobs-launch',
         component: () =>
             import(/* webpackChunkName: "jobs-launch" */ '../views/Inventory/LaunchJobs.vue'),
+        meta: { requiresAuth: true },
+    },
+    {
+        path: '/inventory/grid-demo',
+        name: 'inventory-grid-demo',
+        component: () =>
+            import(/* webpackChunkName: "inventory-grid-demo" */ '../views/Inventory/InventoryGridDemo.vue'),
+        meta: { requiresAuth: true },
+    },
+    {
+        path: '/inventory/job-management',
+        name: 'inventory-job-management',
+        component: () =>
+            import(/* webpackChunkName: "inventory-job-management" */ '../views/Inventory/JobManagement.vue'),
         meta: { requiresAuth: true },
     },
 

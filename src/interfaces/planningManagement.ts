@@ -1,5 +1,5 @@
 // Interfaces pour le planning management
-export interface Store {
+export interface Store extends Record<string, any> {
     id: number;
     store_name: string;
     teams_count: number;

@@ -3,6 +3,12 @@ import { ref, computed } from 'vue';
 import ResourceService from '@/services/ResourceService';
 import type { Resource, CreateResourceRequest, UpdateResourceRequest, AssignResourceRequest } from '@/models/Resource';
 import { alertService } from '@/services/alertService';
+import {
+    buildDataTableParams,
+    processDataTableResponse,
+    type DataTableParams,
+    type DataTableResponse
+} from '@/utils/dataTableUtils';
 
 export const useResourceStore = defineStore('resource', () => {
     // State
@@ -11,6 +17,7 @@ export const useResourceStore = defineStore('resource', () => {
     const loading = ref(false);
     const error = ref<string | null>(null);
     const totalCount = ref(0);
+    const totalPages = ref(1);
     const currentPage = ref(1);
     const itemsPerPage = ref(10);
     const searchQuery = ref('');
@@ -52,15 +59,39 @@ export const useResourceStore = defineStore('resource', () => {
     };
 
     // Fetch all resources with pagination
-    const fetchResources = async () => {
+    const fetchResources = async (params?: DataTableParams): Promise<DataTableResponse<Resource> | void> => {
         try {
             setLoading(true);
             clearError();
 
-            const response = await ResourceService.getResources();
-            resources.value = response.data || response;
+            // Si des paramètres DataTable sont fournis, les utiliser
+            if (params) {
+                const queryParams = buildDataTableParams(params);
+                const response = await ResourceService.getResourcesByUrl(`?${queryParams.toString()}`);
 
-            totalCount.value = response.count || response.data?.length || 0;
+                const resourceData = response.data || [];
+                resources.value = resourceData;
+                totalCount.value = response.count || resourceData.length;
+
+                // Retourner au format DataTable
+                return processDataTableResponse(
+                    {
+                        draw: params.page || 1,
+                        recordsTotal: response.count || 0,
+                        recordsFiltered: response.count || 0,
+                        data: resourceData
+                    } as DataTableResponse<Resource>,
+                    currentPage,
+                    totalPages,
+                    totalCount,
+                    params.pageSize || itemsPerPage.value
+                );
+            } else {
+                // Ancien comportement sans paramètres
+                const response = await ResourceService.getResources();
+                resources.value = response.data || response;
+                totalCount.value = response.count || response.data?.length || 0;
+            }
         } catch (err: any) {
             const errorMessage = err.response?.data?.message || 'Erreur lors de la récupération des ressources';
             setError(errorMessage);
@@ -97,7 +128,7 @@ export const useResourceStore = defineStore('resource', () => {
 
             const newResource = await ResourceService.createResource(resourceData);
             resources.value.unshift(newResource); // Add to beginning of list
-            totalCount.value += 1;
+            totalCount.value = resources.value.length;
 
             await alertService.success({ text: 'Ressource créée avec succès' });
             return newResource;

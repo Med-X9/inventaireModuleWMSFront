@@ -4,6 +4,8 @@
  * Utilitaire pour gérer les erreurs DOM et améliorer la stabilité
  */
 
+import { logger } from '@/services/loggerService';
+
 /**
  * Exécute une fonction de manière sécurisée en évitant les conflits DOM
  * @param fn - Fonction à exécuter
@@ -13,7 +15,7 @@ export function safeExecute<T>(fn: () => T, fallback?: () => T): T | undefined {
     try {
         return fn();
     } catch (error) {
-        console.warn('⚠️ Erreur DOM détectée, utilisation du fallback:', error);
+        logger.warn('Erreur DOM détectée, utilisation du fallback', error);
         return fallback?.();
     }
 }
@@ -33,7 +35,7 @@ export async function safeExecuteWithRetry<T>(
         try {
             return await fn();
         } catch (error) {
-            console.warn(`⚠️ Tentative ${i + 1}/${maxRetries} échouée:`, error);
+            logger.warn(`Tentative ${i + 1}/${maxRetries} échouée`, error);
             if (i < maxRetries - 1) {
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
@@ -77,7 +79,7 @@ export function setupGlobalDOMErrorHandler(): void {
         window.addEventListener('error', (event) => {
             if (event.error && event.error.message &&
                 event.error.message.includes('Node.insertBefore')) {
-                console.warn('🚨 Erreur DOM détectée et ignorée:', event.error);
+                logger.warn('Erreur DOM détectée et ignorée', event.error);
                 event.preventDefault();
                 return false;
             }

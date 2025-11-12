@@ -50,17 +50,48 @@ const handleChange = () => {
 <style scoped>
 input[type="date"] {
     position: relative;
+    padding-right: 2.5rem; /* Espace pour l'icône du calendrier */
 }
+
 .dark input[type="date"] {
     background-color: #1f2937;
     border-color: #374151;
     color: #f9fafb;
 }
+
+/* Style pour l'icône du calendrier (Chrome, Safari, Edge) */
 input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: invert(1);
     cursor: pointer;
+    opacity: 1 !important;
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0.25rem;
+    margin-right: 0.5rem;
+    background-color: transparent;
+    /* Filtre pour améliorer la visibilité de l'icône native */
+    filter: brightness(0) saturate(100%) invert(27%) sepia(8%) saturate(1234%) hue-rotate(182deg) brightness(95%) contrast(87%);
 }
+
 .dark input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: invert(0);
+    filter: brightness(0) saturate(100%) invert(65%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%);
+}
+
+/* Style pour Firefox */
+input[type="date"]::-moz-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 1;
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0.25rem;
+    margin-right: 0.5rem;
+}
+
+/* Hover effect */
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 0.8;
+}
+
+input[type="date"]::-moz-calendar-picker-indicator:hover {
+    opacity: 0.8;
 }
 </style>

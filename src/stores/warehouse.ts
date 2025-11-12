@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { WarehouseService } from '@/services/WarehouseService';
 import type { Warehouse } from '@/models/Warehouse';
 import { Job } from '@/models/Job';
+import { logger } from '@/services/loggerService';
 
 export const useWarehouseStore = defineStore('warehouse', () => {
     const warehouses = ref<Warehouse[]>([]);
@@ -19,11 +20,11 @@ export const useWarehouseStore = defineStore('warehouse', () => {
         } catch (err: unknown) {
             error.value = err instanceof Error ? err.message : 'Erreur lors du chargement des entrepôts';
             warehouses.value = []; // S'assurer que c'est toujours un tableau
-            console.error('Erreur lors du chargement des warehouses:', err);
+            logger.error('Erreur lors du chargement des warehouses', err);
         } finally {
             loading.value = false;
         }
-    }; 
+    };
 
     const fetchJobsByWarehouseId = async (warehouseId: number) => {
         loading.value = true;
@@ -34,7 +35,7 @@ export const useWarehouseStore = defineStore('warehouse', () => {
         } catch (err: unknown) {
             error.value = err instanceof Error ? err.message : 'Erreur lors du chargement des jobs';
             warehouseJobs.value = [];
-            console.error('Erreur lors du chargement des jobs:', err);
+            logger.error('Erreur lors du chargement des jobs', err);
         } finally {
             loading.value = false;
         }
@@ -46,7 +47,7 @@ export const useWarehouseStore = defineStore('warehouse', () => {
             const warehouse = response.data.data;
             return warehouse ? warehouse.id : null;
         } catch (err: unknown) {
-            console.error('Erreur lors de la récupération de l\'entrepôt par référence:', err);
+            logger.error('Erreur lors de la récupération de l\'entrepôt par référence', err);
             return null;
         }
     };

@@ -10,6 +10,7 @@ import type {
     AssignResourceResponse
 } from '@/models/Resource';
 import API from '@/api';
+import { logger } from '@/services/loggerService';
 
 export class ResourceService {
     /**
@@ -22,7 +23,22 @@ export class ResourceService {
             );
             return response.data;
         } catch (error) {
-            console.error('❌ Erreur lors de la récupération des ressources:', error);
+            logger.error('Erreur lors de la récupération des ressources', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Récupérer les ressources avec URL complète (pour DataTable)
+     */
+    static async getResourcesByUrl(url: string): Promise<ResourcesResponse> {
+        try {
+            const response: AxiosResponse<ResourcesResponse> = await axiosInstance.get(
+                `${API.endpoints.resource.base}${url}`
+            );
+            return response.data;
+        } catch (error) {
+            logger.error('Erreur lors de la récupération des ressources', error);
             throw error;
         }
     }
@@ -37,7 +53,7 @@ export class ResourceService {
             );
             return response.data.data;
         } catch (error) {
-            console.error(`❌ Erreur lors de la récupération de la ressource ${id}:`, error);
+            logger.error(`Erreur lors de la récupération de la ressource ${id}`, error);
             throw error;
         }
     }
@@ -53,7 +69,7 @@ export class ResourceService {
             );
             return response.data.data;
         } catch (error) {
-            console.error('❌ Erreur lors de la création de la ressource:', error);
+            logger.error('Erreur lors de la création de la ressource', error);
             throw error;
         }
     }
@@ -69,7 +85,7 @@ export class ResourceService {
             );
             return response.data.data;
         } catch (error) {
-            console.error(`❌ Erreur lors de la mise à jour de la ressource ${id}:`, error);
+            logger.error(`Erreur lors de la mise à jour de la ressource ${id}`, error);
             throw error;
         }
     }
@@ -81,7 +97,7 @@ export class ResourceService {
         try {
             await axiosInstance.delete(`${API.endpoints.resource.base}/${id}`);
         } catch (error) {
-            console.error(`❌ Erreur lors de la suppression de la ressource ${id}:`, error);
+            logger.error(`Erreur lors de la suppression de la ressource ${id}`, error);
             throw error;
         }
     }
@@ -96,7 +112,7 @@ export class ResourceService {
             );
             return response.data;
         } catch (error) {
-            console.error('❌ Erreur lors de la recherche de ressources:', error);
+            logger.error('Erreur lors de la recherche de ressources', error);
             throw error;
         }
     }
@@ -111,7 +127,7 @@ export class ResourceService {
             );
             return response.data.data;
         } catch (error) {
-            console.error('❌ Erreur lors de la récupération des ressources disponibles:', error);
+            logger.error('Erreur lors de la récupération des ressources disponibles', error);
             throw error;
         }
     }
@@ -124,7 +140,7 @@ export class ResourceService {
             const response: AxiosResponse<AssignResourceResponse> = await axiosInstance.post(`${API.endpoints.inventory.base}${inventoryId}/assign-resources-inventory/`,assignData);
             return response.data;
         } catch (error) {
-            console.error('❌ Erreur lors de l\'assignation de la ressource:', error);
+            logger.error('Erreur lors de l\'assignation de la ressource', error);
             throw error;
         }
     }
@@ -138,7 +154,7 @@ export class ResourceService {
                 `${API.endpoints.resource.base}/assign/${inventoryId}/${resourceId}`
             );
         } catch (error) {
-            console.error('❌ Erreur lors du retrait de la ressource:', error);
+            logger.error('Erreur lors du retrait de la ressource', error);
             throw error;
         }
     }
@@ -173,7 +189,7 @@ export class ResourceService {
             );
             return response.data;
         } catch (error) {
-            console.error('❌ Erreur lors de la mise à jour de la quantité:', error);
+            logger.error('Erreur lors de la mise à jour de la quantité', error);
             throw error;
         }
     }

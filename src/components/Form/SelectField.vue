@@ -223,8 +223,6 @@ const handleMouseLeave = () => {
 
 // Gestion sécurisée des événements
 const handleModelValueUpdate = (value: any) => {
-    console.log('🔍 SelectField - Valeur reçue:', value, typeof value, Array.isArray(value));
-    console.log('🔍 SelectField - Multiple:', multiple.value);
 
     // Émettre pour FormBuilder
     emit('update:value', value);

@@ -1,6 +1,11 @@
 <template>
+    <!--
+        Gestionnaire de colonnes pour DataTable
+        Permet de configurer la visibilité, l'ordre et la largeur des colonnes
+        Supporte le drag & drop pour réorganiser les colonnes
+    -->
     <div class="column-manager">
-        <!-- Header -->
+        <!-- Header avec titre et actions -->
         <div class="manager-header">
             <h3 class="manager-title">Gestion des colonnes</h3>
             <div class="header-actions">
@@ -10,7 +15,7 @@
             </div>
         </div>
 
-        <!-- Liste des colonnes -->
+        <!-- Liste des colonnes visibles avec drag & drop -->
         <div class="columns-list" ref="columnsList">
             <div
                 v-for="(column, index) in visibleColumnsData"
@@ -25,17 +30,17 @@
                 class="column-item"
                 :class="{ 'dragging': draggedIndex === index }"
             >
-                <!-- Handle de drag -->
+                <!-- Handle de drag avec icône -->
                 <div class="drag-handle" v-if="column?.draggable !== false">
                     <IconDrag class="w-4 h-4 text-gray-400" />
                 </div>
 
-                <!-- Icône de la colonne -->
+                <!-- Icône de la colonne si définie -->
                 <div class="column-icon" v-if="column?.icon && getIconComponent(column.icon)">
                     <component :is="getIconComponent(column.icon)" class="w-4 h-4" />
                 </div>
 
-                <!-- Informations de la colonne -->
+                <!-- Informations de la colonne (nom et champ) -->
                 <div class="column-info">
                     <div class="column-name">
                         {{ column?.headerName || column?.field || 'Colonne inconnue' }}
@@ -44,20 +49,20 @@
                     <div class="column-field">{{ column?.field || 'field' }}</div>
                 </div>
 
-                <!-- Contrôles de la colonne -->
+                <!-- Contrôles de la colonne (visibilité, auto-size, largeur) -->
                 <div class="column-controls">
-                    <!-- Visibilité -->
+                    <!-- Toggle de visibilité -->
                     <label class="visibility-toggle">
                         <input
                             type="checkbox"
                             :checked="isColumnVisible(column?.field || '')"
                             @change="toggleColumnVisibility(column?.field || '')"
-                            :disabled="isColumnVisible(column?.field || '') && visibleColumnsData.length <= 4"
+                            :disabled="isColumnVisible(column?.field || '') && props.visibleColumns.length <= 1"
                         />
                         <span class="toggle-slider"></span>
                     </label>
 
-                    <!-- Auto-size -->
+                    <!-- Bouton auto-size pour ajuster automatiquement la largeur -->
                     <button
                         v-if="column?.autoSize !== false"
                         @click="autoSizeColumn(column?.field || '')"
@@ -67,7 +72,7 @@
                         <IconResize class="w-3 h-3" />
                     </button>
 
-                    <!-- Largeur personnalisée -->
+                    <!-- Contrôle de largeur personnalisée -->
                     <div class="width-control" v-if="column?.resizable !== false">
                         <input
                             type="number"
@@ -84,7 +89,7 @@
             </div>
         </div>
 
-        <!-- Colonnes masquées -->
+        <!-- Section des colonnes masquées -->
         <div v-if="hiddenColumns.length > 0" class="hidden-section">
             <h4 class="hidden-title">Colonnes masquées</h4>
             <div class="hidden-list">
@@ -100,6 +105,7 @@
                         </div>
                         <div class="column-field">{{ column?.field || 'field' }}</div>
                     </div>
+                    <!-- Bouton pour afficher la colonne -->
                     <button
                         @click.stop="showColumn(column?.field || '')"
                         class="show-btn"
@@ -114,39 +120,86 @@
 </template>
 
 <script setup lang="ts">
+/* eslint-disable */
 import { ref, computed } from 'vue'
-import type { DataTableColumn } from '@/types/dataTable'
+import { logger } from '@/services/loggerService'
+import type { DataTableColumn } from '@/components/DataTable/types/dataTable'
 import IconDrag from '../icon/icon-drag.vue'
 import IconResize from '../icon/icon-resize.vue'
 import IconEye from '../icon/icon-eye.vue'
 
+/**
+ * Props du composant ColumnManager
+ *
+ * @param columns - Configuration complète des colonnes
+ * @param visibleColumns - Liste des champs des colonnes visibles
+ * @param columnWidths - Map des largeurs par champ de colonne
+ */
 const props = defineProps<{
     columns: DataTableColumn[]
     visibleColumns: string[]
     columnWidths: Record<string, number>
 }>()
 
+/**
+ * Émissions du composant
+ *
+ * @param columns-changed - Émis quand les colonnes ou largeurs changent
+ * @param reorder-columns - Émis lors du réordonnancement par drag & drop
+ * @param close - Émis pour fermer le composant
+ */
 const emit = defineEmits<{
     'columns-changed': [visibleColumns: string[], columnWidths: Record<string, number>]
     'reorder-columns': [fromIndex: number, toIndex: number]
     'close': []
 }>()
 
+// ===== ÉTAT LOCAL =====
+
+/**
+ * Index de la colonne en cours de drag
+ */
 const draggedIndex = ref<number | null>(null)
+
+/**
+ * Référence vers la liste des colonnes
+ */
 const columnsList = ref<HTMLElement | null>(null)
 
-// Computed properties
+// ===== COMPUTED PROPERTIES =====
+
+/**
+ * Colonnes visibles avec leurs données complètes
+ * Affiche toutes les colonnes disponibles (pas seulement les visibles)
+ */
 const visibleColumnsData = computed(() => {
-    const filtered = props.columns.filter(col => col?.field && props.visibleColumns.includes(col.field))
-    console.log('🔍 Colonnes visibles dans le gestionnaire:', filtered.map(col => ({ field: col.field, headerName: col.headerName })))
-    return filtered
+    // Afficher toutes les colonnes disponibles (pas seulement les visibles)
+    // Mais exclure les colonnes marquées comme masquées par défaut (hide: true)
+    const allColumns = props.columns.filter(col => col?.field && col.hide !== true)
+
+    // Trier les colonnes : d'abord les visibles, puis les masquées
+    const visibleCols = allColumns.filter(col => props.visibleColumns.includes(col.field))
+    const hiddenCols = allColumns.filter(col => !props.visibleColumns.includes(col.field))
+
+    return [...visibleCols, ...hiddenCols]
 })
 
+/**
+ * Colonnes masquées (non visibles mais pas masquées par défaut)
+ * Exclut les colonnes marquées comme masquées par défaut (hide: true)
+ */
 const hiddenColumns = computed(() =>
     props.columns.filter(col => col?.field && !props.visibleColumns.includes(col.field) && col.hide !== true)
 )
 
-// Méthodes
+// ===== MÉTHODES UTILITAIRES =====
+
+/**
+ * Récupère le composant icône par nom
+ *
+ * @param iconName - Nom de l'icône
+ * @returns Composant Vue ou null
+ */
 const getIconComponent = (iconName: string) => {
     if (!iconName) return null
 
@@ -160,11 +213,23 @@ const getIconComponent = (iconName: string) => {
     return iconMap[iconName] || null
 }
 
+/**
+ * Vérifie si une colonne est visible
+ *
+ * @param field - Champ de la colonne
+ * @returns true si la colonne est visible
+ */
 const isColumnVisible = (field: string) => {
     if (!field) return false
     return props.visibleColumns.includes(field)
 }
 
+/**
+ * Bascule la visibilité d'une colonne
+ * Empêche de masquer la dernière colonne visible
+ *
+ * @param field - Champ de la colonne
+ */
 const toggleColumnVisibility = (field: string) => {
     if (!field) return
 
@@ -173,8 +238,9 @@ const toggleColumnVisibility = (field: string) => {
 
     if (index > -1) {
         // Empêcher de masquer la dernière colonne visible
-        if (newVisibleColumns.length <= 1) {
-            console.warn('Impossible de masquer la dernière colonne visible')
+        const visibleCount = newVisibleColumns.length
+        if (visibleCount <= 1) {
+            logger.warn('Impossible de masquer la dernière colonne visible')
             return
         }
         newVisibleColumns.splice(index, 1)
@@ -185,6 +251,11 @@ const toggleColumnVisibility = (field: string) => {
     emit('columns-changed', newVisibleColumns, props.columnWidths)
 }
 
+/**
+ * Affiche une colonne masquée
+ *
+ * @param field - Champ de la colonne à afficher
+ */
 const showColumn = (field: string) => {
     if (!field) return
 
@@ -192,11 +263,23 @@ const showColumn = (field: string) => {
     emit('columns-changed', newVisibleColumns, props.columnWidths)
 }
 
+/**
+ * Récupère la largeur d'une colonne
+ *
+ * @param field - Champ de la colonne
+ * @returns Largeur en pixels
+ */
 const getColumnWidth = (field: string) => {
     if (!field) return 150
     return props.columnWidths[field] || 150
 }
 
+/**
+ * Définit la largeur d'une colonne
+ *
+ * @param field - Champ de la colonne
+ * @param width - Nouvelle largeur en pixels
+ */
 const setColumnWidth = (field: string, width: string) => {
     if (!field) return
 
@@ -205,6 +288,14 @@ const setColumnWidth = (field: string, width: string) => {
     emit('columns-changed', props.visibleColumns, newWidths)
 }
 
+// ===== MÉTHODES D'AUTO-SIZE =====
+
+/**
+ * Ajuste automatiquement la largeur d'une colonne
+ * Calcule la largeur optimale basée sur le contenu de l'en-tête
+ *
+ * @param field - Champ de la colonne
+ */
 const autoSizeColumn = (field: string) => {
     if (!field) return
 
@@ -234,10 +325,13 @@ const autoSizeColumn = (field: string) => {
     const newWidths = { ...props.columnWidths }
     newWidths[field] = optimalWidth
 
-    console.log(`Auto-sizing column "${field}": ${optimalWidth}px (header: "${headerText}")`)
     emit('columns-changed', props.visibleColumns, newWidths)
 }
 
+/**
+ * Ajuste automatiquement la largeur de toutes les colonnes
+ * Applique l'auto-size à toutes les colonnes qui le supportent
+ */
 const autoSizeAll = () => {
     const newWidths = { ...props.columnWidths }
 
@@ -263,33 +357,43 @@ const autoSizeAll = () => {
             const optimalWidth = Math.max(minWidth, Math.min(maxWidth, headerWidth + controlsWidth))
 
             newWidths[column.field] = optimalWidth
-            console.log(`Auto-sizing column "${column.field}": ${optimalWidth}px (header: "${headerText}")`)
         }
     })
 
     emit('columns-changed', props.visibleColumns, newWidths)
 }
 
+/**
+ * Réinitialise toutes les colonnes à leur état par défaut
+ * Affiche toutes les colonnes avec leurs largeurs par défaut
+ */
 const resetColumns = () => {
-    const allFields = props.columns.map(col => col.field!)
+    // Récupérer toutes les colonnes qui ne sont pas masquées par défaut
+    const allFields = props.columns
+        .filter(col => col.field && col.hide !== true)
+        .map(col => col.field!)
+
     const defaultWidths: Record<string, number> = {}
 
     props.columns.forEach(column => {
-        defaultWidths[column.field!] = column.width || 150
+        if (column.field) {
+            defaultWidths[column.field] = column.width || 150
+        }
     })
 
     emit('columns-changed', allFields, defaultWidths)
 }
 
-// Drag & Drop
+// ===== GESTION DU DRAG & DROP =====
+
+/**
+ * Début du drag d'une colonne
+ *
+ * @param event - Événement de drag
+ * @param index - Index de la colonne
+ */
 const onDragStart = (event: DragEvent, index: number) => {
     const column = visibleColumnsData.value[index]
-    console.log('🔍 Début du drag:', {
-        index,
-        column: column?.field,
-        draggable: column?.draggable,
-        headerName: column?.headerName
-    })
     draggedIndex.value = index
 
     if (event.dataTransfer) {
@@ -304,6 +408,12 @@ const onDragStart = (event: DragEvent, index: number) => {
     }
 }
 
+/**
+ * Gestion du survol pendant le drag
+ *
+ * @param event - Événement de drag
+ * @param index - Index de la colonne cible
+ */
 const onDragOver = (event: DragEvent, index: number) => {
     event.preventDefault()
     if (event.dataTransfer) {
@@ -317,6 +427,12 @@ const onDragOver = (event: DragEvent, index: number) => {
     }
 }
 
+/**
+ * Entrée dans une zone de drop
+ *
+ * @param event - Événement de drag
+ * @param index - Index de la colonne cible
+ */
 const onDragEnter = (event: DragEvent, index: number) => {
     event.preventDefault()
     const target = event.currentTarget as HTMLElement
@@ -325,6 +441,11 @@ const onDragEnter = (event: DragEvent, index: number) => {
     }
 }
 
+/**
+ * Sortie d'une zone de drop
+ *
+ * @param event - Événement de drag
+ */
 const onDragLeave = (event: DragEvent) => {
     const target = event.currentTarget as HTMLElement
     if (target) {
@@ -332,6 +453,13 @@ const onDragLeave = (event: DragEvent) => {
     }
 }
 
+/**
+ * Drop d'une colonne
+ * Émet l'événement de réordonnancement
+ *
+ * @param event - Événement de drop
+ * @param index - Index de la colonne cible
+ */
 const onDrop = (event: DragEvent, index: number) => {
     event.preventDefault()
 
@@ -342,20 +470,28 @@ const onDrop = (event: DragEvent, index: number) => {
     }
 
     if (draggedIndex.value !== null && draggedIndex.value !== index) {
-        console.log('🔍 Drop effectué:', { from: draggedIndex.value, to: index })
         // Émettre l'événement de réordonnancement
         emit('reorder-columns', draggedIndex.value, index)
     }
 }
 
+/**
+ * Fin du drag
+ * Nettoie les classes visuelles
+ */
 const onDragEnd = () => {
-    console.log('🔍 Fin du drag')
     // Retirer toutes les classes visuelles
     const items = document.querySelectorAll('.column-item')
     items.forEach(item => item.classList.remove('drag-over'))
     draggedIndex.value = null
 }
 
+/**
+ * Gère la saisie de largeur personnalisée
+ *
+ * @param field - Champ de la colonne
+ * @param event - Événement de saisie
+ */
 const handleWidthInput = (field: string, event: Event) => {
     const target = event.target as HTMLInputElement
     const width = target.value
@@ -364,6 +500,11 @@ const handleWidthInput = (field: string, event: Event) => {
 </script>
 
 <style scoped>
+/*
+    Styles pour le composant ColumnManager
+    Interface moderne avec drag & drop et contrôles intuitifs
+*/
+
 .column-manager {
     background: white;
     border-radius: 0.5rem;
@@ -375,6 +516,7 @@ const handleWidthInput = (field: string, event: Event) => {
     overflow: hidden;
 }
 
+/* Header avec titre et actions */
 .manager-header {
     display: flex;
     justify-content: space-between;
@@ -429,6 +571,7 @@ const handleWidthInput = (field: string, event: Event) => {
     line-height: 1;
 }
 
+/* Liste des colonnes */
 .columns-list {
     padding: 0.5rem;
     max-height: 140px;
@@ -522,6 +665,7 @@ const handleWidthInput = (field: string, event: Event) => {
     gap: 0.5rem;
 }
 
+/* Toggle de visibilité */
 .visibility-toggle {
     position: relative;
     display: inline-block;
@@ -601,6 +745,7 @@ input:checked + .toggle-slider:before {
     color: #6b7280;
 }
 
+/* Section des colonnes masquées */
 .hidden-section {
     padding: 0.75rem;
     border-top: 1px solid #e5e7eb;

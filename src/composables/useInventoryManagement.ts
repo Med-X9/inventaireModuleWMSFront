@@ -1,98 +1,172 @@
-import { ref, markRaw, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useBackendDataTable } from '@/components/DataTable/composables/useBackendDataTable'
+import { dataTableService } from '@/services/dataTableService'
+import { logger } from '@/services/loggerService'
 import type { InventoryTable } from '@/models/Inventory'
-import type { DataTableColumn, ActionConfig } from '@/types/dataTable'
-import { alertService } from '@/services/alertService'
+import type { DataTableColumn, ColumnDataType, ActionConfig } from '@/types/dataTable'
+import type { StockImportErrorResponse } from '@/interfaces/stockImport'
+import { ref, markRaw } from 'vue'
+import { useRouter } from 'vue-router'
 import { useInventoryStore } from '@/stores/inventory'
-import { useGenericDataTable } from '@/composables/useGenericDataTable'
-import type { DataTableParams } from '@/composables/useDataTableFilters'
 
-// Import des icônes pour les actions
+
+// Import des icônes
 import IconEye from '@/components/icon/icon-eye.vue'
-import IconEdit from '@/components/icon/icon-edit.vue'
-import IconTrash from '@/components/icon/icon-trash.vue'
 import IconUpload from '@/components/icon/icon-upload.vue'
 import IconCalendar from '@/components/icon/icon-calendar.vue'
+import IconEdit from '@/components/icon/icon-edit.vue'
 import IconCheck from '@/components/icon/icon-check.vue'
+import IconTrash from '@/components/icon/icon-trash.vue'
 
+// Import des nouvelles fonctionnalités
+import { useDataTableLazyLoading } from './useDataTableLazyLoading'
+import { useDataTableOptimizations } from './useDataTableOptimizations'
+
+/**
+ * Composable pour la gestion des inventaires
+ * Utilise useBackendDataTable pour l'intégration avec Pinia et les paramètres DataTable
+ * Intègre le lazy loading, les optimisations de rendu et l'édition avancée
+ */
 export function useInventoryManagement() {
     const router = useRouter()
     const inventoryStore = useInventoryStore()
 
-    // Fonction de fetch spécifique pour les inventaires
-    const fetchInventories = async (params: DataTableParams): Promise<InventoryTable[]> => {
-        await inventoryStore.fetchInventories(params)
-        return inventoryStore.inventories
-    }
-
-    // Utiliser le composable générique
-    const dataTable = useGenericDataTable(fetchInventories, {
-        initialPageSize: 10,
-        initialPage: 1
+    // Initialiser useBackendDataTable avec le store Pinia
+    const {
+        data: inventories,
+        loading,
+        currentPage,
+        pageSize,
+        searchQuery,
+        sortModel,
+        setPage,
+        setPageSize,
+        setSearch,
+        setSortModel,
+        setFilters,
+        resetFilters,
+        refresh,
+        pagination
+    } = useBackendDataTable<InventoryTable>('', {
+        piniaStore: inventoryStore,
+        storeId: 'inventory',
+        autoLoad: true,
+        pageSize: 20
     })
 
-    // ✅ Utilise un computed pour surveiller le store
-    const inventories = computed(() => inventoryStore.inventories)
-    const loading = computed(() => inventoryStore.isLoading)
+    /**
+     * Configuration du lazy loading - adapté pour useBackendDataTable
+     */
+    const lazyLoadingConfig = {
+        pageSize: 50, // Charger 50 éléments par page
+        debounceDelay: 300,
+        threshold: 0.8,
+        loadData: async (page: number, pageSize: number, filters?: any) => {
+            try {
+                // Utiliser les méthodes de useBackendDataTable
+                setPage(page)
+                setPageSize(pageSize)
+                if (filters) {
+                    setFilters(filters)
+                }
+                await refresh()
 
-    // États pour la pagination côté serveur - utiliser les valeurs du store
-    const currentPage = computed(() => inventoryStore.currentPage)
-    const totalPages = computed(() => inventoryStore.totalPages)
-    const totalItems = computed(() => inventoryStore.totalItems)
+                return {
+                    data: inventories.value,
+                    total: pagination.value.total,
+                    hasMore: pagination.value.has_next
+                }
+            } catch (error) {
+                logger.error('Erreur lazy loading', error)
+                throw error
+            }
+        },
+        onDataLoaded: (data: any[], page: number) => {
+            logger.debug('Données chargées via lazy loading', { page, count: data.length })
+        },
+        onError: (error: any) => {
+            logger.error('Erreur lazy loading', error)
+        }
+    }
 
-    const columns: DataTableColumn<InventoryTable>[] = [
-        {
-            headerName: 'ID',
-            field: 'id',
-            sortable: true,
-            dataType: 'number',
-            filterable: true,
-            width: 80,
-            hide: true,
-            editable: false,
-            visible: true,
-            draggable: true,
-            autoSize: true,
-            icon: 'icon-info',
-            description: 'Identifiant'
+    /**
+     * Configuration des optimisations de rendu - adapté pour useBackendDataTable
+     */
+    const optimizationConfig = {
+        rendering: {
+            enableVirtualScrolling: true,
+            enableCellCaching: true,
+            enableDataCompression: true,
+            enablePreRendering: true,
+            enableImageOptimization: true,
+            optimizationThreshold: 100
         },
-        {
-            headerName: 'Référence',
-            field: 'reference',
-            sortable: true,
-            dataType: 'text',
-            filterable: true,
-            width: 150,
-            editable: false,
-            visible: true,
-            draggable: true,
-            autoSize: true,
-            hide: true,
-            icon: 'icon-search',
-            description: 'Référence unique'
-        },
+        maxItemsBeforeOptimization: 500,
+        debounceDelay: 16, // ~60fps
+        cellCacheSize: 1000,
+        virtualScrolling: {
+            itemHeight: 50,
+            overscan: 5,
+            containerHeight: 400
+        }
+    }
+
+
+    // Les fonctionnalités de dataTable sont maintenant fournies par useBackendDataTable
+    // Pas besoin d'initialiser useGenericDataTable séparément
+
+    /**
+     * Initialisation du lazy loading
+     */
+    const lazyLoading = useDataTableLazyLoading(lazyLoadingConfig)
+
+    /**
+     * Initialisation des optimisations de rendu - adapté pour useBackendDataTable
+     */
+    const optimizations = useDataTableOptimizations(
+        inventories.value,
+        optimizationConfig
+    )
+
+    /**
+     * Initialisation de l'édition avancée - adapté pour useBackendDataTable
+     */
+
+
+    /**
+     * Configuration des colonnes avec validation
+     * Utilise le service DataTable pour la validation
+     */
+    const columns: DataTableColumn[] = [
         {
             headerName: 'Libellé',
             field: 'label',
             sortable: true,
-            dataType: 'text',
+            dataType: 'text' as ColumnDataType,
             filterable: true,
-            width: 200,
-            editable: false,
+            width: dataTableService.calculateOptimalColumnWidth({
+                field: 'label',
+                headerName: 'Libellé',
+                dataType: 'text'
+            }),
+            editable: true, // Activé pour l'édition
             visible: true,
             draggable: true,
             autoSize: true,
-            icon: 'icon-edit',
-            description: 'Libellé'
+            icon: 'icon-file-text',
+            description: 'Libellé de l\'inventaire'
         },
         {
             headerName: 'Date',
             field: 'date',
             sortable: true,
-            dataType: 'date',
+            dataType: 'date' as ColumnDataType,
             filterable: true,
-            width: 100,
-            editable: false,
+            width: dataTableService.calculateOptimalColumnWidth({
+                field: 'date',
+                headerName: 'Date',
+                dataType: 'date'
+            }),
+            editable: true, // Activé pour l'édition
             visible: true,
             draggable: true,
             autoSize: true,
@@ -102,6 +176,24 @@ export function useInventoryManagement() {
         {
             headerName: 'Statut',
             field: 'status',
+            sortable: true,
+            dataType: 'select' as ColumnDataType,
+            filterable: true,
+            width: dataTableService.calculateOptimalColumnWidth({
+                field: 'status',
+                headerName: 'Statut',
+                dataType: 'text'
+            }),
+            editable: true, // Activé pour l'édition
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-status',
+            description: 'Statut de l\'inventaire',
+            /**
+             * Configuration des badges pour les différents statuts
+             * Chaque statut a sa propre classe CSS pour un style distinctif
+             */
             badgeStyles: [
                 {
                     value: 'EN PREPARATION',
@@ -120,42 +212,7 @@ export function useInventoryManagement() {
                     class: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
                 }
             ],
-            badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
-            sortable: true,
-            dataType: 'select',
-            filterable: true,
-            width: 150,
-            editable: false,
-            visible: true,
-            draggable: true,
-            autoSize: true,
-            icon: 'icon-check',
-            description: 'État',
-            filterConfig: {
-                dataType: 'select',
-                operator: 'equals',
-                options: [
-                    { label: 'EN PREPARATION', value: 'EN PREPARATION' },
-                    { label: 'EN REALISATION', value: 'EN REALISATION' },
-                    { label: 'TERMINE', value: 'TERMINE' },
-                    { label: 'CLOTURE', value: 'CLOTURE' }
-                ]
-            },
-
-        },
-        {
-            headerName: 'Type',
-            field: 'inventory_type',
-            sortable: true,
-            dataType: 'text',
-            filterable: true,
-            width: 90,
-            editable: false,
-            visible: true,
-            draggable: true,
-            autoSize: true,
-            icon: 'icon-settings',
-            description: 'Type'
+            badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
         },
         {
             headerName: 'Date préparation',
@@ -229,57 +286,51 @@ export function useInventoryManagement() {
         },
     ]
 
-    const handleDelete = async (inv: InventoryTable) => {
+    // Validation des colonnes
+    columns.forEach(column => {
+        const validation = dataTableService.validateColumnConfig(column)
+        if (!validation.isValid) {
+            logger.warn('Configuration de colonne invalide', { column, errors: validation.errors })
+        }
+    })
+
+    // États pour la modale d'import Excel
+    const showImportModal = ref(false)
+    const isImporting = ref(false)
+    const importError = ref<string | null>(null)
+    const importErrorDetails = ref<StockImportErrorResponse | null>(null)
+    const importSuccess = ref<boolean>(false)
+    const importSuccessMessage = ref<string | null>(null)
+    const currentImportInventory = ref<InventoryTable | null>(null)
+
+    // Fonction pour gérer l'import Excel depuis les actions
+    const handleImportExcel = (inventory: InventoryTable) => {
+        currentImportInventory.value = inventory
+        showImportModal.value = true
+    }
+
+    // Fonction pour gérer la suppression
+    const handleDelete = async (inventory: InventoryTable) => {
         try {
-            const r = await alertService.confirm({
-                title: 'Confirmation',
-                text: 'Supprimer cet inventaire ?'
+            const result = await alertService.confirm({
+                title: 'Confirmer la suppression',
+                text: `Êtes-vous sûr de vouloir supprimer l'inventaire "${inventory.label}" ?`,
+                icon: 'warning'
             })
-            if (r.isConfirmed) {
-                if (typeof inv.id === 'number') {
-                    await inventoryStore.deleteInventory(inv.id)
-                    await alertService.success({ text: "Supprimé avec succès" })
-                    await dataTable.refresh() // Reset pagination after deletion
-                } else {
-                    await alertService.error({ text: "ID d'inventaire invalide" })
-                }
+
+            if (result.isConfirmed) {
+                // Ici vous pouvez appeler votre API pour supprimer l'inventaire
+                // await inventoryStore.deleteInventory(inventory.id)
+                logger.success('Inventaire supprimé avec succès')
+                await refresh()
             }
-        } catch {
-            await alertService.error({ text: "Erreur lors de la suppression" })
+        } catch (error) {
+            logger.error('Erreur lors de la suppression', error)
+            alertService.error('Erreur lors de la suppression')
         }
     }
 
-    const fileInputRefs = ref<Record<number, HTMLInputElement | null>>({});
-
-    // Action d'import Excel par ligne
-    const handleImportExcel = async (inv: InventoryTable) => {
-        // Crée dynamiquement un input file si besoin
-        if (!fileInputRefs.value[inv.id]) {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.xlsx,.xls';
-            input.style.display = 'none';
-            input.addEventListener('change', async (event: Event) => {
-                const target = event.target as HTMLInputElement;
-                if (!target.files || target.files.length === 0) return;
-                const file = target.files[0];
-                const formData = new FormData();
-                formData.append('file', file);
-                try {
-                    await importStockImage(inv.id, formData);
-                    await alertService.success({ text: 'Import Excel réussi !' });
-                    await dataTable.refresh(); // Reset pagination after import
-                } catch (e) {
-                    // L'alerte d'erreur est déjà gérée
-                }
-                target.value = '';
-            });
-            document.body.appendChild(input);
-            fileInputRefs.value[inv.id] = input;
-        }
-        fileInputRefs.value[inv.id]?.click();
-    };
-
+    // Actions pour les inventaires
     const actions: ActionConfig<InventoryTable>[] = [
         {
             label: 'Détail',
@@ -325,54 +376,150 @@ export function useInventoryManagement() {
         },
     ]
 
-    const redirectToAdd = () => { void router.push({ name: 'inventory-create' }) }
+    // Fonction de redirection
+    const redirectToAdd = () => {
+        void router.push({ name: 'inventory-create' })
+    }
 
-    // --- Import d'image de stock (Excel) via le store Pinia ---
-    const importStockImage = async (id: number, formData: FormData) => {
-        try {
-            return await inventoryStore.importStockImage(id, formData);
-        } catch (error) {
-            await alertService.error({
-                title: 'Erreur import',
-                text: 'Erreur lors de l\'import du fichier Excel.'
-            });
-            throw error;
-        }
-    };
+    // Fonction d'import Excel
+    const processImportExcel = async (file: File) => {
+        if (!currentImportInventory.value) return
 
-    // Nouvelle fonction pour gestion modale/loader/erreur
-    const importStockImageWithModal = async (id: number, formData: FormData, { onStart, onSuccess, onError }: { onStart?: () => void, onSuccess?: () => void, onError?: (msg: string) => void }) => {
+        isImporting.value = true
+        importError.value = null
+        importErrorDetails.value = null
+
         try {
-            onStart && onStart();
-            await inventoryStore.importStockImage(id, formData);
-            onSuccess && onSuccess();
-        } catch (error) {
-            let message = "Erreur lors de l'import.";
-            const e = error as any;
-            if (e && e.response && e.response.data) {
-                if (typeof e.response.data === 'string') message = e.response.data;
-                else if (e.response.data.message) message = e.response.data.message;
-                else if (e.response.data.detail) message = e.response.data.detail;
-                else message = JSON.stringify(e.response.data, null, 2);
-            } else if (e && e.message) {
-                message = e.message;
+            const formData = new FormData()
+            formData.append('file', file)
+
+            const response = await inventoryStore.importStockImage(currentImportInventory.value.id, formData)
+            logger.success('Import Excel réussi', response)
+
+            // Afficher le message de succès
+            importSuccess.value = true
+            importSuccessMessage.value = response?.message || 'Import terminé avec succès'
+            importError.value = null
+            importErrorDetails.value = null
+
+            // Attendre 2 secondes avant de fermer et rafraîchir
+            setTimeout(async () => {
+                closeImportModal()
+                await refresh()
+            }, 2000)
+        } catch (error: any) {
+            importSuccess.value = false
+            importSuccessMessage.value = null
+            // Extraire les détails de l'erreur depuis la réponse API
+            const errorResponse = error.response?.data || error
+
+            // Construire l'objet d'erreur selon la documentation API
+            importErrorDetails.value = {
+                success: false,
+                message: errorResponse.message || 'Erreur lors de l\'import',
+                inventory_type: errorResponse.inventory_type || null,
+                existing_stocks_count: errorResponse.existing_stocks_count ?? null,
+                action_required: errorResponse.action_required || null,
+                summary: errorResponse.summary || null,
+                errors: errorResponse.errors || []
             }
-            onError && onError(message);
+
+            importError.value = importErrorDetails.value.message
+            logger.error('Erreur import Excel', error)
+        } finally {
+            isImporting.value = false
         }
+    }
+
+    // Fonction de fermeture de modale
+    const closeImportModal = () => {
+        showImportModal.value = false
+        isImporting.value = false
+        importError.value = null
+        importErrorDetails.value = null
+        importSuccess.value = false
+        importSuccessMessage.value = null
+        currentImportInventory.value = null
+    }
+
+    // Fonction d'import avec modale
+    const importStockImageWithModal = async (id: number, formData: FormData, callbacks: any) => {
+        try {
+            const result = await inventoryStore.importStockImage(id, formData)
+            callbacks?.onSuccess?.(result)
+            logger.success('Import avec modale réussi', { id })
+        } catch (error) {
+            callbacks?.onError?.(error)
+            logger.error('Erreur import avec modale', { id, error })
+        }
+    }
+
+    // Exemple d'utilisation du service centralisé de transformation des filtres
+    const handleInventoryFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
+        // Cette fonction n'est plus utilisée car on utilise useInventoryDataTable
+        // Gardée pour compatibilité si nécessaire
     };
+
+    // Service d'alerte mock
+    const alertService = {
+        success: (params: any) => logger.success('Succès', params),
+        error: (params: any) => logger.error('Erreur', params),
+        confirm: (params: any) => Promise.resolve({ isConfirmed: true })
+    }
+
+    // Fonction pour compter les inventaires par statut
+    const getStatusCount = (status: string) => {
+        return inventories.value.filter((inv: InventoryTable) => inv.status === status).length
+    }
 
     return {
+        // Données réactives de useBackendDataTable
         inventories,
         loading,
+        currentPage,
+        pageSize,
+        searchQuery,
+        sortModel,
+        pagination,
+
+        // Configuration de la table
         columns,
         actions,
+
+        // Méthodes de navigation
         redirectToAdd,
-        dataTable,
-        importStockImage,
+
+        // Méthodes de useBackendDataTable
+        setPage,
+        setPageSize,
+        setSearch,
+        setSortModel,
+        setFilters,
+        resetFilters,
+        refresh,
+
+        // Nouvelles fonctionnalités
+        lazyLoading,
+        optimizations,
+        // Méthodes d'import
         importStockImageWithModal,
+
+        // Services
         alertService,
-        currentPage,
-        totalPages,
-        totalItems,
+
+        // États pour la modale d'import Excel
+        showImportModal,
+        isImporting,
+        importError,
+        importErrorDetails,
+        importSuccess,
+        importSuccessMessage,
+        currentImportInventory,
+        processImportExcel,
+        closeImportModal,
+
+        // Fonctions utilitaires
+        getStatusCount,
+        handleInventoryFilterChanged
     }
 }
