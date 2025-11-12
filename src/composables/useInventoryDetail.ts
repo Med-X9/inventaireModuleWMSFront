@@ -4,8 +4,31 @@ import { useInventoryStore } from '@/stores/inventory';
 import { useResourceStore } from '@/stores/resource';
 import { useAppStore } from '@/stores';
 import { alertService } from '@/services/alertService';
+import { validationAlertService } from '@/services/validationAlertService';
 import type { ViewModeType } from '@/interfaces/planningManagement';
 import { generatePDF } from '@/utils/pdfGenerator';
+import { InventoryService } from '@/services/InventoryService';
+import { logger } from '@/services/loggerService';
+
+// Interfaces pour les réponses d'erreur du backend
+interface BackendErrorResponse {
+    message: string;
+    errors?: string[];
+    detail?: string;
+    status?: number;
+}
+
+interface ValidationErrorResponse {
+    message: string;
+    errors: string[];
+}
+
+interface ApiResponse<T = any> {
+    data?: T;
+    message?: string;
+    errors?: string[];
+    status?: number;
+}
 
 export function useInventoryDetail(inventoryReference: string) {
     const router = useRouter();
@@ -74,8 +97,14 @@ export function useInventoryDetail(inventoryReference: string) {
             field: 'status',
             sortable: true,
             cellRenderer: (params: any) => {
-                const statusClass = getStatusClass(params.data.status);
-                return `<span class="px-3 py-1 rounded-full text-sm ${statusClass}">${params.data.status}</span>`;
+                // Vérifications de sécurité
+                if (!params || !params.data) {
+                    return '<span class="px-3 py-1 rounded-full text-sm bg-gray-100">-</span>';
+                }
+
+                const status = params.data.status || 'N/A';
+                const statusClass = getStatusClass(status);
+                return `<span class="px-3 py-1 rounded-full text-sm ${statusClass}">${status}</span>`;
             }
         },
         { headerName: 'Date', field: 'date', sortable: true },
@@ -84,7 +113,14 @@ export function useInventoryDetail(inventoryReference: string) {
             field: 'operator',
             sortable: true,
             cellRenderer: (params: any) => {
-                return params.data.status.toLowerCase() === 'terminé' ? params.data.operator : '';
+                // Vérifications de sécurité
+                if (!params || !params.data) {
+                    return '';
+                }
+
+                const status = params.data.status || '';
+                const operator = params.data.operator || '';
+                return status.toLowerCase() === 'terminé' ? operator : '';
             }
         }
     ];
@@ -162,7 +198,7 @@ export function useInventoryDetail(inventoryReference: string) {
             label: 'Retirer',
             handler: async (item: any) => {
                 if (!inventoryId.value) {
-                    console.error('ID d\'inventaire non disponible');
+                    logger.error('ID d\'inventaire non disponible');
                     return;
                 }
 
@@ -178,7 +214,7 @@ export function useInventoryDetail(inventoryReference: string) {
                         await loadDetailData();
                     }
                 } catch (error) {
-                    console.error('Erreur lors du retrait de la ressource:', error);
+                    logger.error('Erreur lors du retrait de la ressource', error);
                 }
             },
             variant: 'danger' as const
@@ -214,19 +250,21 @@ export function useInventoryDetail(inventoryReference: string) {
     };
 
     const getJobsForTab = (tabId: string) => {
-        return jobsData[tabId as keyof typeof jobsData] || [];
+        const jobs = jobsData[tabId as keyof typeof jobsData] || [];
+        // Filtrer les valeurs nulles/undefined pour éviter les erreurs dans le DataTable
+        return jobs.filter(job => job != null && typeof job === 'object');
     };
 
     const getCompletedJobsCount = (tabId: string) => {
-        return getJobsForTab(tabId).filter(job => job.status.toLowerCase() === 'TERMINE').length;
+        return getJobsForTab(tabId).filter(job => job?.status?.toLowerCase() === 'termine').length;
     };
 
     const getInProgressJobsCount = (tabId: string) => {
-        return getJobsForTab(tabId).filter(job => job.status.toLowerCase() === 'EN REALISATION').length;
+        return getJobsForTab(tabId).filter(job => job?.status?.toLowerCase() === 'en realisation').length;
     };
 
     const getRemainingJobsCount = (tabId: string) => {
-        return getJobsForTab(tabId).filter(job => job.status.toLowerCase() === 'EN PREPARATION').length;
+        return getJobsForTab(tabId).filter(job => job?.status?.toLowerCase() === 'en preparation').length;
     };
 
     const getTotalJobsCount = (tabId: string) => {
@@ -235,9 +273,8 @@ export function useInventoryDetail(inventoryReference: string) {
 
     // Fonctions pour les ressources
     const assignResourceToInventory = async (resources: Array<{ resource_id: number; quantity: number }>) => {
-        console.log(resources);
         if (!inventoryId.value) {
-            console.error('ID d\'inventaire non disponible');
+            logger.error('ID d\'inventaire non disponible');
             return null;
         }
 
@@ -249,14 +286,14 @@ export function useInventoryDetail(inventoryReference: string) {
             }
             return result;
         } catch (error) {
-            console.error('Erreur lors de l\'assignation de la ressource:', error);
+            logger.error('Erreur lors de l\'assignation de la ressource', error);
             return null;
         }
     };
 
     const updateResourceQuantity = async (resourceId: number, quantity: number) => {
         if (!inventoryId.value) {
-            console.error('ID d\'inventaire non disponible');
+            logger.error('ID d\'inventaire non disponible');
             return null;
         }
 
@@ -268,14 +305,14 @@ export function useInventoryDetail(inventoryReference: string) {
             }
             return result;
         } catch (error) {
-            console.error('Erreur lors de la mise à jour de la quantité:', error);
+            logger.error('Erreur lors de la mise à jour de la quantité', error);
             return null;
         }
     };
 
     const removeResourceFromInventory = async (resourceId: number) => {
         if (!inventoryId.value) {
-            console.error('ID d\'inventaire non disponible');
+            logger.error('ID d\'inventaire non disponible');
             return false;
         }
 
@@ -287,7 +324,7 @@ export function useInventoryDetail(inventoryReference: string) {
             }
             return result;
         } catch (error) {
-            console.error('Erreur lors du retrait de la ressource:', error);
+            logger.error('Erreur lors du retrait de la ressource', error);
             return false;
         }
     };
@@ -296,13 +333,35 @@ export function useInventoryDetail(inventoryReference: string) {
         try {
             return await resourceStore.fetchAvailableResources();
         } catch (error) {
-            console.error('Erreur lors de la récupération des ressources disponibles:', error);
+            logger.error('Erreur lors de la récupération des ressources disponibles', error);
             return [];
         }
     };
 
+    // Fonction utilitaire pour gérer les erreurs du backend
+    const handleBackendError = (error: any, defaultMessage: string): string => {
+        let errorMessage = defaultMessage;
+
+        if (error && typeof error === 'object') {
+            const backendError = error.response?.data as BackendErrorResponse;
+            if (backendError) {
+                if (backendError.message) {
+                    errorMessage = backendError.message;
+                }
+
+                // Si il y a des erreurs de validation détaillées
+                if (backendError.errors && Array.isArray(backendError.errors)) {
+                    const validationErrors = backendError.errors.join('\n• ');
+                    errorMessage = `${errorMessage}\n\nErreurs de validation :\n• ${validationErrors}`;
+                }
+            }
+        }
+
+        return errorMessage;
+    };
+
     const launchInventory = async () => {
-        if (!inventory.value) return false;
+        if (!inventory.value || !inventoryId.value) return false;
 
         try {
             const result = await alertService.confirm({
@@ -311,7 +370,12 @@ export function useInventoryDetail(inventoryReference: string) {
             });
 
             if (result.isConfirmed) {
-                // TODO: Implémenter l'appel API pour lancer l'inventaire
+                // Utiliser la fonction du store pour lancer l'inventaire
+                await inventoryStore.launchInventory(inventoryId.value);
+
+                // Recharger les données de l'inventaire pour avoir le statut mis à jour
+                await loadDetailData();
+
                 await alertService.success({
                     text: 'L\'inventaire a été lancé avec succès'
                 });
@@ -320,8 +384,20 @@ export function useInventoryDetail(inventoryReference: string) {
 
             return false;
         } catch (error) {
-            console.error('❌ Erreur lors du lancement:', error);
+            logger.error('Erreur lors du lancement', error);
+
+            // Utiliser le nouveau service d'alerte de validation pour les erreurs
+            if (error && typeof error === 'object') {
+                const backendError = (error as any).response?.data;
+                if (backendError) {
+                    validationAlertService.showLaunchErrors(backendError);
+                    return false;
+                }
+            }
+
+            // Fallback pour les erreurs non gérées
             await alertService.error({
+                title: 'Erreur de lancement',
                 text: 'Une erreur est survenue lors du lancement de l\'inventaire'
             });
             return false;
@@ -333,6 +409,8 @@ export function useInventoryDetail(inventoryReference: string) {
     };
 
     const cancelInventory = async () => {
+        if (!inventoryId.value) return false;
+
         try {
             const result = await alertService.confirm({
                 title: 'Annuler l\'inventaire',
@@ -340,7 +418,12 @@ export function useInventoryDetail(inventoryReference: string) {
             });
 
             if (result.isConfirmed) {
-                // TODO: Implémenter l'appel API pour annuler l'inventaire
+                // Utiliser la fonction du store pour annuler l'inventaire
+                await inventoryStore.cancelInventory(inventoryId.value);
+
+                // Recharger les données de l'inventaire pour avoir le statut mis à jour
+                await loadDetailData();
+
                 await alertService.success({
                     text: 'L\'inventaire a été annulé'
                 });
@@ -349,7 +432,7 @@ export function useInventoryDetail(inventoryReference: string) {
 
             return false;
         } catch (error) {
-            console.error('❌ Erreur lors de l\'annulation:', error);
+            logger.error('Erreur lors de l\'annulation', error);
             await alertService.error({
                 text: 'Une erreur est survenue lors de l\'annulation'
             });
@@ -358,7 +441,7 @@ export function useInventoryDetail(inventoryReference: string) {
     };
 
     const terminateInventory = async () => {
-        if (!inventory.value) return false;
+        if (!inventory.value || !inventoryId.value) return false;
 
         try {
             const result = await alertService.confirm({
@@ -367,7 +450,12 @@ export function useInventoryDetail(inventoryReference: string) {
             });
 
             if (result.isConfirmed) {
-                // TODO: Implémenter l'appel API pour terminer l'inventaire
+                // Utiliser la fonction du store pour terminer l'inventaire
+                await inventoryStore.terminateInventory(inventoryId.value);
+
+                // Recharger les données de l'inventaire pour avoir le statut mis à jour
+                await loadDetailData();
+
                 await alertService.success({
                     text: 'L\'inventaire a été terminé avec succès'
                 });
@@ -376,7 +464,7 @@ export function useInventoryDetail(inventoryReference: string) {
 
             return false;
         } catch (error) {
-            console.error('❌ Erreur lors de la terminaison:', error);
+            logger.error('Erreur lors de la terminaison', error);
             await alertService.error({
                 text: 'Une erreur est survenue lors de la fin de l\'inventaire'
             });
@@ -385,7 +473,7 @@ export function useInventoryDetail(inventoryReference: string) {
     };
 
     const closeInventory = async () => {
-        if (!inventory.value) return false;
+        if (!inventory.value || !inventoryId.value) return false;
 
         try {
             const result = await alertService.confirm({
@@ -394,7 +482,12 @@ export function useInventoryDetail(inventoryReference: string) {
             });
 
             if (result.isConfirmed) {
-                // TODO: Implémenter l'appel API pour clôturer l'inventaire
+                // Utiliser la fonction du store pour clôturer l'inventaire
+                await inventoryStore.closeInventory(inventoryId.value);
+
+                // Recharger les données de l'inventaire pour avoir le statut mis à jour
+                await loadDetailData();
+
                 await alertService.success({
                     text: 'L\'inventaire a été clôturé avec succès'
                 });
@@ -403,7 +496,7 @@ export function useInventoryDetail(inventoryReference: string) {
 
             return false;
         } catch (error) {
-            console.error('❌ Erreur lors de la clôture:', error);
+            logger.error('Erreur lors de la clôture', error);
             await alertService.error({
                 text: 'Une erreur est survenue lors de la clôture de l\'inventaire'
             });
@@ -421,14 +514,14 @@ export function useInventoryDetail(inventoryReference: string) {
 
     const loadDetailData = async () => {
         if (!inventoryId.value) {
-            console.warn('ID d\'inventaire non disponible');
+            logger.warn('ID d\'inventaire non disponible');
             return;
         }
 
         try {
             await inventoryStore.fetchInventoryDetail(inventoryId.value);
         } catch (error) {
-            console.error('❌ Erreur lors du chargement des détails:', error);
+            logger.error('Erreur lors du chargement des détails', error);
             await alertService.error({
                 title: 'Erreur',
                 text: 'Impossible de charger les détails de l\'inventaire'
@@ -466,6 +559,43 @@ export function useInventoryDetail(inventoryReference: string) {
         await generatePDF(data, `Inventaire_${inventory.value.reference}`);
     };
 
+    /**
+     * Exporte les jobs d'un inventaire en PDF depuis le backend
+     */
+    const exportJobsToPDF = async () => {
+        if (!inventoryId.value) {
+            await alertService.error({
+                title: 'Erreur',
+                text: 'ID d\'inventaire non disponible'
+            });
+            return;
+        }
+
+        try {
+            const blob = await InventoryService.exportJobsToPDF(inventoryId.value);
+
+            // Créer un lien de téléchargement
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Jobs_Inventaire_${inventory.value?.reference || inventoryId.value}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+            await alertService.success({
+                text: 'Export PDF des jobs réussi'
+            });
+        } catch (error: any) {
+            logger.error('Erreur lors de l\'export PDF des jobs', error);
+            await alertService.error({
+                title: 'Erreur',
+                text: error?.response?.data?.message || 'Impossible d\'exporter les jobs en PDF'
+            });
+        }
+    };
+
     // Charger les données au montage du composant
     onMounted(async () => {
         try {
@@ -474,14 +604,14 @@ export function useInventoryDetail(inventoryReference: string) {
             if (inventoryId.value) {
                 await loadDetailData();
             } else {
-                console.error('Impossible de récupérer l\'ID de l\'inventaire');
+                logger.error('Impossible de récupérer l\'ID de l\'inventaire');
                 await alertService.error({
                     title: 'Erreur',
                     text: inventoryError.value || 'Impossible de charger l\'inventaire'
                 });
             }
         } catch (error) {
-            console.error('Erreur lors de l\'initialisation:', error);
+            logger.error('Erreur lors de l\'initialisation', error);
             await alertService.error({
                 title: 'Erreur',
                 text: 'Impossible d\'initialiser les données de l\'inventaire'
@@ -521,6 +651,7 @@ export function useInventoryDetail(inventoryReference: string) {
         getRemainingJobsCount,
         getTotalJobsCount,
         exportToPDF,
+        exportJobsToPDF,
         resources,
         resourcesLoading,
         resourcesError,

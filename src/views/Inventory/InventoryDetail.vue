@@ -43,6 +43,16 @@
                 <IconDownload class="w-4 h-4" />
                 PDF
             </button>
+
+            <!-- Export jobs PDF button - toujours visible quand l'inventaire a un ID -->
+            <button
+                v-if="inventoryId"
+                type="button"
+                @click="exportJobsToPDF"
+                class="btn btn-secondary p-2 px-4 flex items-center gap-2">
+                <IconDownload class="w-4 h-4" />
+                PDF Jobs
+            </button>
         </div>
 
         <!-- Container principal -->
@@ -133,7 +143,8 @@
                             <div class="flex flex-col">
                                 <span class="text-sm text-gray-500 dark:text-gray-400">Terminé</span>
                                 <span class="mt-1 text-base font-medium text-gray-700 dark:text-gray-200">
-                                    {{ inventory.termine_status_date ? formatDate(inventory.termine_status_date) : 'Non défini' }}
+                                    {{ inventory.termine_status_date ? formatDate(inventory.termine_status_date) : 'Non  défini'}}
+
                                 </span>
                             </div>
                             <div class="flex flex-col">
@@ -317,7 +328,7 @@
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <span class="text-sm text-gray-500 dark:text-gray-400">{{ inventory.magasins.length
-                                    }}
+                                        }}
                                         magasin(s)</span>
                                     <div class="w-2 h-2 bg-green-500 rounded-full"></div>
                                 </div>
@@ -418,7 +429,8 @@
                                 <h4 class="text-lg font-medium text-gray-900 dark:text-white-light mb-2">Aucun magasin
                                     associé
                                 </h4>
-                                <p class="text-gray-500 dark:text-gray-400">Aucun magasin n'a été associé à cet inventaire pour
+                                <p class="text-gray-500 dark:text-gray-400">Aucun magasin n'a été associé à cet
+                                    inventaire pour
                                     le moment.</p>
                             </div>
                         </div>
@@ -440,7 +452,8 @@
                                         <h3 class="text-lg font-semibold text-gray-800 dark:text-white-light">Équipes
                                             assignées
                                         </h3>
-                                        <p class="text-sm text-gray-500 dark:text-gray-400">Équipes responsables de l'inventaire
+                                        <p class="text-sm text-gray-500 dark:text-gray-400">Équipes responsables de
+                                            l'inventaire
                                         </p>
                                     </div>
                                 </div>
@@ -481,6 +494,7 @@
                                             <h4
                                                 class="font-semibold text-gray-800 dark:text-white-light text-base truncate">
                                                 {{ team.user && team.user.username ? team.user.username : 'Équipe sans nom' }}
+
                                             </h4>
                                             <p class="text-sm text-gray-500 dark:text-gray-400 truncate">
                                                 Équipe {{ index + 1 }}
@@ -568,7 +582,7 @@
                                     </button>
                                     <span class="text-sm text-gray-500 dark:text-gray-400">{{
                                         (inventory.ressources && Array.isArray(inventory.ressources) ?
-                                        inventory.ressources.length : 0) }}
+                                            inventory.ressources.length : 0) }}
                                         ressource(s)</span>
                                     <div class="w-2 h-2 bg-purple-500 rounded-full"></div>
                                 </div>
@@ -748,7 +762,7 @@
 
                                 <!-- Table view -->
                                 <div class="overflow-hidden">
-                                    <DataTableNew :columns="jobColumns" :rowDataProp="getJobsForTab(tab.id)"
+                                    <DataTable :columns="jobColumns" :rowDataProp="getJobsForTab(tab.id)"
                                         :pagination="true" :showColumnSelector="true"
                                         :storageKey="'inventory_jobs_' + tab.id" :actions="[]" />
                                 </div>
@@ -768,12 +782,8 @@
                 <div v-for="(line, index) in resourceLines" :key="index"
                     class="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
 
-                    <FormBuilder
-                        v-model="resourceLines[index]"
-                        :fields="resourceFields(index)"
-                        :columns="2"
-                        hide-submit
-                    />
+                    <FormBuilder v-model="resourceLines[index]" :fields="resourceFields(index)" :columns="2"
+                        hide-submit />
                     <button v-if="resourceLines.length > 1" @click="removeResourceLine(index)" type="button"
                         class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors">
                         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -811,12 +821,24 @@
             </div>
         </div>
     </Modal>
+
+    <!-- Composant d'alerte de validation -->
+    <ValidationAlert
+        :show="validationAlert.showAlert.value"
+        :title="validationAlert.alertData.value.title"
+        :subtitle="validationAlert.alertData.value.subtitle"
+        :message="validationAlert.alertData.value.message"
+        :errors="validationErrors"
+        :infos="validationInfos"
+        @close="validationAlert.hide"
+    />
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import DataTableNew from '@/components/DataTable/DataTableNew.vue';
+import { logger } from '@/services/loggerService';
+import DataTable from '@/components/DataTable/DataTable.vue';
 import Modal from '@/components/Modal.vue';
 import { useInventoryDetail } from '@/composables/useInventoryDetail';
 import IconDownload from '@/components/icon/icon-download.vue';
@@ -826,9 +848,11 @@ import IconCancel from '@/components/icon/icon-cancel.vue';
 import IconCheck from '@/components/icon/icon-check.vue';
 import IconLock from '@/components/icon/icon-lock.vue';
 import { useResourceStore } from '@/stores/resource';
-import { computed } from 'vue';
+import { computed, toRaw } from 'vue';
 import FormBuilder from '@/components/Form/FormBuilder.vue';
 import type { FieldConfig } from '@/interfaces/form';
+import ValidationAlert from '@/components/ValidationAlert.vue';
+import { useValidationAlert } from '@/services/validationAlertService';
 
 const route = useRoute();
 const inventoryReference = route.params.reference as string;
@@ -841,6 +865,7 @@ const availableResources = ref<any[]>([]);
 const {
     currentTab,
     inventory,
+    inventoryId,
     tabs,
     jobColumns,
     magasins,
@@ -864,6 +889,7 @@ const {
     getRemainingJobsCount,
     getTotalJobsCount,
     exportToPDF,
+    exportJobsToPDF,
     // Fonctions pour les ressources
     resources,
     resourcesLoading,
@@ -876,11 +902,20 @@ const {
 
 const resourceStore = useResourceStore();
 
+// Utiliser le service d'alerte de validation
+const validationAlert = useValidationAlert();
+
+// Computed properties pour les tableaux readonly
+const validationErrors = computed(() => toRaw(validationAlert.alertData.value.errors || []));
+const validationInfos = computed(() => toRaw(validationAlert.alertData.value.infos || []));
+
 const resourceOptions = computed(() => {
-    return resourceStore.getResources.map(resource => ({
-        value: resource.id?.toString() || resource.reference,
-        label: resource.ressource_nom || resource.reference || `Ressource ${resource.reference}`
-    }));
+    return resourceStore.getResources
+        .filter(resource => resource.id) // Filtrer les ressources sans ID
+        .map(resource => ({
+            value: resource.id!.toString(), // Utiliser ! car on a filtré les undefined
+            label: resource.ressource_nom || resource.libelle
+        }));
 });
 
 // Helper function to check if comptage has any option enabled
@@ -947,32 +982,31 @@ const removeResourceLine = (index: number) => {
     }
 };
 
-// Exemple d'options pour le select (à remplacer par les vraies ressources du store)
-// resourceOptions est déjà utilisé dans le projet, on suppose qu'il est accessible
-
 // Fonction pour filtrer les options disponibles pour chaque ligne (éviter les doublons)
-const getAvailableResourceOptions = (currentIndex) => {
-  const selected = resourceLines.value.map((line, idx) => idx !== currentIndex ? line.resource : null).filter(Boolean);
-  return resourceOptions.value.filter(opt => !selected.includes(opt.value));
+const getAvailableResourceOptions = (currentIndex: number) => {
+    const selected = resourceLines.value
+        .map((line, idx) => idx !== currentIndex ? line.resource : null)
+        .filter((value): value is string => value !== null && value !== '');
+    return resourceOptions.value.filter(opt => !selected.includes(opt.value));
 };
 
 // Champs dynamiques pour FormBuilder (select + input number)
 const resourceFields = (index: number): FieldConfig[] => [
-  {
-    key: 'resource',
-    label: 'Ressource',
-    type: 'select',
-    options: getAvailableResourceOptions(index),
-    required: true,
-    props: { placeholder: 'Choisissez une ressource' }
-  },
-  {
-    key: 'quantity',
-    label: 'Quantité',
-    type: 'number',
-    required: true,
-    props: { min: 1, type: 'number', inputmode: 'numeric', placeholder: 'Quantité' }
-  }
+    {
+        key: 'resource',
+        label: 'Ressource',
+        type: 'select',
+        options: getAvailableResourceOptions(index),
+        required: true,
+        props: { placeholder: 'Choisissez une ressource' }
+    },
+    {
+        key: 'quantity',
+        label: 'Quantité',
+        type: 'number',
+        required: true,
+        props: { min: 1, type: 'number', inputmode: 'numeric', placeholder: 'Quantité' }
+    }
 ];
 
 // Fonction pour charger les ressources disponibles
@@ -980,7 +1014,7 @@ const loadAvailableResources = async () => {
     try {
         availableResources.value = await getAvailableResources();
     } catch (error) {
-        console.error('Erreur lors du chargement des ressources disponibles:', error);
+        logger.error('Erreur lors du chargement des ressources disponibles', error);
     }
 };
 
@@ -1012,7 +1046,7 @@ const onAddResources = async () => {
         await loadDetailData();
 
     } catch (error) {
-        console.error('Erreur lors de l\'ajout des ressources:', error);
+        logger.error('Erreur lors de l\'ajout des ressources', error);
     }
 };
 

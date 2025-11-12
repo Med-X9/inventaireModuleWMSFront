@@ -1,835 +1,908 @@
-// src/composables/useInventoryCreation.ts
-import { ref, reactive, watch, onMounted, nextTick, computed } from 'vue';
-import { alertService } from '@/services/alertService';
+import { reactive, computed, onMounted, watch } from 'vue';
 import { inventoryCreationService } from '@/services/inventoryCreationService';
-import { useInventory } from '@/composables/useInventory';
+import type { ComptageConfig, ComptageMode } from '@/interfaces/inventoryCreation';
+import type { FieldConfig } from '@/interfaces/form';
 import { useWarehouse } from '@/composables/useWarehouse';
 import { useAccount } from '@/composables/useAccount';
 import { useInventoryStore } from '@/stores/inventory';
-import { CountingDispatcher } from '@/usecases/CountingDispatcher';
-import { CountingValidationError } from '@/usecases/CountingByArticle';
-import type { InventoryCreationState, ComptageConfig, ComptageMode } from '@/interfaces/inventoryCreation';
-import type { CreateInventoryRequest, InventoryDetails } from '@/models/Inventory';
-import type { Count, CreateCountRequest } from '@/models/Count';
-// import { validateCreation } from '@/utils/validate';
+import type { CreateInventoryRequest } from '@/models/Inventory';
+import { logger } from '@/services/loggerService';
 
 export function useInventoryCreation() {
-    const currentStep = ref<number>(0); // Forcer l'initialisation à 0
-    const loaded = ref<boolean>(false);
-    const isSubmitting = ref<boolean>(false);
-    const isEditMode = ref<boolean>(false);
-    const inventoryId = ref<number | null>(null);
-    const isInitializing = ref<boolean>(false);
-
-    // Utiliser les stores
-    const { createInventory, fetchInventoryById, updateInventory: updateInventoryStore, fetchInventories } = useInventory();
-    const { warehouses, loading: warehousesLoading, fetchWarehouses } = useWarehouse();
-    const { accounts, loading: accountsLoading, fetchAccounts } = useAccount();
-    const inventoryStore = useInventoryStore();
-
-    // Initialiser avec des valeurs par défaut
-    const state = reactive<InventoryCreationState>({
-        step1Data: {
+    const state = reactive({
+        step: 0,
+        header: {
             libelle: '',
             date: '',
-            inventory_type: '', // Valeur par défaut
+            inventory_type: '',
             compte: '',
             magasin: []
         },
-        comptages: Array(3).fill(null).map<ComptageConfig>(() => ({
-            mode: undefined as any, // Utiliser undefined au lieu de chaîne vide
-            saisieQuantite: false,
-            scannerUnitaire: false,
-            guideQuantite: false,
-            isVariante: false,
-            guideArticle: false,
-            dlc: false,
-            numeroSerie: false,
-            numeroLot: false,
-            stock_situation: false,
-            // Legacy props
-            useScanner: false,
-            useSaisie: false
-        })),
-        currentStep: 0,
+        comptages: [
+            { mode: '' },
+            { mode: '' },
+            { mode: '' }
+        ] as ComptageConfig[]
     });
 
-    // Fonction pour réinitialiser complètement l'état
-    function resetState() {
-        // Réinitialiser step1Data
-        Object.assign(state.step1Data, {
-            libelle: '',
-            date: '',
-            inventory_type: '', // Utiliser la valeur au lieu du label
-            compte: '',
-            magasin: []
-        });
+    const allowedModeCombinations: ReadonlyArray<Readonly<[ComptageMode, ComptageMode, ComptageMode]>> = [
+        ['image de stock', 'par article', 'par article'],
+        ['image de stock', 'en vrac', 'en vrac'],
+        ['par article', 'par article', 'par article'],
+        ['en vrac', 'en vrac', 'en vrac']
+    ] as const;
 
-        // Réinitialiser les comptages
-        state.comptages.splice(0, state.comptages.length,
-            ...Array(3).fill(null).map<ComptageConfig>(() => ({
-                mode: undefined as any, // Utiliser undefined au lieu de chaîne vide
-                saisieQuantite: false,
-                scannerUnitaire: false,
-                guideQuantite: false,
-                isVariante: false,
-                guideArticle: false,
-                dlc: false,
-                numeroSerie: false,
-                numeroLot: false,
-                stock_situation: false,
-                // Legacy props
-                useScanner: false,
-                useSaisie: false
+    const normalizeComptageBoolean = (value: boolean | undefined) => value === true;
+    const normalizeComptageInputMethod = (value: ComptageConfig['inputMethod']) => value || '';
+
+    const resetComptageOptions = (comptage: ComptageConfig | undefined) => {
+        if (!comptage) return;
+        comptage.inputMethod = '';
+        comptage.saisieQuantite = false;
+        comptage.scannerUnitaire = false;
+        comptage.dlc = false;
+        comptage.numeroSerie = false;
+        comptage.numeroLot = false;
+        comptage.guideQuantite = false;
+        comptage.guideArticle = false;
+        comptage.isVariante = false;
+        comptage.stock_situation = false;
+    };
+
+    const cloneComptageConfig = (source: ComptageConfig, target: ComptageConfig | undefined) => {
+        if (!target) return;
+        resetComptageOptions(target);
+        target.mode = source.mode;
+        target.inputMethod = source.inputMethod ?? '';
+        target.saisieQuantite = !!source.saisieQuantite;
+        target.scannerUnitaire = !!source.scannerUnitaire;
+        target.dlc = !!source.dlc;
+        target.numeroSerie = !!source.numeroSerie;
+        target.numeroLot = !!source.numeroLot;
+        target.guideQuantite = !!source.guideQuantite;
+        target.guideArticle = !!source.guideArticle;
+        target.isVariante = !!source.isVariante;
+        target.stock_situation = !!source.stock_situation;
+    };
+
+    const cloneSecondComptageToThird = () => {
+        const first = state.comptages[0];
+        const second = state.comptages[1];
+        const third = state.comptages[2];
+        if (!first || !second || !third) return;
+        if (first.mode !== 'image de stock') return;
+
+        if (!second.mode) {
+            resetComptageOptions(third);
+            third.mode = '';
+            return;
+        }
+
+        if (areComptagesIdentical(second, third)) {
+            return;
+        }
+
+        cloneComptageConfig(second, third);
+    };
+
+    // Stores pour les options dynamiques
+    const { warehouses, fetchWarehouses } = useWarehouse();
+    const { accounts, fetchAccounts } = useAccount();
+    const inventoryStore = useInventoryStore();
+
+    // Options dynamiques
+    const accountOptions = computed(() =>
+        (accounts.value || []).map(acc => ({
+            label: acc.account_name || `Compte ${acc.id}`,
+            value: acc.id.toString()
+        }))
+    );
+    const warehouseOptions = computed(() =>
+        (warehouses.value || []).map(wh => ({
+            label: wh.warehouse_name || `Magasin ${wh.id}`,
+            value: wh.id.toString()
             }))
         );
-        currentStep.value = 0; // Forcer le retour à l'étape 0
-    }
 
-    // Fonction pour forcer le retour à l'étape 0
-    function goToStep0() {
-        currentStep.value = 0;
-    }
-
-    function availableModesForStep(stepIndex: number) {
-        console.log(`🔍 availableModesForStep appelé pour stepIndex: ${stepIndex}`);
-        console.log('État actuel des comptages:', state.comptages.map((c, i) => ({ index: i, mode: c.mode })));
-
-        const modes = inventoryCreationService.getAvailableModesForStep(state, stepIndex);
-        console.log(`📋 Modes retournés par le service:`, modes);
-
-        // Pour le 3e comptage (stepIndex = 2), s'assurer qu'un mode est défini
-        if (stepIndex === 2) {
-            const thirdComptage = state.comptages[2];
-            const firstComptage = state.comptages[0];
-            const secondComptage = state.comptages[1];
-
-
-            // Vérifier que les comptages précédents existent
-            if (!firstComptage?.mode || !secondComptage?.mode) {
-                console.warn('⚠️ Comptages précédents non définis, pas de modes disponibles');
-                return [];
-            }
-
-            // Si le 3e comptage n'a pas de mode défini et qu'il y a des modes disponibles
-            if (!thirdComptage.mode && modes.length > 0) {
-
-                // Scénario 1: 1er comptage = "image de stock"
-                if (firstComptage.mode === 'image de stock' && secondComptage.mode) {
-                    thirdComptage.mode = secondComptage.mode;
-                }
-                // Scénario 2: 1er et 2e = "en vrac"
-                else if (firstComptage.mode === 'en vrac' && secondComptage.mode === 'en vrac') {
-                    thirdComptage.mode = 'en vrac';
-                }
-                // Scénario 3: 1er et 2e = "par article"
-                else if (firstComptage.mode === 'par article' && secondComptage.mode === 'par article') {
-                    thirdComptage.mode = 'par article';
-                }
-                // Scénario 4: Modes mixtes (en vrac + par article)
-                else if (
-                    (firstComptage.mode === 'en vrac' && secondComptage.mode === 'par article') ||
-                    (firstComptage.mode === 'par article' && secondComptage.mode === 'en vrac')
-                ) {
-                    console.log('🎯 Modes mixtes - laisser l\'utilisateur choisir');
-                    // Ne pas forcer d'initialisation, l'utilisateur choisira
-                }
-
-                // Appliquer les options héritées si un mode a été défini
-                if (thirdComptage.mode) {
-                    const inheritedOptions = inventoryCreationService.getInheritedOptionsForComptage3(state);
-                    if (Object.keys(inheritedOptions).length > 0) {
-                        Object.assign(thirdComptage, inheritedOptions);
-                        console.log('📦 Options héritées appliquées:', inheritedOptions);
-                    }
-                }
-            }
-        }
-
-        return modes;
-    }
-
-    // Fonction pour convertir ComptageConfig en Count pour la validation
-    function convertComptageConfigToCount(comptage: ComptageConfig, order: number): Count {
-        // Déterminer unit_scanned et entry_quantity selon le mode
-        let unit_scanned = false;
-        let entry_quantity = false;
-
-        if (comptage.mode === 'en vrac') {
-            unit_scanned = comptage.scannerUnitaire || comptage.inputMethod === 'scanner';
-            entry_quantity = comptage.saisieQuantite || comptage.inputMethod === 'saisie';
-        }
-
-        // Déterminer stock_situation selon le mode
-        let stock_situation = comptage.stock_situation || false;
-        if (comptage.mode === 'image de stock') {
-            stock_situation = true; // Forcer à true pour le mode "image de stock"
-        }
-
-        return {
-            id: null,
-            reference: null,
-            order,
-            count_mode: comptage.mode,
-            unit_scanned,
-            entry_quantity,
-            is_variant: comptage.isVariante,
-            stock_situation,
-            quantity_show: comptage.guideQuantite,
-            show_product: comptage.guideArticle,
-            dlc: comptage.dlc,
-            n_serie: comptage.numeroSerie,
-            n_lot: comptage.numeroLot,
-            inventory: 0,
-            created_at: '',
-            updated_at: ''
-        };
-    }
-
-    // Fonction pour valider un comptage avec CountingDispatcher
-    function validateComptageWithDispatcher(comptage: ComptageConfig, stepIndex: number): string[] {
-        const errors: string[] = [];
-
-        if (!comptage.mode) {
-            errors.push(`Le mode de comptage est obligatoire pour l'étape ${stepIndex + 1}`);
-            return errors;
-        }
-
-        try {
-            const countData = convertComptageConfigToCount(comptage, stepIndex + 1);
-            CountingDispatcher.validateCount(countData);
-        } catch (error) {
-            if (error instanceof CountingValidationError) {
-                errors.push(`Erreurs de validation pour le comptage ${stepIndex + 1}:\n${error.message}`);
-            } else {
-                errors.push(`Erreur inattendue lors de la validation du comptage ${stepIndex + 1}: ${error}`);
-            }
-        }
-
-        return errors;
-    }
-
-    // Fonction pour valider les règles métier du 3e comptage
-    function validateComptage3BusinessRules(): string[] {
-        const errors: string[] = [];
-        const firstComptage = state.comptages[0];
-        const secondComptage = state.comptages[1];
-        const thirdComptage = state.comptages[2];
-
-        // Vérifier que les comptages précédents existent
-        if (!firstComptage?.mode || !secondComptage?.mode) {
-            return errors; // Pas d'erreur si les comptages précédents ne sont pas encore définis
-        }
-
-        // Vérifier que le 3e comptage a un mode défini
-        if (!thirdComptage?.mode) {
-            errors.push('Le mode du 3e comptage doit être défini');
-            return errors;
-        }
-
-        // Scénario 1: 1er comptage = "image de stock"
-        if (firstComptage.mode === 'image de stock') {
-            if (thirdComptage.mode !== secondComptage.mode) {
-                errors.push('Le 3e comptage doit être identique au 2e comptage quand le 1er est "image de stock"');
-            }
-        }
-
-        // Scénario 2: 1er et 2e = "en vrac"
-        else if (firstComptage.mode === 'en vrac' && secondComptage.mode === 'en vrac') {
-            // 3e doit être soit "en vrac" OU "par article" (les deux modes sont autorisés)
-            if (thirdComptage.mode !== 'en vrac' && thirdComptage.mode !== 'par article') {
-                errors.push('Le 3e comptage doit être soit "en vrac" soit "par article" quand les deux premiers sont "en vrac"');
-            }
-        }
-
-        // Scénario 3: 1er = "en vrac" et 2e = "par article" OU 1er = "par article" et 2e = "en vrac"
-        else if (
-            (firstComptage.mode === 'en vrac' && secondComptage.mode === 'par article') ||
-            (firstComptage.mode === 'par article' && secondComptage.mode === 'en vrac')
-        ) {
-            if (thirdComptage.mode !== 'en vrac' && thirdComptage.mode !== 'par article') {
-                errors.push('Le 3e comptage doit être soit "en vrac" soit "par article"');
-            }
-        }
-
-        // Scénario 4: 1er et 2e = "par article" (sous-scénario du scénario 3)
-        else if (firstComptage.mode === 'par article' && secondComptage.mode === 'par article') {
-            if (thirdComptage.mode !== 'par article') {
-                errors.push('Le 3e comptage doit être "par article" quand les deux premiers sont "par article"');
-            }
-        }
-
-        if (errors.length > 0) {
-            return errors;
-        }
-
-        return errors;
-    }
-
-    async function cancelCreation() {
-        const result = await alertService.confirm({
-            title: 'Annuler la création',
-            text: 'Voulez-vous vraiment annuler ?'
-        });
-        if (result.isConfirmed) {
-            resetState();
-        }
-    }
-
-    async function validateCurrentStep(): Promise<boolean> {
-        // const validation = await validateCreation(state); // Temporairement commenté pour permettre la compilation
-        // const { isValid: stepOk, errors } = getCurrentStepValidation(validation); // Utiliser le state directement
-        const stepOk = true; // Temporairement true pour permettre la compilation
-        const errors: string[] = [];
-
-        // Ajouter la validation avec CountingDispatcher pour les étapes 2, 3, 4
-        if (currentStep.value >= 1 && currentStep.value <= 3) {
-            const stepIndex = currentStep.value - 1;
-            const comptage = state.comptages[stepIndex];
-
-            if (comptage && comptage.mode) {
-                const dispatcherErrors = validateComptageWithDispatcher(comptage, stepIndex);
-                if (dispatcherErrors.length > 0) {
-                    errors.push(...dispatcherErrors);
-                }
-            }
-        }
-
-        // Ajouter la validation des règles métier pour le 3e comptage
-        if (currentStep.value === 3) {
-            const businessRuleErrors = validateComptage3BusinessRules();
-            if (businessRuleErrors.length > 0) {
-                errors.push(...businessRuleErrors);
-            }
-        }
-
-        if (errors.length > 0) {
-            await alertService.error({
-                title: 'Validation',
-                text: errors.join('\n\n')
-            });
-            return false;
-        }
-        return true;
-    }
-
-
-
-    async function onStepComplete(step: number, data: any): Promise<boolean> {
-        if (!await validateCurrentStep()) return false;
-
-        if (step === 0) {
-            state.step1Data = { ...data };
-        } else {
-            state.comptages[step - 1] = { ...data };
-        }
-
-        currentStep.value = step + 1;
-        return true;
-    }
-
-    // Convertir les données du formulaire vers le format API
-    const convertFormDataToAPI = (state: InventoryCreationState): CreateInventoryRequest => {
-        const warehouse = state.step1Data.magasin.map(mag => {
-            const warehouseId = warehouses.value.find(w => w.id.toString() === mag.magasin)?.id || 0;
-            return {
-                id: warehouseId,
-                date: mag.date
-            };
-        });
-
-        const comptages: CreateCountRequest[] = state.comptages.map((comptage, index) => {
-            // Déterminer unit_scanned et entry_quantity selon le mode
-            let unit_scanned = false;
-            let entry_quantity = false;
-
-            if (comptage.mode === 'en vrac') {
-                unit_scanned = comptage.scannerUnitaire || comptage.inputMethod === 'scanner';
-                entry_quantity = comptage.saisieQuantite || comptage.inputMethod === 'saisie';
-            }
-
-            // Déterminer stock_situation selon le mode
-            let stock_situation = comptage.stock_situation || false;
-            if (comptage.mode === 'image de stock') {
-                stock_situation = true;
-            }
-
-            return {
-                order: index + 1,
-                count_mode: comptage.mode,
-                unit_scanned,
-                entry_quantity,
-                is_variant: comptage.isVariante,
-                n_lot: comptage.numeroLot,
-                n_serie: comptage.numeroSerie,
-                dlc: comptage.dlc,
-                show_product: comptage.guideArticle,
-                stock_situation,
-                quantity_show: comptage.guideQuantite
-            };
-        });
-
-        return {
-            label: state.step1Data.libelle,
-            date: state.step1Data.date,
-            inventory_type: state.step1Data.inventory_type, // Utiliser le bon nom de champ
-            account_id: parseInt(state.step1Data.compte),
-            warehouse,
-            comptages
-        };
-    };
-
-    async function onComplete() {
-        if (!await validateCurrentStep()) return;
-
-        try {
-            isSubmitting.value = true;
-
-            // Convertir les données au format API
-            const apiData = convertFormDataToAPI(state);
-
-            // Appeler l'API via le store
-            await createInventory(apiData);
-
-            // Reset après succès
-            resetState();
-        } catch (error) {
-            console.error('❌ Erreur lors de la création:', error);
-            throw error;
-        } finally {
-            isSubmitting.value = false;
-        }
-    }
-
-    // Validation réactive - Améliorée pour éviter les conflits DOM
-    watch(state, () => {
-        if (isInitializing.value) return; // Ne pas valider pendant l'initialisation
-
-        // Utiliser nextTick pour éviter les conflits DOM
-        nextTick(() => {
-            // validateCreation(state).then(validation => { // Temporairement commenté pour permettre la compilation
-            //     isValid.value = getCurrentStepValidation(validation).isValid;
-            // });
-        });
-    }, { deep: true });
-
-    watch(currentStep, () => {
-        if (isInitializing.value) return;
-
-        nextTick(() => {
-            // validateCreation(state).then(validation => { // Temporairement commenté pour permettre la compilation
-            //     isValid.value = getCurrentStepValidation(validation).isValid;
-            // });
-        });
-    });
-
-    // Computed properties pour les options des selects
-    const accountOptions = computed(() => {
-        if (!accounts.value || accounts.value.length === 0) {
-            return [];
-        }
-
-        return accounts.value.map(account => ({
-            label: account.account_name || `Compte ${account.id}`,
-            value: account.id.toString()
-        }));
-    });
-
-    const warehouseOptions = computed(() => {
-        if (!warehouses.value || warehouses.value.length === 0) {
-            return [];
-        }
-
-        return warehouses.value.map(warehouse => ({
-            label: warehouse.warehouse_name || `Magasin ${warehouse.id}`,
-            value: warehouse.id.toString()
-        }));
-    });
-
-    const inventoryTypeOptions = computed(() => [
-        { label: 'Inventaire Général', value: 'GENERAL' },
-        { label: 'Inventaire Tournant', value: 'TOURNANT' }
+    // Champs de l'en-tête d'inventaire
+    const headerFields = computed<FieldConfig[]>(() => [
+        { key: 'libelle', label: 'Libellé', type: 'text', required: true },
+        { key: 'date', label: 'Date', type: 'date', required: true },
+        {
+            key: 'inventory_type', label: 'Type', type: 'select', options: [
+                { label: 'Général', value: 'GENERAL' },
+                { label: 'Tournant', value: 'TOURNANT' }
+            ], required: true
+        },
+        { key: 'compte', label: 'Compte', type: 'select', options: accountOptions.value, required: true },
+        { key: 'magasin', label: 'Magasin', type: 'multi-select-with-dates', options: warehouseOptions.value, required: true, multiple: true, dateLabel: 'Dates par magasin' }
     ]);
 
-    // Validation des erreurs et champs vides
-    const validationErrors = computed(() => {
-        const errors: Array<{ field: string; label: string; message: string }> = [];
+    // Champs dynamiques pour chaque étape de comptage
+    function getFields(step: number): FieldConfig[] {
+        const stepConfig = getStepConfig(step);
+        const mode = state.comptages[step].mode;
+        const options = getOptions(step);
+        const fields: FieldConfig[] = [
+            {
+                key: 'mode',
+                label: 'Mode de comptage',
+                type: 'select',
+                options: stepConfig.modes.map(m => ({ label: m, value: m })),
+                required: true
+            }
+        ];
 
-        // Validation des champs de l'étape 1
-        if (!state.step1Data.libelle || state.step1Data.libelle.trim() === '') {
-            errors.push({
-                field: 'libelle',
-                label: 'Libellé',
-                message: 'Le libellé est requis'
+        if (mode === 'en vrac') {
+            fields.push({
+                key: 'inputMethod',
+                label: 'Méthode opératoire',
+                type: 'radio-group',
+                radioOptions: [
+                    { label: 'Saisie quantité', value: 'saisie' },
+                    { label: 'Scanner unitaire', value: 'scanner' }
+                ],
+                required: true
             });
-        }
 
-        if (!state.step1Data.date || state.step1Data.date.trim() === '') {
-            errors.push({
-                field: 'date',
-                label: 'Date',
-                message: 'La date est requise'
-            });
-        }
+            // Ajouter les checkboxes pour les options du mode "en vrac"
+            const optionLabels: Record<string, string> = {
+                'guideQuantite': 'Guide quantité',
+                'saisieQuantite': 'Saisie quantité',
+                'scannerUnitaire': 'Scanner unitaire'
+            };
 
-        if (!state.step1Data.compte || state.step1Data.compte.trim() === '') {
-            errors.push({
-                field: 'compte',
-                label: 'Compte',
-                message: 'Veuillez sélectionner un compte'
-            });
-        }
-
-        // Validation des magasins
-        if (!Array.isArray(state.step1Data.magasin) || state.step1Data.magasin.length === 0) {
-            errors.push({
-                field: 'magasin',
-                label: 'Magasins',
-                message: 'Veuillez sélectionner au moins un magasin'
-            });
-        } else {
-            // Vérifier que chaque magasin a une date
-            state.step1Data.magasin.forEach((mag, index) => {
-                if (!mag.date || mag.date.trim() === '') {
-                    const warehouseName = getWarehouseName(mag.magasin);
-                    errors.push({
-                        field: `magasin-${index}`,
-                        label: `Date pour ${warehouseName}`,
-                        message: 'La date est requise pour ce magasin'
+            for (const opt of options) {
+                if (opt !== 'saisieQuantite' && opt !== 'scannerUnitaire') { // Éviter les doublons
+                    fields.push({
+                        key: opt,
+                        label: optionLabels[opt] || opt,
+                        type: 'checkbox'
                     });
                 }
-            });
-        }
+            }
+        } else if (mode === 'par article') {
+            // Amélioration des libellés pour le mode "par article"
+            const optionLabels: Record<string, string> = {
+                'dlc': 'Date limite de consommation (DLC)',
+                'numeroSerie': 'Numéro de série',
+                'numeroLot': 'Numéro de lot',
+                'guideQuantite': 'Guide quantité',
+                'guideArticle': 'Guide article',
+                'isVariante': 'Gestion des variantes'
+            };
 
-        // Validation des comptages (si on est sur les étapes de comptage)
-        if (currentStep.value >= 1 && currentStep.value <= 3) {
-            const stepIndex = currentStep.value - 1;
-            const comptage = state.comptages[stepIndex];
+            const currentComptage = state.comptages[step];
+            const numeroSerieSelected = currentComptage.numeroSerie;
+            const numeroLotSelected = currentComptage.numeroLot;
+            const dlcSelected = currentComptage.dlc;
 
-            if (comptage && !comptage.mode) {
-                errors.push({
-                    field: `comptage-${stepIndex}`,
-                    label: `Comptage ${stepIndex + 1}`,
-                    message: 'Le mode de comptage est obligatoire'
+            for (const opt of options) {
+                let disabled = false;
+
+                // Désactiver lot et DLC si numéro de série est sélectionné
+                if (numeroSerieSelected && (opt === 'numeroLot' || opt === 'dlc')) {
+                    disabled = true;
+                }
+
+                // Désactiver numéro de série si lot ou DLC sont sélectionnés
+                if (opt === 'numeroSerie' && (numeroLotSelected || dlcSelected)) {
+                    disabled = true;
+                }
+
+                // Les options guideQuantite et guideArticle ne sont jamais désactivées
+                if (opt === 'guideQuantite' || opt === 'guideArticle') {
+                    disabled = false;
+                }
+
+                fields.push({
+                    key: opt,
+                    label: optionLabels[opt] || opt,
+                    type: 'checkbox',
+                    props: { disabled: disabled }
+                });
+            }
+        } else if (mode === 'image de stock') {
+            for (const opt of options) {
+                fields.push({
+                    key: opt,
+                    label: opt,
+                    type: 'checkbox'
                 });
             }
         }
+        return fields;
+    }
 
-        return errors;
-    });
+    // Synchronisation inputMethod <-> saisieQuantite/scannerUnitaire
+    watch(
+        () => state.comptages.map(c => c.inputMethod),
+        (inputMethods) => {
+            state.comptages.forEach((c, idx) => {
+                if (c.mode === 'en vrac') {
+                    if (c.inputMethod === 'saisie') {
+                        c.saisieQuantite = true;
+                        c.scannerUnitaire = false;
+                    } else if (c.inputMethod === 'scanner') {
+                        c.saisieQuantite = false;
+                        c.scannerUnitaire = true;
+                    } else {
+                        c.saisieQuantite = false;
+                        c.scannerUnitaire = false;
+                    }
+                }
+            });
+        },
+        { deep: true }
+    );
 
-    // Mettre à jour isValid pour qu'il prenne en compte les validationErrors
-    const isValid = computed((): boolean => {
-        // Si on est en train d'initialiser, ne pas valider
-        if (isInitializing.value) return false;
+    // Règles métier pour le mode "par article" - Version simplifiée
+    watch(
+        () => state.comptages.map(c => ({
+            mode: c.mode,
+            numeroSerie: c.numeroSerie,
+            numeroLot: c.numeroLot,
+            dlc: c.dlc,
+            isVariante: c.isVariante
+        })),
+        (comptages, oldComptages) => {
+            comptages.forEach((c, idx) => {
+                if (c.mode === 'par article') {
+                    const comptage = state.comptages[idx];
+                    const oldComptage = oldComptages?.[idx];
 
-        // Validation spécifique selon l'étape actuelle
-        if (currentStep.value === 0) {
-            // Étape 1 : Vérifier que tous les champs de base sont remplis
-            const hasBasicData = Boolean(state.step1Data.libelle &&
-                               state.step1Data.date &&
-                               state.step1Data.compte &&
-                               Array.isArray(state.step1Data.magasin) &&
-                               state.step1Data.magasin.length > 0);
+                    // Appliquer les règles de combinaison seulement si on coche une option
+                    if (comptage.numeroSerie) {
+                        // Règle 1: Si numéro de série est sélectionné, désactiver DLC et numéro de lot
+                        comptage.dlc = false;
+                        comptage.numeroLot = false;
+                    }
 
-            // Vérifier que chaque magasin a une date
-            const allMagasinsHaveDates = state.step1Data.magasin.every(mag =>
-                mag.date && mag.date.trim() !== ''
-            );
+                    // Règle 2: Si numéro de lot est sélectionné, désactiver numéro de série
+                    if (comptage.numeroLot && comptage.numeroSerie) {
+                        comptage.numeroSerie = false;
+                    }
 
-            const isValidStep1 = hasBasicData && allMagasinsHaveDates;
-            return isValidStep1;
-        } else if (currentStep.value >= 1 && currentStep.value <= 3) {
-            // Étapes de comptage : Vérifier que le mode est défini
-            const stepIndex = currentStep.value - 1;
-            const comptage = state.comptages[stepIndex];
-            const hasComptageMode = Boolean(comptage && comptage.mode);
+                    // Règle 3: Si DLC est sélectionné, désactiver numéro de série
+                    if (comptage.dlc && comptage.numeroSerie) {
+                        comptage.numeroSerie = false;
+                    }
+                }
+            });
+        },
+        { deep: true }
+    );
 
-            return hasComptageMode;
+    // Watcher pour réactiver les options quand on décoche une checkbox
+    watch(
+        () => state.comptages.map(c => ({
+            mode: c.mode,
+            numeroSerie: c.numeroSerie,
+            numeroLot: c.numeroLot,
+            dlc: c.dlc,
+            isVariante: c.isVariante
+        })),
+        (comptages, oldComptages) => {
+            comptages.forEach((c, idx) => {
+                if (c.mode === 'par article' && oldComptages) {
+                    const comptage = state.comptages[idx];
+                    const oldComptage = oldComptages[idx];
+
+                    // Si on a décocher une option, réactiver toutes les autres
+                    if (oldComptage) {
+                        // Si on a décocher numéro de série, réactiver DLC et numéro de lot
+                        if (oldComptage.numeroSerie && !comptage.numeroSerie) {
+                            // Les options DLC et numéro de lot deviennent disponibles
+                            // (elles ne sont plus désactivées par le watcher précédent)
+                        }
+                        // Si on a décocher numéro de lot, réactiver numéro de série
+                        if (oldComptage.numeroLot && !comptage.numeroLot) {
+                            // L'option numéro de série devient disponible
+                        }
+                        // Si on a décocher DLC, réactiver numéro de série
+                        if (oldComptage.dlc && !comptage.dlc) {
+                            // L'option numéro de série devient disponible
+                        }
+                    }
+                }
+            });
+        },
+        { deep: true }
+    );
+
+    // Règle métier pour le mode "image de stock"
+    watch(
+        () => state.comptages.map(c => c.mode),
+        (modes) => {
+            modes.forEach((mode, idx) => {
+                if (mode === 'image de stock') {
+                    const comptage = state.comptages[idx];
+                    comptage.stock_situation = true;
+                    comptage.guideQuantite = false;
+                    comptage.guideArticle = false;
+                    comptage.saisieQuantite = false;
+                    comptage.scannerUnitaire = false;
+                    comptage.numeroSerie = false;
+                    comptage.numeroLot = false;
+                    comptage.dlc = false;
+                    comptage.isVariante = false;
+                } else {
+                    const comptage = state.comptages[idx];
+                    if (comptage) {
+                        comptage.stock_situation = false;
+                    }
+                }
+            });
+            cloneSecondComptageToThird();
+        },
+        { deep: true }
+    );
+
+    watch(() => state.comptages[0].mode, () => {
+        cloneSecondComptageToThird();
+    }, { immediate: true });
+
+    watch(() => state.comptages[1], () => {
+        cloneSecondComptageToThird();
+    }, { deep: true });
+
+    watch(() => state.comptages[2], () => {
+        if (state.comptages[0]?.mode === 'image de stock') {
+            cloneSecondComptageToThird();
+        }
+    }, { deep: true });
+
+    function setMode(step: number, mode: ComptageMode) {
+        const comptage = state.comptages[step];
+        if (!comptage) return;
+
+        if (comptage.mode !== mode) {
+            resetComptageOptions(comptage);
+        }
+        comptage.mode = mode;
+
+        if (mode === 'image de stock') {
+            comptage.stock_situation = true;
+            comptage.guideQuantite = false;
+            comptage.guideArticle = false;
+            comptage.saisieQuantite = false;
+            comptage.scannerUnitaire = false;
+            comptage.numeroSerie = false;
+            comptage.numeroLot = false;
+            comptage.dlc = false;
+            comptage.isVariante = false;
+            comptage.inputMethod = undefined;
+        } else {
+            comptage.stock_situation = false;
+        }
+
+        if (step === 0 && mode === 'image de stock') {
+            cloneSecondComptageToThird();
+        }
+
+        if (step === 1 && state.comptages[0]?.mode === 'image de stock') {
+            cloneSecondComptageToThird();
+        }
+
+        if (step === 2 && state.comptages[0]?.mode === 'image de stock') {
+            cloneSecondComptageToThird();
+        }
+    }
+
+    function getStepConfig(step: number) {
+        const prev = state.comptages.map(c => c.mode) as ComptageMode[];
+        return inventoryCreationService.getStepConfig(step, prev);
+    }
+
+    function getOptions(step: number) {
+        const mode = state.comptages[step].mode as ComptageMode;
+        return inventoryCreationService.getOptionsForMode(mode);
+    }
+
+    // Fonction de création d'inventaire
+    async function createInventory() {
+        try {
+            // Vérifier que des warehouses sont sélectionnés
+            if (!state.header.magasin || state.header.magasin.length === 0) {
+                throw new Error('Aucun magasin sélectionné. Veuillez sélectionner au moins un magasin.');
+            }
+
+            // Préparer les données pour l'API
+            const warehouseData = state.header.magasin.map((m: any) => {
+
+                // Si c'est un objet avec item (format MultiSelectWithDates)
+                if (typeof m === 'object' && m.item) {
+                    const result = {
+                        id: Number(m.item),
+                        date: m.date || ''
+                    };
+                    return result;
+                }
+
+                // Si c'est un objet avec value et date
+                if (typeof m === 'object' && m.value) {
+                    const result = {
+                        id: Number(m.value),
+                        date: m.date || ''
+                    };
+                    return result;
+                }
+
+                // Si c'est un objet avec id et date
+                if (typeof m === 'object' && m.id) {
+                    const result = {
+                        id: Number(m.id),
+                        date: m.date || ''
+                    };
+                    return result;
+                }
+
+                // Si c'est une chaîne (ID direct)
+                if (typeof m === 'string') {
+                    const result = {
+                        id: Number(m),
+                        date: ''
+                    };
+                    return result;
+                }
+
+                // Si c'est un objet avec warehouse_id
+                if (typeof m === 'object' && m.warehouse_id) {
+                    const result = {
+                        id: Number(m.warehouse_id),
+                        date: m.date || ''
+                    };
+                    return result;
+                }
+
+                return { id: 0, date: '' };
+            }).filter(w => w.id > 0); // Filtrer les warehouses invalides
+
+            // Créer les comptages
+            const comptages = state.comptages
+                .filter(c => c.mode) // Filtrer les comptages vides
+                .map((comptage, index) => createCountRequest(comptage, index + 1));
+
+            // Valider les comptages avant création
+            try {
+                inventoryCreationService.validateAllCounts(comptages);
+            } catch (validationError) {
+                logger.error('Erreur de validation des comptages', validationError);
+                throw new Error(`Validation des comptages échouée: ${validationError instanceof Error ? validationError.message : 'Erreur inconnue'}`);
+            }
+
+            const inventoryData: CreateInventoryRequest = {
+                label: state.header.libelle,
+                date: state.header.date,
+                inventory_type: state.header.inventory_type,
+                account_id: Number(state.header.compte),
+                warehouse: warehouseData,
+                comptages: comptages
+            };
+
+            // Validation métier stricte complète
+            try {
+                inventoryCreationService.validateInventoryData(inventoryData);
+            } catch (validationError) {
+                logger.error('Erreur de validation métier', validationError);
+                throw new Error(`Validation métier échouée: ${validationError instanceof Error ? validationError.message : 'Erreur inconnue'}`);
+            }
+
+            const result = await inventoryStore.createInventory(inventoryData);
+
+            return result;
+        } catch (error) {
+            logger.error('Erreur lors de la création de l\'inventaire', error);
+            throw error;
+        }
+    }
+
+    // Fonction de modification d'inventaire
+    async function updateInventory(inventoryId: number | string) {
+        try {
+            // Préparer les données pour l'API (sans comptages pour éviter les problèmes de type)
+            const inventoryData = {
+                label: state.header.libelle,
+                date: state.header.date,
+                inventory_type: state.header.inventory_type,
+                account_id: Number(state.header.compte),
+                warehouse: state.header.magasin.map((m: any) => {
+
+                    // Si c'est un objet avec value et date
+                    if (typeof m === 'object' && m.value) {
+                        return {
+                            id: Number(m.value),
+                            date: m.date || ''
+                        };
+                    }
+
+                    // Si c'est un objet avec id et date
+                    if (typeof m === 'object' && m.id) {
+                        return {
+                            id: Number(m.id),
+                            date: m.date || ''
+                        };
+                    }
+
+                    // Si c'est une chaîne (ID direct)
+                    if (typeof m === 'string') {
+            return {
+                            id: Number(m),
+                            date: ''
+                        };
+                    }
+
+                    // Si c'est un objet avec warehouse_id
+                    if (typeof m === 'object' && m.warehouse_id) {
+                        return {
+                            id: Number(m.warehouse_id),
+                            date: m.date || ''
+                        };
+                    }
+
+                    return { id: 0, date: '' };
+                }).filter(w => w.id > 0) // Filtrer les warehouses invalides
+            };
+
+            const result = await inventoryStore.updateInventory(inventoryId, inventoryData);
+
+            return result;
+        } catch (error) {
+            logger.error('Erreur lors de la modification de l\'inventaire', error);
+            throw error;
+        }
+    }
+
+    // Fonction pour créer un CreateCountRequest à partir d'un ComptageConfig
+    function createCountRequest(comptage: ComptageConfig, order: number) {
+        const options = getComptageOptions(comptage);
+
+        const result = {
+            order: order,
+            count_mode: comptage.mode,
+            unit_scanned: options.includes('scanner_unitaire'),
+            entry_quantity: options.includes('saisie_quantite'),
+            is_variant: options.includes('is_variante'),
+            n_lot: options.includes('numero_lot'),
+            n_serie: options.includes('numero_serie'),
+            dlc: options.includes('dlc'),
+            show_product: options.includes('guide_article'),
+            stock_situation: false, // Par défaut false
+            quantity_show: options.includes('guide_quantite')
+        };
+
+        // Mapping spécifique selon le mode
+        if (comptage.mode === 'en vrac') {
+            // Pour "en vrac", guideQuantite peut être mappé vers stock_situation
+            result.stock_situation = options.includes('guide_quantite') || options.includes('stock_situation');
+        } else if (comptage.mode === 'par article') {
+            // Pour "par article", stock_situation DOIT être false (règle CountingByArticle)
+            // guideQuantite est seulement mappé vers quantity_show
+            result.stock_situation = false;
+        } else if (comptage.mode === 'image de stock') {
+            // Pour "image de stock", stock_situation doit être true
+            result.quantity_show = false; // Doit être false selon CountingByStockImage
+            result.stock_situation = true; // Doit être true selon CountingByStockImage
+        }
+
+        return result;
+    }
+
+    // Fonction utilitaire pour extraire les options d'un comptage
+    function getComptageOptions(comptage: ComptageConfig) {
+        const options: string[] = [];
+
+        if (comptage.mode === 'en vrac') {
+            if (comptage.saisieQuantite) options.push('saisie_quantite');
+            if (comptage.scannerUnitaire) options.push('scanner_unitaire');
+            if (comptage.guideQuantite) options.push('guide_quantite');
+            // guideArticle n'est pas disponible pour le mode "en vrac"
+        } else if (comptage.mode === 'par article') {
+            if (comptage.numeroSerie) options.push('numero_serie');
+            if (comptage.numeroLot) options.push('numero_lot');
+            if (comptage.dlc) options.push('dlc');
+            if (comptage.guideQuantite) options.push('guide_quantite');
+            if (comptage.guideArticle) options.push('guide_article');
+            if (comptage.isVariante) options.push('is_variante');
+        } else if (comptage.mode === 'image de stock') {
+            // Pour image de stock, selon CountingByStockImage :
+            // - stock_situation doit être true
+            // - Tous les autres champs doivent être false
+            // On ne génère que stock_situation, les autres seront false par défaut
+            options.push('stock_situation');
+        }
+
+        return options;
+    }
+
+    // Fonction pour valider un comptage en temps réel
+    function validateComptage(step: number): boolean {
+        const comptage = state.comptages[step];
+        if (!comptage.mode) return true; // Pas de validation si pas de mode
+
+        try {
+            // Utiliser validateComptage qui prend un ComptageConfig directement
+            // Cette méthode fait la conversion et la validation complète
+            console.log(`[validateComptage] Validation du comptage ${step + 1}`, {
+                mode: comptage.mode,
+                comptage: JSON.parse(JSON.stringify(comptage))
+            });
+            inventoryCreationService.validateComptage(comptage);
+            console.log(`[validateComptage] ✅ Comptage ${step + 1} validé avec succès`);
+            return true;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorDetails = {
+                step: step + 1,
+                mode: comptage.mode,
+                comptage: JSON.parse(JSON.stringify(comptage)),
+                errorMessage,
+                errorName: error instanceof Error ? error.name : 'UnknownError',
+                errorStack: error instanceof Error ? error.stack : undefined
+            };
+
+            console.error(`[validateComptage] ❌ Erreur de validation du comptage ${step + 1}:`, errorDetails);
+            console.error(`[validateComptage] Message d'erreur:`, errorMessage);
+            console.error(`[validateComptage] Erreur complète:`, error);
+
+            logger.error(`[validateComptage] Erreur de validation du comptage ${step + 1}`, errorDetails);
+            return false;
+        }
+    }
+
+    // Fonction pour valider tous les comptages
+    function validateAllComptages(): boolean {
+        const errors: string[] = [];
+
+        state.comptages.forEach((comptage, index) => {
+            if (comptage.mode && !validateComptage(index)) {
+                errors.push(`Comptage ${index + 1}: Configuration invalide`);
+            }
+        });
+
+        if (errors.length > 0) {
+            return false;
         }
 
         return true;
-    });
+    }
 
-    // Watcher pour forcer la validation quand les données changent
-    watch([() => state.step1Data, () => state.comptages], () => {
-        if (isInitializing.value) return;
+    // Fonction de validation métier en temps réel
+    function validateBusinessRules(): string[] {
+        const errors: string[] = [];
 
-        nextTick(() => {
-            forceValidation();
-        });
-    }, { deep: true });
-
-    // Watcher pour forcer le recalcul des options quand les données maîtres sont chargées
-    watch([warehouses, accounts], () => {
-        // Si les données sont vides et pas en cours de chargement, forcer le rechargement
-        if ((!warehouses.value || warehouses.value.length === 0) && !warehousesLoading.value) {
-            fetchWarehouses();
+        // Vérifier qu'il y a exactement 3 comptages avec mode
+        const comptagesWithMode = state.comptages.filter(c => c.mode);
+        if (comptagesWithMode.length !== 3) {
+            errors.push('Un inventaire doit contenir exactement 3 comptages');
+            return errors;
         }
 
-        if ((!accounts.value || accounts.value.length === 0) && !accountsLoading.value) {
-            fetchAccounts();
+        // Vérifier que la combinaison des modes est autorisée
+        const modes = state.comptages.slice(0, 3).map(c => c.mode as ComptageMode);
+        if (!isAllowedModeCombination(modes)) {
+            errors.push(
+                'Combinaison des modes invalide. Combinaisons autorisées : ' +
+                'image de stock > par article > par article, ' +
+                'image de stock > en vrac > en vrac, ' +
+                'par article > par article > par article, ' +
+                'en vrac > en vrac > en vrac.'
+            );
+            return errors;
         }
 
-        // Forcer un recalcul des computed properties
-        nextTick(() => {
-            // Validation sera recalculée automatiquement
-        });
-    }, { deep: true });
+        const [first, second, third] = state.comptages;
 
-    onMounted(() => {
-        loaded.value = true;
-        loadMasterData();
+        if (first.mode === 'image de stock') {
+            if (!second.mode || !third.mode) {
+                errors.push('Avec "image de stock" en premier, les 2e et 3e comptages doivent être définis.');
+            } else if (second.mode !== third.mode || !areComptagesIdentical(second, third)) {
+                errors.push('Lorsque le premier comptage est "image de stock", les 2e et 3e comptages doivent être identiques (mode et options).');
+            }
+        }
 
-        nextTick(() => {
-            // Initialiser explicitement les valeurs par défaut si elles sont vides
-            if (!state.step1Data.libelle) state.step1Data.libelle = '';
-            if (!state.step1Data.date) state.step1Data.date = '';
-            if (!state.step1Data.inventory_type) state.step1Data.inventory_type = ''; // Valeur par défaut
-            if (!state.step1Data.compte) state.step1Data.compte = '';
-            if (!Array.isArray(state.step1Data.magasin)) state.step1Data.magasin = [];
-        });
-    });
+        // Validation spécifique du 3e comptage selon les nouvelles règles
+        const firstOptions = getComptageOptions(state.comptages[0]);
+        const secondOptions = getComptageOptions(state.comptages[1]);
+        const thirdOptions = getComptageOptions(state.comptages[2]);
 
-    // Fonction pour charger les données maîtres
-    async function loadMasterData() {
-        try {
-            // Forcer le rechargement même si les données existent
-            await Promise.all([
-                fetchWarehouses(),
-                fetchAccounts()
-            ]);
-        } catch (error) {
-            console.error('❌ Erreur lors du chargement des données maîtres:', error);
-            await alertService.error({
-                title: 'Erreur de chargement',
-                text: 'Impossible de charger les données de référence. Veuillez réessayer.'
+        // Vérifier que les options du 3e correspondent à celles du 1er OU du 2e
+        const matchesFirst = areOptionsIdentical(thirdOptions, firstOptions);
+        const matchesSecond = areOptionsIdentical(thirdOptions, secondOptions);
+
+        if (!matchesFirst && !matchesSecond) {
+            errors.push('Les options du 3e comptage doivent être identiques à celles du 1er OU du 2e comptage');
+        }
+
+        return errors;
+    }
+
+    // Fonction pour comparer si deux comptages sont identiques
+    function areComptagesIdentical(comptage1: ComptageConfig, comptage2: ComptageConfig): boolean {
+        // Vérifier que les modes sont identiques
+        if (comptage1.mode !== comptage2.mode) {
+            return false;
+        }
+
+        // Si les modes sont identiques, vérifier les options selon le mode
+        if (comptage1.mode === 'en vrac') {
+            return (
+                normalizeComptageInputMethod(comptage1.inputMethod) === normalizeComptageInputMethod(comptage2.inputMethod) &&
+                normalizeComptageBoolean(comptage1.saisieQuantite) === normalizeComptageBoolean(comptage2.saisieQuantite) &&
+                normalizeComptageBoolean(comptage1.scannerUnitaire) === normalizeComptageBoolean(comptage2.scannerUnitaire) &&
+                normalizeComptageBoolean(comptage1.guideQuantite) === normalizeComptageBoolean(comptage2.guideQuantite)
+                // guideArticle n'est pas comparé pour le mode "en vrac"
+            );
+        } else if (comptage1.mode === 'par article') {
+            return (
+                normalizeComptageBoolean(comptage1.numeroSerie) === normalizeComptageBoolean(comptage2.numeroSerie) &&
+                normalizeComptageBoolean(comptage1.numeroLot) === normalizeComptageBoolean(comptage2.numeroLot) &&
+                normalizeComptageBoolean(comptage1.dlc) === normalizeComptageBoolean(comptage2.dlc) &&
+                normalizeComptageBoolean(comptage1.guideQuantite) === normalizeComptageBoolean(comptage2.guideQuantite) &&
+                normalizeComptageBoolean(comptage1.guideArticle) === normalizeComptageBoolean(comptage2.guideArticle) &&
+                normalizeComptageBoolean(comptage1.isVariante) === normalizeComptageBoolean(comptage2.isVariante)
+            );
+        }
+
+        // Pour image de stock, toujours identiques car pas d'options
+        return true;
+    }
+
+    // Fonction pour réinitialiser le formulaire avec les valeurs par défaut
+    function resetForm() {
+        state.header = {
+            libelle: 'Inventaire ' + new Date().toLocaleDateString('fr-FR'),
+            date: new Date().toISOString().split('T')[0],
+            inventory_type: 'GENERAL',
+            compte: '',
+            magasin: []
+        };
+
+        state.comptages = [
+            { mode: '' },
+            { mode: '' },
+            { mode: '' }
+        ];
+
+        state.step = 0;
+    }
+
+    // Fonction pour charger un inventaire existant
+    function loadInventory(inventoryData: any) {
+        // Charger les données d'en-tête
+        state.header = {
+            libelle: inventoryData.libelle || '',
+            date: inventoryData.date || '',
+            inventory_type: inventoryData.inventory_type || '',
+            compte: inventoryData.account_id?.toString() || '',
+            magasin: inventoryData.warehouses || []
+        };
+
+        // Charger les configurations de comptage
+        if (inventoryData.comptage_configs) {
+            inventoryData.comptage_configs.forEach((config: any, index: number) => {
+                if (index < state.comptages.length) {
+                    state.comptages[index] = {
+                        mode: config.mode || '',
+                        ...parseComptageOptions(config.options || [])
+                    };
+                }
             });
         }
     }
 
-    // Fonction pour forcer la validation
-    const forceValidation = () => {
-        // Forcer un recalcul de la validation
-        nextTick(() => {
-            // Validation sera recalculée automatiquement
+    // Fonction utilitaire pour parser les options de comptage
+    function parseComptageOptions(options: string[]) {
+        const parsed: any = {};
+
+        options.forEach(option => {
+            switch (option) {
+                case 'saisie_quantite':
+                    parsed.saisieQuantite = true;
+                    parsed.inputMethod = 'saisie';
+                    break;
+                case 'scanner_unitaire':
+                    parsed.scannerUnitaire = true;
+                    parsed.inputMethod = 'scanner';
+                    break;
+                case 'guide_quantite':
+                    parsed.guideQuantite = true;
+                    break;
+                case 'numero_serie':
+                    parsed.numeroSerie = true;
+                    break;
+                case 'numero_lot':
+                    parsed.numeroLot = true;
+                    break;
+                case 'dlc':
+                    parsed.dlc = true;
+                    break;
+                case 'guide_article':
+                    parsed.guideArticle = true;
+                    break;
+                case 'is_variante':
+                    parsed.isVariante = true;
+                    break;
+            }
         });
-    };
 
-    // Fonction pour obtenir le nom d'un compte par son ID
-    const getAccountName = (accountId: string | number): string => {
-        if (!accountId) return 'Compte non défini';
-        const account = accounts.value?.find(acc => acc.id.toString() === accountId.toString());
-        return account ? account.account_name : `Compte ${accountId}`;
-    };
-
-    // Fonction pour obtenir le nom d'un magasin par son ID
-    const getWarehouseName = (warehouseId: string | number): string => {
-        if (!warehouseId) return 'Magasin non défini';
-        const warehouse = warehouses.value?.find(wh => wh.id.toString() === warehouseId.toString());
-        return warehouse ? warehouse.warehouse_name : `Magasin ${warehouseId}`;
-    };
-
-    // Fonction pour formater la date au format attendu par flat-pickr
-    function formatDateForFlatpickr(dateString: string): string {
-        if (!dateString) return '';
-
-        try {
-            // Si la date est déjà au format Y-m-d, la retourner telle quelle
-            if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-                return dateString;
-            }
-
-            // Si c'est un datetime ISO, extraire seulement la partie date
-            if (/^\d{4}-\d{2}-\d{2}T/.test(dateString)) {
-                return dateString.split('T')[0];
-            }
-
-            // Sinon, essayer de parser la date et la reformater
-            const date = new Date(dateString);
-            if (isNaN(date.getTime())) {
-                console.warn('Format de date invalide:', dateString);
-                return '';
-            }
-
-            // Formater au format Y-m-d
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-
-            return `${year}-${month}-${day}`;
-        } catch (error) {
-            console.error('Erreur lors du formatage de la date:', error);
-            return '';
-        }
+        return parsed;
     }
 
-    // Fonction pour initialiser en mode édition - Améliorée pour éviter les conflits DOM
-    const initializeEditMode = async (reference: string) => {
-        isEditMode.value = true;
-        inventoryId.value = null;
-        isInitializing.value = true; // Désactiver la validation pendant l'initialisation
+    onMounted(() => {
+        fetchWarehouses();
+        fetchAccounts();
+    });
 
-        try {
-            // Charger d'abord les données maîtres et attendre qu'elles soient disponibles
-            await loadMasterData();
+    // Watcher pour appliquer les nouvelles règles de validation en temps réel
+    watch(
+        () => state.comptages.map(c => ({
+            mode: c.mode,
+            numeroSerie: c.numeroSerie,
+            numeroLot: c.numeroLot,
+            dlc: c.dlc,
+            isVariante: c.isVariante,
+            saisieQuantite: c.saisieQuantite,
+            scannerUnitaire: c.scannerUnitaire,
+            guideQuantite: c.guideQuantite,
+            guideArticle: c.guideArticle
+        })),
+        (comptages) => {
+            // Application automatique des règles de combinaison
+            // Validation des options du 3e comptage
+            if (comptages.length >= 3 && comptages[2].mode) {
+                const modes = state.comptages.slice(0, 3).map(c => c.mode as ComptageMode);
+                if (modes.every(Boolean) && !isAllowedModeCombination(modes)) {
+                    logger.warn('[useInventoryCreation] Combinaison de modes invalide détectée', { modes });
+                }
 
-            // Attendre un peu pour s'assurer que les données sont bien chargées
-            await new Promise(resolve => setTimeout(resolve, 100));
+                // Vérifier que les options du 3e comptage correspondent au 1er OU 2e
+                const firstOptions = getComptageOptions(state.comptages[0]);
+                const secondOptions = getComptageOptions(state.comptages[1]);
+                const thirdOptions = getComptageOptions(state.comptages[2]);
 
-            // Vérifier que les données des comptes et magasins sont chargées
-            if (!accounts.value || accounts.value.length === 0) {
-                await fetchAccounts();
+                // Si les options du 3e ne correspondent ni au 1er ni au 2e,
+                // on peut automatiquement les ajuster ou afficher un avertissement
+                const matchesFirst = areOptionsIdentical(thirdOptions, firstOptions);
+                const matchesSecond = areOptionsIdentical(thirdOptions, secondOptions);
+
+                if (!matchesFirst && !matchesSecond && thirdOptions.length > 0) {
+                    // Optionnel : Afficher un avertissement ou ajuster automatiquement
+                    logger.warn('Les options du 3e comptage doivent correspondre au 1er OU 2e comptage');
+                }
             }
+        },
+        { deep: true }
+    );
 
-            if (!warehouses.value || warehouses.value.length === 0) {
-                await fetchWarehouses();
-            }
+    // Fonction utilitaire pour comparer les options
+    function areOptionsIdentical(options1: string[], options2: string[]): boolean {
+        if (options1.length !== options2.length) return false;
+        return options1.every((option, index) => option === options2[index]);
+    }
 
-            // Récupérer l'inventaire par sa référence
-            // D'abord, charger la liste des inventaires pour trouver celui avec la bonne référence
-            await inventoryStore.fetchInventories();
-            const inventory = inventoryStore.inventories.find(inv => inv.reference === reference);
-
-            if (!inventory) {
-                throw new Error(`Aucun inventaire trouvé avec la référence: ${reference}`);
-            }
-
-            // Stocker l'ID de l'inventaire
-            inventoryId.value = inventory.id;
-
-            // Récupérer les détails de l'inventaire avec l'ID
-            const inventoryDetails: InventoryDetails = await inventoryStore.fetchInventoryById(inventory.id);
-            if (!inventoryDetails) {
-                throw new Error(`Impossible de récupérer les détails de l'inventaire avec l'ID: ${inventory.id}`);
-            }
-
-            // Mapper les données de l'API vers le state local
-            const step1Data = {
-                libelle: inventoryDetails.label || '',
-                date: formatDateForFlatpickr(inventoryDetails.date),
-                inventory_type: (inventoryDetails.inventory_type as string) ,
-                compte: inventoryDetails.account_id ? inventoryDetails.account_id.toString() : '',
-                magasin: Array.isArray(inventoryDetails.warehouses)
-                    ? inventoryDetails.warehouses.map(wh => ({
-                        magasin: wh.id ? wh.id.toString() : '',
-                        date: formatDateForFlatpickr(wh.inventory_start_date)
-                    }))
-                    : []
-            };
-
-            // Assigner les données de manière réactive avec nextTick pour éviter les conflits DOM
-            await nextTick();
-
-            // Assigner les données de manière atomique
-            Object.assign(state.step1Data, step1Data);
-
-            // Mapper les comptages
-            if (inventoryDetails.comptages && inventoryDetails.comptages.length > 0) {
-                const mappedComptages = inventoryDetails.comptages.slice(0, 3).map(count => {
-                    // Déterminer inputMethod pour le mode "en vrac"
-                    let inputMethod: '' | 'saisie' | 'scanner' = '';
-                    if (count.count_mode === 'en vrac') {
-                        if (count.entry_quantity) {
-                            inputMethod = 'saisie';
-                        } else if (count.unit_scanned) {
-                            inputMethod = 'scanner';
-                        }
-                    }
-
-                    return {
-                        mode: (count.count_mode || '') as ComptageMode,
-                        inputMethod,
-                        saisieQuantite: count.entry_quantity || false,
-                        scannerUnitaire: count.unit_scanned || false,
-                        guideQuantite: count.quantity_show || false,
-                        isVariante: count.is_variant || false,
-                        guideArticle: count.show_product || false,
-                        dlc: count.dlc || false,
-                        numeroSerie: count.n_serie || false,
-                        numeroLot: count.n_lot || false,
-                        stock_situation: count.stock_situation || false,
-                        // Legacy props
-                        useScanner: count.unit_scanned || false,
-                        useSaisie: count.entry_quantity || false
-                    };
-                });
-
-                // Assigner les comptages de manière atomique
-                state.comptages.splice(0, state.comptages.length, ...mappedComptages);
-            }
-
-            // Forcer une mise à jour réactive après le prochain tick
-            await nextTick();
-
-            // Attendre un peu avant de réactiver la validation
-            await new Promise(resolve => setTimeout(resolve, 200));
-        } catch (error) {
-            console.error('Erreur lors du chargement de l\'inventaire:', error);
-            throw error;
-        } finally {
-            isInitializing.value = false; // Réactiver la validation après l'initialisation
+    function isAllowedModeCombination(modes: Array<ComptageMode | ''>): boolean {
+        if (modes.length < 3 || modes.some(mode => !mode)) {
+            return false;
         }
-    };
-
-    // Fonction pour mettre à jour un inventaire existant
-    const updateInventory = async () => {
-        if (!inventoryId.value) {
-            throw new Error('ID d\'inventaire manquant pour la mise à jour');
-        }
-
-        try {
-            isSubmitting.value = true;
-
-            // Convertir les données au format API
-            const apiData = convertFormDataToAPI(state);
-
-            // Appeler l'API de mise à jour via le store
-            await updateInventoryStore(inventoryId.value, apiData);
-
-            // Reset après succès
-            resetState();
-            isEditMode.value = false;
-            inventoryId.value = null;
-        } catch (error) {
-            console.error('❌ Erreur lors de la mise à jour:', error);
-            throw error;
-        } finally {
-            isSubmitting.value = false;
-        }
-    };
+        return allowedModeCombinations.some(combo =>
+            combo.every((mode, index) => mode === modes[index])
+        );
+    }
 
     return {
         state,
-        currentStep,
-        availableModesForStep,
-        onStepComplete,
-        onComplete,
+        setMode,
+        getStepConfig,
+        getOptions,
+        headerFields,
+        getFields,
+        createInventory,
         updateInventory,
-        initializeEditMode,
-        cancelCreation,
-        loaded,
-        isValid,
-        isSubmitting,
-        isEditMode,
-        inventoryId,
-        resetState,
-        convertFormDataToAPI,
-        validateComptageWithDispatcher,
-        validateComptage3BusinessRules,
-        // Exposer les données des stores
-        warehouses,
-        accounts,
-        warehousesLoading,
-        accountsLoading,
-        loadMasterData,
-        accountOptions,
-        warehouseOptions,
-        inventoryTypeOptions,
-        getAccountName,
-        getWarehouseName,
-        validationErrors,
-        forceValidation,
-        goToStep0
+        loadInventory,
+        resetForm,
+        validateComptage,
+        validateAllComptages,
+        validateBusinessRules
     };
 }

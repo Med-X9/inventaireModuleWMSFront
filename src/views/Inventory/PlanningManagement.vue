@@ -6,14 +6,16 @@
                 <IconCalendar class="w-7 h-7 text-yellow-400" />
                 Planning des magasins
             </h1>
-            <ToggleButtons v-model="viewMode" :options="viewOptions" class="mt-4 sm:mt-0" />
+            <ToggleButtons v-model="viewMode" :options="updatedViewOptions" class="mt-4 sm:mt-0" />
         </div>
 
         <!-- Raccourci vers le détail de l'inventaire -->
         <div class="flex justify-end mb-6">
-            <button class="shortcut-detail-btn flex items-center gap-2" @click="goToInventoryDetail">
-                <IconEye class="w-5 h-5" />
-            </button>
+            <div class="navigation-buttons">
+                <button class="nav-btn detail-btn flex items-center gap-2" @click="handleGoToInventoryDetail">
+                    <IconEye class="w-4 h-4 text-white" />
+                </button>
+            </div>
         </div>
 
         <!-- Chargement de l'inventaire -->
@@ -51,7 +53,7 @@
         <!-- Contenu principal -->
         <template v-else>
             <div v-if="viewMode === 'table'" class="panel py-4 animate-fade-in bg-white rounded-2xl shadow-md border border-gray-100">
-                <DataTableNew
+                <DataTable
                     :columns="adaptedColumns"
                     :rowDataProp="stores"
                     :actions="adaptedActions"
@@ -62,6 +64,18 @@
                     :exportTitle="'Planning Management'"
                     :showColumnSelector="false"
                     storageKey="planning_table"
+                    :loading="loading"
+                    :serverSidePagination="true"
+                    :serverSideFiltering="true"
+                    :serverSideSorting="true"
+                    :debounceFilter="500"
+                    @selection-changed="onSelectionChanged"
+                    @row-clicked="onRowClicked"
+                    @cell-value-changed="onCellValueChanged"
+                    @pagination-changed="handlePaginationChanged"
+                    @sort-changed="handleSortChanged"
+                    @filter-changed="handleFilterChanged"
+                    @global-search-changed="handleGlobalSearchChanged"
                 />
             </div>
             <GridView v-else class="panel animate-fade-in border border-white-dark/20 bg-white rounded-2xl shadow-md"
@@ -89,17 +103,14 @@
 
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import DataTableNew from '@/components/DataTable/DataTableNew.vue';
+import { ref, onMounted } from 'vue';
+import DataTable from '@/components/DataTable/DataTable.vue';
 import ToggleButtons from '@/components/ToggleButtons/ToggleButtons.vue';
 import GridView from '@/components/GridView/GridView.vue';
 import IconCalendar from '@/components/icon/icon-calendar.vue';
 import IconListCheck from '@/components/icon/icon-list-check.vue';
 import IconLayoutGrid from '@/components/icon/icon-layout-grid.vue';
 import IconEye from '@/components/icon/icon-eye.vue';
-import { useRouter, useRoute } from 'vue-router';
-import { useInventoryStore } from '@/stores/inventory';
-import type { Store, GridDataItem } from '@/interfaces/planningManagement';
 import { usePlanningManagement } from '@/composables/usePlanningManagement';
 
 // Props
@@ -107,10 +118,6 @@ interface Props {
     reference: string;
 }
 const props = defineProps<Props>();
-
-const router = useRouter();
-const route = useRoute();
-const inventoryStore = useInventoryStore();
 
 // Utiliser le nouveau composable usePlanning
 const {
@@ -120,110 +127,64 @@ const {
     loading,
     inventoryStatus,
     inventoryReference,
+    inventoryId,
+    inventoryLoading,
+    inventoryError,
 
     // Colonnes et actions
     actions,
+    adaptedColumns,
+    adaptedActions,
+    adaptedGridActions,
+    adaptedHandleItemClick,
+    adaptedHandleActionsClick,
 
     // Fonctions
     fetchStores,
     selectStore,
     setInventoryStatus,
     setInventoryReference,
+    fetchInventoryIdByReference,
+    goToInventoryDetail,
+    goToAffectation, // Added goToAffectation
 } = usePlanningManagement();
 
 // Ajouter viewMode manuellement car il n'est pas dans usePlanning
 const viewMode = ref<'table' | 'grid'>('table');
 
-// Adapter les colonnes pour supprimer les propriétés non reconnues
-const adaptedColumns = computed(() => [
-    {
-        field: 'store_name',
-        headerName: 'Nom du magasin',
-        sortable: true,
-        width: 200,
-        editable: false
-    },
-    {
-        field: 'teams_count',
-        headerName: 'Équipes',
-        sortable: true,
-        width: 100,
-        editable: false
-    },
-    {
-        field: 'jobs_count',
-        headerName: 'Jobs',
-        sortable: true,
-        width: 100,
-        editable: false
-    },
-    {
-        field: 'reference',
-        headerName: 'Référence',
-        sortable: true,
-        width: 150,
-        editable: false
-    }
-]);
+// Mettre à jour les options de vue avec les icônes
+const updatedViewOptions = [
+    { value: 'table', icon: IconListCheck },
+    { value: 'grid', icon: IconLayoutGrid }
+];
 
-// Adapter les actions pour DataTableNew
-const adaptedActions = computed(() =>
-    actions.value.map(action => ({
-        label: action.label,
-        icon: action.icon,
-        onClick: (row: Record<string, unknown>) => action.handler(row as unknown as Store),
-        color: 'primary' as const
-    }))
-);
-
-// Adapter les actions pour GridView
-const adaptedGridActions = computed(() =>
-    actions.value.map(action => ({
-        label: action.label,
-        icon: action.icon,
-        handler: (item: any) => action.handler(item),
-        variant: 'primary' as const
-    }))
-);
-
-// Adapter le handler pour GridView
-const adaptedHandleItemClick = (item: any) => {
-    // This function is not directly used in the new usePlanningManagement,
-    // but keeping it for now as it might be used elsewhere or for future compatibility.
-    // The actual item click handling is now part of the actions.
+// Handlers pour les événements du DataTable
+const onSelectionChanged = (selectedRows: Set<string>) => {
+    // Gestion de la sélection
 };
 
-const adaptedHandleActionsClick = (item: any, e: MouseEvent) => {
-    // This function is not directly used in the new usePlanningManagement,
-    // but keeping it for now as it might be used elsewhere or for future compatibility.
-    // The actual actions click handling is now part of the actions.
+const onRowClicked = (row: any) => {
+    // Gestion du clic sur une ligne
 };
 
-// Récupérer l'ID d'inventaire à partir de la référence
-const inventoryId = ref<number | null>(null);
-const inventoryLoading = ref(false);
-const inventoryError = ref<string | null>(null);
+const onCellValueChanged = (event: { data: any; field: string; newValue: any; oldValue: any }) => {
+    // Gestion du changement de valeur de cellule
+};
 
-// Fonction pour récupérer l'ID de l'inventaire par sa référence
-const fetchInventoryIdByReference = async (reference: string) => {
-    inventoryLoading.value = true;
-    inventoryError.value = null;
+const handlePaginationChanged = (params: { page: number; pageSize: number }) => {
+    // Gestion de la pagination
+};
 
-    try {
-        // Charger la liste des inventaires pour trouver celui avec la bonne référence
-        await inventoryStore.fetchInventories();
-        const inventory = inventoryStore.inventories.find(inv => inv.reference === reference);
+const handleSortChanged = (sortModel: any) => {
+    // Gestion du tri
+};
 
-        if (inventory) {
-            inventoryId.value = inventory.id;
-        } else {
-            inventoryError.value = `Aucun inventaire trouvé avec la référence: ${reference}`;
-        }
-    } catch (error) {
-        inventoryError.value = 'Erreur lors de la récupération de l\'inventaire';
-    } finally {
-        inventoryLoading.value = false;
-    }
+const handleFilterChanged = (filterModel: any) => {
+    // Gestion des filtres
+};
+
+const handleGlobalSearchChanged = (searchTerm: string) => {
+    // Gestion de la recherche globale
 };
 
 // Charger les données au montage du composant
@@ -240,21 +201,20 @@ onMounted(async () => {
             try {
                 await fetchStores(inventoryId.value);
             } catch (error) {
-                console.error('Erreur lors du chargement des magasins:', error);
+                // Gestion silencieuse des erreurs
             }
         }
-    } else {
-        console.warn('Aucune référence d\'inventaire fournie');
     }
 });
 
-const viewOptions = [
-    { value: 'table', icon: IconListCheck },
-    { value: 'grid', icon: IconLayoutGrid }
-];
+// Fonction pour naviguer vers le détail de l'inventaire
+const handleGoToInventoryDetail = () => {
+    goToInventoryDetail(props.reference);
+};
 
-const goToInventoryDetail = () => {
-    router.push({ name: 'inventory-detail', params: { reference: props.reference } });
+// Fonction pour naviguer vers l'affectation
+const handleGoToAffectation = () => {
+    goToAffectation(props.reference);
 };
 </script>
 
@@ -308,6 +268,40 @@ const goToInventoryDetail = () => {
     color: #b45309;
     box-shadow: 0 4px 16px rgba(250,204,21,0.18);
     transform: translateY(-2px) scale(1.03);
+}
+
+.navigation-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+    color: #1e293b;
+    box-shadow: 0 4px 12px rgba(250, 204, 21, 0.3);
+}
+
+.nav-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(250, 204, 21, 0.4);
+}
+
+.nav-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
 }
 
 .animate-fade-in {

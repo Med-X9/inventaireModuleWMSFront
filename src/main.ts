@@ -1,6 +1,7 @@
 import { createApp } from 'vue';
 import App from '@/App.vue';
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
+import axios from 'axios'
 // main.ts ou équivalent
 
 // Import du gestionnaire d'erreur DOM
@@ -119,5 +120,24 @@ ModuleRegistry.registerModules([
     CustomEditorModule
 ])
 
-// montez l'app après avoir enregistré vos modules
-app.mount('#app');
+// Fonction pour initialiser le token CSRF
+async function initializeCSRF() {
+    try {
+        // Récupérer le token CSRF de Django
+        await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/csrf-token/`, {
+            withCredentials: true
+        });
+    } catch (error) {
+        console.warn('⚠️ Erreur lors de l\'initialisation CSRF:', error);
+        // Continuer même en cas d'erreur CSRF
+    }
+}
+
+// Initialiser CSRF puis monter l'app
+async function initializeApp() {
+    // await initializeCSRF();
+    app.mount('#app');
+}
+
+// Démarrer l'application
+initializeApp();

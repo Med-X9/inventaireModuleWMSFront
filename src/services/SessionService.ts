@@ -1,6 +1,7 @@
 import API from "@/api";
 import { SessionResponse } from "@/models/Session";
 import axiosInstance from '@/utils/axiosConfig';
+import { logger } from '@/services/loggerService';
 import type { AxiosResponse } from 'axios';
 
 
@@ -15,7 +16,7 @@ export class SessoinService {
             );
             return response.data;
         } catch (error) {
-            console.error('❌ Erreur lors de la récupération des sessions:', error);
+            logger.error('Erreur lors de la récupération des sessions', error);
             throw error;
         }
     }

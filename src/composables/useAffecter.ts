@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useJobStore } from '@/stores/job';
 import { useResourceStore } from '@/stores/resource';
@@ -6,7 +6,8 @@ import { useWarehouseStore } from '@/stores/warehouse';
 import { useInventoryStore } from '@/stores/inventory';
 import { useSessionStore } from '@/stores/session';
 import { alertService } from '@/services/alertService';
-import { useDataTableFilters, type DataTableParams } from '@/composables/useDataTableFilters';
+import { logger } from '@/services/loggerService';
+import { useJobValidatedDataTable } from '@/composables/useJobValidatedDataTable';
 import type { FieldConfig } from '@/interfaces/form';
 import { JobManualAssignmentsRequest } from '@/models/Job';
 
@@ -16,7 +17,6 @@ const warehouseStore = useWarehouseStore();
 const inventoryStore = useInventoryStore();
 const sessionStore = useSessionStore();
 const route = useRoute();
-const router = useRouter();
 
 export interface RowNode {
     id: string;
@@ -29,7 +29,7 @@ export interface RowNode {
     resourcesList: string[];
     nbResources: number;
     locations?: string[];
-    status: 'AFFECTE' | 'VALIDE' | 'TRANSFER';
+    status: 'AFFECTE' | 'VALIDE' | 'TRANSFERT'| 'PRET';
     isChild?: boolean;
     parentId?: string | null;
     childType?: 'location' | 'resource';
@@ -89,7 +89,54 @@ const fetchWarehouseIdByReference = async (reference: string): Promise<number | 
     }
 };
 
+// Fonction pour parser les dates depuis l'éditeur
+export const dateValueParser = (params: any) => {
+    if (!params.newValue) return '';
+
+    const newVal = params.newValue;
+    if (
+        newVal !== null
+        && typeof newVal === 'object'
+        && Object.prototype.toString.call(newVal) === '[object Date]'
+    ) {
+        return (newVal as Date).toISOString().split('T')[0];
+    }
+
+    if (typeof params.newValue === 'string') {
+        if (params.newValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            return params.newValue;
+        }
+
+        try {
+            const date = new Date(params.newValue);
+            return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
+        } catch {
+            return '';
+        }
+    }
+
+    return '';
+};
+
+// Fonction pour setter les valeurs de date
+export const dateValueSetter = (params: any) => {
+    if (!params.data || params.data.isChild) return false;
+
+    const parsedValue = dateValueParser(params);
+    const field = params.colDef.field!;
+    const oldValue = params.data[field];
+
+    if (parsedValue !== oldValue) {
+        params.data[field] = parsedValue;
+        return true;
+    }
+
+    return false;
+};
+
 export function useAffecter(options?: { inventoryReference?: string, warehouseReference?: string }) {
+    const router = useRouter();
+
     // Priorité aux options, sinon fallback sur la route
     const inventoryReference = options?.inventoryReference ?? (route.params.reference as string);
     const warehouseReference = options?.warehouseReference ?? (route.params.warehouse as string);
@@ -134,60 +181,60 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     const dropdownRef = ref<HTMLElement | null>(null);
     const showDropdown = ref(false);
 
-    const dataTableFilters = useDataTableFilters();
+    // État réactif pour le composable DataTable
+    const jobValidatedDataTableRef = ref<any>(null);
 
-    const currentPage = ref(1);
-    const pageSize = ref(10);
-    const totalItems = ref(0);
-    const totalPages = ref(1);
+    // État pour le statut de l'inventaire
+    const inventoryStatus = ref<string>('');
 
-    const fetchJobsValidated = async (params: DataTableParams) => {
-        if (!inventoryId.value || !warehouseId.value) {
-            return;
-        }
-
+    // Fonction pour récupérer le statut de l'inventaire
+    const fetchInventoryStatus = async () => {
         try {
-            dataTableFilters.setLoading(true);
-
-            await jobStore.fetchJobsValidated(inventoryId.value, warehouseId.value, {
-                page: params.page || currentPage.value,
-                pageSize: params.pageSize || pageSize.value,
-                sort: params.sort,
-                filter: params.filter
-            });
-
-            totalItems.value = jobStore.totalCount;
-            totalPages.value = Math.ceil(totalItems.value / pageSize.value);
-            currentPage.value = params.page || 1;
-            pageSize.value = params.pageSize || pageSize.value;
-
+            const inventory = await inventoryStore.fetchInventoryByReference(inventoryReference);
+            if (inventory) {
+                inventoryStatus.value = inventory.status;
+            }
         } catch (error) {
-            console.error('Erreur lors du chargement des jobs:', error);
-        } finally {
-            dataTableFilters.setLoading(false);
+            logger.error('Erreur lors de la récupération du statut de l\'inventaire', error);
         }
     };
 
+    // Fonction pour initialiser le composable DataTable
+    const initializeDataTable = () => {
+        if (inventoryId.value && warehouseId.value && !jobValidatedDataTableRef.value) {
+            jobValidatedDataTableRef.value = useJobValidatedDataTable(inventoryId.value, warehouseId.value);
+        }
+    };
+
+    // Watch pour réinitialiser le composable quand les IDs changent
+    watch([inventoryId, warehouseId], ([newInventoryId, newWarehouseId]) => {
+        if (newInventoryId && newWarehouseId) {
+            jobValidatedDataTableRef.value = useJobValidatedDataTable(newInventoryId, newWarehouseId);
+        }
+    });
+
     const handlePaginationChanged = async ({ page, pageSize: newPageSize }: { page: number, pageSize: number }) => {
-        await fetchJobsValidated({
-            page,
-            pageSize: newPageSize,
-            sort: dataTableFilters.currentSortModel.value,
-            filter: dataTableFilters.currentFilterModel.value,
-            globalSearch: dataTableFilters.currentGlobalSearch.value
-        });
+        if (jobValidatedDataTableRef.value) {
+            await jobValidatedDataTableRef.value.handlePaginationChanged({ page, pageSize: newPageSize });
+        }
     };
 
     const handleSortChanged = async (sortModel: Array<{ field: string; direction: 'asc' | 'desc' }>) => {
-        await dataTableFilters.handleSortChanged(sortModel, fetchJobsValidated);
+        if (jobValidatedDataTableRef.value) {
+            await jobValidatedDataTableRef.value.handleSortChanged(sortModel);
+        }
     };
 
     const handleFilterChanged = async (filterModel: Record<string, any>) => {
-        await dataTableFilters.handleFilterChanged(filterModel, fetchJobsValidated);
+        if (jobValidatedDataTableRef.value) {
+            await jobValidatedDataTableRef.value.handleFilterChanged(filterModel);
+        }
     };
 
     const handleGlobalSearchChanged = async (searchTerm: string) => {
-        await dataTableFilters.handleGlobalSearchChanged(searchTerm, fetchJobsValidated);
+        if (jobValidatedDataTableRef.value) {
+            await jobValidatedDataTableRef.value.handleSearchChanged(searchTerm);
+        }
     };
 
     const teamOptions = computed(() => {
@@ -198,14 +245,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         }));
     });
 
-    const resourceOptions = computed(() => {
-        const resources = resourceStore.getResources;
-        const options = resources.map(resource => ({
-            value: resource.id?.toString() || resource.reference,
-            label: resource.libelle || resource.reference || `Ressource ${resource.reference}`
-        }));
-        return options;
-    });
+    // resourceOptions est maintenant défini plus bas avec sessionOptions
 
 
     const teamFields = computed((): FieldConfig[] => [
@@ -260,7 +300,8 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     ];
 
     const displayData = computed(() => {
-        const jobs = jobStore.jobsValidated;
+        // Utiliser les données du composable générique si disponible, sinon fallback sur le store
+        const jobs = jobValidatedDataTableRef.value?.data.value || jobStore.jobsValidated;
         const newData: RowNode[] = [];
 
         jobs.forEach((parentRow) => {
@@ -287,7 +328,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                 resourcesList: ressourcesList,
                 resources: ressourcesString,
                 nbResources: ressourcesList.length,
-                status: (['AFFECTE', 'VALIDE', 'TRANSFER'].includes(String(parentRow.status)) ? String(parentRow.status) : 'AFFECTE') as 'AFFECTE' | 'VALIDE' | 'TRANSFER',
+                status: (['AFFECTE', 'VALIDE', 'TRANSFERT', 'PRET'].includes(String(parentRow.status)) ? String(parentRow.status) : 'AFFECTE') as 'AFFECTE' | 'VALIDE' | 'TRANSFERT' | 'PRET',
                 isChild: false,
                 parentId: null
             });
@@ -382,16 +423,12 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                 text: `${manualAssignments.length} modification(s) sauvegardée(s) avec succès !`
             });
 
-            await fetchJobsValidated({
-                page: currentPage.value,
-                pageSize: pageSize.value,
-                sort: dataTableFilters.currentSortModel.value,
-                filter: dataTableFilters.currentFilterModel.value,
-                globalSearch: dataTableFilters.currentGlobalSearch.value
-            });
+            if (jobValidatedDataTableRef.value) {
+                await jobValidatedDataTableRef.value.refresh();
+            }
 
         } catch (error) {
-            console.error('Erreur lors de la sauvegarde:', error);
+            logger.error('Erreur lors de la sauvegarde', error);
             alertService.error({
                 title: 'Erreur de sauvegarde',
                 text: 'Certaines modifications n\'ont pas pu être sauvegardées. Veuillez réessayer.'
@@ -536,7 +573,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             }
 
         } catch (error) {
-            console.error('Erreur lors de l\'initialisation des stores:', error);
+            logger.error('Erreur lors de l\'initialisation des stores', error);
             alertService.error({
                 text: 'Erreur lors du chargement des données. Veuillez rafraîchir la page.'
             });
@@ -548,7 +585,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             try {
                 await sessionStore.fetchSessions();
             } catch (error) {
-                console.error('Erreur lors du chargement des sessions:', error);
+                logger.error('Erreur lors du chargement des sessions', error);
                 alertService.error({
                     text: 'Erreur lors du chargement des sessions'
                 });
@@ -585,7 +622,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         showDropdown.value = false;
     }
 
-    function handleValiderClick() {
+    async function handleValiderClick() {
         if (!selectedRows.value.length) {
             alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
             return;
@@ -594,22 +631,11 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
         selectedRows.value = [];
 
-        fetchJobsValidated({
-            page: currentPage.value,
-            pageSize: pageSize.value,
-            sort: dataTableFilters.currentSortModel.value,
-            filter: dataTableFilters.currentFilterModel.value,
-            globalSearch: dataTableFilters.currentGlobalSearch.value
-        });
+        if (jobValidatedDataTableRef.value) {
+            await jobValidatedDataTableRef.value.refresh();
+        }
     }
 
-    function handleTransfererClick() {
-        if (!selectedRows.value.length) {
-            alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
-            return;
-        }
-        showTransferModal.value = true;
-    }
 
     function clearAllSelections() {
         selectedRows.value = [];
@@ -624,13 +650,9 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         await jobStore.jobReady(jobIds);
         alertService.success({ text: `${jobIds.length} job(s) mis en statut 'Prêt' avec succès !` });
         selectedRows.value = [];
-        await fetchJobsValidated({
-            page: currentPage.value,
-            pageSize: pageSize.value,
-            sort: dataTableFilters.currentSortModel.value,
-            filter: dataTableFilters.currentFilterModel.value,
-            globalSearch: dataTableFilters.currentGlobalSearch.value
-        });
+        if (jobValidatedDataTableRef.value) {
+            await jobValidatedDataTableRef.value.refresh();
+        }
     }
 
     async function handleResetClick() {
@@ -642,14 +664,99 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         await jobStore.jobReset(jobIds);
         alertService.success({ text: `${jobIds.length} job(s) réinitialisés avec succès !` });
         selectedRows.value = [];
-        await fetchJobsValidated({
-            page: currentPage.value,
-            pageSize: pageSize.value,
-            sort: dataTableFilters.currentSortModel.value,
-            filter: dataTableFilters.currentFilterModel.value,
-            globalSearch: dataTableFilters.currentGlobalSearch.value
-        });
+        if (jobValidatedDataTableRef.value) {
+            await jobValidatedDataTableRef.value.refresh();
+        }
     }
+
+    // Fonctions de navigation
+    const handleGoToInventoryDetail = () => {
+        router.push({
+            name: 'inventory-detail',
+            params: { reference: inventoryReference }
+        });
+    };
+
+    const handleGoToAffectation = () => {
+        router.push({
+            name: 'inventory-planning',
+            params: {
+                reference: inventoryReference,
+                warehouse: warehouseReference
+            }
+        });
+    };
+
+    const handleTransferClick = () => {
+        if (!selectedRows.value.length) {
+            alertService.warning({ text: 'Veuillez sélectionner au moins un job.' });
+            return;
+        }
+
+        // Filtrer les jobs éligibles pour le transfert (seulement PRET)
+        const eligibleJobs = selectedRows.value.filter(job => job.status === 'PRET');
+        const ineligibleJobs = selectedRows.value.filter(job => job.status !== 'PRET');
+
+        if (eligibleJobs.length === 0) {
+            alertService.warning({
+                text: 'Aucun job éligible pour le transfert. Seuls les jobs en statut PRET peuvent être transférés.'
+            });
+            return;
+        }
+
+        if (ineligibleJobs.length > 0) {
+            alertService.info({
+                text: `${eligibleJobs.length} job(s) éligible(s). ${ineligibleJobs.length} job(s) ne sont pas en statut PRET.`
+            });
+        }
+
+        showTransferModal.value = true;
+    };
+
+    // Computed pour obtenir les jobs éligibles au transfert (seulement PRET)
+    const eligibleJobsForTransfer = computed(() => {
+        return selectedRows.value.filter(job => job.status === 'PRET');
+    });
+
+    const handleTransferSubmit = async (data: Record<string, unknown>) => {
+        const { premierComptage, deuxiemeComptage } = data as { premierComptage: boolean; deuxiemeComptage: boolean };
+
+        // Déterminer les ordres de comptage à transférer
+        const countingOrder: number[] = [];
+        if (premierComptage) countingOrder.push(1);
+        if (deuxiemeComptage) countingOrder.push(2);
+
+        if (countingOrder.length === 0) {
+            alertService.warning({ text: 'Veuillez sélectionner au moins un comptage à transférer.' });
+            return;
+        }
+
+        // Utiliser uniquement les jobs éligibles (seulement PRET)
+        const eligibleJobIds = selectedRows.value
+            .filter(job => job.status === 'PRET')
+            .map(r => parseInt(r.id));
+
+        try {
+            await jobStore.jobTransfer(eligibleJobIds, countingOrder);
+
+            alertService.success({
+                text: `${eligibleJobIds.length} job(s) transféré(s) avec succès pour ${countingOrder.length === 2 ? 'les deux comptages' : countingOrder[0] === 1 ? 'le 1er comptage' : 'le 2e comptage'}`
+            });
+
+            showTransferModal.value = false;
+            transferForm.value = { premierComptage: false, deuxiemeComptage: false };
+            selectedRows.value = [];
+
+            if (jobValidatedDataTableRef.value) {
+                await jobValidatedDataTableRef.value.refresh();
+            }
+        } catch (error) {
+            logger.error('Erreur lors du transfert des jobs', error);
+            alertService.error({
+                text: 'Erreur lors du transfert des jobs'
+            });
+        }
+    };
 
     async function handleResourceSubmit(data: Record<string, unknown>) {
         const { resources } = data as { resources: string[] };
@@ -693,16 +800,12 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
             showResourceModal.value = false;
             resourceForm.value = { resources: [] };
-            await fetchJobsValidated({
-                page: currentPage.value,
-                pageSize: pageSize.value,
-                sort: dataTableFilters.currentSortModel.value,
-                filter: dataTableFilters.currentFilterModel.value,
-                globalSearch: dataTableFilters.currentGlobalSearch.value
-            });
+            if (jobValidatedDataTableRef.value) {
+                await jobValidatedDataTableRef.value.refresh();
+            }
 
         } catch (error) {
-            console.error('Erreur lors de l\'affectation des ressources:', error);
+            logger.error('Erreur lors de l\'affectation des ressources', error);
             alertService.error({
                 text: 'Erreur lors de l\'affectation des ressources'
             });
@@ -731,31 +834,248 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
             showTeamModal.value = false;
             teamForm.value = { team: '', date: '' };
-            await fetchJobsValidated({
-                page: currentPage.value,
-                pageSize: pageSize.value,
-                sort: dataTableFilters.currentSortModel.value,
-                filter: dataTableFilters.currentFilterModel.value,
-                globalSearch: dataTableFilters.currentGlobalSearch.value
-            });
+            if (jobValidatedDataTableRef.value) {
+                await jobValidatedDataTableRef.value.refresh();
+            }
 
         } catch (error) {
-            console.error('Erreur lors de l\'affectation de l\'équipe:', error);
+            logger.error('Erreur lors de l\'affectation de l\'équipe', error);
             alertService.error({
                 text: 'Erreur lors de l\'affectation de l\'équipe'
             });
         }
     }
 
+    // Computed pour vérifier si on doit afficher le bouton de transfert
+    const showTransferButton = computed(() => {
+        return inventoryStatus.value === 'EN REALISATION';
+    });
+
+    // Computed pour vérifier si on doit afficher le bouton prêt
+    const showReadyButton = computed(() => {
+        return inventoryStatus.value === 'EN PREPARATION';
+    });
+
+    // Computed réactif pour les options des sessions
+    const sessionOptions = computed(() => {
+        const sessions = sessionStore.getAllSessions;
+
+        if (sessions.length === 0) {
+            loadSessionsIfNeeded();
+            return [];
+        }
+
+        const options = sessions.map(session => ({
+            value: session.username,
+            label: session.username
+        }));
+        return options;
+    });
+
+    // Computed pour les options de ressources
+    const resourceOptions = computed(() => {
+        const resources = resourceStore.getResources;
+
+        if (resources.length === 0) {
+            resourceStore.fetchResources();
+            return [];
+        }
+
+        const options = resources.map(resource => ({
+            value: resource.id?.toString() || resource.reference,
+            label: resource.ressource_nom || resource.reference || `Ressource ${resource.reference}`
+        }));
+        return options;
+    });
+
+    // Computed réactif pour les colonnes de DataTable
+    const columns = computed(() => {
+        const cols: any[] = [
+            {
+                field: 'job',
+                headerName: 'Job',
+                sortable: true,
+                filterable: true,
+                width: 80,
+                flex: 1,
+                editable: false,
+                dataType: 'text' as const,
+                nestedData: {
+                    key: 'locations',
+                    displayKey: 'location_reference',
+                    countSuffix: 'emplacements',
+                    expandable: true,
+                }
+            },
+            {
+                field: 'status',
+                headerName: 'Statut',
+                sortable: true,
+                filterable: true,
+                width: 40,
+                flex: 1,
+                editable: false,
+                dataType: 'select' as const,
+                editValueFormatter: (value: any) => {
+                    if (!value || value === '') {
+                        return 'Sélectionner un statut...';
+                    }
+                    return value;
+                },
+                filterConfig: {
+                    dataType: 'select' as const,
+                    operator: 'equals' as const,
+                    options: [
+                        { value: 'AFFECTE', label: 'AFFECTE' },
+                        { value: 'VALIDE', label: 'VALIDE' },
+                        { value: 'TRANSFERE', label: 'TRANSFERE' }
+                    ]
+                },
+                badgeStyles: [
+                    { value: 'VALIDE', class: 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-800 ring-1 ring-green-600/20 ring-inset' },
+                    { value: 'AFFECTE', class: 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-600/20 ring-inset' },
+                    { value: 'TRANSFERT', class: 'inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-yellow-600/20 ring-inset' },
+                    { value: 'PRET', class: 'inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-800 ring-1 ring-purple-600/20 ring-inset' },
+                ],
+                badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+            },
+            {
+                field: 'team1',
+                headerName: 'Équipe 1er Comptage',
+                sortable: true,
+                filterable: true,
+                width: 80,
+                flex: 1,
+                editable: true,
+                dataType: 'select' as const,
+                editValueFormatter: (value: any) => {
+                    if (!value || value === '') {
+                        return 'Sélectionner une équipe...';
+                    }
+                    return value;
+                },
+                filterConfig: {
+                    dataType: 'select' as const,
+                    operator: 'equals' as const,
+                    options: sessionOptions.value
+                }
+            },
+            {
+                field: 'date1',
+                headerName: 'Date 1er Comptage',
+                sortable: true,
+                filterable: true,
+                width: 80,
+                flex: 1,
+                editable: true,
+                dataType: 'date' as const,
+                editValueFormatter: (value: any) => {
+                    if (!value || value === '') {
+                        return 'Choisir une date...';
+                    }
+                    try {
+                        const date = new Date(value);
+                        if (isNaN(date.getTime())) return '';
+                        return date.toLocaleDateString('fr-FR', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit'
+                        });
+                    } catch {
+                        return value;
+                    }
+                }
+            },
+            {
+                field: 'team2',
+                headerName: 'Équipe 2e Comptage',
+                sortable: true,
+                filterable: true,
+                width: 80,
+                flex: 1,
+                editable: true,
+                dataType: 'select' as const,
+                editValueFormatter: (value: any) => {
+                    if (!value || value === '') {
+                        return 'Sélectionner une équipe...';
+                    }
+                    return value;
+                },
+                filterConfig: {
+                    dataType: 'select' as const,
+                    operator: 'equals' as const,
+                    options: sessionOptions.value
+                }
+            },
+            {
+                field: 'date2',
+                headerName: 'Date 2e Comptage',
+                sortable: true,
+                filterable: true,
+                width: 100,
+                flex: 1,
+                editable: true,
+                dataType: 'date' as const,
+                editValueFormatter: (value: any) => {
+                    if (!value || value === '') {
+                        return 'Choisir une date...';
+                    }
+                    try {
+                        const date = new Date(value);
+                        if (isNaN(date.getTime())) return '';
+                        return date.toLocaleDateString('fr-FR', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit'
+                        });
+                    } catch {
+                        return value;
+                    }
+                }
+            },
+            {
+                field: 'resources',
+                headerName: 'Ressources',
+                sortable: true,
+                filterable: true,
+                width: 100,
+                flex: 1,
+                editable: true,
+                dataType: 'select' as const,
+                multiple: true,
+                editValueFormatter: (value: any) => {
+                    if (!value || (Array.isArray(value) && value.length === 0)) {
+                        return 'Sélectionner des ressources...';
+                    }
+                    if (Array.isArray(value)) {
+                        return value.join(', ');
+                    }
+                    return value;
+                },
+                filterConfig: {
+                    dataType: 'select' as const,
+                    operator: 'equals' as const,
+                    options: resourceOptions.value
+                }
+            }
+        ];
+
+        return cols;
+    });
+
     onMounted(async () => {
         await initializeStores();
 
         await initializeIdsFromReferences();
 
-        await fetchJobsValidated({
-            page: 1,
-            pageSize: 10
-        });
+        // Récupérer le statut de l'inventaire
+        await fetchInventoryStatus();
+
+        // Initialiser le DataTable et charger les données
+        initializeDataTable();
+        if (jobValidatedDataTableRef.value) {
+            await jobValidatedDataTableRef.value.loadData();
+        }
     });
 
     onUnmounted(() => {
@@ -792,16 +1112,19 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         focusNextItem,
         focusPrevItem,
         handleValiderClick,
-        handleTransfererClick,
         handleResourceSubmit,
         handleTeamSubmit,
+        handleTransferSubmit,
         loadSessionsIfNeeded,
         handleReadyClick,
         handleResetClick,
-        currentPage: computed(() => currentPage.value),
-        totalPages: computed(() => totalPages.value),
-        totalItems: computed(() => totalItems.value),
-        loading: computed(() => dataTableFilters.loading.value),
+        handleGoToInventoryDetail,
+        handleGoToAffectation,
+        handleTransferClick,
+        currentPage: computed(() => jobValidatedDataTableRef.value?.currentPage.value || 1),
+        totalPages: computed(() => jobValidatedDataTableRef.value?.pagination.value.total_pages || 1),
+        totalItems: computed(() => jobValidatedDataTableRef.value?.pagination.value.total || 0),
+        loading: computed(() => jobValidatedDataTableRef.value?.loading.value || false),
         handlePaginationChanged,
         handleSortChanged,
         handleFilterChanged,
@@ -811,7 +1134,17 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         refreshIdsFromReferences,
         inventoryId: computed(() => inventoryId.value),
         warehouseId: computed(() => warehouseId.value),
-        inventoryReference: computed(() => inventoryReference),
-        warehouseReference: computed(() => warehouseReference)
+        inventoryReference,
+        warehouseReference,
+        eligibleJobsForTransfer,
+        // Nouvelles propriétés pour la configuration de DataTable
+        columns,
+        sessionOptions,
+        resourceOptions,
+        showTransferButton,
+        showReadyButton,
+        // Fonctions utilitaires pour les dates
+        dateValueParser,
+        dateValueSetter
     };
 }

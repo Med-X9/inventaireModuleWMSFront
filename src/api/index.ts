@@ -35,8 +35,10 @@ const API = {
 
         location: {
             base: '/masterdata/api/locations/'
+        },
+        inventoryResults: {
+            base: '/web/api/inventory-results/'
         }
-
     },
 };
 

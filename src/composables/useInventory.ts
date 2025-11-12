@@ -1,6 +1,7 @@
 import { computed } from 'vue';
 import { useInventoryStore } from '@/stores/inventory';
 import { useAppStore } from '@/stores/app';
+import { logger } from '@/services/loggerService';
 import type { CreateInventoryRequest } from '@/models/Inventory';
 
 export const useInventory = () => {
@@ -18,7 +19,7 @@ export const useInventory = () => {
         try {
             await inventoryStore.fetchInventories();
         } catch (error) {
-            console.error('Erreur lors du chargement des inventaires:', error);
+            logger.error('Erreur lors du chargement des inventaires', error);
         }
     };
 
@@ -27,7 +28,7 @@ export const useInventory = () => {
             const result = await inventoryStore.fetchInventoryById(id);
             return result;
         } catch (error) {
-            console.error('Erreur lors de la récupération de l\'inventaire:', error);
+            logger.error('Erreur lors de la récupération de l\'inventaire', error);
             throw error;
         }
     };
@@ -37,7 +38,7 @@ export const useInventory = () => {
             const result = await inventoryStore.createInventory(data);
             return result;
         } catch (error) {
-            console.error('Erreur lors de la création de l\'inventaire:', error);
+            logger.error('Erreur lors de la création de l\'inventaire', error);
             throw error;
         }
     };
@@ -47,7 +48,7 @@ export const useInventory = () => {
             const result = await inventoryStore.updateInventory(id, data);
             return result;
         } catch (error) {
-            console.error('Erreur lors de la mise à jour de l\'inventaire:', error);
+            logger.error('Erreur lors de la mise à jour de l\'inventaire', error);
             throw error;
         }
     };
@@ -56,7 +57,7 @@ export const useInventory = () => {
         try {
             await inventoryStore.deleteInventory(id);
         } catch (error) {
-            console.error('Erreur lors de la suppression de l\'inventaire:', error);
+            logger.error('Erreur lors de la suppression de l\'inventaire', error);
             throw error;
         }
     };

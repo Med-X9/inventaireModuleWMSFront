@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { LocationService } from '@/services/LocationService';
+import { LocationService, type LocationDataTableParams } from '@/services/LocationService';
 import { alertService } from '@/services/alertService';
+import {
+    buildDataTableParams,
+    processDataTableResponse,
+    type DataTableParams,
+    type DataTableResponse
+} from '@/utils/dataTableUtils';
+import API from '@/api';
 import type {
     Location,
     CreateLocationRequest,
@@ -17,6 +24,7 @@ export const useLocationStore = defineStore('location', () => {
     const loading = ref(false);
     const error = ref<string | null>(null);
     const totalCount = ref(0);
+    const totalPages = ref(1);
     const currentPage = ref(1);
     const pageSize = ref(20);
 
@@ -98,50 +106,62 @@ export const useLocationStore = defineStore('location', () => {
 
     // ===== ACTIONS =====
 
-    // Récupérer toutes les locations
-    const fetchLocations = async (params?: LocationQueryParams) => {
-        loading.value = true;
-        error.value = null;
 
-        try {
-            const response = await LocationService.getAll(params);
-            const data = response.data;
-
-            locations.value = data.results || [];
-            totalCount.value = data.count || 0;
-
-            if (params?.page) {
-                currentPage.value = params.page;
-            }
-            if (params?.page_size) {
-                pageSize.value = params.page_size;
-            }
-        } catch (err) {
-            error.value = err instanceof Error ? err.message : 'Erreur lors du chargement des locations';
-            await alertService.error({ text: 'Erreur lors du chargement des locations' });
-            throw err;
-        } finally {
-            loading.value = false;
-        }
-    };
 
     // Récupérer les locations non assignées
-    const fetchUnassignedLocations = async (warehouseId: number, params?: LocationQueryParams) => {
+    const fetchUnassignedLocations = async (account_id: number, inventory_id: number, warehouse_id: number, params?: LocationDataTableParams): Promise<DataTableResponse<Location> | void> => {
         loading.value = true;
         error.value = null;
 
         try {
-            const response = await LocationService.getUnassigned(warehouseId, params);
-            const data = response.data;
+            const response = await LocationService.getUnassigned(account_id, inventory_id, warehouse_id, params);
+            const payload = response.data as (LocationResponse & DataTableResponse<Location>) | LocationResponse | DataTableResponse<Location>;
 
-            locations.value = data.results || [];
-            totalCount.value = data.count || 0;
+            const results = Array.isArray((payload as DataTableResponse<Location>).data)
+                ? (payload as DataTableResponse<Location>).data as Location[]
+                : (payload as LocationResponse).results || [];
 
-            if (params?.page) {
-                currentPage.value = params.page;
+            const recordsTotal = (payload as DataTableResponse<Location>).recordsTotal
+                ?? (payload as LocationResponse).count
+                ?? results.length;
+
+            const recordsFiltered = (payload as DataTableResponse<Location>).recordsFiltered
+                ?? recordsTotal;
+
+            locations.value = results;
+
+            const isDataTableParams = params && ('draw' in params || 'start' in params || 'length' in params);
+
+            if (isDataTableParams) {
+                const pageLength = params?.length || pageSize.value || results.length || 1;
+                pageSize.value = pageLength;
+                const computedPage = params?.start !== undefined && pageLength > 0
+                    ? Math.floor((params.start || 0) / pageLength) + 1
+                    : params?.draw || currentPage.value;
+                currentPage.value = Math.max(1, computedPage || 1);
+
+                return processDataTableResponse(
+                    {
+                        draw: params?.draw || (payload as DataTableResponse<Location>).draw || 1,
+                        recordsTotal,
+                        recordsFiltered,
+                        data: results
+                    },
+                    currentPage,
+                    totalPages,
+                    totalCount,
+                    pageLength
+                );
             }
-            if (params?.page_size) {
-                pageSize.value = params.page_size;
+
+            totalCount.value = recordsTotal;
+            totalPages.value = Math.max(1, Math.ceil(totalCount.value / (pageSize.value || 1)));
+
+            if ((params as LocationQueryParams)?.page) {
+                currentPage.value = (params as LocationQueryParams).page as number;
+            }
+            if ((params as LocationQueryParams)?.page_size) {
+                pageSize.value = (params as LocationQueryParams).page_size as number;
             }
         } catch (err) {
             error.value = err instanceof Error ? err.message : 'Erreur lors du chargement des locations non assignées';
@@ -271,7 +291,7 @@ export const useLocationStore = defineStore('location', () => {
     };
 
     // Rechercher des locations
-    const searchLocations = async (query: string, params?: LocationQueryParams) => {
+    const searchLocations = async (query: string, params?: LocationDataTableParams) => {
         searchLoading.value = true;
         error.value = null;
 
@@ -293,7 +313,7 @@ export const useLocationStore = defineStore('location', () => {
     };
 
     // Récupérer les locations par sous-zone
-    const fetchLocationsBySousZone = async (sousZoneId: number, params?: LocationQueryParams) => {
+    const fetchLocationsBySousZone = async (sousZoneId: number, params?: LocationDataTableParams) => {
         loading.value = true;
         error.value = null;
 
@@ -315,7 +335,7 @@ export const useLocationStore = defineStore('location', () => {
     };
 
     // Récupérer les locations par zone
-    const fetchLocationsByZone = async (zoneId: number, params?: LocationQueryParams) => {
+    const fetchLocationsByZone = async (zoneId: number, params?: LocationDataTableParams) => {
         loading.value = true;
         error.value = null;
 
@@ -337,18 +357,39 @@ export const useLocationStore = defineStore('location', () => {
     };
 
     // Récupérer les locations par entrepôt
-    const fetchLocationsByWarehouse = async (warehouseId: number, params?: LocationQueryParams) => {
+    const fetchLocationsByWarehouse = async (warehouseId: number, params?: LocationDataTableParams): Promise<DataTableResponse<Location> | LocationResponse | void> => {
         loading.value = true;
         error.value = null;
 
         try {
+            // Le service accepte maintenant directement LocationDataTableParams qui supporte les deux formats
             const response = await LocationService.getByWarehouse(warehouseId, params);
             const data = response.data;
 
             locations.value = data.results || [];
             totalCount.value = data.count || 0;
 
-            return data;
+            // Si c'est un format DataTable (avec draw, start, length)
+            if (params && ('draw' in params || 'start' in params || 'length' in params)) {
+                const draw = params.draw || 1;
+                const pageLength = params.length || pageSize.value;
+
+                return processDataTableResponse(
+                    {
+                        draw: draw,
+                        recordsTotal: data.count || 0,
+                        recordsFiltered: data.count || 0,
+                        data: data.results || []
+                    } as DataTableResponse<Location>,
+                    currentPage,
+                    totalPages,
+                    totalCount,
+                    pageLength
+                );
+            } else {
+                // Format LocationQueryParams (ancien format avec page, page_size)
+                return data;
+            }
         } catch (err) {
             error.value = err instanceof Error ? err.message : 'Erreur lors de la récupération des locations par entrepôt';
             await alertService.error({ text: 'Erreur lors de la récupération des locations par entrepôt' });
@@ -376,7 +417,6 @@ export const useLocationStore = defineStore('location', () => {
             }
 
             // Recharger les locations
-            await fetchLocations();
 
             return result;
         } catch (err) {
@@ -388,29 +428,6 @@ export const useLocationStore = defineStore('location', () => {
         }
     };
 
-    // Exporter les locations
-    const exportLocations = async (format: 'csv' | 'excel' | 'json' = 'csv', params?: LocationQueryParams) => {
-        try {
-            const response = await LocationService.export(format, params);
-
-            // Créer un lien de téléchargement
-            const blob = new Blob([response.data]);
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `locations.${format}`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-
-            await alertService.success({ text: 'Export des locations réussi' });
-        } catch (err) {
-            error.value = err instanceof Error ? err.message : 'Erreur lors de l\'export des locations';
-            await alertService.error({ text: 'Erreur lors de l\'export des locations' });
-            throw err;
-        }
-    };
 
     // Sélectionner une location
     const selectLocation = (location: Location) => {
@@ -465,7 +482,6 @@ export const useLocationStore = defineStore('location', () => {
         getLocationsByReference,
 
         // Actions
-        fetchLocations,
         fetchUnassignedLocations,
         fetchLocationById,
         fetchLocationByReference,
@@ -477,7 +493,6 @@ export const useLocationStore = defineStore('location', () => {
         fetchLocationsByZone,
         fetchLocationsByWarehouse,
         bulkImportLocations,
-        exportLocations,
         selectLocation,
         resetStore,
         clearError

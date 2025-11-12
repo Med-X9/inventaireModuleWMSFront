@@ -77,7 +77,9 @@ export class CellRenderersService {
 
         for (const check of checks) {
             const renderer = check()
-            if (renderer) return renderer
+            if (renderer) {
+                return renderer
+            }
         }
 
         return null
@@ -141,34 +143,34 @@ export class CellRenderersService {
         const baseClass = column.badgeBaseClass || 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium'
         const defaultClass = column.badgeDefaultClass || 'bg-gray-100 text-gray-800'
 
-        // Chercher le style pour cette valeur
-        const valueStr = String(value).toLowerCase()
-        const style = badgeStyles.find(s => s.value.toLowerCase() === valueStr)
+        // Chercher le style pour cette valeur - comparaison plus robuste
+        const valueStr = String(value).trim().toLowerCase()
+        const style = badgeStyles.find(s => {
+            const styleValue = String(s.value).trim().toLowerCase()
+            return styleValue === valueStr
+        })
 
         // Construire le badge
         const badgeClass = style ? style.class : defaultClass
         const icon = style?.icon ? `${style.icon} ` : ''
 
-        return `<span class="${baseClass} ${badgeClass}">
+        const result = `<span class="${baseClass} ${badgeClass}">
             ${icon}${value}
         </span>`
+
+        return result
     }
 
     /**
      * Renderer pour les données imbriquées avec count et expansion
      */
     private nestedDataRenderer = (value: any, column: any, row: any, rowIndex?: number): string => {
-        console.log('🔍 nestedDataRenderer appelé avec:', { value, column, row, rowIndex });
-
         if (!value) return '-'
 
         const config: NestedDataConfig = column.nestedData
         if (!config) {
-            console.log('🔍 Pas de config nestedData');
             return String(value)
         }
-
-        console.log('🔍 Config nestedData:', config);
 
         // Si c'est un tableau, afficher le count
         if (Array.isArray(value)) {
@@ -176,7 +178,6 @@ export class CellRenderersService {
             const suffix = config.countSuffix || 'éléments'
             const displayText = `${count} ${suffix}`
 
-            console.log('🔍 Array détecté, count:', count, 'displayText:', displayText);
             return displayText
         }
 

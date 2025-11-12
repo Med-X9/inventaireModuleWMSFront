@@ -90,7 +90,7 @@ export interface DeleteJobResponse {
 export interface JobReadyResponse {
     success: boolean;
     message: string;
-    
+
 }
 
 export interface JobErrorResponse {
@@ -154,7 +154,9 @@ export interface JobAssignment {
 // Interface pour les emplacements dans la réponse
 export interface JobEmplacement {
     id: number;
+    location_id?: number;
     reference: string;
+    location_reference?: string;
     sous_zone: {
         id: number;
         sous_zone_name: string;
@@ -179,6 +181,10 @@ export interface JobResult {
     emplacements: JobEmplacement[];
     assignments: JobAssignment[];
     ressources: any[];
+    valide_date?: string | null;
+    en_attente_date?: string | null;
+    termine_date?: string | null;
+    date_transfer?: string | null;
 }
 
 // Interface pour la réponse paginée
@@ -187,6 +193,22 @@ export interface JobPaginatedResponse {
     next: string | null;
     previous: string | null;
     results: JobResult[];
+}
+
+// Interface pour la réponse DataTable des jobs
+export interface JobDataTableResponse {
+    draw: number;
+    recordsTotal: number;
+    recordsFiltered: number;
+    data: JobTable[];
+}
+
+// Interface pour la réponse DataTable des jobs validés
+export interface JobValidatedDataTableResponse {
+    draw: number;
+    recordsTotal: number;
+    recordsFiltered: number;
+    data: JobResult[];
 }
 
 
@@ -209,6 +231,21 @@ export interface JobManualAssignmentsRequest {
     team2: number | null;
     date2: string | null;
     resources?: number[] | null;
+}
+
+// Interface pour le transfert de jobs
+export interface JobTransferRequest {
+    job_ids: number[];
+    counting_orders: number[]; // [1] pour 1er, [2] pour 2e, [1, 2] pour les deux
+}
+
+export interface JobTransferResponse {
+    success: boolean;
+    message: string;
+    data: {
+        transferred_job_ids: number[];
+        counting_orders: number[];
+    };
 }
 
 

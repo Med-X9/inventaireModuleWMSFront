@@ -1,108 +1,245 @@
-<!-- <template>
+<template>
     <div class="panel">
-
-        <!-- Tabs Navigation
-        <div class="border-b border-[#e0e6ed] dark:border-[#1b2e4b]">
-            <ul class="flex flex-wrap -mb-[1px]">
-                <li v-for="store in stores" :key="store.value" class="mr-2">
-                    <button type="button"
-                        class="relative inline-block px-8 py-4 hover:text-primary transition-colors duration-300"
-                        :class="{
-                            'text-primary before:w-full': selectedStore === store.value,
-                            'text-gray-500 dark:text-gray-400 before:w-0': selectedStore !== store.value
-                        }" @click="handleStoreSelect(store.value)">
-                        {{ store.label }}
-                        <span class="absolute bottom-0 left-0 h-[2px] bg-primary transition-all duration-300" :class="{
-                            'w-full': selectedStore === store.value,
-                            'w-0': selectedStore !== store.value
-                        }"></span>
-                    </button>
-                </li>
-            </ul>
+        <!-- Sélection du magasin -->
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <IconHome class="w-4 h-4 inline mr-2" />
+                Magasin
+            </label>
+            <SelectField
+                v-model="selectedStore"
+                :options="stores"
+                :clearable="false"
+                :searchable="false"
+                placeholder="Sélectionner un magasin..."
+                :disabled="loading || stores.length === 0"
+                class="store-select vs-limit-height w-full md:w-1/3"
+                @update:modelValue="onStoreChanged"
+            />
         </div>
 
-        <!-- Results Table
+        <div class="mb-6 flex justify-end">
+            <RouterLink
+                v-if="inventoryReference"
+                :to="{ name: 'inventory-job-tracking', params: { reference: inventoryReference } }"
+                class="btn btn-outline-primary btn-sm"
+            >
+                Suivi des jobs
+            </RouterLink>
+        </div>
+
         <div v-if="selectedStore" class="py-6">
-            <DataTable :columns="columns" :rowDataProp="results" :actions="actions" :pagination="true"
-                :enableFiltering="true" :rowSelection="true" :selectedRows="selectedResults"
-                @selection-changed="onSelectionChanged" storageKey="inventory_results_table" inlineEditing>
+                <DataTable
+                :columns="columns"
+                :rowDataProp="results"
+                :actions="actions as any"
+                :pagination="true"
+                :enableFiltering="true"
+                :rowSelection="true"
+                @selection-changed="onSelectionChanged"
+                @pagination-changed="onPaginationChanged"
+                @sort-changed="onSortChanged"
+                @filter-changed="onFilterChanged"
+                @global-search-changed="onGlobalSearchChanged"
+                storageKey="inventory_results_table"
+                :loading="loading"
+            >
+
                 <template #table-actions>
                     <div class="flex items-center flex-wrap gap-2">
-                        <button class="btn btn-primary p-2 px-4 mb-4 btn-sm" @click="handleBulkValidate">
-                            <IconValider class="w-5 h-5 ltr:mr-2 rtl:ml-2" />
-                            Valider
+                        <button class="btn btn-primary p-2 px-4 mb-4 btn-sm" @click="handleBulkValidateWrapper">
+                            <IconCheck class="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                            Valider en lot
                         </button>
                     </div>
                 </template>
             </DataTable>
         </div>
     </div>
-</template> -->
+</template>
 
 <script setup lang="ts">
-// import { onMounted, watch } from 'vue';
-// import DataTable from '@/components/DataTable/DataTable.vue';
-// import { useInventoryResults } from '@/composables/useInventoryResults';
-// // import { findInventoryByReference } from '@/services/inventoryManagementService';
-// import type { InventoryManagement } from '@/interfaces/inventoryManagement';
-// import type { InventoryResult } from '@/interfaces/inventoryResults';
-// import IconValider from '@/components/icon/icon-check.vue';
+import { ref, computed, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { logger } from '@/services/loggerService'
+import DataTable from '@/components/DataTable/DataTable.vue'
+import { useInventoryResults } from '@/composables/useInventoryResults'
+import type { InventoryResult } from '@/interfaces/inventoryResults'
+import IconCheck from '@/components/icon/icon-check.vue'
+import IconHome from '@/components/icon/icon-home.vue'
+import SelectField from '@/components/Form/SelectField.vue'
 
-// // Accept the reference param from the route
-// const props = defineProps<{ reference: string }>();
+// Récupérer la référence depuis l'URL
+const route = useRoute()
+const inventoryReference = computed(() => route.params.reference as string)
 
-// // Lookup the full inventory by reference
-// // const inventory: InventoryManagement | undefined = findInventoryByReference(props.reference);
-// if (!inventory) {
-//     throw new Error(`Inventaire \"${props.reference}\" introuvable`);
-// }
+// État local pour les résultats sélectionnés
+const selectedResultsLocal = ref<InventoryResult[]>([])
 
-// // Use the inventory's ID in the composable
-// const {
-//     loading,
-//     stores,
-//     results,
-//     columns,
-//     actions,
-//     selectedStore,
-//     selectedResults,
-//     fetchStores,
-//     fetchResults,
-//     handleBulkValidate
-// } = useInventoryResults(inventory.id);
+// Utiliser le composable avec la référence de l'URL
+const {
+    loading,
+    stores,
+    results,
+    columns,
+    actions,
+    selectedStore,
+    handleStoreSelect,
+    onPaginationChanged,
+    onSortChanged,
+    onFilterChanged,
+    onGlobalSearchChanged,
+    initialize,
+    reinitialize
+} = useInventoryResults({ inventoryReference: inventoryReference.value })
 
-// // When a tab (store) is clicked
-// const handleStoreSelect = async (storeId: string) => {
-//     selectedStore.value = storeId;
-//     selectedResults.value = [];
-//     await fetchResults(storeId);
-// };
+const onStoreChanged = async (value: string | number | string[] | number[] | null) => {
+    if (!value) {
+        return
+    }
 
-// // Track selection changes
-// const onSelectionChanged = (selectedRows: InventoryResult[]) => {
-//     selectedResults.value = selectedRows;
-// };
+    const storeId = Array.isArray(value) ? value[0] : value
+    await handleStoreSelectWrapper(String(storeId))
+}
 
-// // Initial load: fetch stores and first store's results
-// onMounted(async () => {
-//     await fetchStores();
-//     if (stores.value.length > 0) {
-//         await handleStoreSelect(stores.value[0].value);
-//     }
-// });
+// Wrapper pour le handler de sélection de magasin
+const handleStoreSelectWrapper = async (storeId: string | null) => {
+    if (!storeId) return
+    await handleStoreSelect(storeId)
+}
 
-// // React if the reference prop changes
-// watch(() => props.reference, async (newRef) => {
-//     const inv = findInventoryByReference(newRef);
-//     if (!inv) return;
-//     selectedResults.value = [];
-//     await fetchStores();
-//     if (stores.value.length) {
-//         await handleStoreSelect(stores.value[0].value);
-//     }
-// });
+// Handler pour la validation en masse
+const handleBulkValidateWrapper = async () => {
+    try {
+        // Le composable nécessite maintenant les résultats sélectionnés en paramètre
+        // On utilise une méthode de validation alternative
+        if (selectedResultsLocal.value.length === 0) {
+            logger.warn('Aucun résultat sélectionné')
+            return
+        }
+
+        // Appeler l'action de validation pour chaque résultat sélectionné
+        for (const result of selectedResultsLocal.value) {
+            const action = actions.find(a => a.label === 'Valider')
+            if (action?.onClick) {
+                await action.onClick(result)
+            }
+        }
+
+        // Réinitialiser la sélection
+        selectedResultsLocal.value = []
+    } catch (error) {
+        logger.error('Erreur lors de la validation en masse', error)
+    }
+}
+
+// Track selection changes
+const onSelectionChanged = (selectedRows: Set<string>) => {
+    // Convertir Set<string> en InventoryResult[]
+    const resultIds = Array.from(selectedRows)
+    selectedResultsLocal.value = results.value.filter(r => resultIds.includes(String(r.id)))
+}
+
+// Initialisation au montage
+onMounted(async () => {
+    try {
+        logger.debug('Initialisation de la page résultats', { reference: inventoryReference.value })
+        await initialize(inventoryReference.value)
+    } catch (error) {
+        logger.error('Erreur lors de l\'initialisation', error)
+    }
+})
+
+// Watch pour surveiller les changements de référence dans l'URL
+watch(inventoryReference, async (newReference, oldReference) => {
+    if (!newReference || newReference === oldReference) return
+
+    try {
+        logger.debug('Changement de référence détecté', { old: oldReference, new: newReference })
+        await reinitialize(newReference)
+    } catch (error) {
+        logger.error('Erreur lors du changement de référence', error)
+    }
+})
 </script>
 
 <style scoped>
-/* Add any component-specific styles here */
+/* Styles pour le select de magasin */
+.store-select {
+    display: block;
+}
+
+.store-select :deep(.vs__dropdown-toggle) {
+    padding: 0.625rem 1rem;
+    border: 1px solid #e0e6ed;
+    border-radius: 0.5rem;
+    background-color: white;
+    color: #1e293b;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+
+.store-select :deep(.vs__dropdown-toggle:hover) {
+    border-color: #cbd5f5;
+}
+
+.store-select :deep(.vs__dropdown-toggle:focus-within) {
+    border-color: #FACC15;
+    box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.1);
+}
+
+.store-select :deep(.vs__dropdown-menu) {
+    max-height: calc(5 * 2.5rem);
+    overflow-y: auto;
+}
+
+.store-select :deep(.vs__dropdown-option) {
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+}
+
+.store-select :deep(.vs__clear) {
+    display: none;
+}
+
+.store-select :deep(.vs__search) {
+    margin: 0;
+}
+
+.store-select :deep(.vs__selected) {
+    color: #1e293b;
+}
+
+.store-select :deep(.vs__dropdown-toggle[aria-disabled="true"]) {
+    background-color: #f8f9fa;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.dark .store-select :deep(.vs__dropdown-toggle) {
+    background-color: #1b2e4b;
+    border-color: #3b4863;
+    color: #e0e6ed;
+}
+
+.dark .store-select :deep(.vs__dropdown-toggle:focus-within) {
+    border-color: #FACC15;
+    box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.2);
+}
+
+.dark .store-select :deep(.vs__dropdown-menu) {
+    background-color: #243a5e;
+    border-color: #3b4863;
+}
+
+.panel {
+    background: white;
+    border-radius: 1rem;
+    padding: 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.dark .panel {
+    background: #1b2e4b;
+}
 </style>

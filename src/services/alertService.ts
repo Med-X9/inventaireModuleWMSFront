@@ -41,7 +41,22 @@ export interface AlertOptions {
     timer?: number;
 }
 
-export const alertService = {
+export interface PromptOptions {
+    title?: string;
+    text?: string;
+    inputPlaceholder?: string;
+}
+
+interface AlertService {
+    confirm(opts: AlertOptions): Promise<{ isConfirmed: boolean }>;
+    success(opts: AlertOptions): Promise<any>;
+    error(opts: AlertOptions): Promise<any>;
+    warning(opts: AlertOptions): Promise<any>;
+    info(opts: AlertOptions): Promise<any>;
+    prompt(opts: PromptOptions): Promise<{ isConfirmed: boolean; value: string }>;
+}
+
+export const alertService: AlertService = {
     async confirm(opts: AlertOptions): Promise<{ isConfirmed: boolean }> {
         const result = await Swal.fire({
             title: opts.title || 'Confirmation',
@@ -103,5 +118,28 @@ export const alertService = {
             background: getCssVar('--color-info'),
             iconColor: 'white',
         });
+    },
+
+    async prompt(opts: PromptOptions): Promise<{ isConfirmed: boolean; value: string }> {
+        const result = await Swal.fire({
+            title: opts.title || 'Saisie',
+            text: opts.text || '',
+            input: 'text',
+            inputPlaceholder: opts.inputPlaceholder || '',
+            showCancelButton: true,
+            confirmButtonColor: getCssVar('--color-primary'),
+            cancelButtonColor: getCssVar('--color-secondary'),
+            confirmButtonText: 'Confirmer',
+            cancelButtonText: 'Annuler',
+            customClass: {
+                popup: 'sweet-alerts',
+                confirmButton: 'btn btn-primary',
+                cancelButton: 'bg-secondary/10 text-secondary hover:bg-secondary/5',
+            },
+        });
+        return {
+            isConfirmed: result.isConfirmed,
+            value: result.value || ''
+        };
     }
 };

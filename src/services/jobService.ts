@@ -14,7 +14,9 @@ import type {
     JobAssignmentsTeamRequest,
     JobAssignmentsResourceRequest,
     JobManualAssignmentsRequest,
-    JobReadyResponse
+    JobReadyResponse,
+    JobDataTableResponse,
+    JobValidatedDataTableResponse
 } from '@/models/Job';
 import API from '@/api';
 
@@ -23,9 +25,20 @@ export class JobService {
     private static baseUrlJob = API.endpoints.job?.base;
     private static baseUrlWarehouse = API.endpoints.warehouse?.base;
 
-    // Récupérer tous les jobs avec pagination, tri et filtres
+    // Récupérer tous les jobs avec pagination, tri et filtres (format DataTable)
+    static async getAllByUrl(url: string): Promise<JobDataTableResponse> {
+        const response = await axiosInstance.get<JobDataTableResponse>(url);
+        return response.data;
+    }
+
+    // Récupérer tous les jobs avec pagination, tri et filtres (format REST API - pour compatibilité)
     static async getAll(inventoryId: number, warehouseId: number, params?: { page?: number; page_size?: number; ordering?: string; [key: string]: any; }): Promise<JobResponse> {
         const response = await axiosInstance.get<JobResponse>(`${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/`, { params });
+        return response.data;
+    }
+
+    static async getAllValidatedByUrl(url: string): Promise<JobValidatedDataTableResponse> {
+        const response = await axiosInstance.get<JobValidatedDataTableResponse>(url);
         return response.data;
     }
 
@@ -75,6 +88,11 @@ export class JobService {
 
     static async jobReset(job_ids: number[]): Promise<JobReadyResponse> {
         const response = await axiosInstance.post<JobReadyResponse>(`${this.baseUrlJob}reset-assignments/`, { job_ids:  job_ids  });
+        return response.data;
+    }
+
+    static async jobTransfer(data: { job_ids: number[]; counting_order: number[] }): Promise<any> {
+        const response = await axiosInstance.post(`${this.baseUrlJob}transfer/`, data);
         return response.data;
     }
 

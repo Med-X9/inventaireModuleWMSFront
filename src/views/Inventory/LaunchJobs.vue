@@ -1,21 +1,10 @@
-<!-- <template>
-    <div class="panel py-7 datatable">
-        <DataTable :columns="columns" :rowDataProp="displayData" :actions="actions" :pagination="true"
-            :enableFiltering="true" :rowSelection="true" @selection-changed="onSelectionChanged"
-            @row-clicked="onRowClicked" storageKey="jobs_management_table">
-            <template #table-actions>
-                <button class="btn btn-primary mb-4" @click="launchSelected">
-                    Transfer
-                </button>
-            </template>
-        </DataTable>
-    </div>
-</template> -->
+
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import DataTable from '@/components/DataTable/DataTable.vue';
+// import DataTable from '@/components/DataTable/DataTable.vue';
 import { alertService } from '@/services/alertService';
+import { logger } from '@/services/loggerService';
 import type { ActionConfig, TableRow } from '@/interfaces/dataTable';
 import type { ColDef, CellClassParams, CellClickedEvent, RowClickedEvent } from 'ag-grid-community';
 
@@ -195,7 +184,6 @@ const actions: ActionConfig[] = [
                     });
 
                     if (result.isConfirmed) {
-                        console.log('Lancement du job :', row);
                         // Placez ici votre logique de lancement du job
 
                         await alertService.success({
@@ -249,7 +237,6 @@ async function launchSelected() {
         }
 
         // Placez ici votre logique de transfert réel
-        console.log('Transfert lancé pour :', selectedJobs.value);
 
         // Simulation d'un appel API avec un délai
         // await transferJobsAPI(selectedJobs.value);
@@ -260,7 +247,7 @@ async function launchSelected() {
         });
 
     } catch (error) {
-        console.error('Erreur lors du transfert :', error);
+        logger.error('Erreur lors du transfert', error);
         await alertService.error({
             title: 'Erreur de transfert',
             text: 'Une erreur est survenue lors du transfert des jobs. Veuillez réessayer.'
@@ -272,7 +259,7 @@ const launchJob = async (row: any) => {
     try {
         // Logique de lancement du job
     } catch (error) {
-        console.error('Erreur lors du lancement du job:', error);
+        logger.error('Erreur lors du lancement du job', error);
     }
 };
 
@@ -280,7 +267,7 @@ const launchTransfer = async () => {
     try {
         // Logique de lancement du transfert
     } catch (error) {
-        console.error('Erreur lors du lancement du transfert:', error);
+        logger.error('Erreur lors du lancement du transfert', error);
     }
 };
 </script>

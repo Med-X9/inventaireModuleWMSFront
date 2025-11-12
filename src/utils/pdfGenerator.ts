@@ -3,6 +3,7 @@
 import { InventoryEquipe, InventoryMagasin, InventoryRessource } from '@/models/InventoryDetail';
 import { jsPDF } from 'jspdf';
 import autoTable, { UserOptions } from 'jspdf-autotable';
+import { logger } from '@/services/loggerService';
 
 interface Comptage {
     mode?: string;
@@ -64,7 +65,7 @@ export const generatePDF = async (data: InventoryData, filename: string) => {
             doc.addImage(img, 'PNG', 40, 20, 80, 40);
             return true;
         } catch (error) {
-            console.warn('Logo non trouvé, utilisation du texte par défaut');
+            logger.warn('Logo non trouvé, utilisation du texte par défaut', error);
             return false;
         }
     };

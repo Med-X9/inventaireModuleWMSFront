@@ -36,6 +36,7 @@ export interface Location {
     sous_zone: SousZone;
     zone: Zone;
     warehouse: Warehouse;
+    // "families":[{"id":155,"reference":"FAM-1772","family_name":"TOP MODEL","family_description":null,"family_status":"ACTIVE"}
     created_at?: string;
     updated_at?: string;
 }

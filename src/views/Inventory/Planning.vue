@@ -8,34 +8,25 @@
                         <IconCalendar class="title-icon" />
                         Planning des jobs
                     </h1>
-                    <div class="context-info">
-                        <div v-if="inventoryReference" class="context-badge">
-                            <span class="badge-label">Inventaire:</span>
-                            <span class="badge-value">{{ inventoryReference }}</span>
-                        </div>
-                        <div v-if="warehouseReference" class="context-badge">
-                            <span class="badge-label">Entrepôt:</span>
-                            <span class="badge-value">{{ warehouseReference }}</span>
-                        </div>
-                    </div>
                 </div>
-                <div class="header-right">
-                    <button class="refresh-btn" @click="onRefreshData" :disabled="isSubmitting">
-                        <IconRefresh class="w-4 h-4" />
-                        <span>Actualiser</span>
+                <div class="navigation-buttons header-right">
+                    <button class="nav-btn detail-btn flex items-center gap-2" @click="handleGoToInventoryDetail">
+                        <IconEye class="w-4 h-4 text-white" />
+                    </button>
+                    <button class="nav-btn affectation-btn flex items-center gap-2" @click="handleGoToAffectation">
+                        <IconUser class="w-4 h-4 text-white" />
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- Cartes de statistiques -->
         <div class="stats-grid">
             <div class="stat-card small">
                 <div class="stat-header">
                     <div class="stat-icon stat-jobs">
                         <IconCheck class="w-4 h-4" />
                     </div>
-                    <div class="stat-value">{{ storeJobs.length }}</div>
+                    <div class="stat-value">{{ jobs.length }}</div>
                 </div>
                 <div class="stat-label">Jobs créés</div>
             </div>
@@ -45,7 +36,7 @@
                     <div class="stat-icon stat-locations">
                         <IconBox class="w-4 h-4" />
                     </div>
-                    <div class="stat-value">{{ tableData.length }}</div>
+                    <div class="stat-value">{{ locations.length }}</div>
                 </div>
                 <div class="stat-label">Emplacements</div>
             </div>
@@ -55,7 +46,7 @@
                     <div class="stat-icon stat-selected">
                         <IconEye class="w-4 h-4" />
                     </div>
-                    <div class="stat-value">{{ selectedAvailable.length }}</div>
+                    <div class="stat-value">{{ availableLocations.length }}</div>
                 </div>
                 <div class="stat-label">Sélectionnés</div>
             </div>
@@ -65,117 +56,93 @@
                     <div class="stat-icon stat-validated">
                         <IconCircleCheck class="w-4 h-4" />
                     </div>
-                    <div class="stat-value">{{ selectedJobs.length }}</div>
+                    <div class="stat-value">{{ selectedJobsCount }}</div>
                 </div>
                 <div class="stat-label">À valider</div>
             </div>
         </div>
 
-        <!-- Section Jobs créés -->
         <div class="datatable-container">
             <div class="section-header">
                 <h2 class="section-title">Jobs créés</h2>
                 <div class="section-actions">
-                    <button @click="onBulkValidate" class="action-btn validate-btn" :disabled="isSubmitting || selectedJobs.length === 0">
+                    <button @click="onBulkValidateHandler" class="action-btn validate-btn"
+                        :disabled="planningState.isSubmitting || selectedJobsCount === 0">
                         <IconCheck class="w-4 h-4" />
-                        <span>Valider ({{ selectedJobs.length }})</span>
+                        <span>Valider ({{ selectedJobsCount }})</span>
                     </button>
-                    <button @click="onReturnSelectedJobsFromStore" class="action-btn return-btn" :disabled="selectedJobs.length === 0">
+                    <button @click="onReturnSelectedJobs" class="action-btn return-btn"
+                        :disabled="selectedJobsCount === 0">
                         <IconArrowLeft class="w-4 h-4" />
-                        <span>Retourner ({{ selectedJobs.length }})</span>
+                        <span>Retourner ({{ selectedJobsCount }})</span>
                     </button>
                 </div>
             </div>
 
-            <DataTableNew
-                :key="jobsKey"
-                :columns="adaptedStoreJobsColumns"
-                :rowDataProp="storeJobs"
-                :rowSelection="true"
-                @selection-changed="onJobSelectionChanged"
-                :showColumnSelector="false"
-                storageKey="planning_jobs_table"
-                :actions="[]"
-                :pagination="true"
-                :enableFiltering="true"
-                :inlineEditing="false"
-                :exportTitle="'Jobs créés'"
-                enableRowDetails
-                groupColumn="emplacements"
-                :loading="loading"
-                :serverSidePagination="true"
-                :serverSideFiltering="true"
-                :serverSideSorting="true"
-                @pagination-changed="onJobPaginationChanged"
-                @sort-changed="onJobSortChanged"
-                @filter-changed="onJobFilterChanged"
-                ref="jobsTableRef"
-            >
-            </DataTableNew>
+            <DataTable :key="jobsKey" :columns="adaptedStoreJobsColumns" :rowDataProp="jobs"
+                :rowSelection="true" @selection-changed="onJobSelectionChanged" :showColumnSelector="false"
+                storageKey="planning_jobs_table" :actions="[]" :pagination="true" :enableFiltering="true"
+                :inlineEditing="false" :exportTitle="'Jobs créés'" :loading="loading"
+                :serverSidePagination="true" :serverSideFiltering="true" :serverSideSorting="true"
+                @pagination-changed="onJobPaginationChanged" @sort-changed="onJobSortChanged"
+                @filter-changed="onJobFilterChanged" ref="jobsTableRef">
+                <template #nested-actions="{ item, parentRow } ">
+                    <button
+                        class="btn-supprimer-emplacement"
+                        :data-job-id="parentRow.id"
+                        :data-location-id="item.id"
+                        @click="removeLocationFromNestedTable(parentRow.id.toString(), item.location_reference)"
+                        title="Supprimer cet emplacement"
+                        style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; cursor: pointer;">
+                        <IconTrash class="w-3 h-3" />
+                    </button>
+                </template>
+            </DataTable>
 
-            <div v-if="!storeJobs.length && !loading" class="empty-state">
+            <div v-if="!jobs.length && !loading" class="empty-state">
                 <IconBox class="empty-icon" />
                 <h3 class="empty-title">Aucun job créé</h3>
-                <p class="empty-description">Sélectionnez des emplacements dans la table ci-dessous pour créer un job</p>
+                <p class="empty-description">Sélectionnez des emplacements dans la table ci-dessous pour créer un job
+                </p>
             </div>
         </div>
 
-        <!-- Section Emplacements disponibles -->
         <div class="datatable-container">
             <div class="section-header">
                 <h2 class="section-title">Emplacements disponibles</h2>
                 <div class="section-actions">
-                    <button @click="createSingleJob" class="action-btn create-btn" :disabled="selectedAvailable.length === 0">
+                    <button @click="createSingleJob" class="action-btn create-btn"
+                        :disabled="availableLocations.length === 0">
                         <IconPlus class="w-4 h-4" />
-                        <span>Créer Job ({{ selectedAvailable.length }})</span>
+                        <span>Créer Job ({{ availableLocations.length }})</span>
                     </button>
                     <div v-if="hasAvailableJobs" class="job-selector">
-                        <SelectField
-                            :key="`job-select-${selectFieldKey}`"
-                            v-model="selectedJobId"
-                            :options="jobSelectOptions"
-                            :searchable="true"
-                            :clearable="true"
-                            :compact="true"
-                            placeholder="Ajouter à un job existant..."
-                            no-options-text="Aucun job trouvé"
-                            @update:modelValue="onSelectJobForLocation"
-                        />
+                        <SelectField :key="`job-select-${selectFieldKey}`" v-model="planningState.selectedJobToAddLocation"
+                            :options="jobSelectOptions" :searchable="true" :clearable="true" :compact="true"
+                            placeholder="Ajouter à un job existant..." no-options-text="Aucun job trouvé"
+                            @update:modelValue="onSelectJobForLocation" />
                     </div>
                 </div>
             </div>
 
-            <DataTableNew
-                :key="availableLocationsKey"
-                :columns="adaptedAvailableLocationColumns"
-                :rowDataProp="tableData"
-                :pagination="true"
-                :rowSelection="true"
-                @selection-changed="onAvailableSelectionChanged"
-                storageKey="available_locations"
-                :showColumnSelector="false"
-                :actions="[]"
-                :enableFiltering="true"
-                :inlineEditing="false"
-                :exportTitle="'Emplacements disponibles'"
-                :loading="loading"
-                :serverSidePagination="true"
-                :serverSideFiltering="true"
-                :serverSideSorting="true"
-                @pagination-changed="onLocationPaginationChanged"
-                @sort-changed="onLocationSortChanged"
-                @filter-changed="onLocationFilterChanged"
-                ref="availableLocationsTableRef"
-            />
+            <DataTable :key="availableLocationsKey" :columns="adaptedAvailableLocationColumns as any"
+                :rowDataProp="locations" :pagination="true" :rowSelection="true"
+                @selection-changed="onAvailableSelectionChanged" storageKey="available_locations"
+                :showColumnSelector="false" :actions="[]" :enableFiltering="true" :inlineEditing="false"
+                :exportTitle="'Emplacements disponibles'" :loading="loading" :serverSidePagination="true"
+                :serverSideFiltering="true" :serverSideSorting="true" @pagination-changed="onLocationPaginationChanged"
+                @sort-changed="onLocationSortChanged" @filter-changed="onLocationFilterChanged"
+                ref="availableLocationsTableRef" />
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref,  onMounted, computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { ref, onMounted, computed, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { logger } from '@/services/loggerService';
 import { usePlanning } from '@/composables/usePlanning';
-import DataTableNew from '@/components/DataTable/DataTableNew.vue';
+import DataTable from '@/components/DataTable/DataTable.vue';
 import SelectField from '@/components/Form/SelectField.vue';
 
 // Import des icônes
@@ -184,65 +151,103 @@ import IconCheck from '@/components/icon/icon-check.vue';
 import IconBox from '@/components/icon/icon-box.vue';
 import IconEye from '@/components/icon/icon-eye.vue';
 import IconCircleCheck from '@/components/icon/icon-circle-check.vue';
-import IconRefresh from '@/components/icon/icon-refresh.vue';
 import IconPlus from '@/components/icon/icon-plus.vue';
 import IconArrowLeft from '@/components/icon/icon-arrow-left.vue';
+import IconUser from '@/components/icon/icon-user.vue';
+import IconTrash from '@/components/icon/icon-trash.vue';
 
 // Import CSS pour vue-select
 import '@/assets/css/select2.css';
 
 const route = useRoute();
-const inventoryReference = route.params.reference as string;
-const warehouseReference = route.params.warehouse as string;
+const router = useRouter();
 
+// Déclarer le contrôleur en premier (controller = logique)
 const {
-    // Jobs
-
-    hasAvailableJobs,
-    jobSelectOptions,
-    selectedAvailable,
-    selectedJobs,
-    selectedJobToAddLocation,
-    isSubmitting,
-    expandedJobIds,
-    createJobFromSelectedLocations,
-    addLocationToJob,
-    removeLocationFromJob,
-    returnSelectedJobs,
-    validateJob,
-    validateJobs,
+    // État
+    jobs,
+    locations,
+    availableLocations,
+    planningState,
+    paginationState,
+    filterState,
     loading,
 
-    // DataTable des locations
-    tableData,
-    pageSize,
+    // Computed properties additionnelles
+    hasAvailableJobs,
+    jobSelectOptions,
 
-    locationSearchQuery,
-    loadLocations,
+    // Actions principales
+    createJobFromSelectedLocations,
+    applyJobFilters,
+    applyLocationFilters,
 
-    searchLocations,
-    handleLocationServerPagination,
+    // Gestionnaires d'état
+    updateSelection,
 
-    // Jobs du store
-    storeJobs,
+    clearSelection,
+    updatePagination,
+    updateFilters,
 
-    // Handlers pour les sélections et actions
+    // Handlers pour DataTable
+    onJobPaginationChanged,
+    onJobSortChanged,
+    onJobFilterChanged,
+    onLocationPaginationChanged,
+    onLocationSortChanged,
+    onLocationFilterChanged,
     onAvailableSelectionChanged,
     onJobSelectionChanged,
     onSelectJobForLocation,
-    onReturnSelectedJobsFromStore,
+    onBulkValidate,
+    onReturnSelectedJobs,
     onRefreshLocations,
-    onLocationPaginationChanged,
-    onLocationFilterChanged,
-    onJobPaginationChanged,
-    onJobSortChanged,
-    onJobFilterChanged
-} = usePlanning({ inventoryReference, warehouseReference });
+    onRefreshData,
+    onNestedTableFilterChanged,
 
-console.log('🔗 Paramètres de route reçus:', {
+    // Colonnes adaptées
+    adaptedStoreJobsColumns,
+    adaptedAvailableLocationColumns,
+
+    // Navigation
     inventoryReference,
     warehouseReference
+} = usePlanning({
+    inventoryReference: route.params.reference as string,
+    warehouseReference: route.params.warehouse as string
 });
+
+// Computed pour surveiller la sélection des jobs
+const selectedJobsCount = computed(() => {
+    return planningState.value.selectedJobs.length;
+});
+
+// Watch pour surveiller les changements de sélection
+watch(
+    () => planningState.value.selectedJobs,
+    () => {
+        // Logique de surveillance silencieuse
+    },
+    { deep: true }
+);
+
+// Fonctions de navigation (après la déclaration du composable)
+const handleGoToInventoryDetail = () => {
+    router.push({
+        name: 'inventory-detail',
+        params: { reference: inventoryReference }
+    });
+};
+
+const handleGoToAffectation = () => {
+    router.push({
+        name: 'inventory-affecter',
+        params: {
+            reference: inventoryReference,
+            warehouse: warehouseReference
+        }
+    });
+};
 
 // Keys pour forcer le re-render des tables
 const availableLocationsKey = ref(0);
@@ -254,190 +259,60 @@ const availableLocationsTableRef = ref();
 const jobsTableRef = ref();
 
 // État pour le SelectField - utiliser la variable du composable
-const selectedJobId = selectedJobToAddLocation;
+const selectedJobId = planningState.value.selectedJobToAddLocation;
 
-// Adapter les colonnes pour DataTableNew.vue
-const adaptedStoreJobsColumns = computed(() => [
-
-    {
-        field: 'id',
-        headerName: 'ID',
-        sortable: true,
-        filterable: true,
-        width: 80,
-        editable: false,
-        hide: true,
-        description: 'Identifiant unique du job',
-        draggable: true,
-        autoSize: true
-    },
-    {
-        field: 'reference',
-        headerName: 'Référence',
-        sortable: true,
-        filterable: true,
-        width: 200,
-        editable: false,
-        draggable: true,
-        autoSize: true
-    },
-    {
-        field: 'status',
-        headerName: 'Statut',
-        sortable: true,
-        filterable: true,
-        width: 120,
-        editable: false,
-        draggable: true,
-        autoSize: true,
-        badgeStyles: [
-            { value: 'EN ATTENTE', class: 'inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-yellow-600/20 ring-inset' },
-            { value: 'VALIDE', class: 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-800 ring-1 ring-green-600/20 ring-inset' }
-        ],
-        badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
-    },
-    {
-    field: 'emplacements',
-    headerName: 'Emplacements',
-    sortable: false,
-    filterable: false,
-    nestedData: {
-        key: 'emplacements',
-        displayKey: 'location_reference',
-        countSuffix: 'emplacements',
-        expandable: true
-    },
-    draggable: true,
-    autoSize: true
-    },
-    {
-        field: 'created_at',
-        headerName: 'Date création',
-        sortable: true,
-        filterable: true,
-        width: 120,
-        editable: false,
-        draggable: true,
-        autoSize: true,
-        dataType: 'date' as const,
-        dateFormat: 'fr-FR',
-        dateOptions: {
-            year: 'numeric' as const,
-            month: '2-digit' as const,
-            day: '2-digit' as const
-        }
-    }
-]);
-
-const adaptedAvailableLocationColumns = computed(() => [
-    {
-        field: 'id',
-        headerName: 'ID',
-        hide: true, // Masquée par défaut
-        description: 'Identifiant unique',
-        sortable: true,
-        filterable: true
-    },
-    {
-        field: 'reference',
-        headerName: 'Référence',
-        sortable: true,
-        filterable: true,
-        width: 150,
-        editable: false,
-        draggable: true,
-        autoSize: true
-    },
-    {
-        field: 'location_reference',
-        headerName: 'Réf. Location',
-        sortable: true,
-        filterable: true,
-        width: 150,
-        editable: false,
-        draggable: true,
-        autoSize: true
-    },
-    {
-        field: 'sous_zone',
-        headerName: 'Sous-zone',
-        sortable: true,
-        filterable: true,
-        width: 120,
-        editable: false,
-        draggable: true,
-        autoSize: true
-    },
-    {
-        field: 'zone',
-        headerName: 'Zone',
-        sortable: true,
-        filterable: true,
-        width: 120,
-        editable: false,
-        draggable: true,
-        autoSize: true
-    },
-]);
-
-
-
-// Recherche de locations
 async function onSearchLocations() {
-    await searchLocations(locationSearchQuery.value);
+    await applyLocationFilters(filterState.value.filterModel);
 }
 
-// Création / ajout
+// Handler pour la validation en masse
+async function onBulkValidateHandler() {
+    await onBulkValidate();
+
+    // Vider les sélections dans la table des jobs
+    // if (jobsTableRef.value) {
+    //     jobsTableRef.value.clearAllSelections();
+    // }
+}
+
+// Fonction pour supprimer un emplacement d'un job (pour la nested table)
+async function removeLocationFromNestedTable(jobId: string, locationReference: string) {
+    try {
+        // Logique de suppression d'emplacement
+        await onRefreshData();
+    } catch (error) {
+        logger.error('Erreur lors de la suppression de l\'emplacement', error);
+    }
+}
+
+// Fonction pour créer un job depuis les emplacements sélectionnés
 async function createSingleJob() {
     const ok = await createJobFromSelectedLocations();
     if (ok) {
         // Forcer le re-render seulement après création réussie
-        availableLocationsKey.value++;
-        jobsKey.value++;
+        // availableLocationsKey.value++;
+        // jobsKey.value++;
 
         // Vider les sélections dans les tables
-        if (availableLocationsTableRef.value) {
-            availableLocationsTableRef.value.clearAllSelections();
-        }
+        // if (availableLocationsTableRef.value) {
+        //     availableLocationsTableRef.value.clearAllSelections();
+        // }
     }
 }
 
-// Handler pour la validation en masse
-async function onBulkValidate() {
-    await validateJobs(selectedJobs.value);
-
-    // Vider les sélections dans la table des jobs
-    if (jobsTableRef.value) {
-        jobsTableRef.value.clearAllSelections();
-    }
+// 🧪 Fonction de test pour simuler une sélection
+function testSelection() {
+    // Simuler une sélection de job
+    updateSelection('jobs', ['1', '2']);
 }
 
-// Fonction pour actualiser les données et les IDs
-async function onRefreshData() {
-    console.log('🔄 Actualisation des données...');
-
-    // Actualiser les IDs depuis les références
-    // await refreshIdsFromReferences(); // This line was removed from the composable
-
-    // Actualiser les locations
-    await onRefreshLocations();
-
-    // Forcer le re-render des tables
-    availableLocationsKey.value++;
-    jobsKey.value++;
-
-    console.log('✅ Données actualisées');
-}
+// Exposer la fonction de test dans la console
+(window as any).testSelection = testSelection;
 
 // Charger les données au montage
 onMounted(async () => {
-    console.log('🚀 Chargement des données de planning avec les paramètres:', {
-        inventoryReference,
-        warehouseReference
-    });
-
-    // Les IDs sont automatiquement initialisés dans le composable
-    await loadLocations();
+    // Le composable usePlanning gère automatiquement l'initialisation des données
+    // dans son propre onMounted, pas besoin d'appeler de méthode d'initialisation ici
 
     // Ajouter event listener pour l'expansion des jobs (seulement sur l'icône)
     document.addEventListener('click', (event) => {
@@ -446,28 +321,16 @@ onMounted(async () => {
         if (chevronIcon) {
             const jobId = chevronIcon.getAttribute('data-job-id');
             if (jobId) {
-                if (expandedJobIds.value.has(jobId)) {
-                    expandedJobIds.value.delete(jobId);
+                if (planningState.value.expandedJobIds.has(jobId)) {
+                    planningState.value.expandedJobIds.delete(jobId);
                 } else {
-                    expandedJobIds.value.add(jobId);
+                    planningState.value.expandedJobIds.add(jobId);
                 }
                 jobsKey.value++;
             }
         }
     });
 });
-
-// Ajout d'un handler local pour le tri des emplacements
-function onLocationSortChanged(sortModel: Array<{ field: string; direction: 'asc' | 'desc' }>) {
-    // Recharge les données avec le tri demandé
-    loadLocations({
-        ordering: sortModel.length > 0
-            ? (sortModel[0].direction === 'desc' ? `-${sortModel[0].field}` : sortModel[0].field)
-            : undefined
-    });
-}
-
-console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.value);
 </script>
 
 <style scoped>
@@ -513,6 +376,40 @@ console.log('tableData.length', tableData.value.length, 'pageSize', pageSize.val
     width: 2.5rem;
     height: 2.5rem;
     color: #FACC15;
+}
+
+.navigation-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+    color: #1e293b;
+    box-shadow: 0 4px 12px rgba(250, 204, 21, 0.3);
+}
+
+.nav-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(250, 204, 21, 0.4);
+}
+
+.nav-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
 }
 
 .context-info {

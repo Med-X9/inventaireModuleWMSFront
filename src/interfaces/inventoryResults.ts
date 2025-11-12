@@ -3,22 +3,19 @@ export interface StoreOption {
   value: string;
 }
 
-export interface InventoryResult {
-  id: number;
-  article: string;
+export interface InventoryResult extends Record<string, any> {
+  id: number | string;
+  jobId: number | string;
   emplacement: string;
-  premier_contage: number;
-  deuxieme_contage: number;
-  ecart: number;
-  troisieme_contage: number;
-  resultats: string;
-  inventory: string;
-  store: string;
+  article?: string;
+  product?: string;
+  final_result: number | null;
+  resultats?: number | null;
 }
 
 export interface ResultAction {
   label: string;
   icon: any;
-  class: string;
-  handler: (row: InventoryResult) => void | Promise<void>;
+  onClick: (row: any) => void | Promise<void>;
+  color?: 'primary' | 'secondary' | 'danger';
 }

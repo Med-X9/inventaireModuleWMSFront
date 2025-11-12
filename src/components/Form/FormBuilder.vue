@@ -43,6 +43,7 @@
 
 <script setup lang="ts">
 import { reactive, computed, watch, ref, nextTick } from 'vue';
+import { logger } from '@/services/loggerService';
 import SubmitButton from './SubmitButton.vue';
 import SelectField from './SelectField.vue';
 import FormFieldLabel from './FormFieldLabel.vue';
@@ -186,21 +187,19 @@ watch(() => props.modelValue, async (newValue) => {
             });
         });
     }, () => {
-        console.warn('⚠️ Erreur lors de l\'initialisation des données FormBuilder');
+        logger.warn('Erreur lors de l\'initialisation des données FormBuilder');
     });
 }, { immediate: true, deep: true });
 </script>
 
-<style lang="postcss" scoped>
-/* Styles spécifiques au FormBuilder */
-.container {
-    @apply max-w-7xl mx-auto px-4;
+<style scoped>
+.form-grid {
+    display: grid;
+    gap: 1rem;
 }
-
-/* Responsive design */
-@media (max-width: 768px) {
-    .container {
-        @apply px-2;
-    }
-}
+.grid-cols-1 { grid-template-columns: repeat(1, 1fr); }
+.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+.grid-cols-5 { grid-template-columns: repeat(5, 1fr); }
 </style>

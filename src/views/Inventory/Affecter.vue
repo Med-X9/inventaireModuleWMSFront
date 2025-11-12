@@ -1,37 +1,21 @@
 <template>
     <div class="container mx-auto p-4">
         <!-- Header avec titre et statistiques -->
-        <div class="mb-6">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+        <div class="page-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1 class="page-title">
+                        <IconCalendar class="title-icon" />
                         Gestion des Affectations
                     </h1>
-                    <p class="text-gray-600 dark:text-gray-400">
-                        Affectez les équipes et ressources aux jobs d'inventaire
-                    </p>
                 </div>
-                <div class="flex items-center gap-4">
-                    <div class="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span class="text-sm font-medium text-blue-700 dark:text-blue-300">
-                            {{displayData.filter(row => !row.isChild).length}} jobs
-                        </span>
-                    </div>
-                    <div class="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span class="text-sm font-medium text-green-700 dark:text-green-300">
-                            {{ hasUnsavedChanges ? 'Modifications en attente' : 'À jour' }}
-                        </span>
-                    </div>
+                <div class="navigation-buttons">
+                    <button class="nav-btn detail-btn flex items-center gap-2" @click="handleGoToInventoryDetail">
+                        <IconEye class="w-4 h-4 text-white" />
+                    </button>
+                    <button class="nav-btn affectation-btn flex items-center gap-2" @click="handleGoToAffectation">
+                        <IconCalendar class="w-4 h-4 text-white" />
+                    </button>
                 </div>
             </div>
         </div>
@@ -132,12 +116,21 @@
                     </button>
 
                     <!-- Bouton Pret -->
-                    <button @click="handleReadyClick"
+                    <button v-if="showReadyButton" @click="handleReadyClick"
                         class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#FECD1C] to-[#fec31c] hover:from-[#fec31c] hover:to-[#feb91c] text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#FECD1C] focus:ring-offset-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <span>Pret</span>
+                    </button>
+
+                    <!-- Bouton Transférer - affiché seulement si statut EN REALISATION -->
+                    <button v-if="showTransferButton" @click="handleTransferClick"
+                        class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                        <span>Transférer</span>
                     </button>
 
                     <!-- Bouton Annuler -->
@@ -153,10 +146,9 @@
         </div>
         <div
             class="panel datatable bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <DataTableNew ref="dataTableRef" :columns="columns" :rowDataProp="displayData" :actions="[]"
+            <DataTable ref="dataTableRef" :columns="columns" :rowDataProp="displayData" :actions="[]"
                 :pagination="true" :enableFiltering="true" :rowSelection="true" :inlineEditing="true"
                 :serverSidePagination="true" :serverSideFiltering="true" :serverSideSorting="true" :debounceFilter="500"
-                :currentPageProp="currentPage" :totalPagesProp="totalPages" :totalItemsProp="totalItems"
                 :loading="loading" @selection-changed="onSelectionChanged" @row-clicked="onRowClicked"
                 @cell-value-changed="onCellValueChanged" @pagination-changed="handlePaginationChanged"
                 @sort-changed="handleSortChanged" @filter-changed="handleFilterChanged"
@@ -179,9 +171,129 @@
             </div>
         </Modal>
 
-        <Modal v-model="showTransferModal" title="Transférer Jobs" class="modern-modal">
-            <div class="mt-4">
-                <FormBuilder v-model="transferForm" :fields="transferFields" submitLabel="Transférer" :columns="1" />
+        <Modal v-model="showTransferModal" :title="`Transférer ${eligibleJobsForTransfer.length} Job(s)`" class="modern-modal" :size="'xl'">
+            <div class="flex flex-col" style="height: 75vh; max-height: 75vh;">
+                <!-- Section 1: Header et alert -->
+                <div class="flex-shrink-0 mb-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-base font-semibold text-gray-700 dark:text-gray-300">
+                            Jobs éligibles au transfert
+                        </h3>
+                        <div class="flex items-center gap-2">
+                            <span class="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 text-xs font-medium rounded-full">
+                                {{ eligibleJobsForTransfer.length }} éligible(s)
+                            </span>
+                            <span v-if="selectedRows.length - eligibleJobsForTransfer.length > 0"
+                                class="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400 text-xs font-medium rounded-full">
+                                {{ selectedRows.length - eligibleJobsForTransfer.length }} exclu(s)
+                            </span>
+                        </div>
+                    </div>
+                    <!-- Alert pour les jobs exclus -->
+                    <div v-if="selectedRows.length - eligibleJobsForTransfer.length > 0"
+                        class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                        <div class="flex items-start">
+                            <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            <div class="flex-1">
+                                <p class="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+                                    {{ selectedRows.length - eligibleJobsForTransfer.length }} job(s) ne sont pas éligibles au transfert
+                                </p>
+                                <p class="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
+                                    Seuls les jobs en statut PRET peuvent être transférés.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Liste des jobs avec hauteur limitée -->
+                <div class="flex-1 min-h-0 mb-4">
+                    <div class="h-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                        <div class="h-full overflow-y-auto custom-scrollbar">
+                            <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                                <div v-for="job in eligibleJobsForTransfer" :key="job.id"
+                                    class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                    <div class="flex items-center justify-between gap-4">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="font-medium text-gray-900 dark:text-white truncate">{{ job.job }}</div>
+                                            <div class="flex items-center gap-3 mt-1">
+                                                <span class="text-xs text-gray-500 dark:text-gray-400">
+                                                    <svg class="w-3.5 h-3.5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                                    </svg>
+                                                    {{ job.locations?.length || 0 }} emplacement(s)
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="flex-shrink-0">
+                                            <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                                :class="{
+                                                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400': job.status === 'AFFECTE',
+                                                    'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400': job.status === 'VALIDE',
+                                                    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400': job.status === 'PRET',
+                                                    'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400': job.status === 'TRANSFERT'
+                                                }">
+                                                {{ job.status }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Divider -->
+                <div class="border-t border-gray-200 dark:border-gray-700 my-4"></div>
+
+                <!-- Formulaire de sélection du comptage -->
+                <div class="flex-shrink-0 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 mb-4">
+                    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                        </svg>
+                        Sélectionner le(s) comptage(s) à transférer
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border-2 transition-all cursor-pointer hover:border-purple-300 dark:hover:border-purple-700"
+                            :class="transferForm.premierComptage ? 'border-purple-500 dark:border-purple-600' : 'border-gray-200 dark:border-gray-700'">
+                            <input type="checkbox" v-model="transferForm.premierComptage"
+                                class="w-5 h-5 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                            <div class="ml-3 flex-1">
+                                <div class="text-sm font-medium text-gray-900 dark:text-white">1er Comptage</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">Transfert du premier comptage</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border-2 transition-all cursor-pointer hover:border-purple-300 dark:hover:border-purple-700"
+                            :class="transferForm.deuxiemeComptage ? 'border-purple-500 dark:border-purple-600' : 'border-gray-200 dark:border-gray-700'">
+                            <input type="checkbox" v-model="transferForm.deuxiemeComptage"
+                                class="w-5 h-5 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                            <div class="ml-3 flex-1">
+                                <div class="text-sm font-medium text-gray-900 dark:text-white">2e Comptage</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">Transfert du deuxième comptage</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Boutons d'action avec sticky footer -->
+                <div class="flex-shrink-0 flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <button @click="showTransferModal = false"
+                        class="px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
+                        Annuler
+                    </button>
+                    <button @click="handleTransferSubmit({
+                        premierComptage: transferForm.premierComptage,
+                        deuxiemeComptage: transferForm.deuxiemeComptage
+                    })"
+                        :disabled="!transferForm.premierComptage && !transferForm.deuxiemeComptage"
+                        class="px-6 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 disabled:cursor-not-allowed transform transition-all hover:scale-105 shadow-md hover:shadow-lg">
+                        Transférer {{ eligibleJobsForTransfer.length }} Job(s)
+                    </button>
+                </div>
             </div>
         </Modal>
     </div>
@@ -189,24 +301,20 @@
 
 
 <script setup lang="ts">
-import { useRouter, useRoute } from 'vue-router';
-import DataTableNew from '@/components/DataTable/DataTableNew.vue';
+import { useRoute } from 'vue-router';
+import DataTable from '@/components/DataTable/DataTable.vue';
 import Modal from '@/components/Modal.vue';
 import FormBuilder from '@/components/Form/FormBuilder.vue';
-import type { DataTableColumn } from '@/types/dataTable';
 import { useAffecter } from '@/composables/useAffecter';
-import { useSessionStore } from '@/stores/session';
-import { useResourceStore } from '@/stores/resource';
-import { computed, onMounted, watch } from 'vue';
+import IconCalendar from '@/components/icon/icon-calendar.vue';
+import IconEye from '@/components/icon/icon-eye.vue';
 
 const route = useRoute();
-const inventoryReference = route.params.reference as string;
-const warehouseReference = route.params.warehouse as string;
 
 // Utilisation du composable migré avec la nouvelle signature
 const affecter = useAffecter({
-    inventoryReference,
-    warehouseReference
+    inventoryReference: route.params.reference as string,
+    warehouseReference: route.params.warehouse as string
 });
 
 // Destructuration des propriétés du composable
@@ -241,8 +349,12 @@ const {
     handleValiderClick,
     handleResourceSubmit,
     handleTeamSubmit,
+    handleTransferSubmit,
     handleReadyClick,
     handleResetClick,
+    handleGoToInventoryDetail,
+    handleGoToAffectation,
+    handleTransferClick,
     // Pagination et filtrage
     currentPage,
     totalPages,
@@ -253,286 +365,55 @@ const {
     handleFilterChanged,
     handleGlobalSearchChanged,
     loadSessionsIfNeeded,
+    inventoryReference,
+    warehouseReference,
+    eligibleJobsForTransfer,
+    // Nouvelles propriétés pour DataTable
+    columns,
+    sessionOptions,
+    resourceOptions,
+    showTransferButton,
+    showReadyButton,
+    dateValueParser,
+    dateValueSetter,
 } = affecter;
 
-// Utilisation du store pour les sessions
-const sessionStore = useSessionStore();
-
-// Utilisation du store pour les ressources
-const resourceStore = useResourceStore();
-
-// Computed réactif pour les options des sessions
-const sessionOptions = computed(() => {
-    return sessionStore.getAllSessions.map(session => ({
-        value: session.username,
-        label: session.username
-    }));
-});
-
-const resourceOptions = computed(() => {
-    return resourceStore.getResources.map(resource => ({
-        value: resource.id?.toString() || resource.reference,
-        label: resource.ressource_nom || resource.reference || `Ressource ${resource.reference}`
-    }));
-});
-
-
-
-// Computed réactif pour les colonnes qui se met à jour quand les sessions changent
-const columns = computed((): DataTableColumn[] => [
-    {
-        field: 'job',
-        headerName: 'Job',
-        sortable: true,
-        filterable: true,
-        width: 80,
-        flex: 1,
-        editable: false,
-        dataType: 'text',
-        nestedData: {
-            key: 'locations',
-            displayKey: 'location_reference',
-            countSuffix: 'emplacements',
-            expandable: true,
-        }
-    },
-    {
-        field: 'status',
-        headerName: 'Statut',
-        sortable: true,
-        filterable: true,
-        width: 40,
-        flex: 1,
-        editable: false,
-        dataType: 'select',
-        editValueFormatter: (value: any, row: any) => {
-            if (!value || value === '') {
-                return 'Sélectionner un statut...';
-            }
-            return value;
-        },
-        filterConfig: {
-            dataType: 'select',
-            operator: 'equals',
-            options: [
-                { value: 'AFFECTE', label: 'AFFECTE' },
-                { value: 'VALIDE', label: 'VALIDE' },
-                { value: 'TRANSFERE', label: 'TRANSFERE' }
-            ]
-        },
-        badgeStyles: [
-            { value: 'VALIDE', class: 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-800 ring-1 ring-green-600/20 ring-inset' },
-            { value: 'AFFECTE', class: 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-600/20 ring-inset' },
-            { value: 'TRANSFERE', class: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset' },
-        ],
-        badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
-    },
-    {
-        field: 'team1',
-        headerName: 'Équipe 1er Comptage',
-        sortable: true,
-        filterable: true,
-        width: 80,
-        flex: 1,
-        editable: true,
-        dataType: 'select',
-        editValueFormatter: (value: any, row: any) => {
-            if (!value || value === '') {
-                return 'Sélectionner une équipe...';
-            }
-            return value;
-        },
-        filterConfig: {
-            dataType: 'select',
-            operator: 'equals',
-            options: sessionOptions.value
-        }
-    },
-    {
-        field: 'date1',
-        headerName: 'Date 1er Comptage',
-        sortable: true,
-        filterable: true,
-        width: 80,
-        flex: 1,
-        editable: true,
-        dataType: 'date',
-        editValueFormatter: (value: any, row: any) => {
-            if (!value || value === '') {
-                return 'Choisir une date...';
-            }
-            // Formater la date pour l'affichage pendant l'édition
-            try {
-                const date = new Date(value);
-                if (isNaN(date.getTime())) return '';
-                return date.toLocaleDateString('fr-FR', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit'
-                });
-            } catch {
-                return value;
-            }
-        }
-    },
-    {
-        field: 'team2',
-        headerName: 'Équipe 2e Comptage',
-        sortable: true,
-        filterable: true,
-        width: 80,
-        flex: 1,
-        editable: true,
-        dataType: 'select',
-        editValueFormatter: (value: any, row: any) => {
-            if (!value || value === '') {
-                return 'Sélectionner une équipe...';
-            }
-            return value;
-        },
-        filterConfig: {
-            dataType: 'select',
-            operator: 'equals',
-            options: sessionOptions.value
-        }
-    },
-    {
-        field: 'date2',
-        headerName: 'Date 2e Comptage',
-        sortable: true,
-        filterable: true,
-        width: 100,
-        flex: 1,
-        editable: true,
-        dataType: 'date',
-        editValueFormatter: (value: any, row: any) => {
-            if (!value || value === '') {
-                return 'Choisir une date...';
-            }
-            // Formater la date pour l'affichage pendant l'édition
-            try {
-                const date = new Date(value);
-                if (isNaN(date.getTime())) return '';
-                return date.toLocaleDateString('fr-FR', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit'
-                });
-            } catch {
-                return value;
-            }
-        }
-    },
-    {
-        field: 'resources',
-        headerName: 'Ressources',
-        sortable: true,
-        filterable: true,
-        width: 100,
-        flex: 1,
-        editable: true,
-        dataType: 'select',
-        multiple: true, // Sélection multiple activée
-        editValueFormatter: (value: any, row: any) => {
-            if (!value || (Array.isArray(value) && value.length === 0)) {
-                return 'Sélectionner des ressources...';
-            }
-            // Pour les sélections multiples, afficher les valeurs séparées par des virgules
-            if (Array.isArray(value)) {
-                return value.join(', ');
-            }
-            return value;
-        },
-        filterConfig: {
-            dataType: 'select',
-            operator: 'equals',
-            options: resourceOptions.value
-        },
-        nestedData: {
-            key: 'resourcesList',
-            displayKey: 'name',
-            countSuffix: 'ressources',
-            expandable: true,
-        }
-    }
-]);
-
-// Charger les sessions au montage du composant
-onMounted(async () => {
-    await loadSessionsIfNeeded();
-
-    // Charger les ressources si elles ne sont pas déjà chargées
-    if (resourceStore.getResources.length === 0) {
-        await resourceStore.fetchResources();
-    }
-});
-
-// Watcher pour forcer la mise à jour du DataTable quand les sessions changent
-watch(sessionOptions, (newOptions) => {
-    // Les colonnes sont déjà réactives grâce au computed, pas besoin de forcer la mise à jour
-}, { deep: true });
-
-// Watcher pour les ressources
-watch(resourceOptions, (newOptions) => {
-    // Les colonnes se mettent à jour automatiquement grâce au computed
-}, { deep: true });
-
-
-// Fonction pour parser les dates depuis l'éditeur
-const dateValueParser = (params: any) => {
-    if (!params.newValue) return '';
-
-    // Si c'est un objet Date, le convertir en string YYYY-MM-DD
-    const newVal = params.newValue;
-    if (
-        newVal !== null
-        && typeof newVal === 'object'
-        && Object.prototype.toString.call(newVal) === '[object Date]'
-    ) {
-        // ici TS sait que newVal est un Date
-        return (newVal as Date).toISOString().split('T')[0];
-    }
-
-    // Si c'est déjà une string, vérifier le format
-    if (typeof params.newValue === 'string') {
-        // Format YYYY-MM-DD
-        if (params.newValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
-            return params.newValue;
-        }
-
-        // Essayer de parser et reformater
-        try {
-            const date = new Date(params.newValue);
-            return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
-        } catch {
-            return '';
-        }
-    }
-
-    return '';
-};
-
-// Fonction pour setter les valeurs de date
-const dateValueSetter = (params: any) => {
-    if (!params.data || params.data.isChild) return false;
-
-    const parsedValue = dateValueParser(params);
-    const field = params.colDef.field!;
-    const oldValue = params.data[field];
-
-    if (parsedValue !== oldValue) {
-        params.data[field] = parsedValue;
-        return true;
-    }
-
-    return false;
-};
-
-
+// Toute la logique TypeScript a été migrée vers useAffecter.ts
 
 </script>
 
 <style scoped>
+/* Scrollbar personnalisé pour le modal */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+    background: #1e293b;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #475569;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+
 /* Animations pour le dropdown */
 .dropdown-enter-active,
 .dropdown-leave-active {
@@ -564,6 +445,76 @@ const dateValueSetter = (params: any) => {
 
 .modern-modal :deep(.modal-body) {
     padding: 1rem 1.5rem 1.5rem;
+}
+
+.page-header {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e5e7eb;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+}
+
+.header-left {
+    flex: 1;
+}
+
+.page-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: #1e293b;
+    margin: 0 0 0.5rem 0;
+}
+
+.title-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    color: #FACC15;
+}
+
+.navigation-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+    color: #1e293b;
+    box-shadow: 0 4px 12px rgba(250, 204, 21, 0.3);
+}
+
+.nav-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(250, 204, 21, 0.4);
+}
+
+.nav-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
 }
 
 /* Animations pour les boutons */

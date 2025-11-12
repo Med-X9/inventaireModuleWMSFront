@@ -1,6 +1,7 @@
 import type { InventoryCreationState, ComptageMode } from '../interfaces/inventoryCreation';
 import type { InventoryManagement } from '../interfaces/inventoryManagement';
 import { inventoryCreationService } from './inventoryCreationService';
+import { logger } from './loggerService';
 
 class InventoryEditService {
     private mockInventoryMap: Map<number, InventoryManagement> = new Map([
@@ -38,12 +39,12 @@ class InventoryEditService {
             if (existingInventory) {
                 this.mockInventoryMap.set(id, {
                     ...existingInventory,
-                    label: inventoryData.step1Data.libelle,
-                    date: inventoryData.step1Data.date,
+                    label: inventoryData.step1Data?.libelle || existingInventory.label,
+                    date: inventoryData.step1Data?.date || existingInventory.date,
                 });
             }
         } catch (error) {
-            console.error('Error updating inventory:', error);
+            logger.error('Error updating inventory', error);
             throw new Error('Erreur lors de la mise à jour de l\'inventaire');
 
         }

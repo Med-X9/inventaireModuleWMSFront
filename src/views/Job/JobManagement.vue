@@ -1,15 +1,16 @@
 <template>
     <div class="datatable panel py-7">
         <DataTable
-            :columns="columns"
+            :columns="columns as any"
             :rowDataProp="jobs"
-            :actions="actions"
+            :actions="actions as any"
             :pagination="true"
             :rowSelection="false"
             :enableFiltering="true"
             :storageKey="'job_management_table'"
             :showColumnSelector="true"
-            :onPaginationChanged="handlePaginationChanged"
+            :loading="loading"
+            @pagination-changed="handlePaginationChanged"
             @sort-changed="handleSortChanged"
             @filter-changed="handleFilterChanged"
         >
@@ -26,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch } from 'vue';
+import { onMounted } from 'vue';
 import { useJobManagement } from '@/composables/useJobManagement';
 import DataTable from '@/components/DataTable/DataTable.vue';
 import IconPlus from '@/components/icon/icon-plus.vue';
@@ -37,20 +38,14 @@ const {
     columns,
     actions,
     redirectToAdd,
-    fetchJobs,
     handlePaginationChanged,
     handleSortChanged,
     handleFilterChanged,
+    loadData
 } = useJobManagement();
 
 // Charger les données une fois le composant monté
 onMounted(async () => {
-    console.log('🚀 Chargement initial des jobs...');
-    await fetchJobs();
+    await loadData();
 });
-
-// Supprimer le watcher qui peut causer des boucles infinies
-// watch(jobs, (newJobs) => {
-//     console.log('📊 Jobs mis à jour:', newJobs.length, 'éléments');
-// }, { deep: true });
 </script>

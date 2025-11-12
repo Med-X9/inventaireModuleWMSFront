@@ -47,6 +47,7 @@
 </template>
 
 <script setup lang="ts">
+/* eslint-disable */
 interface Props {
     columnsCount?: number
     rowsCount?: number

@@ -84,8 +84,6 @@ export function useResourceModal() {
 
     // Fonction pour gérer l'ajout de ressources
     const handleAddResources = (): ResourceToAdd[] => {
-        console.log('Lignes de ressources:', resourceLines.value);
-
         // Traiter les lignes de ressources
         const resourcesToAdd = resourceLines.value
             .filter(line => line.resource && line.quantity)
@@ -93,8 +91,6 @@ export function useResourceModal() {
                 resource_id: line.resource!,
                 quantity: parseInt(line.quantity.toString())
             }));
-
-        console.log('Ressources à ajouter:', resourcesToAdd);
 
         // Fermer le modal et réinitialiser
         closeModal();
