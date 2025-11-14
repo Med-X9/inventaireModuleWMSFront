@@ -3,11 +3,11 @@ import axiosInstance from '@/utils/axiosConfig';
 // API base configuration
 const API = {
     baseURL: import.meta.env.VITE_API_BASE_URL,
-    get axiosInstance() { 
+    get axiosInstance() {
         return axiosInstance;
     },
     endpoints: {
-        auth: {
+        auth: { 
             login: '/api/auth/login/',
             refresh: '/api/auth/login/refresh/',
             logout: '/api/auth/logout/',
