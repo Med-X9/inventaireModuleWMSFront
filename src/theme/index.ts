@@ -5,6 +5,18 @@
  * @module theme
  */
 
+import { colors, darkColors, type ColorKey } from './colors'
+import {
+    fontFamilies,
+    fontSizes,
+    fontWeights,
+    lineHeights,
+    letterSpacings,
+    typography,
+    type TypographyStyle,
+} from './typography'
+
+// Ré-exporter pour permettre l'import direct
 export { colors, darkColors, type ColorKey } from './colors'
 export {
     fontFamilies,

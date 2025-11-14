@@ -236,20 +236,20 @@ export function useDataTable(props: DataTableProps, emit: any) {
         }
 
         // Pour la pagination côté client, mettre à jour paginatedData
-        if (newData && Array.isArray(newData)) {
+        if (newData && Array.isArray(newData) && newData.length > 0) {
             // Créer une nouvelle référence pour forcer la mise à jour
-            paginatedData.value = Array.isArray(newData) ? [...newData] : []
+            paginatedData.value = [...newData]
 
             // Utiliser totalItemsProp si disponible, sinon la longueur des données
-            effectiveTotalItems.value = newTotalItems ?? (Array.isArray(newData) ? newData.length : 0)
+            effectiveTotalItems.value = newTotalItems ?? newData.length
 
             effectiveTotalPages.value = Math.ceil(effectiveTotalItems.value / effectivePageSize.value)
             updatePaginationInfo()
             
             // S'assurer que les sélections restent vides lors du chargement de nouvelles données
             // Ne pas sélectionner automatiquement toutes les lignes
-        } else if (!newData || (Array.isArray(newData) && newData.length === 0)) {
-            // Si les données sont vides, vider aussi paginatedData
+        } else {
+            // Si les données sont vides ou non définies, vider aussi paginatedData
             paginatedData.value = []
             effectiveTotalItems.value = newTotalItems ?? 0
             effectiveTotalPages.value = Math.ceil(effectiveTotalItems.value / effectivePageSize.value)
