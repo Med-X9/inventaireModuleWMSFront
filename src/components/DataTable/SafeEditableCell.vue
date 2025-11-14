@@ -291,7 +291,7 @@ watch(() => props.isEditing, (isEditing) => {
 
 .edit-input:focus {
     outline: none;
-    border-color: #FECD1C;
+    border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgba(254, 205, 28, 0.2), 0 4px 6px rgba(0, 0, 0, 0.1);
     transform: translateY(-1px);
 }

@@ -1,18 +1,18 @@
 <template>
     <div class="flex flex-col bg-gray-50 p-3 rounded border border-gray-200 hover:shadow-sm transition-all duration-200 hover:border-gray-300">
         <div class="flex items-center gap-2 mb-2">
-            <IconComponent icon="comptage" class="w-4 h-4" style="color: #FECD1C;" />
+            <IconComponent icon="comptage" class="w-4 h-4 text-primary" />
             <span class="text-xs font-semibold text-gray-700">Comptage {{ index + 1 }}</span>
         </div>
 
         <div class="mb-2">
             <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Mode :</span>
-            <span class="text-xs font-semibold text-yellow-600 ml-1">{{ Formatters.formatMode(comptage.mode) }}</span>
+            <span class="text-xs font-semibold text-primary ml-1">{{ Formatters.formatMode(comptage.mode) }}</span>
         </div>
 
         <div v-if="comptage.mode === 'en vrac'" class="space-y-1">
             <div v-if="comptage.inputMethod" class="flex items-center gap-1">
-                <span class="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full border border-yellow-200 shadow-sm font-medium">
+                <span class="text-xs px-2 py-0.5 bg-warning-100 text-warning-700 rounded-full border border-warning-200 shadow-sm font-medium">
                     {{ Formatters.formatInputMethod(comptage.inputMethod) }}
                 </span>
             </div>

@@ -332,6 +332,8 @@ export interface DataTableProps<T = Record<string, unknown>> {
     serverSideFiltering?: boolean
     /** Délai de debounce pour les filtres */
     debounceFilter?: number
+    /** Paramètres personnalisés à ajouter aux paramètres DataTable standard */
+    customDataTableParams?: Record<string, any>
 }
 
 /**

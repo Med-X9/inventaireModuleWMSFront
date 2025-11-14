@@ -1,18 +1,44 @@
+/**
+ * Composable useInventoryResults - Gestion des résultats d'inventaire
+ *
+ * Ce composable gère :
+ * - L'affichage des résultats d'inventaire par magasin
+ * - La pagination, le tri et le filtrage côté serveur avec format standard DataTable
+ * - La validation et modification des résultats
+ * - La gestion dynamique des colonnes de comptage et d'écart
+ *
+ * @module useInventoryResults
+ */
+
+// ===== IMPORTS VUE =====
 import { ref, computed, markRaw, watch } from 'vue'
+
+// ===== IMPORTS PINIA =====
 import { storeToRefs } from 'pinia'
+
+// ===== IMPORTS COMPOSABLES =====
 import { useBackendDataTable } from '@/components/DataTable/composables/useBackendDataTable'
+
+// ===== IMPORTS SERVICES =====
 import { dataTableService } from '@/services/dataTableService'
 import { logger } from '@/services/loggerService'
 import { alertService } from '@/services/alertService'
+
+// ===== IMPORTS STORES =====
 import { useResultsStore } from '@/stores/results'
 import { useInventoryStore } from '@/stores/inventory'
 import { useWarehouseStore } from '@/stores/warehouse'
+
+// ===== IMPORTS TYPES =====
 import type { DataTableColumn, ColumnDataType, ActionConfig } from '@/types/dataTable'
 import type { InventoryResult, StoreOption } from '@/interfaces/inventoryResults'
 import type { Warehouse } from '@/models/Warehouse'
+import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
+
+// ===== IMPORTS EXTERNES =====
 import Swal from 'sweetalert2'
 
-// Import des icônes
+// ===== IMPORTS ICÔNES =====
 import IconCheck from '@/components/icon/icon-check.vue'
 import IconPencil from '@/components/icon/icon-edit.vue'
 import IconLaunch from '@/components/icon/icon-launch.vue'
@@ -44,6 +70,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     // ===== ÉTAT LOCAL =====
     const inventoryReference = ref(config?.inventoryReference || '')
     const inventoryId = ref<number | null>(config?.initialInventoryId || null)
+    const accountId = ref<number | null>(null)
     const isInitialized = ref(false)
 
     // États pour les magasins
@@ -377,10 +404,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     // ===== MÉTHODES DE CHARGEMENT =====
 
     /**
-     * Récupérer les métadonnées de l'inventaire
-     */
-    /**
      * Récupérer les magasins disponibles
+     * Priorité 1 : Charger par account_id
+     * Priorité 2 : Charger depuis l'inventaire (avec timeout)
+     * Priorité 3 : Utiliser les magasins du store existant
      */
     const fetchStores = async () => {
         if (!inventoryId.value) {
@@ -388,27 +415,53 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             return
         }
 
+        // Priorité 1 : Charger les magasins filtrés par account_id (plus rapide et fiable)
+        if (accountId.value) {
+            try {
+                await warehouseStore.fetchWarehouses(accountId.value)
+                logger.debug('Magasins chargés pour le compte', accountId.value)
+                // Utiliser les magasins du warehouse store
+                syncStoreOptions(null) // null pour forcer l'utilisation du fallback warehouse
+
+                // Si on a des magasins, on peut retourner directement
+                if (storeOptions.value.length > 0) {
+                    logger.debug('Magasins synchronisés depuis le compte', storeOptions.value)
+                    return
+                }
+            } catch (error) {
+                logger.warn('Erreur lors du chargement des magasins par compte, essai depuis l\'inventaire', error)
+                // Continuer avec le fallback
+            }
+        }
+
+        // Priorité 2 : Essayer de charger les magasins depuis l'inventaire (fallback)
         try {
-            let inventoryStoreOptions: StoreOption[] | null = null
+            const inventoryStoreOptions = await Promise.race([
+                resultsStore.fetchStores(inventoryId.value),
+                new Promise<StoreOption[]>((_, reject) =>
+                    setTimeout(() => reject(new Error('Timeout')), 5000)
+                )
+            ]) as StoreOption[]
 
-            try {
-                inventoryStoreOptions = await resultsStore.fetchStores(inventoryId.value)
-            } catch (error) {
-                logger.error('Erreur lors du chargement des magasins inventaire', error)
-                await alertService.error({ text: 'Erreur lors du chargement des magasins' })
+            logger.debug('Magasins chargés depuis l\'inventaire', inventoryStoreOptions)
+
+            // Si on a des magasins depuis l'inventaire, les utiliser
+            if (inventoryStoreOptions && inventoryStoreOptions.length > 0) {
+                syncStoreOptions(inventoryStoreOptions)
+                logger.debug('Magasins synchronisés depuis l\'inventaire', storeOptions.value)
+                return
             }
-
-            try {
-                await warehouseStore.fetchWarehouses()
-            } catch (error) {
-                logger.error('Erreur lors du chargement des entrepôts', error)
-            }
-
-            syncStoreOptions(inventoryStoreOptions)
-            logger.debug('Magasins chargés', storeOptions.value)
         } catch (error) {
-            logger.error('Erreur inattendue lors du chargement des magasins', error)
+            logger.warn('Impossible de charger les magasins depuis l\'inventaire', error)
+            // Ne pas afficher d'erreur bloquante, utiliser ce qu'on a
+        }
+
+        // Dernier recours : utiliser les magasins déjà dans le store s'ils existent
+        if (storeOptionsFromStore.value.length > 0) {
             syncStoreOptions(storeOptionsFromStore.value)
+            logger.debug('Utilisation des magasins du store existant', storeOptions.value)
+        } else {
+            logger.warn('Aucun magasin disponible')
         }
     }
 
@@ -447,8 +500,9 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         try {
             const inventory = await inventoryStore.fetchInventoryByReference(reference)
             inventoryId.value = inventory.id
+            accountId.value = inventory.account_id || null
             inventoryReference.value = reference
-            logger.debug('Inventaire chargé', { id: inventoryId.value, reference })
+            logger.debug('Inventaire chargé', { id: inventoryId.value, accountId: accountId.value, reference })
             return inventory
         } catch (error) {
             logger.error('Erreur lors de la récupération de l\'inventaire', error)
@@ -496,15 +550,68 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
 
     // ===== HANDLERS DATATABLE =====
 
-    const onPaginationChanged = async (params: { page: number; pageSize: number }) => {
-        setPage(params.page)
-        setPageSize(params.pageSize)
+    /**
+     * Handler pour les changements de pagination
+     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     *
+     * @param params - Paramètres de pagination (format standard ou ancien format)
+     */
+    const onPaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams) => {
+        // Si c'est déjà le format standard (venant du DataTable), utiliser directement
+        if ('draw' in params && 'start' in params && 'length' in params) {
+            const standardParams = params as StandardDataTableParams
+            const page = Math.floor((standardParams.start || 0) / (standardParams.length || 20)) + 1
+            setPage(page)
+            setPageSize(standardParams.length || 20)
+            await reloadResults()
+            return
+        }
+
+        // Sinon, convertir l'ancien format
+        const paginationParams = params as { page: number; pageSize: number }
+        setPage(paginationParams.page)
+        setPageSize(paginationParams.pageSize)
         await reloadResults()
     }
 
-    const onSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }>) => {
-        // Adapter le format du sortModel pour useBackendDataTable
-        const adaptedSortModel = sortModel.map(sort => ({
+    /**
+     * Handler pour les changements de tri
+     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     *
+     * @param sortModel - Modèle de tri (format standard ou ancien format)
+     */
+    const onSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }> | StandardDataTableParams) => {
+        // Si c'est déjà le format standard (venant du DataTable), extraire les informations
+        if ('draw' in sortModel && 'start' in sortModel && 'length' in sortModel) {
+            const standardParams = sortModel as StandardDataTableParams
+            const page = Math.floor((standardParams.start || 0) / (standardParams.length || 20)) + 1
+            setPage(page)
+            setPageSize(standardParams.length || 20)
+
+            // Extraire le tri depuis les paramètres standard
+            const extractedSort: Array<{ field: string; direction: 'asc' | 'desc' }> = []
+            let sortIndex = 0
+            while (standardParams[`order[${sortIndex}][column]`] !== undefined) {
+                const columnIndex = standardParams[`order[${sortIndex}][column]`]
+                const direction = standardParams[`order[${sortIndex}][dir]`] as 'asc' | 'desc'
+                const fieldKey = `columns[${columnIndex}][data]`
+                const fieldName = standardParams[fieldKey]
+                if (fieldName) {
+                    extractedSort.push({
+                        field: fieldName,
+                        direction
+                    })
+                }
+                sortIndex++
+            }
+            setSortModel(extractedSort as any)
+            await reloadResults()
+            return
+        }
+
+        // Sinon, convertir l'ancien format
+        const sortModelArray = sortModel as Array<{ colId: string; sort: 'asc' | 'desc' }>
+        const adaptedSortModel = sortModelArray.map(sort => ({
             field: sort.colId,
             direction: sort.sort
         }))
@@ -512,13 +619,68 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         await reloadResults()
     }
 
-    const onFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
-        setFilters(filterModel)
+    /**
+     * Handler pour les changements de filtres
+     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     *
+     * @param filterModel - Modèle de filtres (format standard ou ancien format)
+     */
+    const onFilterChanged = async (filterModel: Record<string, { filter: string }> | StandardDataTableParams) => {
+        // Si c'est déjà le format standard (venant du DataTable), extraire les informations
+        if ('draw' in filterModel && 'start' in filterModel && 'length' in filterModel) {
+            const standardParams = filterModel as StandardDataTableParams
+            const page = Math.floor((standardParams.start || 0) / (standardParams.length || 20)) + 1
+            setPage(page)
+            setPageSize(standardParams.length || 20)
+
+            // Extraire les filtres depuis les paramètres standard
+            const extractedFilters: Record<string, { filter: string }> = {}
+            Object.keys(standardParams).forEach(key => {
+                if (key.startsWith('columns[') && key.includes('][search][value]')) {
+                    const match = key.match(/columns\[(\d+)\]\[search\]\[value\]/)
+                    if (match && standardParams[key]) {
+                        const columnIndex = parseInt(match[1])
+                        const fieldKey = `columns[${columnIndex}][data]`
+                        const fieldName = standardParams[fieldKey]
+                        if (fieldName) {
+                            extractedFilters[fieldName] = {
+                                filter: standardParams[key]
+                            }
+                        }
+                    }
+                }
+            })
+            setFilters(extractedFilters)
+            await reloadResults()
+            return
+        }
+
+        // Sinon, utiliser directement l'ancien format
+        const filterModelObj = filterModel as Record<string, { filter: string }>
+        setFilters(filterModelObj)
         await reloadResults()
     }
 
-    const onGlobalSearchChanged = async (searchTerm: string) => {
-        setSearch(searchTerm)
+    /**
+     * Handler pour les changements de recherche globale
+     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     *
+     * @param searchTerm - Terme de recherche (format standard ou string)
+     */
+    const onGlobalSearchChanged = async (searchTerm: string | StandardDataTableParams) => {
+        // Si c'est déjà le format standard (venant du DataTable), extraire les informations
+        if (typeof searchTerm === 'object' && 'draw' in searchTerm && 'start' in searchTerm && 'length' in searchTerm) {
+            const standardParams = searchTerm as StandardDataTableParams
+            const page = Math.floor((standardParams.start || 0) / (standardParams.length || 20)) + 1
+            setPage(page)
+            setPageSize(standardParams.length || 20)
+            setSearch(standardParams['search[value]'] || '')
+            await reloadResults()
+            return
+        }
+
+        // Sinon, utiliser directement la valeur string
+        setSearch(searchTerm as string)
         await reloadResults()
     }
 
@@ -554,10 +716,14 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             // Charger les magasins
             await fetchStores()
 
-            // Sélectionner le premier magasin par défaut
+            // Sélectionner le premier magasin par défaut seulement s'il y en a
             if (storeOptions.value.length > 0) {
                 const defaultStoreId = storeOptions.value[0].value
+                resultsStore.setSelectedStore(defaultStoreId)
                 await fetchResults(defaultStoreId)
+                logger.debug('Premier magasin sélectionné par défaut', defaultStoreId)
+            } else {
+                logger.warn('Aucun magasin disponible pour sélection automatique')
             }
 
             isInitialized.value = true

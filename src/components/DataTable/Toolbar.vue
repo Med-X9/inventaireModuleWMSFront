@@ -247,27 +247,27 @@ const deselectAll = () => {
 
 /* Bouton d'export spécial */
 .export-btn {
-    background: linear-gradient(135deg, #FECD1C 0%, #F59E0B 100%);
-    border-color: #FECD1C;
-    color: #1f2937;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    border-color: var(--color-primary);
+    color: #ffffff;
 }
 
 .dark .export-btn {
-    background: linear-gradient(135deg, #FECD1C 0%, #F59E0B 100%);
-    border-color: #FECD1C;
-    color: #1f2937;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    border-color: var(--color-primary);
+    color: #ffffff;
 }
 
 .export-btn:hover {
-    background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
-    border-color: #F59E0B;
-    color: #1f2937;
+    background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%);
+    border-color: var(--color-primary-dark);
+    color: #ffffff;
 }
 
 .dark .export-btn:hover {
-    background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
-    border-color: #F59E0B;
-    color: #1f2937;
+    background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%);
+    border-color: var(--color-primary-dark);
+    color: #ffffff;
 }
 
 /* Dropdown d'export amélioré */

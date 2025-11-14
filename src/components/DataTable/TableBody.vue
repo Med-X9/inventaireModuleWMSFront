@@ -30,7 +30,7 @@
                 <tr>
                     <!-- Colonne de sélection multiple si activée -->
                     <th v-if="rowSelection" class="selection-header">
-                        <input type="checkbox" :checked="selectAllState === 'all'" @change="toggleAllSelection"
+                        <input type="checkbox" :checked="selectAllState === 'all'" @change="(e) => toggleAllSelection()"
                             class="select-all-checkbox-input" />
                     </th>
                     <!-- En-têtes de colonnes avec contrôles de tri et filtrage -->
@@ -76,20 +76,22 @@
                 </tr>
             </thead>
             <tbody>
+                <!-- Debug: Afficher les informations de paginatedData -->
                 <!-- Message si aucune donnée -->
-                <tr v-if="paginatedData.length === 0">
-                    <td :colspan="columns.length + (actions.length > 0 ? 1 : 0)" class="no-data">
-                        Aucune donnée à afficher
+                <tr v-if="!paginatedData || !Array.isArray(paginatedData) || paginatedData.length === 0">
+                    <td :colspan="columns.length + (rowSelection ? 1 : 0) + (actions.length > 0 ? 1 : 0)" class="no-data">
+                        Aucune donnée à afficher ({{ paginatedData ? (Array.isArray(paginatedData) ? paginatedData.length : 'not array') : 'null' }})
                     </td>
                 </tr>
                 <!-- Lignes de données avec gestion des actions -->
-                <template v-else v-for="(row, rowIndex) in paginatedData" :key="getRowId(row, rowIndex)">
+                <template v-else>
+                    <template v-for="(row, rowIndex) in paginatedData" :key="getRowId(row, rowIndex)">
                     <!-- Ligne principale -->
                     <tr>
                         <!-- Cellule de sélection -->
                         <td v-if="rowSelection" class="selection-cell">
                             <input type="checkbox" :checked="isRowSelected(getRowId(row, rowIndex))"
-                                @change="toggleRowSelection(getRowId(row, rowIndex))" />
+                                @change="(e) => toggleRowSelection(getRowId(row, rowIndex))" />
                         </td>
                         <!-- Cellules de données avec support des slots personnalisés -->
                         <td v-for="col in columns" :key="col.field" class="data-cell">
@@ -171,6 +173,7 @@
                             </td>
                         </tr>
                     </template>
+                    </template>
                 </template>
             </tbody>
         </table>
@@ -230,7 +233,9 @@ const props = withDefaults(defineProps<Props>(), {
     currentPage: 1,
     pageSize: 10,
     // Ajout de la prop pour l'indexation globale
-    globalStartIndex: 0
+    globalStartIndex: 0,
+    // PaginatedData doit avoir une valeur par défaut
+    paginatedData: () => []
 })
 
 
@@ -257,8 +262,9 @@ const expandedRows = ref<Set<string>>(new Set())
 const selectedRows = ref<Set<string>>(new Set())
 
 // Obtient tous les IDs de lignes pour la sélection multiple
+// Normaliser tous les IDs en strings pour garantir la cohérence
 const allRowIds = computed(() => {
-    return props.paginatedData.map((row, index) => getRowId(row, index))
+    return props.paginatedData.map((row, index) => String(getRowId(row, index)))
 })
 
 // État de sélection "tout sélectionner"
@@ -378,13 +384,15 @@ const cancelEditCell = () => {
 
 /**
  * Vérifie si une ligne est sélectionnée
- *
- * @param rowId - ID de la ligne
- * @returns true si la ligne est sélectionnée
+ * Utilise un computed par ligne pour garantir la réactivité
  */
 const isRowSelected = (rowId: string | number): boolean => {
     const normalizedId = String(rowId)
-    return selectedRows.value.has(normalizedId)
+    // Utiliser selectedRows.value (état local) comme source de vérité UNIQUE pour une réactivité immédiate
+    // L'état local est mis à jour immédiatement, puis synchronisé avec props via le watcher
+    // Forcer la réactivité en accédant à selectedRows.value
+    const currentSelection = selectedRows.value
+    return currentSelection.has(normalizedId)
 }
 
 /**
@@ -394,30 +402,48 @@ const isRowSelected = (rowId: string | number): boolean => {
  */
 const toggleRowSelection = (rowId: string | number) => {
     const normalizedId = String(rowId)
-    if (selectedRows.value.has(normalizedId)) {
-        selectedRows.value.delete(normalizedId)
+
+    // Créer un nouveau Set basé sur selectedRows.value (état local) pour une réactivité immédiate
+    const currentSelection = selectedRows.value
+    const newSelection = new Set<string>(currentSelection)
+
+    if (newSelection.has(normalizedId)) {
+        // Désélectionner
+        newSelection.delete(normalizedId)
     } else {
-        selectedRows.value.add(normalizedId)
+        // Sélectionner
+        newSelection.add(normalizedId)
     }
 
-    // Mettre à jour l'état "sélectionner tout"
-    updateSelectAllState()
+    // Mettre à jour l'état local IMMÉDIATEMENT pour une réactivité immédiate
+    // Créer un nouveau Set pour forcer la réactivité
+    selectedRows.value = new Set(newSelection)
 
-    // Émettre l'événement de changement de sélection
-    emit('selection-changed', new Set(selectedRows.value))
+    // Mettre à jour l'état "sélectionner tout" après la mise à jour
+    nextTick(() => {
+        updateSelectAllState()
+    })
+
+    // Émettre l'événement de changement de sélection avec le nouveau Set
+    emit('selection-changed', new Set(newSelection))
 }
 
 /**
  * Met à jour l'état "sélectionner tout"
- * Calcule si toutes les lignes sont sélectionnées
+ * Calcule si toutes les lignes de la page actuelle sont sélectionnées
  */
 const updateSelectAllState = () => {
-    const selectedCount = props.selectedRows.size
-    const totalCount = allRowIds.value.length
+    // Compter seulement les sélections de la page actuelle
+    // Utiliser selectedRows.value (état local) pour une réactivité immédiate
+    const currentSelection = selectedRows.value
+    const pageRowIds = allRowIds.value
+    // allRowIds retourne déjà des strings, donc pas besoin de conversion
+    const selectedInCurrentPage = pageRowIds.filter(id => currentSelection.has(id)).length
+    const totalCount = pageRowIds.length
 
-    if (selectedCount === 0) {
+    if (selectedInCurrentPage === 0) {
         selectAllState.value = 'none'
-    } else if (selectedCount === totalCount) {
+    } else if (selectedInCurrentPage === totalCount && totalCount > 0) {
         selectAllState.value = 'all'
     } else {
         selectAllState.value = 'partial'
@@ -428,37 +454,61 @@ const updateSelectAllState = () => {
  * Bascule la sélection de toutes les lignes
  */
 const toggleAllSelection = () => {
-    // Vérifier si toutes les lignes sont actuellement sélectionnées
-    const allSelected = allRowIds.value.length > 0 && allRowIds.value.every(id => selectedRows.value.has(id))
+    // Vérifier si toutes les lignes de la page actuelle sont sélectionnées
+    // Utiliser selectedRows.value (état local) comme source de vérité pour une réactivité immédiate
+    const currentSelection = selectedRows.value
+    const pageRowIds = allRowIds.value
+
+    // allRowIds retourne déjà des strings, donc pas besoin de conversion
+    const allSelected = pageRowIds.length > 0 && pageRowIds.every(id => currentSelection.has(id))
+
+    // Créer un nouveau Set basé sur selectedRows.value (état local)
+    const newSelection = new Set<string>(currentSelection)
 
     if (allSelected) {
-        // Si toutes sont sélectionnées, les désélectionner toutes
-        selectedRows.value.clear()
-        selectAllState.value = 'none'
+        // Si toutes les lignes de la page actuelle sont sélectionnées, désélectionner toutes les lignes de la page actuelle
+        // Garder les sélections des autres pages mais retirer celles de la page actuelle
+        pageRowIds.forEach(id => {
+            // id est déjà une string (allRowIds retourne des strings)
+            newSelection.delete(id)
+        })
     } else {
-        // Sinon, sélectionner toutes les lignes
-        allRowIds.value.forEach(id => selectedRows.value.add(id))
-        selectAllState.value = 'all'
+        // Sinon, sélectionner toutes les lignes de la page actuelle
+        // Ajouter toutes les lignes de la page actuelle au Set
+        pageRowIds.forEach(id => {
+            // id est déjà une string (allRowIds retourne des strings)
+            if (!newSelection.has(id)) {
+                newSelection.add(id)
+            }
+        })
     }
 
-    // Mettre à jour l'état "sélectionner tout"
-    updateSelectAllState()
+    // Mettre à jour l'état local immédiatement pour une réactivité immédiate
+    // Créer un nouveau Set pour forcer la réactivité
+    selectedRows.value = new Set(newSelection)
 
-    // Émettre l'événement de changement de sélection
-    emit('selection-changed', new Set(selectedRows.value))
+    // Mettre à jour l'état "sélectionner tout" après la mise à jour
+    nextTick(() => {
+        updateSelectAllState()
+    })
+
+    // Émettre l'événement de changement de sélection avec le nouveau Set complet
+    emit('selection-changed', new Set(newSelection))
 }
 
 /**
  * Vide toutes les sélections
  */
 const clearAllSelections = () => {
-    selectedRows.value.clear()
+    // Créer un nouveau Set vide
+    const newSelection = new Set<string>()
+    selectedRows.value = newSelection
     selectAllState.value = 'none'
 
     // Forcer la mise à jour visuelle
     nextTick(() => {
-        // Émettre l'événement de changement de sélection
-        emit('selection-changed', new Set(selectedRows.value))
+        // Émettre l'événement de changement de sélection avec le Set vide
+        emit('selection-changed', new Set(newSelection))
     })
 }
 
@@ -676,6 +726,7 @@ const renderNestedCell = (value: any, column: any, row: any) => {
  * @returns ID unique de la ligne
  */
 const getRowId = (row: any, rowIndex: number): string => {
+    if (!row) return rowIndex.toString()
     return row.id || row.reference || row.job || rowIndex.toString()
 }
 
@@ -745,6 +796,23 @@ defineExpose({
  * Initialisation au montage du composant
  */
 onMounted(() => {
+    // Logger pour déboguer
+    logger.debug('TableBody mounted', {
+        paginatedDataLength: Array.isArray(props.paginatedData) ? props.paginatedData.length : 0,
+        isArray: Array.isArray(props.paginatedData),
+        sample: Array.isArray(props.paginatedData) && props.paginatedData.length > 0
+            ? props.paginatedData.slice(0, 2).map((r: any) => ({ id: r?.id, ref: r?.reference }))
+            : []
+    })
+
+    // S'assurer que les sélections sont synchronisées au montage
+    if (props.selectedRows.size === 0) {
+        selectedRows.value = new Set<string>()
+        selectAllState.value = 'none'
+    } else {
+        // Si des sélections existent, les synchroniser
+        selectedRows.value = new Set(props.selectedRows)
+    }
     // Initialiser l'état de sélection
     updateSelectAllState()
 })
@@ -753,28 +821,57 @@ onMounted(() => {
 
 /**
  * Synchronise l'état de sélection avec les props
+ * Note: Cette synchronisation se fait APRÈS les mises à jour locales pour éviter les conflits
  */
 watch(() => props.selectedRows, (newSelectedRows) => {
-    selectedRows.value = new Set(newSelectedRows)
-    updateSelectAllState()
-}, { deep: true, immediate: true })
+    // Créer un nouveau Set pour forcer la réactivité
+    const newSet = new Set<string>(newSelectedRows)
 
-/**
- * Force la mise à jour quand les props selectedRows sont vidées
- */
-watch(() => props.selectedRows.size, (newSize) => {
-    if (newSize === 0) {
-        selectedRows.value.clear()
-        selectAllState.value = 'none'
+    // Ne mettre à jour que si les Sets sont différents pour éviter les boucles infinies
+    const currentSet = selectedRows.value
+    const currentSize = currentSet.size
+    const newSize = newSet.size
+
+    // Comparer les tailles et quelques éléments pour détecter les changements
+    if (currentSize !== newSize || !allRowIds.value.every(id => currentSet.has(id) === newSet.has(id))) {
+        selectedRows.value = newSet
+        updateSelectAllState()
+
+        // Logger pour déboguer
+        logger.debug('TableBody: selectedRows prop changed', {
+            currentSize,
+            newSize,
+            sample: Array.from(newSet).slice(0, 5)
+        })
     }
-}, { immediate: true })
+}, { deep: true, immediate: true, flush: 'post' })
 
 /**
  * Met à jour l'état "sélectionner tout" quand les données changent
  */
-watch(() => props.paginatedData, () => {
-    updateSelectAllState()
-}, { deep: true })
+watch(() => props.paginatedData, (newData, oldData) => {
+    const newLength = Array.isArray(newData) ? newData.length : 0
+    const oldLength = Array.isArray(oldData) ? oldData.length : 0
+
+    logger.debug('TableBody: paginatedData changed', {
+        oldLength,
+        newLength,
+        isArray: Array.isArray(newData),
+        hasData: newLength > 0,
+        sample: Array.isArray(newData) && newData.length > 0
+            ? newData.slice(0, 2).map((r: any) => ({ id: r?.id, ref: r?.reference }))
+            : []
+    })
+
+    // Forcer la mise à jour si les données changent
+    if (newLength !== oldLength || (newLength > 0 && oldLength === 0)) {
+        nextTick(() => {
+            updateSelectAllState()
+        })
+    } else {
+        updateSelectAllState()
+    }
+}, { deep: true, immediate: true })
 </script>
 
 <style scoped>
@@ -1054,7 +1151,7 @@ tbody tr:hover {
 .select-all-checkbox-input {
     width: 1rem;
     height: 1rem;
-    accent-color: #FECD1C;
+    accent-color: var(--color-primary);
 }
 
 /* Styles pour les lignes imbriquées */

@@ -1,35 +1,67 @@
-import { ref, computed, markRaw, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+/**
+ * Composable pour la gestion du planning d'inventaire
+ *
+ * Ce composable gère :
+ * - Les jobs d'inventaire (création, validation, suppression)
+ * - Les locations disponibles (affichage, sélection, filtrage)
+ * - La pagination et le tri côté serveur pour les deux DataTables
+ * - La conversion automatique des paramètres vers le format standard DataTable
+ *
+ * @module usePlanning
+ */
+
+// ===== IMPORTS VUE =====
+import { ref, computed, markRaw, onMounted, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+
+// ===== IMPORTS COMPOSABLES =====
 import { useBackendDataTable } from '@/components/DataTable/composables/useBackendDataTable'
+
+// ===== IMPORTS SERVICES =====
 import { logger } from '@/services/loggerService'
 import { alertService } from '@/services/alertService'
+
+// ===== IMPORTS STORES =====
 import { useJobStore } from '@/stores/job'
 import { useLocationStore } from '@/stores/location'
 import { useInventoryStore } from '@/stores/inventory'
 import { useWarehouseStore } from '@/stores/warehouse'
+
+// ===== IMPORTS UTILS =====
+import { convertToStandardDataTableParams, type StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
+
+// ===== IMPORTS TYPES =====
 import type { DataTableColumn, ColumnDataType, ActionConfig } from '@/types/dataTable'
 import type { Job, JobTable } from '@/models/Job'
 import type { Location } from '@/models/Location'
 import type { LocationDataTableParams } from '@/services/LocationService'
 
-// Import des icônes
+// ===== IMPORTS COMPOSANTS =====
 import IconCheck from '@/components/icon/icon-check.vue'
 import IconTrash from '@/components/icon/icon-trash.vue'
+
+// ===== INTERFACES =====
 
 /**
  * Options pour initialiser le composable de planning
  */
 interface PlanningOptions {
+    /** Référence de l'inventaire */
     inventoryReference?: string
+    /** Référence de l'entrepôt */
     warehouseReference?: string
 }
 
+// ===== COMPOSABLE =====
+
 /**
  * Composable pour la gestion du planning d'inventaire
- * Gère les jobs et les locations disponibles
- * Utilise useBackendDataTable pour l'intégration avec Pinia
+ *
+ * @param options - Options d'initialisation (références d'inventaire et d'entrepôt)
+ * @returns Objet contenant l'état, les méthodes et les handlers pour le planning
  */
 export function usePlanning(options?: PlanningOptions) {
+    // ===== ROUTER & STORES =====
     const route = useRoute()
     const jobStore = useJobStore()
     const locationStore = useLocationStore()
@@ -37,22 +69,38 @@ export function usePlanning(options?: PlanningOptions) {
     const warehouseStore = useWarehouseStore()
 
     // ===== ÉTAT LOCAL =====
+
+    /** Référence de l'inventaire (depuis les options ou la route) */
     const inventoryReference = options?.inventoryReference ?? (route.params.reference as string)
+
+    /** Référence de l'entrepôt (depuis les options ou la route) */
     const warehouseReference = options?.warehouseReference ?? (route.params.warehouse as string)
 
+    /** ID de l'inventaire (résolu depuis la référence) */
     const inventoryId = ref<number | null>(null)
+
+    /** ID de l'entrepôt (résolu depuis la référence) */
     const warehouseId = ref<number | null>(null)
+
+    /** ID du compte (récupéré depuis l'inventaire) */
     const accountId = ref<number | null>(null)
+
+    /** Indicateur d'initialisation */
     const isInitialized = ref(false)
 
-    // Sélections
+    // ===== SÉLECTIONS =====
+
+    /** IDs des locations disponibles sélectionnées */
     const selectedAvailableLocations = ref<string[]>([])
+
+    /** IDs des jobs sélectionnés */
     const selectedJobs = ref<string[]>([])
 
     // ===== INITIALISATION DES DATATABLES =====
 
     /**
      * DataTable pour les jobs
+     * Utilise useBackendDataTable pour l'intégration avec le store Pinia
      */
     const {
         data: jobs,
@@ -78,6 +126,7 @@ export function usePlanning(options?: PlanningOptions) {
 
     /**
      * DataTable pour les locations disponibles
+     * Utilise useBackendDataTable pour l'intégration avec le store Pinia
      */
     const {
         data: locations,
@@ -93,7 +142,8 @@ export function usePlanning(options?: PlanningOptions) {
         setFilters: setLocationsFilters,
         resetFilters: resetLocationsFilters,
         refresh: _refreshLocationsDataTable,
-        pagination: locationsPagination
+        pagination: locationsPagination,
+        getFromPinia: getLocationFromPinia
     } = useBackendDataTable<Location>('', {
         piniaStore: locationStore,
         storeId: 'location',
@@ -101,25 +151,33 @@ export function usePlanning(options?: PlanningOptions) {
         pageSize: 20
     })
 
-    // ===== COMPUTED =====
+    // ===== COMPUTED PROPERTIES =====
 
+    /** État de chargement global (jobs ou locations) */
     const loading = computed(() => jobsLoading.value || locationsLoading.value)
 
     /**
-     * Transformer les jobs pour aplatir les propriétés imbriquées des locations
-     * Cela permet à la DataTable nested d'afficher correctement zone et sous_zone
+     * Dédupliquer les locations d'un job
+     * Transforme les locations pour aplatir les propriétés imbriquées (zone, sous_zone)
+     * et supprime les doublons basés sur l'ID ou la référence
+     *
+     * @param job - Job contenant les locations à traiter
+     * @returns Tableau de locations uniques avec propriétés aplaties
      */
     const dedupeJobLocations = (job: Job | JobTable) => {
         const rawLocations = ((job as any).locations ?? (job as any).emplacements ?? []) as Array<Record<string, any>>
         const uniqueLocations = new Map<string | number | symbol, Record<string, any>>()
 
         rawLocations.forEach((loc, index) => {
+            // Identifier la location par son ID, location_id, location_reference ou reference
             const key =
                 loc.id ??
                 loc.location_id ??
                 loc.location_reference ??
                 loc.reference ??
                 Symbol(`job-location-${index}`)
+
+            // Ne garder que la première occurrence
             if (!uniqueLocations.has(key)) {
                 uniqueLocations.set(key, {
                     ...loc,
@@ -132,6 +190,10 @@ export function usePlanning(options?: PlanningOptions) {
         return Array.from(uniqueLocations.values())
     }
 
+    /**
+     * Jobs transformés avec locations dédupliquées
+     * Chaque job a ses locations traitées pour supprimer les doublons
+     */
     const transformedJobs = computed(() => {
         return jobs.value.map(job => ({
             ...job,
@@ -139,8 +201,13 @@ export function usePlanning(options?: PlanningOptions) {
         }))
     })
 
+    /**
+     * Locations mappées avec propriétés aplaties
+     * Aplatit les propriétés imbriquées (zone, sous_zone) pour faciliter l'affichage dans la DataTable
+     */
     const mappedLocations = computed(() => {
-        return locations.value.map(loc => ({
+        const locationsData = locationStore.locations || []
+        return locationsData.map(loc => ({
             ...loc,
             location_reference: (loc as any).location_reference ?? (loc as any).reference ?? loc.reference ?? '',
             zone_name: loc.zone?.zone_name || (loc as any).zone_name || 'N/A',
@@ -148,10 +215,14 @@ export function usePlanning(options?: PlanningOptions) {
         }))
     })
 
+    /**
+     * Locations disponibles (non utilisées dans les jobs)
+     * Filtre les locations pour exclure celles déjà assignées à un job
+     */
     const availableLocations = computed(() => {
-        // Exclure les locations déjà utilisées dans les jobs
         const usedLocationIds = new Set<number | string>()
 
+        // Collecter tous les IDs de locations utilisées dans les jobs
         transformedJobs.value.forEach(job => {
             job.locations?.forEach(loc => {
                 const key = loc.id ?? loc.location_id ?? (loc as any).location_reference ?? loc.reference
@@ -161,31 +232,47 @@ export function usePlanning(options?: PlanningOptions) {
             })
         })
 
+        // Retourner uniquement les locations non utilisées
         return mappedLocations.value.filter(loc => {
             const key = loc.id ?? (loc as any).location_id ?? (loc as any).location_reference ?? loc.reference
             return key === undefined || key === null ? true : !usedLocationIds.has(key)
         })
     })
 
-    const resetJobsDataTable = async () => {
-        setJobsSortModel([])
-        resetJobsFilters()
-        setJobsSearch('')
-        await refreshJobs()
-    }
-
-    const resetLocationsDataTable = async () => {
-        setLocationsSortModel([])
-        resetLocationsFilters()
-        setLocationsSearch('')
-        await refreshLocations()
-    }
-
+    /**
+     * Indicateur de sélection de locations
+     */
     const hasSelectedLocations = computed(() => selectedAvailableLocations.value.length > 0)
+
+    /**
+     * Indicateur de sélection de jobs
+     */
     const hasSelectedJobs = computed(() => selectedJobs.value.length > 0)
 
+    /**
+     * Pagination calculée pour les locations
+     * Utilise le totalCount du store pour calculer les informations de pagination
+     */
+    const locationsPaginationComputed = computed(() => {
+        const totalCount = locationStore.totalCount || 0
+        const pageSize = locationsPageSize.value || 20
+        const currentPage = locationsCurrentPage.value || 1
 
+        return {
+            current_page: currentPage,
+            total_pages: Math.max(1, Math.ceil(totalCount / pageSize)),
+            has_next: currentPage < Math.ceil(totalCount / pageSize),
+            has_previous: currentPage > 1,
+            page_size: pageSize,
+            total: totalCount
+        }
+    })
 
+    // ===== COLONNES DATATABLE =====
+
+    /**
+     * Configuration des colonnes pour la DataTable des jobs
+     */
     const jobsColumns = computed<DataTableColumn[]>(() => [
         {
             headerName: 'ID',
@@ -326,8 +413,9 @@ export function usePlanning(options?: PlanningOptions) {
         }
     ])
 
-    // ===== COLONNES POUR LES LOCATIONS DISPONIBLES =====
-
+    /**
+     * Configuration des colonnes pour la DataTable des locations disponibles
+     */
     const locationsColumns = computed<DataTableColumn[]>(() => [
         {
             headerName: 'ID',
@@ -402,6 +490,9 @@ export function usePlanning(options?: PlanningOptions) {
 
     // ===== ACTIONS POUR LES JOBS =====
 
+    /**
+     * Configuration des actions disponibles pour chaque job dans la DataTable
+     */
     const jobsActions: ActionConfig<Job>[] = [
         {
             label: 'Valider',
@@ -417,6 +508,7 @@ export function usePlanning(options?: PlanningOptions) {
                     if (result.isConfirmed) {
                         await jobStore.validateJob([job.id])
                         await alertService.success({ text: 'Job validé avec succès' })
+                        resetAllSelections()
                         await refreshJobs()
                     }
                 } catch (error) {
@@ -440,6 +532,7 @@ export function usePlanning(options?: PlanningOptions) {
                     if (result.isConfirmed) {
                         await jobStore.deleteJob([job.id])
                         await alertService.success({ text: 'Job supprimé avec succès' })
+                        resetAllSelections()
                         await refreshData()
                     }
                 } catch (error) {
@@ -455,6 +548,8 @@ export function usePlanning(options?: PlanningOptions) {
 
     /**
      * Résoudre les IDs d'inventaire, compte et entrepôt à partir des références
+     * Cette méthode est appelée lors de l'initialisation pour obtenir les IDs nécessaires
+     * aux appels API
      */
     const resolveContextIds = async () => {
         try {
@@ -474,7 +569,7 @@ export function usePlanning(options?: PlanningOptions) {
                 logger.debug('ID entrepôt résolu', { warehouseId: warehouseId.value })
             }
 
-            // Validation
+            // Validation des IDs requis
             if (!inventoryId.value || !warehouseId.value) {
                 throw new Error(`IDs de contexte manquants - inventaire: ${inventoryId.value}, entrepôt: ${warehouseId.value}`)
             }
@@ -498,6 +593,8 @@ export function usePlanning(options?: PlanningOptions) {
 
     /**
      * Charger les jobs pour l'inventaire et l'entrepôt actuels
+     *
+     * @param params - Paramètres DataTable standard (pagination, tri, filtres)
      */
     const loadJobs = async (params?: LocationDataTableParams) => {
         if (!inventoryId.value || !warehouseId.value) {
@@ -515,6 +612,8 @@ export function usePlanning(options?: PlanningOptions) {
 
     /**
      * Charger les locations disponibles pour l'entrepôt actuel
+     *
+     * @param params - Paramètres DataTable standard (pagination, tri, filtres)
      */
     const loadLocations = async (params?: LocationDataTableParams) => {
         if (!accountId.value || !inventoryId.value || !warehouseId.value) {
@@ -523,36 +622,79 @@ export function usePlanning(options?: PlanningOptions) {
         }
 
         try {
-            // Si pas de paramètres, utiliser les valeurs par défaut au format DataTable
-            const defaultParams: LocationDataTableParams = params || {
-                draw: 1,
-                start: 0,
+            // Utiliser les paramètres fournis ou construire à partir des valeurs actuelles
+            const finalParams: LocationDataTableParams = params || {
+                draw: locationsCurrentPage.value || 1,
+                start: ((locationsCurrentPage.value || 1) - 1) * locationsPageSize.value,
                 length: locationsPageSize.value
+            }
+
+            // S'assurer que length est bien défini
+            if (!finalParams.length) {
+                finalParams.length = locationsPageSize.value
             }
 
             logger.debug('Chargement des locations avec paramètres DataTable:', {
                 accountId: accountId.value,
                 warehouseId: warehouseId.value,
-                params: defaultParams
+                pageSize: locationsPageSize.value,
+                params: finalParams
             })
 
-            await locationStore.fetchUnassignedLocations(accountId.value, inventoryId.value, warehouseId.value, defaultParams)
+            await locationStore.fetchUnassignedLocations(accountId.value, inventoryId.value, warehouseId.value, finalParams)
+            await nextTick()
+
+            logger.debug('Locations mises à jour dans le store', {
+                count: locationStore.locations.length,
+                sample: locationStore.locations.slice(0, 2).map(l => ({ id: l.id, ref: l.reference }))
+            })
         } catch (error) {
             logger.error('Erreur lors du chargement des locations', error)
             await alertService.error({ text: 'Erreur lors du chargement des locations' })
         }
     }
 
+    /**
+     * Rafraîchir les jobs
+     *
+     * @param params - Paramètres DataTable optionnels
+     */
     const refreshJobs = async (params?: LocationDataTableParams) => {
         await loadJobs(params)
     }
 
+    /**
+     * Rafraîchir les locations
+     *
+     * @param params - Paramètres DataTable optionnels
+     */
     const refreshLocations = async (params?: LocationDataTableParams) => {
         await loadLocations(params)
     }
 
     /**
-     * Recharger toutes les données
+     * Réinitialiser la DataTable des jobs (tri, filtres, recherche)
+     */
+    const resetJobsDataTable = async () => {
+        setJobsSortModel([])
+        resetJobsFilters()
+        setJobsSearch('')
+        await refreshJobs()
+    }
+
+    /**
+     * Réinitialiser la DataTable des locations (tri, filtres, recherche, page)
+     */
+    const resetLocationsDataTable = async () => {
+        setLocationsSortModel([])
+        resetLocationsFilters()
+        setLocationsSearch('')
+        setLocationsPage(1)
+        await refreshLocations()
+    }
+
+    /**
+     * Recharger toutes les données (jobs et locations)
      */
     const refreshData = async () => {
         await Promise.all([
@@ -565,6 +707,8 @@ export function usePlanning(options?: PlanningOptions) {
 
     /**
      * Créer un nouveau job avec les locations sélectionnées
+     *
+     * @returns true si le job a été créé avec succès, false sinon
      */
     const createJobFromSelectedLocations = async (): Promise<boolean> => {
         if (!hasSelectedLocations.value) {
@@ -588,9 +732,7 @@ export function usePlanning(options?: PlanningOptions) {
                 await jobStore.createJob(inventoryId.value, warehouseId.value, { emplacements: locationIds } as any)
 
                 await alertService.success({ text: 'Job créé avec succès' })
-
-                // Réinitialiser la sélection et recharger
-                selectedAvailableLocations.value = []
+                resetAllSelections()
                 await refreshData()
                 return true
             }
@@ -622,9 +764,7 @@ export function usePlanning(options?: PlanningOptions) {
                 await jobStore.validateJob(jobIds)
 
                 await alertService.success({ text: `${jobIds.length} job(s) validé(s) avec succès` })
-
-                // Réinitialiser la sélection et recharger
-                selectedJobs.value = []
+                resetAllSelections()
                 await refreshData()
             }
         } catch (error) {
@@ -653,9 +793,7 @@ export function usePlanning(options?: PlanningOptions) {
                 await jobStore.deleteJob(jobIds)
 
                 await alertService.success({ text: `${jobIds.length} job(s) supprimé(s) avec succès` })
-
-                // Réinitialiser la sélection et recharger
-                selectedJobs.value = []
+                resetAllSelections()
                 await refreshData()
             }
         } catch (error) {
@@ -664,55 +802,308 @@ export function usePlanning(options?: PlanningOptions) {
         }
     }
 
+    // ===== CONVERTISSEURS DE PARAMÈTRES =====
+
+    /**
+     * Convertir les paramètres vers le format standard DataTable pour les jobs
+     *
+     * @param page - Numéro de page
+     * @param pageSize - Taille de page
+     * @param filters - Modèle de filtres
+     * @param sort - Modèle de tri
+     * @param globalSearch - Recherche globale
+     * @returns Paramètres au format standard DataTable
+     */
+    const convertJobParamsToStandard = (
+        page: number,
+        pageSize: number,
+        filters?: Record<string, { filter: string }>,
+        sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>,
+        globalSearch?: string
+    ) => {
+        return convertToStandardDataTableParams(
+            {
+                page,
+                pageSize,
+                filters: filters || {},
+                sort: sort || [],
+                globalSearch
+            },
+            {
+                columns: jobsColumns.value,
+                draw: 1,
+                customParams: {
+                    inventory_id: inventoryId.value,
+                    warehouse_id: warehouseId.value
+                }
+            }
+        )
+    }
+
+    /**
+     * Convertir les paramètres vers le format standard DataTable pour les locations
+     *
+     * @param page - Numéro de page
+     * @param pageSize - Taille de page
+     * @param filters - Modèle de filtres
+     * @param sort - Modèle de tri
+     * @param globalSearch - Recherche globale
+     * @returns Paramètres au format standard DataTable
+     */
+    const convertLocationParamsToStandard = (
+        page: number,
+        pageSize: number,
+        filters?: Record<string, { filter: string }>,
+        sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>,
+        globalSearch?: string
+    ) => {
+        return convertToStandardDataTableParams(
+            {
+                page,
+                pageSize,
+                filters: filters || {},
+                sort: sort || [],
+                globalSearch
+            },
+            {
+                columns: locationsColumns.value,
+                draw: 1,
+                customParams: {
+                    account_id: accountId.value,
+                    inventory_id: inventoryId.value,
+                    warehouse_id: warehouseId.value
+                }
+            }
+        )
+    }
+
     // ===== HANDLERS DATATABLE =====
 
     /**
-     * Convertir les paramètres de pagination au format DataTable
+     * Handler pour les changements de pagination des jobs
+     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     *
+     * @param params - Paramètres de pagination (format standard ou ancien format)
      */
-    const convertToDataTableParams = (params: { page: number; pageSize: number }): LocationDataTableParams => {
-        return {
-            draw: params.page,
-            start: (params.page - 1) * params.pageSize,
-            length: params.pageSize
+    const onJobPaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams) => {
+        try {
+            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
+            if ('draw' in params && 'start' in params && 'length' in params) {
+                await loadJobs(params as LocationDataTableParams)
+                return
+            }
+
+            // Sinon, convertir l'ancien format
+            const paginationParams = params as { page: number; pageSize: number }
+            setJobsPageSize(paginationParams.pageSize)
+            setJobsPage(paginationParams.page)
+
+            const standardParams = convertJobParamsToStandard(
+                paginationParams.page,
+                paginationParams.pageSize,
+                undefined,
+                (jobsSortModel.value || []).map(s => ({ colId: s.field, sort: s.direction as 'asc' | 'desc' })),
+                jobsSearchQuery.value || undefined
+            )
+
+            await loadJobs(standardParams as LocationDataTableParams)
+        } catch (error) {
+            logger.error('Erreur dans onJobPaginationChanged', error)
+            await alertService.error({ text: 'Erreur lors du changement de pagination' })
         }
     }
 
-    const onJobPaginationChanged = async (params: { page: number; pageSize: number }) => {
-        const dataTableParams = convertToDataTableParams(params)
-        await loadJobs(dataTableParams)
+    /**
+     * Handler pour les changements de tri des jobs
+     *
+     * @param sortModel - Modèle de tri (format standard ou ancien format)
+     */
+    const onJobSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }> | StandardDataTableParams) => {
+        try {
+            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
+            if ('draw' in sortModel && 'start' in sortModel && 'length' in sortModel) {
+                await loadJobs(sortModel as LocationDataTableParams)
+                return
+            }
+
+            // Sinon, convertir l'ancien format
+            const sortModelArray = sortModel as Array<{ colId: string; sort: 'asc' | 'desc' }>
+            const convertedSortModel = sortModelArray.map(s => ({ field: s.colId, direction: s.sort as 'asc' | 'desc' }))
+            setJobsSortModel(convertedSortModel)
+
+            const standardParams = convertJobParamsToStandard(
+                jobsCurrentPage.value,
+                jobsPageSize.value,
+                undefined,
+                sortModelArray,
+                jobsSearchQuery.value || undefined
+            )
+
+            await loadJobs(standardParams as LocationDataTableParams)
+        } catch (error) {
+            logger.error('Erreur dans onJobSortChanged', error)
+            await alertService.error({ text: 'Erreur lors du changement de tri' })
+        }
     }
 
-    const onJobSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }>) => {
-        await loadJobs({ sort: sortModel } as LocationDataTableParams)
+    /**
+     * Handler pour les changements de filtre des jobs
+     *
+     * @param filterModel - Modèle de filtres (format standard ou ancien format)
+     */
+    const onJobFilterChanged = async (filterModel: Record<string, { filter: string }> | StandardDataTableParams) => {
+        try {
+            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
+            if ('draw' in filterModel && 'start' in filterModel && 'length' in filterModel) {
+                await loadJobs(filterModel as LocationDataTableParams)
+                return
+            }
+
+            // Sinon, convertir l'ancien format
+            const filterModelObj = filterModel as Record<string, { filter: string }>
+            setJobsFilters(filterModelObj)
+
+            const standardParams = convertJobParamsToStandard(
+                jobsCurrentPage.value,
+                jobsPageSize.value,
+                filterModelObj,
+                (jobsSortModel.value || []).map(s => ({ colId: s.field, sort: s.direction as 'asc' | 'desc' })),
+                jobsSearchQuery.value || undefined
+            )
+
+            await loadJobs(standardParams as LocationDataTableParams)
+        } catch (error) {
+            logger.error('Erreur dans onJobFilterChanged', error)
+            await alertService.error({ text: 'Erreur lors du changement de filtre' })
+        }
     }
 
-    const onJobFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
-        await loadJobs(filterModel as any)
+    /**
+     * Handler pour les changements de pagination des locations
+     *
+     * @param params - Paramètres de pagination (format standard ou ancien format)
+     */
+    const onLocationPaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams) => {
+        try {
+            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
+            if ('draw' in params && 'start' in params && 'length' in params) {
+                const page = Math.floor((params.start || 0) / (params.length || 20)) + 1
+                setLocationsPageSize(params.length || 20)
+                setLocationsPage(page)
+
+                await loadLocations(params as LocationDataTableParams)
+                return
+            }
+
+            // Sinon, convertir l'ancien format
+            const paginationParams = params as { page: number; pageSize: number }
+            setLocationsPageSize(paginationParams.pageSize)
+            setLocationsPage(paginationParams.page)
+
+            const standardParams = convertLocationParamsToStandard(
+                paginationParams.page,
+                paginationParams.pageSize,
+                undefined,
+                (locationsSortModel.value || []).map(s => ({ colId: s.field, sort: s.direction as 'asc' | 'desc' })),
+                locationsSearchQuery.value || undefined
+            )
+
+            await loadLocations(standardParams as LocationDataTableParams)
+        } catch (error) {
+            logger.error('Erreur dans onLocationPaginationChanged', error)
+            await alertService.error({ text: 'Erreur lors du changement de pagination' })
+        }
     }
 
-    const onLocationPaginationChanged = async (params: { page: number; pageSize: number }) => {
-        const dataTableParams = convertToDataTableParams(params)
-        await loadLocations(dataTableParams)
+    /**
+     * Handler pour les changements de tri des locations
+     *
+     * @param sortModel - Modèle de tri (format standard ou ancien format)
+     */
+    const onLocationSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }> | StandardDataTableParams) => {
+        try {
+            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
+            if ('draw' in sortModel && 'start' in sortModel && 'length' in sortModel) {
+                await loadLocations(sortModel as LocationDataTableParams)
+                return
+            }
+
+            // Sinon, convertir l'ancien format
+            const sortModelArray = sortModel as Array<{ colId: string; sort: 'asc' | 'desc' }>
+            const convertedSortModel = sortModelArray.map(s => ({ field: s.colId, direction: s.sort as 'asc' | 'desc' }))
+            setLocationsSortModel(convertedSortModel)
+
+            const standardParams = convertLocationParamsToStandard(
+                locationsCurrentPage.value,
+                locationsPageSize.value,
+                undefined,
+                sortModelArray,
+                locationsSearchQuery.value || undefined
+            )
+
+            await loadLocations(standardParams as LocationDataTableParams)
+        } catch (error) {
+            logger.error('Erreur dans onLocationSortChanged', error)
+            await alertService.error({ text: 'Erreur lors du changement de tri' })
+        }
     }
 
-    const onLocationSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }>) => {
-        await loadLocations({ sort: sortModel } as LocationDataTableParams)
+    /**
+     * Handler pour les changements de filtre des locations
+     *
+     * @param filterModel - Modèle de filtres (format standard ou ancien format)
+     */
+    const onLocationFilterChanged = async (filterModel: Record<string, { filter: string }> | StandardDataTableParams) => {
+        try {
+            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
+            if ('draw' in filterModel && 'start' in filterModel && 'length' in filterModel) {
+                await loadLocations(filterModel as LocationDataTableParams)
+                return
+            }
+
+            // Sinon, convertir l'ancien format
+            const filterModelObj = filterModel as Record<string, { filter: string }>
+            setLocationsFilters(filterModelObj)
+
+            const standardParams = convertLocationParamsToStandard(
+                locationsCurrentPage.value,
+                locationsPageSize.value,
+                filterModelObj,
+                (locationsSortModel.value || []).map(s => ({ colId: s.field, sort: s.direction as 'asc' | 'desc' })),
+                locationsSearchQuery.value || undefined
+            )
+
+            await loadLocations(standardParams as LocationDataTableParams)
+        } catch (error) {
+            logger.error('Erreur dans onLocationFilterChanged', error)
+            await alertService.error({ text: 'Erreur lors du changement de filtre' })
+        }
     }
 
-    const onLocationFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
-        await loadLocations(filterModel as any)
-    }
-
+    /**
+     * Handler pour les changements de sélection des locations disponibles
+     *
+     * @param selectedRows - Set des IDs de lignes sélectionnées
+     */
     const onAvailableSelectionChanged = (selectedRows: Set<string>) => {
-        selectedAvailableLocations.value = Array.from(selectedRows)
+        selectedAvailableLocations.value = selectedRows ? Array.from(selectedRows) : []
     }
 
+    /**
+     * Handler pour les changements de sélection des jobs
+     *
+     * @param selectedRows - Set des IDs de lignes sélectionnées
+     */
     const onJobSelectionChanged = (selectedRows: Set<string>) => {
-        selectedJobs.value = Array.from(selectedRows)
+        selectedJobs.value = selectedRows ? Array.from(selectedRows) : []
     }
 
     // ===== INITIALISATION =====
 
+    /**
+     * Initialiser le composable
+     * Résout les IDs de contexte et charge les données initiales
+     */
     const initialize = async () => {
         if (isInitialized.value) return
 
@@ -740,12 +1131,16 @@ export function usePlanning(options?: PlanningOptions) {
 
     // Initialiser au montage
     onMounted(() => {
+        selectedAvailableLocations.value = []
+        selectedJobs.value = []
         void initialize()
     })
 
-    // ===== COMPUTED ADDITIONNELS POUR COMPATIBILITÉ =====
+    // ===== COMPUTED POUR COMPATIBILITÉ =====
 
-    // États pour compatibilité avec Planning.vue
+    /**
+     * État du planning pour compatibilité avec Planning.vue
+     */
     const planningState = computed(() => ({
         selectedAvailable: selectedAvailableLocations.value,
         selectedJobs: selectedJobs.value,
@@ -754,6 +1149,9 @@ export function usePlanning(options?: PlanningOptions) {
         isSubmitting: false
     }))
 
+    /**
+     * État de pagination pour compatibilité
+     */
     const paginationState = computed(() => ({
         currentPage: jobsCurrentPage.value,
         pageSize: jobsPageSize.value,
@@ -761,14 +1159,23 @@ export function usePlanning(options?: PlanningOptions) {
         sortOrder: 'asc' as 'asc' | 'desc'
     }))
 
+    /**
+     * État des filtres pour compatibilité
+     */
     const filterState = computed(() => ({
         sortModel: jobsSortModel.value || [],
         filterModel: {},
         locationSearchQuery: locationsSearchQuery.value || ''
     }))
 
+    /**
+     * Indicateur de disponibilité de jobs
+     */
     const hasAvailableJobs = computed(() => transformedJobs.value.length > 0)
 
+    /**
+     * Options pour le sélecteur de jobs
+     */
     const jobSelectOptions = computed(() =>
         transformedJobs.value.map(job => ({
             value: job.id.toString(),
@@ -780,16 +1187,84 @@ export function usePlanning(options?: PlanningOptions) {
     const adaptedStoreJobsColumns = jobsColumns
     const adaptedAvailableLocationColumns = locationsColumns
 
-    // ===== MÉTHODES ADDITIONNELLES POUR COMPATIBILITÉ =====
+    // ===== MÉTHODES POUR COMPATIBILITÉ =====
 
+    /**
+     * Appliquer des filtres aux jobs
+     *
+     * @param filterModel - Modèle de filtres
+     */
     const applyJobFilters = async (filterModel: Record<string, { filter: string }>) => {
         await onJobFilterChanged(filterModel)
     }
 
+    /**
+     * Appliquer des filtres aux locations
+     *
+     * @param filterModel - Modèle de filtres
+     */
     const applyLocationFilters = async (filterModel: Record<string, { filter: string }>) => {
         await onLocationFilterChanged(filterModel)
     }
 
+    /**
+     * Handler pour la recherche globale des jobs
+     *
+     * @param searchQuery - Terme de recherche
+     */
+    const onJobSearchChanged = async (searchQuery: string) => {
+        try {
+            setJobsSearch(searchQuery)
+
+            const convertedSortModel = (jobsSortModel.value || []).map(s => ({ colId: s.field, sort: s.direction as 'asc' | 'desc' }))
+
+            const standardParams = convertJobParamsToStandard(
+                jobsCurrentPage.value,
+                jobsPageSize.value,
+                undefined,
+                convertedSortModel,
+                searchQuery || undefined
+            )
+
+            await loadJobs(standardParams as LocationDataTableParams)
+        } catch (error) {
+            logger.error('Erreur dans onJobSearchChanged', error)
+            await alertService.error({ text: 'Erreur lors de la recherche' })
+        }
+    }
+
+    /**
+     * Handler pour la recherche globale des locations
+     *
+     * @param searchQuery - Terme de recherche
+     */
+    const onLocationSearchChanged = async (searchQuery: string) => {
+        try {
+            setLocationsSearch(searchQuery)
+
+            const convertedSortModel = (locationsSortModel.value || []).map(s => ({ colId: s.field, sort: s.direction as 'asc' | 'desc' }))
+
+            const standardParams = convertLocationParamsToStandard(
+                locationsCurrentPage.value,
+                locationsPageSize.value,
+                undefined,
+                convertedSortModel,
+                searchQuery || undefined
+            )
+
+            await loadLocations(standardParams as LocationDataTableParams)
+        } catch (error) {
+            logger.error('Erreur dans onLocationSearchChanged', error)
+            await alertService.error({ text: 'Erreur lors de la recherche' })
+        }
+    }
+
+    /**
+     * Mettre à jour la sélection
+     *
+     * @param type - Type de sélection ('available' ou 'jobs')
+     * @param selection - Tableau d'IDs sélectionnés
+     */
     const updateSelection = (type: 'available' | 'jobs', selection: string[]) => {
         if (type === 'available') {
             selectedAvailableLocations.value = selection
@@ -798,6 +1273,11 @@ export function usePlanning(options?: PlanningOptions) {
         }
     }
 
+    /**
+     * Effacer la sélection
+     *
+     * @param type - Type de sélection ('available' ou 'jobs')
+     */
     const clearSelection = (type: 'available' | 'jobs') => {
         if (type === 'available') {
             selectedAvailableLocations.value = []
@@ -806,15 +1286,39 @@ export function usePlanning(options?: PlanningOptions) {
         }
     }
 
+    /**
+     * Réinitialiser toutes les sélections (locations et jobs)
+     * Appelée après chaque action (création, suppression, validation, ajout d'emplacements)
+     */
+    const resetAllSelections = () => {
+        selectedAvailableLocations.value = []
+        selectedJobs.value = []
+    }
+
+    /**
+     * Mettre à jour la pagination
+     *
+     * @param newState - Nouvel état de pagination
+     */
     const updatePagination = (newState: Partial<{ currentPage: number; pageSize: number; sortBy: string; sortOrder: 'asc' | 'desc' }>) => {
         if (newState.currentPage) setJobsPage(newState.currentPage)
         if (newState.pageSize) setJobsPageSize(newState.pageSize)
     }
 
+    /**
+     * Mettre à jour les filtres
+     *
+     * @param newFilters - Nouveaux filtres
+     */
     const updateFilters = (newFilters: any) => {
         // Logique de mise à jour des filtres si nécessaire
     }
 
+    /**
+     * Ajouter des emplacements sélectionnés à un job existant
+     *
+     * @param value - ID du job (string, number, array ou null)
+     */
     const onSelectJobForLocation = async (value: string | number | string[] | number[] | null) => {
         if (!value || typeof value !== 'string' || value.trim() === '') {
             return
@@ -837,7 +1341,7 @@ export function usePlanning(options?: PlanningOptions) {
                 await jobStore.addLocationToJob(jobId, locationIds)
 
                 await alertService.success({ text: 'Emplacements ajoutés avec succès' })
-                selectedAvailableLocations.value = []
+                resetAllSelections()
                 await refreshData()
             }
         } catch (error) {
@@ -846,22 +1350,39 @@ export function usePlanning(options?: PlanningOptions) {
         }
     }
 
+    /**
+     * Wrapper pour la validation en masse
+     */
     const onBulkValidate = async () => {
         await bulkValidateJobs()
     }
 
+    /**
+     * Wrapper pour la suppression en masse
+     */
     const onReturnSelectedJobs = async () => {
         await bulkDeleteJobs()
     }
 
+    /**
+     * Wrapper pour le rafraîchissement des locations
+     */
     const onRefreshLocations = async () => {
         await resetLocationsDataTable()
     }
 
+    /**
+     * Wrapper pour le rafraîchissement de toutes les données
+     */
     const onRefreshData = async () => {
         await refreshData()
     }
 
+    /**
+     * Handler pour les filtres de la table imbriquée
+     *
+     * @param filterModel - Modèle de filtres
+     */
     const onNestedTableFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
         await onJobFilterChanged(filterModel)
     }
@@ -902,7 +1423,8 @@ export function usePlanning(options?: PlanningOptions) {
         locationsPageSize,
         locationsSearchQuery,
         locationsSortModel,
-        locationsPagination,
+        locationsPagination: locationsPaginationComputed,
+        locationsTotalItems: computed(() => locationStore.totalCount || 0),
         locationsColumns,
 
         // Sélections
@@ -951,6 +1473,7 @@ export function usePlanning(options?: PlanningOptions) {
         applyLocationFilters,
         updateSelection,
         clearSelection,
+        resetAllSelections,
         updatePagination,
         updateFilters,
 

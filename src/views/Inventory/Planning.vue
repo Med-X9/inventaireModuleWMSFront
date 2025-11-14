@@ -1,6 +1,6 @@
 <template>
     <div class="planning-page">
-        <!-- Header moderne avec informations de contexte -->
+        <!-- Header avec titre et navigation -->
         <div class="page-header">
             <div class="header-content">
                 <div class="header-left">
@@ -20,6 +20,7 @@
             </div>
         </div>
 
+        <!-- Grille de statistiques -->
         <div class="stats-grid">
             <div class="stat-card small">
                 <div class="stat-header">
@@ -62,6 +63,7 @@
             </div>
         </div>
 
+        <!-- Section Jobs créés -->
         <div class="datatable-container">
             <div class="section-header">
                 <h2 class="section-title">Jobs créés</h2>
@@ -79,13 +81,16 @@
                 </div>
             </div>
 
+            <!-- DataTable des jobs -->
             <DataTable :key="jobsKey" :columns="adaptedStoreJobsColumns" :rowDataProp="jobs"
                 :rowSelection="true" @selection-changed="onJobSelectionChanged" :showColumnSelector="false"
                 storageKey="planning_jobs_table" :actions="[]" :pagination="true" :enableFiltering="true"
                 :inlineEditing="false" :exportTitle="'Jobs créés'" :loading="loading"
                 :serverSidePagination="true" :serverSideFiltering="true" :serverSideSorting="true"
+                :customDataTableParams="jobsCustomParams"
                 @pagination-changed="onJobPaginationChanged" @sort-changed="onJobSortChanged"
                 @filter-changed="onJobFilterChanged" ref="jobsTableRef">
+                <!-- Slot pour les actions dans la table imbriquée des emplacements -->
                 <template #nested-actions="{ item, parentRow } ">
                     <button
                         class="btn-supprimer-emplacement"
@@ -98,23 +103,17 @@
                     </button>
                 </template>
             </DataTable>
-
-            <div v-if="!jobs.length && !loading" class="empty-state">
-                <IconBox class="empty-icon" />
-                <h3 class="empty-title">Aucun job créé</h3>
-                <p class="empty-description">Sélectionnez des emplacements dans la table ci-dessous pour créer un job
-                </p>
-            </div>
         </div>
 
+        <!-- Section Emplacements disponibles -->
         <div class="datatable-container">
             <div class="section-header">
                 <h2 class="section-title">Emplacements disponibles</h2>
                 <div class="section-actions">
                     <button @click="createSingleJob" class="action-btn create-btn"
-                        :disabled="availableLocations.length === 0">
+                        :disabled="planningState.selectedAvailable.length === 0">
                         <IconPlus class="w-4 h-4" />
-                        <span>Créer Job ({{ availableLocations.length }})</span>
+                        <span>Créer Job ({{ planningState.selectedAvailable.length }})</span>
                     </button>
                     <div v-if="hasAvailableJobs" class="job-selector">
                         <SelectField :key="`job-select-${selectFieldKey}`" v-model="planningState.selectedJobToAddLocation"
@@ -125,12 +124,15 @@
                 </div>
             </div>
 
+            <!-- DataTable des locations disponibles -->
             <DataTable :key="availableLocationsKey" :columns="adaptedAvailableLocationColumns as any"
                 :rowDataProp="locations" :pagination="true" :rowSelection="true"
+                :totalItemsProp="locationsTotalItems" :pageSizeProp="locationsPageSize"
                 @selection-changed="onAvailableSelectionChanged" storageKey="available_locations"
                 :showColumnSelector="false" :actions="[]" :enableFiltering="true" :inlineEditing="false"
                 :exportTitle="'Emplacements disponibles'" :loading="loading" :serverSidePagination="true"
-                :serverSideFiltering="true" :serverSideSorting="true" @pagination-changed="onLocationPaginationChanged"
+                :serverSideFiltering="true" :serverSideSorting="true" :customDataTableParams="locationsCustomParams"
+                @pagination-changed="onLocationPaginationChanged"
                 @sort-changed="onLocationSortChanged" @filter-changed="onLocationFilterChanged"
                 ref="availableLocationsTableRef" />
         </div>
@@ -138,31 +140,57 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { logger } from '@/services/loggerService';
-import { usePlanning } from '@/composables/usePlanning';
-import DataTable from '@/components/DataTable/DataTable.vue';
-import SelectField from '@/components/Form/SelectField.vue';
+/**
+ * Vue Planning - Gestion du planning des jobs d'inventaire
+ *
+ * Cette vue permet de :
+ * - Visualiser les jobs créés avec leurs emplacements
+ * - Gérer les emplacements disponibles
+ * - Créer de nouveaux jobs à partir d'emplacements sélectionnés
+ * - Valider ou supprimer des jobs en masse
+ * - Ajouter des emplacements à des jobs existants
+ *
+ * @component Planning
+ */
 
-// Import des icônes
-import IconCalendar from '@/components/icon/icon-calendar.vue';
-import IconCheck from '@/components/icon/icon-check.vue';
-import IconBox from '@/components/icon/icon-box.vue';
-import IconEye from '@/components/icon/icon-eye.vue';
-import IconCircleCheck from '@/components/icon/icon-circle-check.vue';
-import IconPlus from '@/components/icon/icon-plus.vue';
-import IconArrowLeft from '@/components/icon/icon-arrow-left.vue';
-import IconUser from '@/components/icon/icon-user.vue';
-import IconTrash from '@/components/icon/icon-trash.vue';
+// ===== IMPORTS VUE =====
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
-// Import CSS pour vue-select
-import '@/assets/css/select2.css';
+// ===== IMPORTS SERVICES =====
+import { logger } from '@/services/loggerService'
 
-const route = useRoute();
-const router = useRouter();
+// ===== IMPORTS COMPOSABLES =====
+import { usePlanning } from '@/composables/usePlanning'
 
-// Déclarer le contrôleur en premier (controller = logique)
+// ===== IMPORTS COMPOSANTS =====
+import DataTable from '@/components/DataTable/DataTable.vue'
+import SelectField from '@/components/Form/SelectField.vue'
+
+// ===== IMPORTS ICÔNES =====
+import IconCalendar from '@/components/icon/icon-calendar.vue'
+import IconCheck from '@/components/icon/icon-check.vue'
+import IconBox from '@/components/icon/icon-box.vue'
+import IconEye from '@/components/icon/icon-eye.vue'
+import IconCircleCheck from '@/components/icon/icon-circle-check.vue'
+import IconPlus from '@/components/icon/icon-plus.vue'
+import IconArrowLeft from '@/components/icon/icon-arrow-left.vue'
+import IconUser from '@/components/icon/icon-user.vue'
+import IconTrash from '@/components/icon/icon-trash.vue'
+
+// ===== IMPORTS STYLES =====
+import '@/assets/css/select2.css'
+
+// ===== ROUTER =====
+const route = useRoute()
+const router = useRouter()
+
+// ===== COMPOSABLE =====
+
+/**
+ * Initialisation du composable usePlanning
+ * Récupère toutes les méthodes, états et handlers nécessaires
+ */
 const {
     // État
     jobs,
@@ -184,7 +212,6 @@ const {
 
     // Gestionnaires d'état
     updateSelection,
-
     clearSelection,
     updatePagination,
     updateFilters,
@@ -198,6 +225,7 @@ const {
     onLocationFilterChanged,
     onAvailableSelectionChanged,
     onJobSelectionChanged,
+    resetAllSelections,
     onSelectJobForLocation,
     onBulkValidate,
     onReturnSelectedJobs,
@@ -209,36 +237,122 @@ const {
     adaptedStoreJobsColumns,
     adaptedAvailableLocationColumns,
 
+    // Pagination
+    locationsTotalItems,
+    locationsPageSize,
+
     // Navigation
     inventoryReference,
-    warehouseReference
+    warehouseReference,
+    inventoryId,
+    accountId,
+    warehouseId
 } = usePlanning({
     inventoryReference: route.params.reference as string,
     warehouseReference: route.params.warehouse as string
-});
+})
 
-// Computed pour surveiller la sélection des jobs
+// ===== COMPUTED PROPERTIES =====
+
+/**
+ * Nombre de jobs sélectionnés
+ */
 const selectedJobsCount = computed(() => {
-    return planningState.value.selectedJobs.length;
-});
+    return planningState.value.selectedJobs.length
+})
 
-// Watch pour surveiller les changements de sélection
-watch(
-    () => planningState.value.selectedJobs,
-    () => {
-        // Logique de surveillance silencieuse
-    },
-    { deep: true }
-);
+/**
+ * Paramètres personnalisés pour la DataTable des jobs
+ * Inclut les IDs nécessaires pour les appels API
+ */
+const jobsCustomParams = computed(() => ({
+    inventory_id: inventoryId.value,
+    warehouse_id: warehouseId.value
+}))
 
-// Fonctions de navigation (après la déclaration du composable)
+/**
+ * Paramètres personnalisés pour la DataTable des locations
+ * Inclut les IDs nécessaires pour les appels API
+ */
+const locationsCustomParams = computed(() => ({
+    account_id: accountId.value,
+    inventory_id: inventoryId.value,
+    warehouse_id: warehouseId.value
+}))
+
+// ===== RÉFÉRENCES =====
+
+/** Clés pour forcer le re-render des tables */
+const availableLocationsKey = ref(0)
+const jobsKey = ref(0)
+const selectFieldKey = ref(0)
+
+/** Références aux composants DataTable pour accéder à leurs méthodes */
+const availableLocationsTableRef = ref()
+const jobsTableRef = ref()
+
+// ===== MÉTHODES =====
+
+/**
+ * Réinitialiser les sélections dans les DataTables via les refs
+ * Appelée après certaines actions pour synchroniser l'état visuel
+ */
+const resetDataTableSelections = () => {
+    nextTick(() => {
+        if (availableLocationsTableRef.value) {
+            availableLocationsTableRef.value.clearAllSelections()
+        }
+        if (jobsTableRef.value) {
+            jobsTableRef.value.clearAllSelections()
+        }
+    })
+}
+
+/**
+ * Handler pour la validation en masse des jobs
+ */
+async function onBulkValidateHandler() {
+    await onBulkValidate()
+}
+
+/**
+ * Supprimer un emplacement d'un job (depuis la table imbriquée)
+ *
+ * @param jobId - ID du job
+ * @param locationReference - Référence de l'emplacement à supprimer
+ */
+async function removeLocationFromNestedTable(jobId: string, locationReference: string) {
+    try {
+        // TODO: Implémenter la logique de suppression d'emplacement
+        await onRefreshData()
+    } catch (error) {
+        logger.error('Erreur lors de la suppression de l\'emplacement', error)
+    }
+}
+
+/**
+ * Créer un job depuis les emplacements sélectionnés
+ */
+async function createSingleJob() {
+    const ok = await createJobFromSelectedLocations()
+    if (ok) {
+        // Le composable gère déjà la réinitialisation des sélections
+    }
+}
+
+/**
+ * Navigation vers la page de détail de l'inventaire
+ */
 const handleGoToInventoryDetail = () => {
     router.push({
         name: 'inventory-detail',
         params: { reference: inventoryReference }
-    });
-};
+    })
+}
 
+/**
+ * Navigation vers la page d'affectation
+ */
 const handleGoToAffectation = () => {
     router.push({
         name: 'inventory-affecter',
@@ -246,102 +360,82 @@ const handleGoToAffectation = () => {
             reference: inventoryReference,
             warehouse: warehouseReference
         }
-    });
-};
-
-// Keys pour forcer le re-render des tables
-const availableLocationsKey = ref(0);
-const jobsKey = ref(0);
-const selectFieldKey = ref(0);
-
-// Références aux DataTableNew pour vider les sélections
-const availableLocationsTableRef = ref();
-const jobsTableRef = ref();
-
-// État pour le SelectField - utiliser la variable du composable
-const selectedJobId = planningState.value.selectedJobToAddLocation;
-
-async function onSearchLocations() {
-    await applyLocationFilters(filterState.value.filterModel);
+    })
 }
 
-// Handler pour la validation en masse
-async function onBulkValidateHandler() {
-    await onBulkValidate();
+// ===== WATCHERS =====
 
-    // Vider les sélections dans la table des jobs
-    // if (jobsTableRef.value) {
-    //     jobsTableRef.value.clearAllSelections();
-    // }
-}
+/**
+ * Flags pour éviter les boucles infinies lors de la réinitialisation des sélections
+ */
+let isResettingSelections = false
+let isInitialMount = true
 
-// Fonction pour supprimer un emplacement d'un job (pour la nested table)
-async function removeLocationFromNestedTable(jobId: string, locationReference: string) {
-    try {
-        // Logique de suppression d'emplacement
-        await onRefreshData();
-    } catch (error) {
-        logger.error('Erreur lors de la suppression de l\'emplacement', error);
-    }
-}
+/**
+ * Watcher pour surveiller les changements de sélection
+ * Réinitialise les DataTables quand les sélections passent de non-vides à vides
+ */
+watch(
+    () => [planningState.value.selectedAvailable.length, planningState.value.selectedJobs.length],
+    ([availableLength, jobsLength], [oldAvailableLength, oldJobsLength]) => {
+        // Ignorer le premier déclenchement au montage
+        if (isInitialMount) {
+            isInitialMount = false
+            return
+        }
 
-// Fonction pour créer un job depuis les emplacements sélectionnés
-async function createSingleJob() {
-    const ok = await createJobFromSelectedLocations();
-    if (ok) {
-        // Forcer le re-render seulement après création réussie
-        // availableLocationsKey.value++;
-        // jobsKey.value++;
+        // Éviter les boucles infinies
+        if (isResettingSelections) return
 
-        // Vider les sélections dans les tables
-        // if (availableLocationsTableRef.value) {
-        //     availableLocationsTableRef.value.clearAllSelections();
-        // }
-    }
-}
+        // Si les sélections passent de non-vides à vides, réinitialiser aussi les DataTables
+        if (availableLength === 0 && jobsLength === 0 && (oldAvailableLength > 0 || oldJobsLength > 0)) {
+            isResettingSelections = true
+            resetDataTableSelections()
+            setTimeout(() => {
+                isResettingSelections = false
+            }, 100)
+        }
+    },
+    { immediate: false }
+)
 
-// 🧪 Fonction de test pour simuler une sélection
-function testSelection() {
-    // Simuler une sélection de job
-    updateSelection('jobs', ['1', '2']);
-}
+// ===== LIFECYCLE =====
 
-// Exposer la fonction de test dans la console
-(window as any).testSelection = testSelection;
-
-// Charger les données au montage
+/**
+ * Initialisation au montage du composant
+ */
 onMounted(async () => {
     // Le composable usePlanning gère automatiquement l'initialisation des données
-    // dans son propre onMounted, pas besoin d'appeler de méthode d'initialisation ici
+    // dans son propre onMounted
 
     // Ajouter event listener pour l'expansion des jobs (seulement sur l'icône)
     document.addEventListener('click', (event) => {
-        const target = event.target as HTMLElement;
-        const chevronIcon = target.closest('.chevron-icon');
+        const target = event.target as HTMLElement
+        const chevronIcon = target.closest('.chevron-icon')
         if (chevronIcon) {
-            const jobId = chevronIcon.getAttribute('data-job-id');
+            const jobId = chevronIcon.getAttribute('data-job-id')
             if (jobId) {
                 if (planningState.value.expandedJobIds.has(jobId)) {
-                    planningState.value.expandedJobIds.delete(jobId);
+                    planningState.value.expandedJobIds.delete(jobId)
                 } else {
-                    planningState.value.expandedJobIds.add(jobId);
+                    planningState.value.expandedJobIds.add(jobId)
                 }
-                jobsKey.value++;
+                jobsKey.value++
             }
         }
-    });
-});
+    })
+})
 </script>
 
 <style scoped>
-/* Page principale */
+/* ===== PAGE PRINCIPALE ===== */
 .planning-page {
     min-height: 100vh;
     background: #ffffff;
     padding: 2rem;
 }
 
-/* Header de la page */
+/* ===== HEADER ===== */
 .page-header {
     background: #ffffff;
     border-radius: 20px;
@@ -375,7 +469,7 @@ onMounted(async () => {
 .title-icon {
     width: 2.5rem;
     height: 2.5rem;
-    color: #FACC15;
+    color: var(--color-primary);
 }
 
 .navigation-buttons {
@@ -396,7 +490,7 @@ onMounted(async () => {
     cursor: pointer;
     transition: all 0.3s ease;
     white-space: nowrap;
-    background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
     color: #1e293b;
     box-shadow: 0 4px 12px rgba(250, 204, 21, 0.3);
 }
@@ -412,82 +506,7 @@ onMounted(async () => {
     transform: none;
 }
 
-.context-info {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
-.context-badge {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    font-size: 0.9rem;
-}
-
-.badge-label {
-    color: #64748b;
-    font-weight: 600;
-}
-
-.badge-value {
-    color: #1e293b;
-    font-weight: 700;
-    padding: 0.25rem 0.75rem;
-    background: #FACC15;
-    border-radius: 8px;
-    color: #1e293b;
-}
-
-.refresh-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 1rem 2rem;
-    background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
-    color: #1e293b;
-    border: none;
-    border-radius: 16px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 16px rgba(250, 204, 21, 0.3);
-    position: relative;
-    overflow: hidden;
-}
-
-.refresh-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transition: left 0.5s ease;
-}
-
-.refresh-btn:hover::before {
-    left: 100%;
-}
-
-.refresh-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(250, 204, 21, 0.4);
-}
-
-.refresh-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-}
-
-/* Grille de statistiques */
+/* ===== STATISTIQUES ===== */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -529,12 +548,11 @@ onMounted(async () => {
 .stat-card:nth-child(2),
 .stat-card:nth-child(3),
 .stat-card:nth-child(4) {
-    --stat-color: #FACC15;
-    --stat-color-light: #EAB308;
+    --stat-color: var(--color-primary);
+    --stat-color-light: var(--color-primary-light);
     grid-column: span 1;
 }
 
-/* Variantes de taille pour les cartes */
 .stat-card.small {
     grid-column: span 1;
     padding: 0.5rem;
@@ -552,14 +570,6 @@ onMounted(async () => {
     color: #1e293b;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
     flex-shrink: 0;
-}
-
-.stat-content {
-    text-align: left;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
 }
 
 .stat-header {
@@ -587,7 +597,7 @@ onMounted(async () => {
     text-align: left;
 }
 
-/* Container du tableau */
+/* ===== CONTAINER DATATABLE ===== */
 .datatable-container {
     background: #ffffff;
     border-radius: 20px;
@@ -634,7 +644,7 @@ onMounted(async () => {
 }
 
 .validate-btn {
-    background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
     color: #1e293b;
     box-shadow: 0 4px 12px rgba(250, 204, 21, 0.3);
 }
@@ -656,7 +666,7 @@ onMounted(async () => {
 }
 
 .create-btn {
-    background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
     color: #1e293b;
     box-shadow: 0 4px 12px rgba(250, 204, 21, 0.3);
 }
@@ -672,45 +682,11 @@ onMounted(async () => {
     transform: none;
 }
 
-/* Job selector */
 .job-selector {
     min-width: 250px;
 }
 
-/* Empty state */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 4rem 2rem;
-    text-align: center;
-    border: 2px dashed #e5e7eb;
-    border-radius: 16px;
-    background: #ffffff;
-}
-
-.empty-icon {
-    width: 4rem;
-    height: 4rem;
-    color: #64748b;
-    margin-bottom: 1rem;
-}
-
-.empty-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #1e293b;
-    margin-bottom: 0.5rem;
-}
-
-.empty-description {
-    color: #64748b;
-    font-size: 0.9rem;
-    max-width: 400px;
-}
-
-/* Responsive */
+/* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
     .planning-page {
         padding: 1rem;
@@ -724,10 +700,6 @@ onMounted(async () => {
 
     .page-title {
         font-size: 2rem;
-        justify-content: center;
-    }
-
-    .context-info {
         justify-content: center;
     }
 
@@ -794,37 +766,6 @@ onMounted(async () => {
 
     .page-title {
         font-size: 1.75rem;
-    }
-
-    .refresh-btn {
-        padding: 0.75rem 1.5rem;
-        font-size: 0.9rem;
-    }
-}
-
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-    .planning-page {
-        background: #ffffff;
-    }
-
-    .page-header,
-    .stat-card,
-    .datatable-container {
-        background: #ffffff;
-        border-color: #e5e7eb;
-    }
-
-    .page-title {
-        color: #1e293b;
-    }
-
-    .stat-value {
-        color: #1e293b;
-    }
-
-    .stat-label {
-        color: #64748b;
     }
 }
 </style>

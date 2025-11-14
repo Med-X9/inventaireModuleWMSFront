@@ -421,7 +421,7 @@ watch(() => props.isEditing, (isEditing) => {
 .edit-input:focus,
 .edit-select:focus {
     outline: none;
-    border-color: #FECD1C;
+    border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgba(254, 205, 28, 0.2), 0 4px 6px rgba(0, 0, 0, 0.1);
     transform: translateY(-1px);
 }
@@ -446,7 +446,7 @@ watch(() => props.isEditing, (isEditing) => {
     align-items: center;
     gap: 0.375rem;
     padding: 0.25rem 0.5rem;
-    background: linear-gradient(135deg, #FECD1C, #fbbf24);
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
     border-radius: 0.375rem;
     font-size: 0.75rem;
     color: #1f2937;
@@ -586,7 +586,7 @@ watch(() => props.isEditing, (isEditing) => {
 }
 
 .dark .selected-item {
-    background: linear-gradient(135deg, #FECD1C, #f59e0b);
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
     color: #111827;
 }
 </style>

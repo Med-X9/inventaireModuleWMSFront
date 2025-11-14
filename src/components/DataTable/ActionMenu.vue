@@ -512,7 +512,7 @@ const getIconComponent = (iconName: string) => {
 
 @media (prefers-color-scheme: dark) {
     .dt-menu-item:not(:disabled):hover {
-        background-color: #FECD1C;
+        background-color: var(--color-primary);
     }
 }
 
@@ -633,7 +633,7 @@ const getIconComponent = (iconName: string) => {
     left: 0;
     width: 3px;
     height: 0;
-    background: linear-gradient(180deg, #F7AA0B, #FECD1C);
+    background: linear-gradient(180deg, var(--color-primary-dark), var(--color-primary));
     transition: height 0.2s ease-in-out;
     border-radius: 0 3px 3px 0;
 }

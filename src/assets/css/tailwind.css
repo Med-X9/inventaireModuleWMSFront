@@ -42,6 +42,8 @@
 /* dragndrop */
 @import 'dragndrop.css';
 
+/* Theme WMS - Palette de couleurs et typographie */
+@import '../../theme/theme.css';
 
 @tailwind base;
 @tailwind components;
@@ -55,11 +57,13 @@
     }
 
     body {
-        @apply bg-[#fafafa] font-nunito;
+        @apply bg-bg-app font-body;
+        color: var(--color-text);
     }
 
     body.dark {
-        @apply bg-[#060818];
+        @apply bg-bg-dark;
+        color: var(--color-text);
     }
 
 /* form */

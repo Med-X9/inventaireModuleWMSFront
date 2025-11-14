@@ -202,13 +202,13 @@ const {
 }
 
 .btn-primary {
-    background-color: #FECD1C;
-    border-color: #FECD1C;
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
     color: #1f2937;
 }
 
 .btn-primary:hover {
-    background-color: #f59e0b;
+    background-color: var(--color-primary-dark);
 }
 
 .btn-secondary {
@@ -267,8 +267,8 @@ const {
 .warehouse-select:focus,
 .status-select:focus {
     outline: none;
-    border-color: #FECD1C;
-    box-shadow: 0 0 0 2px rgba(254, 205, 28, 0.2);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
 }
 
 .jobs-table-container {
@@ -378,8 +378,8 @@ const {
 
 .form-select:focus {
     outline: none;
-    border-color: #FECD1C;
-    box-shadow: 0 0 0 2px rgba(254, 205, 28, 0.2);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
 }
 
 .modal-footer {
@@ -404,8 +404,8 @@ const {
 }
 
 :deep(.action-saisie-btn:hover) {
-    background-color: #f59e0b;
-    border-color: #f59e0b;
+    background-color: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
 }
 
 /* Responsive */

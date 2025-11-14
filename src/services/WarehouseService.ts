@@ -12,6 +12,10 @@ export class WarehouseService {
         return axiosInstance.get<ApiResponse<Warehouse[]>>(API.endpoints.warehouse.base);
     }
 
+    static async getByAccountId(accountId: number): Promise<AxiosResponse<ApiResponse<Warehouse[]>>> {
+        return axiosInstance.get<ApiResponse<Warehouse[]>>(`${API.endpoints.inventory.base}account/${accountId}/warehouses/`);
+    }
+
     static async getByReference(reference: string): Promise<AxiosResponse<ApiResponse<Warehouse>>> {
         return axiosInstance.get<ApiResponse<Warehouse>>(`${API.endpoints.warehouse.base}${reference}/`);
     }

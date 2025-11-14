@@ -576,7 +576,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 .edit-select:focus,
 .edit-textarea:focus {
     outline: none;
-    border-color: #FECD1C;
+    border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgba(254, 205, 28, 0.2), 0 4px 6px rgba(0, 0, 0, 0.1);
     transform: translateY(-1px);
 }
@@ -584,7 +584,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 .dark .edit-input:focus,
 .dark .edit-select:focus,
 .dark .edit-textarea:focus {
-    border-color: #FECD1C;
+    border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgba(254, 205, 28, 0.2), 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
@@ -597,7 +597,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 .edit-checkbox {
     width: 1.25rem;
     height: 1.25rem;
-    accent-color: #FECD1C;
+    accent-color: var(--color-primary);
     cursor: pointer;
     transform: scale(1.2);
 }
@@ -627,7 +627,7 @@ const handleKeydown = (event: KeyboardEvent) => {
     align-items: center;
     gap: 0.375rem;
     padding: 0.25rem 0.5rem;
-    background: linear-gradient(135deg, #FECD1C, #fbbf24);
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
     border-radius: 0.375rem;
     font-size: 0.75rem;
     color: #1f2937;
@@ -642,7 +642,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 }
 
 .dark .selected-item {
-    background: linear-gradient(135deg, #FECD1C, #f59e0b);
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
     color: #111827;
 }
 
@@ -797,11 +797,11 @@ const handleKeydown = (event: KeyboardEvent) => {
 
 @keyframes highlightUpdate {
     0% {
-        background-color: #FECD1C;
+        background-color: var(--color-primary);
         transform: scale(1.02);
     }
     50% {
-        background-color: #fbbf24;
+        background-color: var(--color-primary-light);
         transform: scale(1.01);
     }
     100% {

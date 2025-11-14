@@ -76,7 +76,7 @@
                 <div class="virtual-scroll-content" :style="{ height: virtualScrolling.totalHeight + 'px' }">
                     <div class="virtual-scroll-transform"
                         :style="{ transform: `translateY(${virtualScrolling.transformY}px)` }">
-                        <TableBody ref="tableBodyRef" :columns="finalColumns" :paginatedData="finalRowData"
+                        <TableBody ref="tableBodyRef" :columns="finalColumns" :paginatedData="finalRowData" :key="`virtual-${finalRowData.length}`"
                             :actions="dataTable?.actions" :loading="isLoading" :skeletonRowsCount="pageSizeProp || 10"
                             :currentSortField="currentSortField" :currentSortDirection="currentSortDirection"
                             :rowSelection="dataTable?.rowSelection" :selectedRows="selectedRowsSet"
@@ -99,30 +99,30 @@
             </div>
 
             <!-- TableBody normal si pas de virtual scrolling -->
-            <TableBody v-else ref="tableBodyRef" :columns="finalColumns" :paginatedData="finalRowData"
-                :actions="dataTable?.actions" :loading="isLoading" :skeletonRowsCount="pageSizeProp || 10"
-                :currentSortField="currentSortField" :currentSortDirection="currentSortDirection"
-                :rowSelection="dataTable?.rowSelection" :selectedRows="selectedRowsSet"
-                :inlineEditing="props.inlineEditing" :editingState="editing?.state.value"
-                :masterDetailState="masterDetail?.detailStates" :currentPage="dataTable?.effectiveCurrentPage || 1"
-                :pageSize="dataTable?.effectivePageSize || 10"
-                :globalStartIndex="(dataTable?.effectiveCurrentPage || 1) * (dataTable?.effectivePageSize || 10) - (dataTable?.effectivePageSize || 10)"
-                @sort-changed="handleSortChanged" @filter-changed="handleFilterChanged"
-                @selection-changed="handleSelectionChanged"
-                @cell-value-changed="(event) => emit('cell-value-changed', event)"
-                @row-clicked="(row: any) => emit('row-clicked', row)"
-                @group-toggle="(groupKey: any) => grouping?.toggleGroup(groupKey)"
-                @detail-toggle="(rowId: any) => masterDetail?.toggleDetail(rowId)"
-                @edit-start="(row: any, field: any) => editing?.startEditing(row, field)"
-                @edit-stop="(save: any) => editing?.stopEditing(save)"
-                @edit-value-update="(value: any) => editing?.updateEditingValue(value)" />
+            <TableBody v-if="!virtualScrolling" :key="`table-${dataTable?.effectivePageSize || 10}-${dataTable?.effectiveCurrentPage || 1}-${finalRowData.length}-${JSON.stringify(finalRowData.slice(0, 1).map(r => r?.id || r?.reference))}`" ref="tableBodyRef" :columns="finalColumns" :paginatedData="finalRowData"
+                    :actions="dataTable?.actions" :loading="isLoading" :skeletonRowsCount="pageSizeProp || 10"
+                    :currentSortField="currentSortField" :currentSortDirection="currentSortDirection"
+                    :rowSelection="dataTable?.rowSelection" :selectedRows="selectedRowsSet"
+                    :inlineEditing="props.inlineEditing" :editingState="editing?.state.value"
+                    :masterDetailState="masterDetail?.detailStates" :currentPage="dataTable?.effectiveCurrentPage || 1"
+                    :pageSize="dataTable?.effectivePageSize || 10"
+                    :globalStartIndex="(dataTable?.effectiveCurrentPage || 1) * (dataTable?.effectivePageSize || 10) - (dataTable?.effectivePageSize || 10)"
+                    @sort-changed="handleSortChanged" @filter-changed="handleFilterChanged"
+                    @selection-changed="handleSelectionChanged"
+                    @cell-value-changed="(event) => emit('cell-value-changed', event)"
+                    @row-clicked="(row: any) => emit('row-clicked', row)"
+                    @group-toggle="(groupKey: any) => grouping?.toggleGroup(groupKey)"
+                    @detail-toggle="(rowId: any) => masterDetail?.toggleDetail(rowId)"
+                    @edit-start="(row: any, field: any) => editing?.startEditing(row, field)"
+                    @edit-stop="(save: any) => editing?.stopEditing(save)"
+                    @edit-value-update="(value: any) => editing?.updateEditingValue(value)" />
 
             <Pagination :currentPage="dataTable?.effectiveCurrentPage || 1"
                 :totalPages="dataTable?.effectiveTotalPages || 1" :totalItems="dataTable?.effectiveTotalItems || 0"
                 :pageSize="dataTable?.effectivePageSize || 10" :total="dataTable?.effectiveTotalItems || 0"
                 :start="dataTable?.start || 0" :end="dataTable?.end || 0" :loading="dataTable?.loading || false"
-                @page-changed="(page: any) => dataTable?.goToPage?.(page)"
-                @page-size-changed="(size: any) => dataTable?.changePageSize?.(size)" />
+                @page-changed="handlePaginationChanged"
+                @page-size-changed="handlePageSizeChanged" />
         </template>
     </div>
 </template>
@@ -146,13 +146,14 @@ import { useDataTableGrouping } from './composables/useDataTableGrouping'
 import { useDataTableEditing } from './composables/useDataTableEditing'
 import { useDataTablePivot } from './composables/useDataTablePivot'
 import { useDataTableMasterDetail } from './composables/useDataTableMasterDetail'
+import { convertToStandardDataTableParams, type StandardDataTableParams } from './utils/dataTableParamsConverter'
 
 const props = defineProps<DataTableProps>()
 const emit = defineEmits<{
-    'pagination-changed': [params: { page: number; pageSize: number; start: number; end: number }]
-    'sort-changed': [sortModel: any]
-    'filter-changed': [filterModel: any]
-    'global-search-changed': [searchTerm: string]
+    'pagination-changed': [params: { page: number; pageSize: number; start: number; end: number } | StandardDataTableParams]
+    'sort-changed': [sortModel: any | StandardDataTableParams]
+    'filter-changed': [filterModel: any | StandardDataTableParams]
+    'global-search-changed': [searchTerm: string | StandardDataTableParams]
     'selection-changed': [selectedRows: Set<string>]
     'cell-value-changed': [event: { data: any; field: string; newValue: any; oldValue: any }]
     'grouping-changed': [groups: any[]]
@@ -240,9 +241,79 @@ const tableBodyRef = ref()
 // État local pour le tri
 const currentSortField = ref<string>('')
 const currentSortDirection = ref<'asc' | 'desc'>('asc')
+const currentSortModel = ref<Array<{ colId: string; sort: 'asc' | 'desc' }>>([])
 
 const handleGlobalSearchUpdate = (searchTerm: string) => {
     dataTable.updateGlobalSearchTerm(searchTerm)
+    
+    // Si serverSideFiltering est activé, convertir vers le format standard DataTable
+    if (props.serverSideFiltering) {
+        const standardParams = convertToStandardDataTableParams(
+            {
+                page: dataTable?.effectiveCurrentPage || 1,
+                pageSize: dataTable?.effectivePageSize || 10,
+                filters: dataTable?.filterState || {},
+                sort: currentSortModel.value,
+                globalSearch: searchTerm || undefined
+            },
+            {
+                columns: props.columns,
+                draw: 1,
+                customParams: props.customDataTableParams || {}
+            }
+        )
+        emit('global-search-changed', standardParams)
+    } else {
+        emit('global-search-changed', searchTerm)
+    }
+}
+
+// Handler pour les changements de pagination
+const handlePaginationChanged = (page: number) => {
+    if (props.serverSidePagination) {
+        // Convertir vers le format standard DataTable
+        const standardParams = convertToStandardDataTableParams(
+            {
+                page: page,
+                pageSize: dataTable?.effectivePageSize || 10,
+                filters: dataTable?.filterState || {},
+                sort: currentSortModel.value,
+                globalSearch: dataTable?.globalSearchTerm || undefined
+            },
+            {
+                columns: props.columns,
+                draw: 1,
+                customParams: props.customDataTableParams || {}
+            }
+        )
+        emit('pagination-changed', standardParams)
+    } else {
+        dataTable?.goToPage?.(page)
+    }
+}
+
+// Handler pour les changements de taille de page
+const handlePageSizeChanged = (size: number) => {
+    if (props.serverSidePagination) {
+        // Convertir vers le format standard DataTable
+        const standardParams = convertToStandardDataTableParams(
+            {
+                page: 1, // Réinitialiser à la page 1 lors du changement de taille
+                pageSize: size,
+                filters: dataTable?.filterState || {},
+                sort: currentSortModel.value,
+                globalSearch: dataTable?.globalSearchTerm || undefined
+            },
+            {
+                columns: props.columns,
+                draw: 1,
+                customParams: props.customDataTableParams || {}
+            }
+        )
+        emit('pagination-changed', standardParams)
+    } else {
+        dataTable?.changePageSize?.(size)
+    }
 }
 
 // Handler pour les changements de tri
@@ -258,33 +329,78 @@ const handleSortChanged = (sortData: { field: string; direction: 'asc' | 'desc';
 
     // Convertir le format pour correspondre à l'API
     const sortModel = sortData.isActive ? [{
-        field: sortData.field,
-        direction: sortData.direction
+        colId: sortData.field,
+        sort: sortData.direction
     }] : []
 
-    emit('sort-changed', sortModel)
+    // Mettre à jour l'état local
+    currentSortModel.value = sortModel
+
+    // Si serverSideSorting est activé, convertir vers le format standard DataTable
+    if (props.serverSideSorting) {
+        const standardParams = convertToStandardDataTableParams(
+            {
+                page: dataTable?.effectiveCurrentPage || 1,
+                pageSize: dataTable?.effectivePageSize || 10,
+                filters: dataTable?.filterState || {},
+                sort: sortModel,
+                globalSearch: dataTable?.globalSearchTerm || undefined
+            },
+            {
+                columns: props.columns,
+                draw: 1,
+                customParams: props.customDataTableParams || {}
+            }
+        )
+        emit('sort-changed', standardParams)
+    } else {
+        emit('sort-changed', sortModel)
+    }
 }
 
 // Handler pour les changements de filtre
 const handleFilterChanged = (filters: Record<string, any>) => {
-    emit('filter-changed', filters)
+    // Si serverSideFiltering est activé, convertir vers le format standard DataTable
+    if (props.serverSideFiltering) {
+        const standardParams = convertToStandardDataTableParams(
+            {
+                page: dataTable?.effectiveCurrentPage || 1,
+                pageSize: dataTable?.effectivePageSize || 10,
+                filters: filters,
+                sort: currentSortModel.value,
+                globalSearch: dataTable?.globalSearchTerm || undefined
+            },
+            {
+                columns: props.columns,
+                draw: 1,
+                customParams: props.customDataTableParams || {}
+            }
+        )
+        emit('filter-changed', standardParams)
+    } else {
+        emit('filter-changed', filters)
+    }
 }
 
 // Handler pour les changements de sélection
 const handleSelectionChanged = (selectedRows: Set<string>) => {
     // Mettre à jour les sélections dans useDataTable
     if (dataTable?.selectedRows) {
+        // Créer un nouveau Set pour forcer la réactivité
+        const newSelection = new Set<string>(selectedRows)
+        
         // Si c'est un Ref, utiliser .value, sinon assigner directement
         if ('value' in dataTable.selectedRows) {
-            dataTable.selectedRows.value = selectedRows
+            dataTable.selectedRows.value = newSelection
         } else {
-            // Copier les valeurs du Set
-            dataTable.selectedRows.clear()
-            selectedRows.forEach(row => dataTable.selectedRows.add(row))
+            // Créer un nouveau Set et copier les valeurs
+            const currentSet = dataTable.selectedRows as Set<string>
+            currentSet.clear()
+            newSelection.forEach(row => currentSet.add(row))
         }
     }
-    // Émettre vers le parent
-    emit('selection-changed', selectedRows)
+    // Émettre vers le parent avec le nouveau Set
+    emit('selection-changed', new Set(selectedRows))
 }
 
 // Fonction de formatage pour les dates (date seulement, sans heure)
@@ -417,7 +533,30 @@ watch(() => dataTable?.visibleColumns, (newVisibleColumns) => {
 
 // Données finales à afficher (avec groupement, pivot, etc.)
 const finalRowData = computed(() => {
-    let data = props.rowDataProp
+    // Pour la pagination côté serveur, utiliser directement rowDataProp
+    // Pour la pagination côté client, utiliser paginatedData de useDataTable
+    let data: any[] = []
+    
+    if (props.serverSidePagination) {
+        // Pagination côté serveur : utiliser directement rowDataProp
+        // Forcer la création d'un nouveau tableau pour garantir la réactivité
+        const rowData = props.rowDataProp
+        if (Array.isArray(rowData) && rowData.length > 0) {
+            // Créer une copie complète pour forcer la réactivité
+            data = rowData.map(item => ({ ...item }))
+        } else {
+            data = []
+        }
+    } else {
+        // Pagination côté client : utiliser paginatedData de useDataTable
+        if (Array.isArray(dataTable?.paginatedData) && dataTable.paginatedData.length > 0) {
+            data = [...dataTable.paginatedData]
+        } else if (Array.isArray(props.rowDataProp) && props.rowDataProp.length > 0) {
+            data = [...props.rowDataProp]
+        } else {
+            data = []
+        }
+    }
 
     // Appliquer le groupement si activé
     if (grouping && grouping.groupedData.value) {
@@ -434,8 +573,46 @@ const finalRowData = computed(() => {
         data = virtualScrolling.visibleItems.value
     }
 
+    // Logger pour déboguer (seulement si serverSidePagination)
+    if (props.serverSidePagination) {
+        logger.debug('finalRowData computed (server-side)', {
+            rowDataPropLength: Array.isArray(props.rowDataProp) ? props.rowDataProp.length : 0,
+            rowDataPropIsArray: Array.isArray(props.rowDataProp),
+            rowDataPropType: typeof props.rowDataProp,
+            finalDataLength: data.length,
+            isArray: Array.isArray(data),
+            sample: data.length > 0 ? data.slice(0, 2).map((r: any) => ({ id: r?.id, ref: r?.reference })) : []
+        })
+    }
+
     return data
 })
+
+// Watcher pour forcer la mise à jour quand rowDataProp change (pour la pagination côté serveur)
+watch(() => props.rowDataProp, (newData, oldData) => {
+    if (props.serverSidePagination) {
+        const newLength = Array.isArray(newData) ? newData.length : 0
+        const oldLength = Array.isArray(oldData) ? oldData.length : 0
+        
+        logger.debug('DataTable: rowDataProp changed (server-side)', {
+            oldLength,
+            newLength,
+            isArray: Array.isArray(newData),
+            hasData: newLength > 0,
+            sample: Array.isArray(newData) && newData.length > 0 
+                ? newData.slice(0, 2).map((r: any) => ({ id: r?.id, ref: r?.reference }))
+                : []
+        })
+        
+        // Forcer la mise à jour du computed en accédant à sa valeur
+        // Cela déclenchera le re-render si nécessaire
+        const currentData = finalRowData.value
+        logger.debug('DataTable: finalRowData after watch', {
+            length: currentData.length,
+            sample: currentData.length > 0 ? currentData.slice(0, 2).map((r: any) => ({ id: r?.id, ref: r?.reference })) : []
+        })
+    }
+}, { deep: true, immediate: true })
 
 // Colonnes finales (avec colonnes de groupement si nécessaire)
 const finalColumns = computed(() => {
@@ -648,12 +825,12 @@ defineExpose({
 
 /* Amélioration pour les états d'avertissement */
 .data-table.warning {
-    border: 2px solid #FECD1C;
-    box-shadow: 0 0 0 3px rgba(254, 205, 28, 0.1);
+    border: 2px solid var(--color-warning);
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.1);
 }
 
 .dark .data-table.warning {
-    border-color: #fbbf24;
+    border-color: var(--color-warning);
     box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.1);
 }
 
@@ -708,6 +885,35 @@ defineExpose({
 
 .virtual-scroll-transform {
     @apply absolute top-0 left-0 right-0;
+}
+
+/* Transition pour le changement de taille de page */
+.table-fade-enter-active {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.table-fade-leave-active {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.table-fade-enter-from {
+    opacity: 0;
+    transform: translateY(10px);
+}
+
+.table-fade-enter-to {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.table-fade-leave-from {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.table-fade-leave-to {
+    opacity: 0;
+    transform: translateY(-10px);
 }
 
 /* Responsive */

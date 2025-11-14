@@ -6,7 +6,7 @@
                 <div class="flex justify-between items-center">
                     <div class="flex items-center gap-4">
                         <h1 class="text-3xl font-bold text-gray-900">
-                            <span class="border-b-4 border-yellow-400 pb-2">Création d'inventaire</span>
+                            <span class="border-b-4 border-primary pb-2">Création d'inventaire</span>
                         </h1>
                         <button
                             @click="showBusinessRules"
@@ -155,11 +155,9 @@ import AlertMessage from '@/components/AlertMessage.vue';
 import { Validators } from '@/utils/validators';
 
 const { state, headerFields, getFields, createInventory, updateInventory, loadInventory, resetForm, validateBusinessRules, validateComptage } = useInventoryCreation();
-const { fetchWarehouses } = useWarehouse();
 const { fetchAccounts } = useAccount();
 
 onMounted(() => {
-    fetchWarehouses();
     fetchAccounts();
 });
 

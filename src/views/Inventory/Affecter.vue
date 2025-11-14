@@ -1,44 +1,45 @@
 <template>
-    <div class="container mx-auto p-4">
-        <!-- Header avec titre et statistiques -->
-        <div class="page-header">
-            <div class="header-content">
-                <div class="header-left">
-                    <h1 class="page-title">
-                        <IconCalendar class="title-icon" />
+    <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 dark:from-slate-900 dark:to-slate-800 p-8">
+        <!-- Header -->
+        <div class="bg-white dark:bg-slate-800 rounded-3xl p-8 mb-8 shadow-lg border border-slate-200 dark:border-slate-700">
+            <div class="flex justify-between items-center gap-8">
+                <div class="flex-1">
+                    <h1 class="flex items-center gap-4 text-4xl font-extrabold text-slate-900 dark:text-slate-100 m-0 mb-2">
+                        <IconCalendar class="w-10 h-10 text-primary" />
                         Gestion des Affectations
                     </h1>
                 </div>
-                <div class="navigation-buttons">
-                    <button class="nav-btn detail-btn flex items-center gap-2" @click="handleGoToInventoryDetail">
+                <div class="flex gap-4 mb-4">
+                    <button
+                        @click="handleGoToInventoryDetail"
+                        class="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold cursor-pointer transition-all duration-300 whitespace-nowrap bg-gradient-to-r from-primary to-primary-light text-white shadow-lg hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none">
                         <IconEye class="w-4 h-4 text-white" />
                     </button>
-                    <button class="nav-btn affectation-btn flex items-center gap-2" @click="handleGoToAffectation">
+                    <button
+                        @click="handleGoToAffectation"
+                        class="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold cursor-pointer transition-all duration-300 whitespace-nowrap bg-gradient-to-r from-primary to-primary-light text-white shadow-lg hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none">
                         <IconCalendar class="w-4 h-4 text-white" />
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- DataTableNew avec édition par cellule activée -->
-
-
-        <!-- Barre d'actions fusionnée -->
-        <div class="mb-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
-            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <!-- Barre d'actions -->
+        <div class="mb-6 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                 <!-- Informations de sélection et statut -->
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-4 flex-wrap">
                     <div class="flex items-center gap-2">
-                        <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-5 h-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">
                             {{ selectedRows.length }} job{{ selectedRows.length > 1 ? 's' : '' }} sélectionné{{ selectedRows.length > 1 ? 's' : '' }}
                         </span>
                     </div>
                     <div v-if="hasUnsavedChanges" class="flex items-center gap-2">
-                        <div class="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                        <span class="text-sm text-yellow-700 dark:text-yellow-300 font-medium">
+                        <div class="w-2 h-2 bg-warning rounded-full animate-pulse"></div>
+                        <span class="text-sm text-warning-700 dark:text-warning-300 font-medium">
                             {{ Array.from(pendingChanges.values()).reduce((total, changes) => total + changes.size, 0) }} modification{{ Array.from(pendingChanges.values()).reduce((total, changes) => total + changes.size, 0) > 1 ? 's' : '' }} en attente
                         </span>
                     </div>
@@ -54,9 +55,13 @@
                 <div class="flex flex-col sm:flex-row gap-3">
                     <!-- Dropdown pour les affectations -->
                     <div class="relative" ref="dropdownRef">
-                        <button @click="toggleDropdown" @keydown.down.prevent="focusFirstItem"
+                        <button
+                            @click="toggleDropdown"
+                            @keydown.down.prevent="focusFirstItem"
                             class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                            aria-haspopup="true" :aria-expanded="showDropdown" type="button">
+                            aria-haspopup="true"
+                            :aria-expanded="showDropdown"
+                            type="button">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-2.025m13.5-8.5a2.121 2.121 0 00-3-3L7 9l2.025 2.025M13.5 21V9l-6-6" />
                             </svg>
@@ -65,16 +70,22 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                             </svg>
                         </button>
-                        <transition name="dropdown" appear>
-                            <ul v-if="showDropdown"
-                                class="absolute right-0 z-50 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl focus:outline-none max-h-60 overflow-y-auto py-2"
-                                role="menu" tabindex="-1" @keydown.esc="closeDropdown"
-                                @keydown.down.prevent="focusNextItem" @keydown.up.prevent="focusPrevItem">
+                        <Transition name="dropdown" appear>
+                            <ul
+                                v-if="showDropdown"
+                                class="absolute right-0 z-50 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl focus:outline-none max-h-60 overflow-y-auto py-2"
+                                role="menu"
+                                tabindex="-1"
+                                @keydown.esc="closeDropdown"
+                                @keydown.down.prevent="focusNextItem"
+                                @keydown.up.prevent="focusPrevItem">
                                 <li v-for="(item, idx) in dropdownItems" :key="item.label">
-                                    <button ref="el => setDropdownItemRef(el, idx)"
+                                    <button
+                                        ref="el => setDropdownItemRef(el, idx)"
                                         class="w-full flex items-center gap-3 text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 focus:bg-blue-100 dark:focus:bg-blue-900/30 transition-colors duration-150 rounded-lg mx-2"
                                         @click="item.action(); closeDropdown()"
-                                        @keydown.enter.prevent="item.action(); closeDropdown()" role="menuitem">
+                                        @keydown.enter.prevent="item.action(); closeDropdown()"
+                                        role="menuitem">
                                         <span class="w-6 h-6 flex items-center justify-center rounded-lg" :class="{
                                             'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400': item.icon === 'premier',
                                             'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400': item.icon === 'deuxieme',
@@ -90,22 +101,22 @@
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 11l6 6M3 21h6v-6H3v6zm0 0l9-9a2.828 2.828 0 114 4l-9 9H3v-4.586z" />
                                             </svg>
                                         </span>
-                                        <span class="font-medium text-gray-900 dark:text-white">{{ item.label }}</span>
+                                        <span class="font-medium text-slate-900 dark:text-white">{{ item.label }}</span>
                                     </button>
-                                    <div v-if="idx < dropdownItems.length - 1" class="border-b border-gray-100 dark:border-gray-700 mx-4 my-1"></div>
+                                    <div v-if="idx < dropdownItems.length - 1" class="border-b border-slate-100 dark:border-slate-700 mx-4 my-1"></div>
                                 </li>
                             </ul>
-                        </transition>
+                        </Transition>
                     </div>
 
-
-
                     <!-- Bouton Sauvegarder -->
-                    <button @click="saveAllChanges" :disabled="!hasUnsavedChanges"
+                    <button
+                        @click="saveAllChanges"
+                        :disabled="!hasUnsavedChanges"
                         class="flex items-center justify-center gap-2 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2"
                         :class="hasUnsavedChanges
                             ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-md hover:shadow-lg focus:ring-green-500'
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'">
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                         </svg>
@@ -116,16 +127,20 @@
                     </button>
 
                     <!-- Bouton Pret -->
-                    <button v-if="showReadyButton" @click="handleReadyClick"
-                        class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#FECD1C] to-[#fec31c] hover:from-[#fec31c] hover:to-[#feb91c] text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#FECD1C] focus:ring-offset-2">
+                    <button
+                        v-if="showReadyButton"
+                        @click="handleReadyClick"
+                        class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary to-primary-light hover:from-primary-light hover:to-primary-dark text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <span>Pret</span>
                     </button>
 
-                    <!-- Bouton Transférer - affiché seulement si statut EN REALISATION -->
-                    <button v-if="showTransferButton" @click="handleTransferClick"
+                    <!-- Bouton Transférer -->
+                    <button
+                        v-if="showTransferButton"
+                        @click="handleTransferClick"
                         class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
@@ -134,7 +149,8 @@
                     </button>
 
                     <!-- Bouton Annuler -->
-                    <button @click="handleResetClick"
+                    <button
+                        @click="handleResetClick"
                         class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -144,63 +160,88 @@
                 </div>
             </div>
         </div>
-        <div
-            class="panel datatable bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <DataTable ref="dataTableRef" :columns="columns" :rowDataProp="displayData" :actions="[]"
-                :pagination="true" :enableFiltering="true" :rowSelection="true" :inlineEditing="true"
-                :serverSidePagination="true" :serverSideFiltering="true" :serverSideSorting="true" :debounceFilter="500"
-                :loading="loading" @selection-changed="onSelectionChanged" @row-clicked="onRowClicked"
-                @cell-value-changed="onCellValueChanged" @pagination-changed="handlePaginationChanged"
-                @sort-changed="handleSortChanged" @filter-changed="handleFilterChanged"
-                @global-search-changed="handleGlobalSearchChanged" storageKey="affecter_table"
+
+        <!-- DataTable -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <DataTable
+                ref="dataTableRef"
+                :columns="columns"
+                :rowDataProp="displayData"
+                :actions="[]"
+                :pagination="true"
+                :enableFiltering="true"
+                :rowSelection="true"
+                :inlineEditing="true"
+                :serverSidePagination="true"
+                :serverSideFiltering="true"
+                :serverSideSorting="true"
+                :debounceFilter="500"
+                :loading="loading"
+                @selection-changed="onSelectionChanged"
+                @row-clicked="onRowClicked"
+                @cell-value-changed="onCellValueChanged"
+                @pagination-changed="handlePaginationChanged"
+                @sort-changed="handleSortChanged"
+                @filter-changed="handleFilterChanged"
+                @global-search-changed="handleGlobalSearchChanged"
+                storageKey="affecter_table"
                 :exportTitle="'Affecter_Jobs'" />
         </div>
 
-        <!-- Modals avec styles améliorés -->
-        <Modal v-model="showTeamModal" :title="modalTitle" class="modern-modal">
+        <!-- Modals -->
+        <Modal v-model="showTeamModal" :title="modalTitle">
             <div class="mt-4">
-                <FormBuilder v-model="teamForm" :fields="teamFields" @submit="handleTeamSubmit"
+                <FormBuilder
+                    v-model="teamForm"
+                    :fields="teamFields"
+                    @submit="handleTeamSubmit"
                     submitLabel="Affecter" />
             </div>
         </Modal>
 
-        <Modal v-model="showResourceModal" title="Affecter Ressources" class="modern-modal">
+        <Modal v-model="showResourceModal" title="Affecter Ressources">
             <div class="mt-4">
-                <FormBuilder v-model="resourceForm" :fields="resourceFields" @submit="handleResourceSubmit"
-                    submitLabel="Affecter" :columns="1" />
+                <FormBuilder
+                    v-model="resourceForm"
+                    :fields="resourceFields"
+                    @submit="handleResourceSubmit"
+                    submitLabel="Affecter"
+                    :columns="1" />
             </div>
         </Modal>
 
-        <Modal v-model="showTransferModal" :title="`Transférer ${eligibleJobsForTransfer.length} Job(s)`" class="modern-modal" :size="'xl'">
+        <Modal v-model="showTransferModal" :title="`Transférer ${eligibleJobsForTransfer.length} Job(s)`" :size="'xl'">
             <div class="flex flex-col" style="height: 75vh; max-height: 75vh;">
                 <!-- Section 1: Header et alert -->
                 <div class="flex-shrink-0 mb-4">
                     <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-base font-semibold text-gray-700 dark:text-gray-300">
+                        <h3 class="text-base font-semibold text-slate-700 dark:text-slate-300">
                             Jobs éligibles au transfert
                         </h3>
                         <div class="flex items-center gap-2">
                             <span class="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 text-xs font-medium rounded-full">
                                 {{ eligibleJobsForTransfer.length }} éligible(s)
                             </span>
-                            <span v-if="selectedRows.length - eligibleJobsForTransfer.length > 0"
-                                class="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400 text-xs font-medium rounded-full">
+                            <span
+                                v-if="selectedRows.length - eligibleJobsForTransfer.length > 0"
+                                class="px-3 py-1 bg-warning-100 dark:bg-warning-900/30 text-warning-800 dark:text-warning-400 text-xs font-medium rounded-full">
                                 {{ selectedRows.length - eligibleJobsForTransfer.length }} exclu(s)
                             </span>
                         </div>
                     </div>
                     <!-- Alert pour les jobs exclus -->
-                    <div v-if="selectedRows.length - eligibleJobsForTransfer.length > 0"
-                        class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <div
+                        v-if="selectedRows.length - eligibleJobsForTransfer.length > 0"
+                        class="p-3 bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-800 rounded-lg">
                         <div class="flex items-start">
-                            <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-5 h-5 text-warning-600 dark:text-warning-400 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                             </svg>
                             <div class="flex-1">
-                                <p class="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+                                <p class="text-sm font-medium text-warning-800 dark:text-warning-300">
                                     {{ selectedRows.length - eligibleJobsForTransfer.length }} job(s) ne sont pas éligibles au transfert
                                 </p>
-                                <p class="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
+                                <p class="text-xs text-warning-700 dark:text-warning-400 mt-1">
                                     Seuls les jobs en statut PRET peuvent être transférés.
                                 </p>
                             </div>
@@ -208,18 +249,20 @@
                     </div>
                 </div>
 
-                <!-- Section 2: Liste des jobs avec hauteur limitée -->
+                <!-- Section 2: Liste des jobs -->
                 <div class="flex-1 min-h-0 mb-4">
-                    <div class="h-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <div class="h-full overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
                         <div class="h-full overflow-y-auto custom-scrollbar">
-                            <div class="divide-y divide-gray-200 dark:divide-gray-700">
-                                <div v-for="job in eligibleJobsForTransfer" :key="job.id"
-                                    class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                            <div class="divide-y divide-slate-200 dark:divide-slate-700">
+                                <div
+                                    v-for="job in eligibleJobsForTransfer"
+                                    :key="job.id"
+                                    class="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                                     <div class="flex items-center justify-between gap-4">
                                         <div class="flex-1 min-w-0">
-                                            <div class="font-medium text-gray-900 dark:text-white truncate">{{ job.job }}</div>
+                                            <div class="font-medium text-slate-900 dark:text-white truncate">{{ job.job }}</div>
                                             <div class="flex items-center gap-3 mt-1">
-                                                <span class="text-xs text-gray-500 dark:text-gray-400">
+                                                <span class="text-xs text-slate-500 dark:text-slate-400">
                                                     <svg class="w-3.5 h-3.5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -233,8 +276,8 @@
                                                 :class="{
                                                     'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400': job.status === 'AFFECTE',
                                                     'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400': job.status === 'VALIDE',
-                                                    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400': job.status === 'PRET',
-                                                    'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400': job.status === 'TRANSFERT'
+                                                    'bg-warning-100 text-warning-800 dark:bg-warning-900/30 dark:text-warning-400': job.status === 'PRET',
+                                                    'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400': job.status === 'TRANSFERT'
                                                 }">
                                                 {{ job.status }}
                                             </span>
@@ -247,48 +290,54 @@
                 </div>
 
                 <!-- Divider -->
-                <div class="border-t border-gray-200 dark:border-gray-700 my-4"></div>
+                <div class="border-t border-slate-200 dark:border-slate-700 my-4"></div>
 
                 <!-- Formulaire de sélection du comptage -->
                 <div class="flex-shrink-0 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 mb-4">
-                    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+                    <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2">
                         <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
                         </svg>
                         Sélectionner le(s) comptage(s) à transférer
                     </h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <label class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border-2 transition-all cursor-pointer hover:border-purple-300 dark:hover:border-purple-700"
-                            :class="transferForm.premierComptage ? 'border-purple-500 dark:border-purple-600' : 'border-gray-200 dark:border-gray-700'">
-                            <input type="checkbox" v-model="transferForm.premierComptage"
-                                class="w-5 h-5 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                        <label class="flex items-center p-3 bg-white dark:bg-slate-800 rounded-lg border-2 transition-all cursor-pointer hover:border-purple-300 dark:hover:border-purple-700"
+                            :class="transferForm.premierComptage ? 'border-purple-500 dark:border-purple-600' : 'border-slate-200 dark:border-slate-700'">
+                            <input
+                                type="checkbox"
+                                v-model="transferForm.premierComptage"
+                                class="w-5 h-5 text-purple-600 bg-slate-100 border-slate-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 focus:ring-2 dark:bg-slate-700 dark:border-slate-600">
                             <div class="ml-3 flex-1">
-                                <div class="text-sm font-medium text-gray-900 dark:text-white">1er Comptage</div>
-                                <div class="text-xs text-gray-500 dark:text-gray-400">Transfert du premier comptage</div>
+                                <div class="text-sm font-medium text-slate-900 dark:text-white">1er Comptage</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">Transfert du premier comptage</div>
                             </div>
                         </label>
-                        <label class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border-2 transition-all cursor-pointer hover:border-purple-300 dark:hover:border-purple-700"
-                            :class="transferForm.deuxiemeComptage ? 'border-purple-500 dark:border-purple-600' : 'border-gray-200 dark:border-gray-700'">
-                            <input type="checkbox" v-model="transferForm.deuxiemeComptage"
-                                class="w-5 h-5 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                        <label class="flex items-center p-3 bg-white dark:bg-slate-800 rounded-lg border-2 transition-all cursor-pointer hover:border-purple-300 dark:hover:border-purple-700"
+                            :class="transferForm.deuxiemeComptage ? 'border-purple-500 dark:border-purple-600' : 'border-slate-200 dark:border-slate-700'">
+                            <input
+                                type="checkbox"
+                                v-model="transferForm.deuxiemeComptage"
+                                class="w-5 h-5 text-purple-600 bg-slate-100 border-slate-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 focus:ring-2 dark:bg-slate-700 dark:border-slate-600">
                             <div class="ml-3 flex-1">
-                                <div class="text-sm font-medium text-gray-900 dark:text-white">2e Comptage</div>
-                                <div class="text-xs text-gray-500 dark:text-gray-400">Transfert du deuxième comptage</div>
+                                <div class="text-sm font-medium text-slate-900 dark:text-white">2e Comptage</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">Transfert du deuxième comptage</div>
                             </div>
                         </label>
                     </div>
                 </div>
 
-                <!-- Boutons d'action avec sticky footer -->
-                <div class="flex-shrink-0 flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <button @click="showTransferModal = false"
-                        class="px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
+                <!-- Boutons d'action -->
+                <div class="flex-shrink-0 flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <button
+                        @click="showTransferModal = false"
+                        class="px-6 py-2.5 text-sm font-medium text-slate-700 bg-white border-2 border-slate-300 rounded-lg hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 dark:hover:bg-slate-700 transition-colors">
                         Annuler
                     </button>
-                    <button @click="handleTransferSubmit({
-                        premierComptage: transferForm.premierComptage,
-                        deuxiemeComptage: transferForm.deuxiemeComptage
-                    })"
+                    <button
+                        @click="handleTransferSubmit({
+                            premierComptage: transferForm.premierComptage,
+                            deuxiemeComptage: transferForm.deuxiemeComptage
+                        })"
                         :disabled="!transferForm.premierComptage && !transferForm.deuxiemeComptage"
                         class="px-6 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 disabled:cursor-not-allowed transform transition-all hover:scale-105 shadow-md hover:shadow-lg">
                         Transférer {{ eligibleJobsForTransfer.length }} Job(s)
@@ -299,25 +348,49 @@
     </div>
 </template>
 
-
 <script setup lang="ts">
-import { useRoute } from 'vue-router';
-import DataTable from '@/components/DataTable/DataTable.vue';
-import Modal from '@/components/Modal.vue';
-import FormBuilder from '@/components/Form/FormBuilder.vue';
-import { useAffecter } from '@/composables/useAffecter';
-import IconCalendar from '@/components/icon/icon-calendar.vue';
-import IconEye from '@/components/icon/icon-eye.vue';
+/**
+ * Vue Affecter - Gestion des affectations de jobs
+ *
+ * Cette vue permet de :
+ * - Visualiser les jobs validés avec pagination, tri et filtrage côté serveur
+ * - Affecter des équipes aux jobs (1er et 2e comptage)
+ * - Affecter des ressources aux jobs
+ * - Transférer des jobs entre comptages
+ * - Éditer inline les données dans le DataTable
+ *
+ * @component Affecter
+ */
 
-const route = useRoute();
+// ===== IMPORTS ROUTER =====
+import { useRoute } from 'vue-router'
 
-// Utilisation du composable migré avec la nouvelle signature
+// ===== IMPORTS COMPOSANTS =====
+import DataTable from '@/components/DataTable/DataTable.vue'
+import Modal from '@/components/Modal.vue'
+import FormBuilder from '@/components/Form/FormBuilder.vue'
+
+// ===== IMPORTS COMPOSABLES =====
+import { useAffecter } from '@/composables/useAffecter'
+
+// ===== IMPORTS ICÔNES =====
+import IconCalendar from '@/components/icon/icon-calendar.vue'
+import IconEye from '@/components/icon/icon-eye.vue'
+
+// ===== ROUTE =====
+const route = useRoute()
+
+// ===== COMPOSABLE =====
+/**
+ * Initialisation du composable useAffecter
+ * Gère toute la logique métier de la page
+ */
 const affecter = useAffecter({
     inventoryReference: route.params.reference as string,
     warehouseReference: route.params.warehouse as string
-});
+})
 
-// Destructuration des propriétés du composable
+// ===== DESTRUCTURATION =====
 const {
     displayData,
     selectedRows,
@@ -355,7 +428,6 @@ const {
     handleGoToInventoryDetail,
     handleGoToAffectation,
     handleTransferClick,
-    // Pagination et filtrage
     currentPage,
     totalPages,
     totalItems,
@@ -368,7 +440,6 @@ const {
     inventoryReference,
     warehouseReference,
     eligibleJobsForTransfer,
-    // Nouvelles propriétés pour DataTable
     columns,
     sessionOptions,
     resourceOptions,
@@ -376,10 +447,7 @@ const {
     showReadyButton,
     dateValueParser,
     dateValueSetter,
-} = affecter;
-
-// Toute la logique TypeScript a été migrée vers useAffecter.ts
-
+} = affecter
 </script>
 
 <style scoped>
@@ -389,7 +457,7 @@ const {
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: #f1f5f9;
     border-radius: 10px;
 }
 
@@ -430,127 +498,5 @@ const {
 .dropdown-leave-from {
     opacity: 1;
     transform: translateY(0) scale(1);
-}
-
-/* Styles pour les modals modernes */
-.modern-modal :deep(.modal-content) {
-    border-radius: 1rem;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-}
-
-.modern-modal :deep(.modal-header) {
-    border-bottom: 1px solid #e5e7eb;
-    padding: 1.5rem 1.5rem 1rem;
-}
-
-.modern-modal :deep(.modal-body) {
-    padding: 1rem 1.5rem 1.5rem;
-}
-
-.page-header {
-    background: #ffffff;
-    border-radius: 20px;
-    padding: 2rem;
-    margin-bottom: 2rem;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    border: 1px solid #e5e7eb;
-}
-
-.header-content {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 2rem;
-}
-
-.header-left {
-    flex: 1;
-}
-
-.page-title {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    font-size: 2.5rem;
-    font-weight: 800;
-    color: #1e293b;
-    margin: 0 0 0.5rem 0;
-}
-
-.title-icon {
-    width: 2.5rem;
-    height: 2.5rem;
-    color: #FACC15;
-}
-
-.navigation-buttons {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-.nav-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 12px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    white-space: nowrap;
-    background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
-    color: #1e293b;
-    box-shadow: 0 4px 12px rgba(250, 204, 21, 0.3);
-}
-
-.nav-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(250, 204, 21, 0.4);
-}
-
-.nav-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-}
-
-/* Animations pour les boutons */
-@keyframes pulse {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.5;
-    }
-}
-
-.animate-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Styles pour les gradients et ombres */
-.bg-gradient-to-r {
-    background-image: linear-gradient(to right, var(--tw-gradient-stops));
-}
-
-/* Responsive design amélioré */
-@media (max-width: 640px) {
-    .container {
-        padding: 1rem;
-    }
-
-    .flex-col {
-        flex-direction: column;
-    }
-
-    .gap-4 {
-        gap: 1rem;
-    }
 }
 </style>

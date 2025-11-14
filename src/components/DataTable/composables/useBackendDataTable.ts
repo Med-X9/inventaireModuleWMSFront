@@ -7,6 +7,7 @@
  */
 
 import { ref, computed, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import { DataTableService } from '@/components/DataTable/services/dataTableService';
 import { logger } from '@/services/loggerService';
 import API from '@/api';
@@ -171,12 +172,48 @@ export function useBackendDataTable<T = any>(
     // Configuration des colonnes
     const columns = ref<Array<{ field: string; searchable: boolean; orderable: boolean }>>([]);
 
+    // Utiliser storeToRefs pour garantir la réactivité avec Pinia
+    let storeRefs: any = null;
+    if (piniaStore) {
+        try {
+            storeRefs = storeToRefs(piniaStore);
+        } catch (e) {
+            // Si storeToRefs échoue, on utilisera l'accès direct
+            logger.warn('Impossible d\'utiliser storeToRefs, utilisation de l\'accès direct', e);
+        }
+    }
+
     // Computed pour récupérer les données depuis Pinia si disponible
     const piniaData = computed(() => {
         if (piniaStore) {
-            // Récupérer les données depuis le store Pinia
-            // Essayer d'abord la propriété de données (ex: jobs, locations, etc.)
-            const storeData = piniaStore[storeId || 'data'] || piniaStore.jobs || piniaStore.locations || piniaStore.inventories || [];
+            let storeData: any[] = [];
+            
+            // Essayer d'utiliser storeToRefs d'abord pour la réactivité
+            if (storeRefs) {
+                if (storeId === 'location' && storeRefs.locations) {
+                    storeData = storeRefs.locations.value || [];
+                } else if (storeId === 'job' && storeRefs.jobs) {
+                    storeData = storeRefs.jobs.value || [];
+                } else if (storeId === 'inventory' && storeRefs.inventories) {
+                    storeData = storeRefs.inventories.value || [];
+                }
+            }
+            
+            // Fallback: accès direct au store
+            if (storeData.length === 0) {
+                if (storeId === 'location') {
+                    storeData = piniaStore.locations || [];
+                } else if (storeId === 'job') {
+                    storeData = piniaStore.jobs || [];
+                } else if (storeId === 'inventory') {
+                    storeData = piniaStore.inventories || [];
+                } else {
+                    // Fallback: essayer toutes les propriétés possibles
+                    storeData = piniaStore[storeId || 'data'] || piniaStore.jobs || piniaStore.locations || piniaStore.inventories || [];
+                }
+            }
+            
+            // S'assurer que c'est un tableau et qu'il est réactif
             return Array.isArray(storeData) ? storeData : [];
         }
         return data.value;
@@ -355,6 +392,14 @@ export function useBackendDataTable<T = any>(
     const setPageSize = (size: number): void => {
         pageSizeRef.value = size;
         currentPage.value = 1;
+        
+        // Synchroniser avec le store Pinia si disponible
+        if (piniaStore && typeof piniaStore.setPageSize === 'function') {
+            piniaStore.setPageSize(size);
+        } else if (piniaStore && piniaStore.pageSize !== undefined) {
+            // Si le store a une propriété pageSize réactive, la mettre à jour
+            piniaStore.pageSize = size;
+        }
     };
 
     const setSearch = (query: string): void => {

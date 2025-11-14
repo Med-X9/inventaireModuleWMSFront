@@ -5,6 +5,7 @@ import type { FieldConfig } from '@/interfaces/form';
 import { useWarehouse } from '@/composables/useWarehouse';
 import { useAccount } from '@/composables/useAccount';
 import { useInventoryStore } from '@/stores/inventory';
+import { useWarehouseStore } from '@/stores/warehouse';
 import type { CreateInventoryRequest } from '@/models/Inventory';
 import { logger } from '@/services/loggerService';
 
@@ -89,6 +90,7 @@ export function useInventoryCreation() {
     const { warehouses, fetchWarehouses } = useWarehouse();
     const { accounts, fetchAccounts } = useAccount();
     const inventoryStore = useInventoryStore();
+    const warehouseStore = useWarehouseStore();
 
     // Options dynamiques
     const accountOptions = computed(() =>
@@ -829,8 +831,30 @@ export function useInventoryCreation() {
         return parsed;
     }
 
+    // Watcher pour charger les magasins quand un compte est sélectionné
+    watch(
+        () => state.header.compte,
+        async (newAccountId, oldAccountId) => {
+            // Si un compte est sélectionné, charger les magasins pour ce compte
+            if (newAccountId && newAccountId !== oldAccountId) {
+                const accountId = Number(newAccountId);
+                if (!isNaN(accountId)) {
+                    await fetchWarehouses(accountId);
+                    // Réinitialiser les magasins sélectionnés quand le compte change
+                    state.header.magasin = [];
+                }
+            } else if (!newAccountId) {
+                // Si aucun compte n'est sélectionné, vider la liste des magasins et les sélections
+                warehouseStore.warehouses = [];
+                state.header.magasin = [];
+            }
+        }
+    );
+
     onMounted(() => {
-        fetchWarehouses();
+        // S'assurer que les magasins sont vides par défaut
+        warehouseStore.warehouses = [];
+        state.header.magasin = [];
         fetchAccounts();
     });
 

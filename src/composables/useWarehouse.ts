@@ -7,8 +7,8 @@ export const useWarehouse = () => {
   const loading = computed(() => store.loading);
   const error = computed(() => store.error);
 
-  const fetchWarehouses = async () => {
-    await store.fetchWarehouses();
+  const fetchWarehouses = async (accountId?: number) => {
+    await store.fetchWarehouses(accountId);
   };
 
   return { warehouses, loading, error, fetchWarehouses };

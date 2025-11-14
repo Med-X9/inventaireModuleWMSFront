@@ -99,7 +99,7 @@ export function useDataTable(props: DataTableProps, emit: any) {
     const effectiveCurrentPage = ref(1)
     const effectiveTotalPages = ref(1)
     const effectiveTotalItems = ref(0)
-    const effectivePageSize = ref(10)
+    const effectivePageSize = ref(props.pageSizeProp || 10)
     const start = ref(1)
     const end = ref(10)
     const actions = computed(() => props.actions || [])
@@ -172,7 +172,7 @@ export function useDataTable(props: DataTableProps, emit: any) {
     }
 
     const deselectAll = () => {
-        selectedRows.value.clear()
+        selectedRows.value = new Set()
 
         // Émettre l'événement de changement de sélection vers le parent
         emit('selection-changed', new Set())
@@ -219,19 +219,43 @@ export function useDataTable(props: DataTableProps, emit: any) {
 
     // Initialisation immédiate
     initializeData()
+    
+    // S'assurer que les sélections sont vides à l'initialisation
+    selectedRows.value = new Set()
 
     // Watcher pour les changements de données
     watch([() => props.rowDataProp, () => props.totalItemsProp], ([newData, newTotalItems]) => {
+        // Pour la pagination côté serveur, ne pas modifier paginatedData
+        // Les données viennent directement du serveur via rowDataProp
+        if (props.serverSidePagination) {
+            // Mettre à jour seulement les totaux pour la pagination
+            effectiveTotalItems.value = newTotalItems ?? (Array.isArray(newData) ? newData.length : 0)
+            effectiveTotalPages.value = Math.ceil(effectiveTotalItems.value / effectivePageSize.value)
+            updatePaginationInfo()
+            return
+        }
+
+        // Pour la pagination côté client, mettre à jour paginatedData
         if (newData && Array.isArray(newData)) {
-            paginatedData.value = [...newData]
+            // Créer une nouvelle référence pour forcer la mise à jour
+            paginatedData.value = Array.isArray(newData) ? [...newData] : []
 
             // Utiliser totalItemsProp si disponible, sinon la longueur des données
-            effectiveTotalItems.value = newTotalItems ?? newData.length
+            effectiveTotalItems.value = newTotalItems ?? (Array.isArray(newData) ? newData.length : 0)
 
             effectiveTotalPages.value = Math.ceil(effectiveTotalItems.value / effectivePageSize.value)
             updatePaginationInfo()
+            
+            // S'assurer que les sélections restent vides lors du chargement de nouvelles données
+            // Ne pas sélectionner automatiquement toutes les lignes
+        } else if (!newData || (Array.isArray(newData) && newData.length === 0)) {
+            // Si les données sont vides, vider aussi paginatedData
+            paginatedData.value = []
+            effectiveTotalItems.value = newTotalItems ?? 0
+            effectiveTotalPages.value = Math.ceil(effectiveTotalItems.value / effectivePageSize.value)
+            updatePaginationInfo()
         }
-    }, { immediate: true, deep: true })
+    }, { immediate: true, deep: true, flush: 'post' })
 
     // Watcher pour les props de pagination côté serveur
     watch([() => props.currentPageProp, () => props.pageSizeProp], ([newPage, newPageSize]) => {

@@ -11,11 +11,16 @@ export const useWarehouseStore = defineStore('warehouse', () => {
     const loading = ref(false);
     const error = ref<string | null>(null);
 
-    const fetchWarehouses = async () => {
+    const fetchWarehouses = async (accountId?: number) => {
         loading.value = true;
         error.value = null;
         try {
-            const response = await WarehouseService.getAll();
+            let response;
+            if (accountId) {
+                response = await WarehouseService.getByAccountId(accountId);
+            } else {
+                response = await WarehouseService.getAll();
+            }
             warehouses.value = response.data.data || [];
         } catch (err: unknown) {
             error.value = err instanceof Error ? err.message : 'Erreur lors du chargement des entrepôts';

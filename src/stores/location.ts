@@ -140,6 +140,10 @@ export const useLocationStore = defineStore('location', () => {
                     : params?.draw || currentPage.value;
                 currentPage.value = Math.max(1, computedPage || 1);
 
+                // Utiliser recordsFiltered comme totalCount pour la pagination
+                totalCount.value = recordsFiltered;
+                totalPages.value = Math.max(1, Math.ceil(recordsFiltered / pageLength));
+
                 return processDataTableResponse(
                     {
                         draw: params?.draw || (payload as DataTableResponse<Location>).draw || 1,
@@ -154,7 +158,8 @@ export const useLocationStore = defineStore('location', () => {
                 );
             }
 
-            totalCount.value = recordsTotal;
+            // Utiliser recordsFiltered comme totalCount même si ce n'est pas un format DataTable
+            totalCount.value = recordsFiltered;
             totalPages.value = Math.max(1, Math.ceil(totalCount.value / (pageSize.value || 1)));
 
             if ((params as LocationQueryParams)?.page) {
