@@ -4,7 +4,7 @@
         Inclut le skeleton loader, la table principale, les contrôles d'en-tête
         et la gestion des actions par ligne
     -->
-    <div class="table-container">
+    <div class="table-container" :class="{ 'min-height-enabled': hasMinHeight }" :style="minHeightStyle">
         <!-- Skeleton loader pendant le chargement -->
         <div v-if="loading" class="table-skeleton">
             <!-- Header skeleton avec animation de shimmer -->
@@ -126,7 +126,7 @@
 
 
                                 <!-- Affichage normal -->
-                                <span v-else v-html="renderCell(row[col.field], col, row)"></span>
+                                <span v-else class="cell-content" v-html="renderCell(row[col.field], col, row)"></span>
                             </template>
                         </td>
                         <!-- Cellule des actions avec menu déroulant -->
@@ -190,7 +190,7 @@ import AdvancedEditableCell from './cells/AdvancedEditableCell.vue'
 import FilterDropdown from './filters/FilterDropdown.vue'
 import { cellRenderersService } from '@/services/cellRenderers'
 import { logger } from '@/services/loggerService'
-import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { ref, onMounted, computed, watch, nextTick, provide, toRef } from 'vue'
 import IconSortBoth from '../icon/icon-sort-both.vue'
 import IconSortAsc from '../icon/icon-sort-asc.vue'
 import IconSortDesc from '../icon/icon-sort-desc.vue'
@@ -238,6 +238,9 @@ const props = withDefaults(defineProps<Props>(), {
     paginatedData: () => []
 })
 
+// Fournir les données paginées pour les filtres (évite de passer via prop)
+// Utiliser computed pour maintenir la réactivité
+provide('tableData', computed(() => props.paginatedData))
 
 // ===== ÉTAT LOCAL =====
 
@@ -273,6 +276,30 @@ const selectAllState = ref<'all' | 'partial' | 'none'>('none')
 // États pour le tri et le filtrage (utiliser les props comme source de vérité)
 const currentSortField = computed(() => props.currentSortField)
 const currentSortDirection = computed(() => props.currentSortDirection)
+
+// Computed pour déterminer si on doit appliquer une hauteur minimale
+// Si moins de 10 lignes, on applique une hauteur minimale pour éviter le scroll lors de l'ouverture du filtre
+const hasMinHeight = computed(() => {
+    return props.paginatedData && props.paginatedData.length > 0 && props.paginatedData.length < 10
+})
+
+// Computed pour calculer la hauteur minimale
+// Hauteur = header (~50px) + 10 lignes (~50px chacune) + dropdown (~400px) + padding
+const minHeightStyle = computed(() => {
+    if (!hasMinHeight.value) {
+        return {}
+    }
+    // Calculer la hauteur minimale : header + 10 lignes + espace pour le dropdown
+    const headerHeight = 50 // Hauteur approximative du header
+    const rowHeight = 50 // Hauteur approximative d'une ligne
+    const dropdownHeight = 400 // Hauteur approximative du dropdown de filtre
+    const padding = 20 // Padding supplémentaire
+    const minHeight = headerHeight + (10 * rowHeight) + dropdownHeight + padding
+    
+    return {
+        minHeight: `${minHeight}px`
+    }
+})
 
 /**
  * Champ actuellement en cours de filtrage
@@ -885,6 +912,12 @@ watch(() => props.paginatedData, (newData, oldData) => {
     border: 1px solid #e9ecef;
     border-radius: 0.375rem;
     background-color: #ffffff;
+    transition: min-height 0.3s ease;
+}
+
+/* Hauteur minimale pour les petites tables pour améliorer l'UX des filtres */
+.table-container.min-height-enabled {
+    position: relative;
 }
 
 .dark .table-container {
@@ -896,6 +929,7 @@ watch(() => props.paginatedData, (newData, oldData) => {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.875rem;
+    table-layout: auto; /* Permet aux colonnes de s'adapter au contenu */
 }
 
 th,
@@ -903,6 +937,9 @@ td {
     padding: 0.75rem;
     border-bottom: 1px solid #f3f4f6;
     text-align: left;
+    white-space: nowrap; /* Empêche les retours à la ligne */
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .dark th,
@@ -919,6 +956,12 @@ th {
 .dark th {
     background-color: #2d3748;
     color: #f7fafc;
+}
+
+/* Permettre l'overflow visible pour les th qui contiennent des dropdowns */
+.column-header {
+    overflow: visible !important;
+    position: relative;
 }
 
 .no-data {
@@ -955,6 +998,10 @@ tbody tr:hover {
 /* Styles pour les cellules de données */
 .data-cell {
     position: relative;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 80px; /* Largeur minimale pour éviter les cellules trop petites */
 }
 
 .data-cell:hover {
@@ -963,6 +1010,22 @@ tbody tr:hover {
 
 .dark .data-cell:hover {
     background-color: #2d3748;
+}
+
+/* Contenu de la cellule avec adaptation au contenu */
+.cell-content {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+/* Exception pour les colonnes avec largeur définie explicitement */
+.data-cell[style*="width"],
+.data-cell[style*="min-width"] {
+    min-width: auto;
 }
 
 /* Skeleton styles avec animation de shimmer */
@@ -1089,6 +1152,10 @@ tbody tr:hover {
     font-weight: 600;
     color: #374151;
     flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .dark .header-title {
@@ -1186,8 +1253,9 @@ tbody tr:hover {
 /* Styles pour les filtres */
 .filter-dropdown-container {
     position: relative;
-    z-index: 1000;
+    z-index: 10000 !important;
     width: 100%;
+    overflow: visible !important;
 }
 
 .filter-dropdown {

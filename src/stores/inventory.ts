@@ -6,6 +6,7 @@ import type { InventoryDetail, InventoryDetailResponse } from '@/models/Inventor
 import type { AxiosResponse } from 'axios';
 import API from '@/api';
 import { PlanningManagementResponse } from '@/models/PlanningManagement';
+import { logger } from '@/services/loggerService';
 import {
     buildDataTableParams,
     processDataTableResponse,
@@ -19,6 +20,7 @@ export const useInventoryStore = defineStore('inventory', () => {
     const currentInventory = ref<InventoryTable | null>(null);
     const currentInventoryDetails = ref<InventoryDetails | null>(null);
     const currentInventoryDetail = ref<InventoryDetail | null>(null);
+    const planningManagementData = ref<any[]>([]);
     const loading = ref(false);
     const error = ref<string | null>(null);
 
@@ -311,13 +313,32 @@ export const useInventoryStore = defineStore('inventory', () => {
         }
     };
 
-    const fetchPlanningManagement = async (id: number) => {
+    const fetchPlanningManagement = async (id: number, params?: any) => {
         loading.value = true;
         error.value = null;
         try {
-            const response: AxiosResponse<PlanningManagementResponse> = await InventoryService.getPlanningManagement(id);
-            return response.data;
+            logger.debug('fetchPlanningManagement appelé', { id, params });
+            const response: AxiosResponse<PlanningManagementResponse> = await InventoryService.getPlanningManagement(id, params);
+            const responseData = response.data;
+
+            logger.debug('fetchPlanningManagement réponse reçue', {
+                dataCount: responseData.data?.length || 0,
+                warehousesCount: responseData.warehouses_count
+            });
+
+            // Stocker les données dans le store
+            planningManagementData.value = responseData.data || [];
+
+            // Adapter le format de réponse pour le DataTable
+            // PlanningManagementResponse a: { status, message, inventory_id, warehouses_count, data: WarehouseStats[] }
+            // On doit retourner: { data: T[], recordsTotal: number, recordsFiltered: number }
+            return {
+                data: responseData.data || [],
+                recordsTotal: responseData.warehouses_count || 0,
+                recordsFiltered: responseData.warehouses_count || 0
+            };
         } catch (err: any) {
+            logger.error('Erreur dans fetchPlanningManagement', err);
             error.value = err.response?.data?.message || 'Erreur lors de la récupération des statistiques de planning';
             throw err;
         } finally {
@@ -351,6 +372,7 @@ export const useInventoryStore = defineStore('inventory', () => {
         inventories,
         currentInventory,
         currentInventoryDetail,
+        planningManagementData,
         loading,
         error,
         totalItems,

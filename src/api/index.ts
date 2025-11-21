@@ -7,7 +7,7 @@ const API = {
         return axiosInstance;
     },
     endpoints: {
-        auth: { 
+        auth: {
             login: '/api/auth/login/',
             refresh: '/api/auth/login/refresh/',
             logout: '/api/auth/logout/',
@@ -23,7 +23,7 @@ const API = {
         usersmobile: {
             base: '/masterdata/api/users/mobile/'
         },
-        account: {
+        account: {  
             base: '/masterdata/api/accounts/'
         },
         job: {

@@ -305,7 +305,7 @@ export function usePlanning(options?: PlanningOptions) {
             headerName: 'Statut',
             field: 'status',
             sortable: true,
-            dataType: 'text' as ColumnDataType,
+            dataType: 'select' as ColumnDataType,
             filterable: true,
             width: 150,
             editable: false,
@@ -560,7 +560,11 @@ export function usePlanning(options?: PlanningOptions) {
                 const inventory = await inventoryStore.fetchInventoryByReference(inventoryReference)
                 inventoryId.value = inventory?.id ?? null
                 accountId.value = inventory?.account_id ?? null
-                logger.debug('IDs inventaire et compte résolus', { inventoryId: inventoryId.value, accountId: accountId.value })
+                logger.debug('IDs inventaire et compte résolus', {
+                    inventoryId: inventoryId.value,
+                    accountId: accountId.value,
+                    inventory: inventory ? { id: inventory.id, account_id: inventory.account_id } : null
+                })
             }
 
             // Résoudre l'entrepôt
@@ -575,7 +579,10 @@ export function usePlanning(options?: PlanningOptions) {
             }
 
             if (!accountId.value) {
-                logger.warn('ID de compte non résolu, certaines fonctionnalités peuvent être limitées')
+                logger.warn('ID de compte non résolu, le chargement des locations peut échouer', {
+                    inventoryId: inventoryId.value,
+                    inventoryReference
+                })
             }
 
             logger.debug('Résolution des IDs terminée avec succès', {
@@ -617,7 +624,11 @@ export function usePlanning(options?: PlanningOptions) {
      */
     const loadLocations = async (params?: LocationDataTableParams) => {
         if (!accountId.value || !inventoryId.value || !warehouseId.value) {
-            logger.warn('Impossible de charger les locations, IDs manquants')
+            logger.warn('Impossible de charger les locations, IDs manquants', {
+                accountId: accountId.value,
+                inventoryId: inventoryId.value,
+                warehouseId: warehouseId.value
+            })
             return
         }
 
@@ -636,6 +647,7 @@ export function usePlanning(options?: PlanningOptions) {
 
             logger.debug('Chargement des locations avec paramètres DataTable:', {
                 accountId: accountId.value,
+                inventoryId: inventoryId.value,
                 warehouseId: warehouseId.value,
                 pageSize: locationsPageSize.value,
                 params: finalParams
@@ -1118,11 +1130,34 @@ export function usePlanning(options?: PlanningOptions) {
             // Résoudre les IDs
             await resolveContextIds()
 
+            // Vérifier que tous les IDs sont résolus avant de charger les données
+            if (!inventoryId.value || !warehouseId.value) {
+                throw new Error(`IDs de contexte manquants après résolution - inventaire: ${inventoryId.value}, entrepôt: ${warehouseId.value}`)
+            }
+
+            if (!accountId.value) {
+                logger.warn('ID de compte non résolu, le chargement des locations peut échouer', {
+                    inventoryId: inventoryId.value,
+                    accountId: accountId.value
+                })
+            }
+
             // Charger les données initiales
+            logger.debug('Chargement des données initiales (jobs et locations)', {
+                inventoryId: inventoryId.value,
+                warehouseId: warehouseId.value,
+                accountId: accountId.value
+            })
             await refreshData()
 
             isInitialized.value = true
-            logger.debug('Initialisation du planning terminée avec succès')
+            logger.debug('Initialisation du planning terminée avec succès', {
+                inventoryId: inventoryId.value,
+                warehouseId: warehouseId.value,
+                accountId: accountId.value,
+                jobsCount: transformedJobs.value.length,
+                locationsCount: mappedLocations.value.length
+            })
         } catch (error) {
             logger.error('Erreur lors de l\'initialisation du planning', error)
             await alertService.error({ text: 'Erreur lors de l\'initialisation du planning' })

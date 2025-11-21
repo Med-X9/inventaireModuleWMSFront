@@ -11,6 +11,7 @@ export interface InventoryResult extends Record<string, any> {
   product?: string;
   final_result: number | null;
   resultats?: number | null;
+  ecart_id?: number | string; // ID de l'écart de comptage associé
 }
 
 export interface ResultAction {

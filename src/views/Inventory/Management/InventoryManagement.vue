@@ -11,7 +11,7 @@
                     <button @click="redirectToAdd"
                         class="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-medium text-sm bg-gradient-to-r from-primary to-primary-light text-white hover:from-primary-dark hover:to-primary transition-all duration-200 hover:-translate-y-0.5">
                         <i class="icon-plus"></i>
-                        Nouvel inventaire
+                        Nouveau inventaire
                     </button>
                 </div>
             </div>

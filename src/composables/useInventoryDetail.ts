@@ -102,17 +102,25 @@ export function useInventoryDetail(inventoryReference: string) {
         inventoryError.value = null
 
         try {
-            await inventoryStore.fetchInventories()
-            const inventory = inventoryStore.inventories.find(inv => inv.reference === reference)
+            logger.debug('Résolution de l\'ID de l\'inventaire par référence', { reference })
 
-            if (inventory) {
+            // Utiliser fetchInventoryByReference qui récupère directement l'inventaire par référence
+            // Cette méthode fait un appel API direct, plus fiable que de chercher dans la liste paginée
+            const inventory = await inventoryStore.fetchInventoryByReference(reference)
+
+            if (inventory && inventory.id) {
                 inventoryId.value = inventory.id
+                logger.debug('ID de l\'inventaire résolu avec succès', {
+                    reference,
+                    inventoryId: inventory.id
+                })
             } else {
                 inventoryError.value = `Aucun inventaire trouvé avec la référence: ${reference}`
+                logger.warn('Inventaire trouvé mais sans ID', { reference, inventory })
             }
         } catch (error) {
             inventoryError.value = 'Erreur lors de la récupération de l\'inventaire'
-            logger.error('Erreur lors de la récupération de l\'ID de l\'inventaire', error)
+            logger.error('Erreur lors de la récupération de l\'ID de l\'inventaire', { reference, error })
         } finally {
             inventoryLoading.value = false
         }

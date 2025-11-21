@@ -142,6 +142,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useInventoryCreation } from '@/composables/useInventoryCreation';
 import { inventoryCreationService } from '@/services/inventoryCreationService';
 import Wizard from '@/components/wizard/Wizard.vue';
@@ -154,6 +155,8 @@ import InventoryCreationRecap from './InventoryCreationRecap.vue';
 import AlertMessage from '@/components/AlertMessage.vue';
 import { Validators } from '@/utils/validators';
 
+const router = useRouter();
+
 const { state, headerFields, getFields, createInventory, updateInventory, loadInventory, resetForm, validateBusinessRules, validateComptage } = useInventoryCreation();
 const { fetchAccounts } = useAccount();
 
@@ -164,98 +167,160 @@ onMounted(() => {
 // Fonction pour afficher les règles métier
 function showBusinessRules() {
     Swal.fire({
-        title: '<div class="flex items-center gap-3"><span class="text-3xl">📋</span><span>Règles métier de comptage</span></div>',
+        title: '<div class="flex items-center gap-3"><span class="text-primary">Règles métier de comptage</span></div>',
         html: `
-            <div class="text-left space-y-8 text-base max-h-[70vh] overflow-y-auto">
+            <div class="text-left space-y-8 text-base overflow-y-auto max-h-[calc(100vh-200px)]">
                 <!-- Section Règles de comptage -->
-                <div class="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200 shadow-sm">
+                <div class="bg-primary/10 dark:bg-primary/20 p-6 rounded-xl border border-primary/20 dark:border-primary/30 shadow-sm">
                     <div class="flex items-center gap-3 mb-4">
-                        <div class="bg-green-100 p-2 rounded-lg">
-                            <span class="text-2xl">🔢</span>
+                        <div class="bg-primary/20 dark:bg-primary/30 p-2 rounded-lg">
+                            <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                            </svg>
                         </div>
-                        <h3 class="font-bold text-green-800 text-xl">Règles de comptage</h3>
+                        <h3 class="font-bold text-gray-900 dark:text-white text-xl">Règles de comptage</h3>
                     </div>
 
                     <div class="space-y-6">
                         <!-- Mode En vrac -->
-                        <div class="bg-white p-4 rounded-lg border border-green-100">
+                        <div class="bg-white dark:bg-dark-bg p-4 rounded-lg border border-primary/20 dark:border-primary/30">
                             <div class="flex items-center gap-2 mb-3">
-                                <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-                                <h4 class="font-semibold text-green-900 text-lg">Mode "En vrac"</h4>
+                                <div class="w-3 h-3 bg-primary rounded-full"></div>
+                                <h4 class="font-semibold text-gray-900 dark:text-white text-lg">Mode "En vrac"</h4>
                             </div>
-                            <div class="text-green-700 space-y-2">
+                            <div class="text-gray-700 dark:text-gray-300 space-y-2">
                                 <p class="flex items-start gap-2">
-                                    <span class="text-green-500 mt-1">•</span>
-                                    <span>La <strong>méthode de saisie</strong> (<span class="bg-green-100 px-2 py-1 rounded">Saisie manuelle</span> ou <span class="bg-green-100 px-2 py-1 rounded">Scanner</span>) est obligatoire.</span>
+                                    <span class="text-primary mt-1">•</span>
+                                    <span>La <strong>méthode de saisie</strong> (<span class="bg-primary/10 dark:bg-primary/20 px-2 py-1 rounded text-gray-900 dark:text-white">Saisie manuelle</span> ou <span class="bg-primary/10 dark:bg-primary/20 px-2 py-1 rounded text-gray-900 dark:text-white">Scanner</span>) est <strong>obligatoire</strong>.</span>
                                 </p>
                                 <p class="flex items-start gap-2">
-                                    <span class="text-green-500 mt-1">•</span>
-                                    <span>Vous pouvez activer la <strong>saisie de quantité</strong> ou le <strong>scanner unitaire</strong> selon vos besoins.</span>
+                                    <span class="text-primary mt-1">•</span>
+                                    <span>Options disponibles : <span class="bg-primary/10 dark:bg-primary/20 px-2 py-1 rounded text-gray-900 dark:text-white">Saisie de quantité</span>, <span class="bg-primary/10 dark:bg-primary/20 px-2 py-1 rounded text-gray-900 dark:text-white">Scanner unitaire</span>, <span class="bg-primary/10 dark:bg-primary/20 px-2 py-1 rounded text-gray-900 dark:text-white">Guide quantité</span>.</span>
                                 </p>
-                                <div class="mt-3 p-3 bg-green-50 rounded-lg">
-                                    <p class="text-sm font-medium text-green-800 mb-2">💡 Scénarios possibles :</p>
-                                    <ul class="text-sm text-green-700 space-y-1">
-                                        <li class="flex items-start gap-2">
-                                            <span class="text-green-500 mt-1">→</span>
-                                            <span>Choisir "Saisie manuelle" pour entrer les quantités à la main</span>
-                                        </li>
-                                        <li class="flex items-start gap-2">
-                                            <span class="text-green-500 mt-1">→</span>
-                                            <span>Choisir "Scanner" pour scanner les articles un par un</span>
-                                        </li>
-                                    </ul>
+                                <div class="mt-3 p-3 bg-info/10 dark:bg-info/20 rounded-lg border border-info/20 dark:border-info/30">
+                                    <p class="text-sm font-medium text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        Note importante :
+                                    </p>
+                                    <p class="text-sm text-gray-700 dark:text-gray-300">L'option <strong>Guide article</strong> n'est <strong>pas disponible</strong> pour le mode "En vrac".</p>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Mode Par article -->
-                        <div class="bg-white p-4 rounded-lg border border-green-100">
+                        <div class="bg-white dark:bg-dark-bg p-4 rounded-lg border border-primary/20 dark:border-primary/30">
                             <div class="flex items-center gap-2 mb-3">
-                                <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-                                <h4 class="font-semibold text-green-900 text-lg">Mode "Par article"</h4>
+                                <div class="w-3 h-3 bg-primary rounded-full"></div>
+                                <h4 class="font-semibold text-gray-900 dark:text-white text-lg">Mode "Par article"</h4>
                             </div>
-                            <div class="text-green-700 space-y-2">
+                            <div class="text-gray-700 dark:text-gray-300 space-y-2">
                                 <p class="flex items-start gap-2">
-                                    <span class="text-green-500 mt-1">•</span>
-                                    <span>Les options sont <strong>optionnelles</strong> parmi : <span class="bg-green-100 px-2 py-1 rounded">Numéro de série</span>, <span class="bg-green-100 px-2 py-1 rounded">Numéro de lot</span>, <span class="bg-green-100 px-2 py-1 rounded">DLC</span>, <span class="bg-green-100 px-2 py-1 rounded">Variante</span>.</span>
+                                    <span class="text-primary mt-1">•</span>
+                                    <span><strong>Toutes les options sont optionnelles</strong> (vous pouvez créer un comptage sans aucune option).</span>
                                 </p>
-                                <div class="mt-3 p-3 bg-green-50 rounded-lg">
-                                    <p class="text-sm font-medium text-green-800 mb-2">✅ Combinaisons valides :</p>
+                                <p class="flex items-start gap-2">
+                                    <span class="text-primary mt-1">•</span>
+                                    <span>Options disponibles : <span class="bg-primary/10 dark:bg-primary/20 px-2 py-1 rounded text-gray-900 dark:text-white">Numéro de série</span>, <span class="bg-primary/10 dark:bg-primary/20 px-2 py-1 rounded text-gray-900 dark:text-white">Numéro de lot</span>, <span class="bg-primary/10 dark:bg-primary/20 px-2 py-1 rounded text-gray-900 dark:text-white">DLC</span>, <span class="bg-primary/10 dark:bg-primary/20 px-2 py-1 rounded text-gray-900 dark:text-white">Variante</span>, <span class="bg-primary/10 dark:bg-primary/20 px-2 py-1 rounded text-gray-900 dark:text-white">Guide quantité</span>, <span class="bg-primary/10 dark:bg-primary/20 px-2 py-1 rounded text-gray-900 dark:text-white">Guide article</span>.</span>
+                                </p>
+                                <div class="mt-3 p-3 bg-success/10 dark:bg-success/20 rounded-lg border border-success/20 dark:border-success/30">
+                                    <p class="text-sm font-medium text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        Combinaisons valides (10 au total) :
+                                    </p>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                                        <div class="bg-white p-2 rounded border">
-                                            <p class="font-medium text-green-800">Simples :</p>
-                                            <p class="text-green-700">Numéro de série, Numéro de lot, DLC, Variante</p>
+                                        <div class="bg-white dark:bg-dark-bg p-2 rounded border border-primary/20 dark:border-primary/30">
+                                            <p class="font-medium text-gray-900 dark:text-white mb-1">Aucune option :</p>
+                                            <p class="text-gray-700 dark:text-gray-300 text-xs">(vide) ✓</p>
                                         </div>
-                                        <div class="bg-white p-2 rounded border">
-                                            <p class="font-medium text-green-800">Doubles :</p>
-                                            <p class="text-green-700">(Numéro de série + Variante), (Numéro de lot + DLC), etc.</p>
+                                        <div class="bg-white dark:bg-dark-bg p-2 rounded border border-primary/20 dark:border-primary/30">
+                                            <p class="font-medium text-gray-900 dark:text-white mb-1">Simples :</p>
+                                            <p class="text-gray-700 dark:text-gray-300 text-xs">Numéro de série, Numéro de lot, DLC, Variante</p>
                                         </div>
-                                        <div class="bg-white p-2 rounded border">
-                                            <p class="font-medium text-green-800">Triples :</p>
-                                            <p class="text-green-700">(Numéro de lot + DLC + Variante)</p>
+                                        <div class="bg-white dark:bg-dark-bg p-2 rounded border border-primary/20 dark:border-primary/30">
+                                            <p class="font-medium text-gray-900 dark:text-white mb-1">Doubles :</p>
+                                            <p class="text-gray-700 dark:text-gray-300 text-xs">(Numéro de série + Variante), (DLC + Numéro de lot), (DLC + Variante), (Numéro de lot + Variante)</p>
                                         </div>
-                                        <div class="bg-white p-2 rounded border">
-                                            <p class="font-medium text-green-800">Quadruples :</p>
-                                            <p class="text-green-700">(Numéro de série + Numéro de lot + DLC + Variante)</p>
+                                        <div class="bg-white dark:bg-dark-bg p-2 rounded border border-primary/20 dark:border-primary/30">
+                                            <p class="font-medium text-gray-900 dark:text-white mb-1">Triples :</p>
+                                            <p class="text-gray-700 dark:text-gray-300 text-xs">(DLC + Numéro de lot + Variante)</p>
                                         </div>
                                     </div>
-                                    <div class="mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
-                                        <p class="text-sm font-medium text-red-800 mb-2">⚠️ Règles importantes :</p>
-                                        <ul class="text-sm text-red-700 space-y-1">
+                                    <div class="mt-3 p-3 bg-error/10 dark:bg-error/20 rounded-lg border border-error/20 dark:border-error/30">
+                                        <p class="text-sm font-medium text-error-700 dark:text-error-300 mb-2 flex items-center gap-2">
+                                            <svg class="w-4 h-4 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                            </svg>
+                                            Règles d'exclusion :
+                                        </p>
+                                        <ul class="text-sm text-error-600 dark:text-error-400 space-y-1">
                                             <li class="flex items-start gap-2">
-                                                <span class="text-red-500 mt-1">•</span>
-                                                <span>Numéro de série ne peut être combiné qu'avec Variante</span>
+                                                <span class="text-error mt-1">•</span>
+                                                <span><strong>Numéro de série</strong> ne peut être combiné qu'avec <strong>Variante</strong></span>
                                             </li>
                                             <li class="flex items-start gap-2">
-                                                <span class="text-red-500 mt-1">•</span>
-                                                <span>Numéro de série et Numéro de lot ne peuvent pas coexister</span>
+                                                <span class="text-error mt-1">•</span>
+                                                <span><strong>Numéro de série</strong> et <strong>Numéro de lot</strong> ne peuvent pas coexister</span>
                                             </li>
                                             <li class="flex items-start gap-2">
-                                                <span class="text-red-500 mt-1">•</span>
-                                                <span>Numéro de série et DLC ne peuvent pas coexister</span>
+                                                <span class="text-error mt-1">•</span>
+                                                <span><strong>Numéro de série</strong> et <strong>DLC</strong> ne peuvent pas coexister</span>
                                             </li>
                                         </ul>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Mode Image de stock -->
+                        <div class="bg-white dark:bg-dark-bg p-4 rounded-lg border border-primary/20 dark:border-primary/30">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="w-3 h-3 bg-primary rounded-full"></div>
+                                <h4 class="font-semibold text-gray-900 dark:text-white text-lg">Mode "Image de stock"</h4>
+                            </div>
+                            <div class="text-gray-700 dark:text-gray-300 space-y-2">
+                                <p class="flex items-start gap-2">
+                                    <span class="text-primary mt-1">•</span>
+                                    <span>Aucune option disponible. Ce mode ne peut être utilisé qu'en <strong>1er comptage</strong>.</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section Combinaisons de modes -->
+                <div class="bg-primary/10 dark:bg-primary/20 p-6 rounded-xl border border-primary/20 dark:border-primary/30 shadow-sm">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="bg-primary/20 dark:bg-primary/30 p-2 rounded-lg">
+                            <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                        </div>
+                        <h3 class="font-bold text-gray-900 dark:text-white text-xl">Combinaisons de modes autorisées</h3>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="bg-white dark:bg-dark-bg p-4 rounded-lg border border-primary/20 dark:border-primary/30">
+                            <p class="text-gray-700 dark:text-gray-300 mb-3">Un inventaire doit contenir exactement <strong>3 comptages</strong>. Voici les combinaisons autorisées :</p>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex items-center gap-2 p-2 bg-primary/5 dark:bg-primary/10 rounded">
+                                    <span class="text-primary font-bold">1.</span>
+                                    <span class="text-gray-800 dark:text-gray-200"><strong>Image de stock</strong> → <strong>Par article</strong> → <strong>Par article</strong></span>
+                                </div>
+                                <div class="flex items-center gap-2 p-2 bg-primary/5 dark:bg-primary/10 rounded">
+                                    <span class="text-primary font-bold">2.</span>
+                                    <span class="text-gray-800 dark:text-gray-200"><strong>Image de stock</strong> → <strong>En vrac</strong> → <strong>En vrac</strong></span>
+                                </div>
+                                <div class="flex items-center gap-2 p-2 bg-primary/5 dark:bg-primary/10 rounded">
+                                    <span class="text-primary font-bold">3.</span>
+                                    <span class="text-gray-800 dark:text-gray-200"><strong>Par article</strong> → <strong>Par article</strong> → <strong>Par article</strong></span>
+                                </div>
+                                <div class="flex items-center gap-2 p-2 bg-primary/5 dark:bg-primary/10 rounded">
+                                    <span class="text-primary font-bold">4.</span>
+                                    <span class="text-gray-800 dark:text-gray-200"><strong>En vrac</strong> → <strong>En vrac</strong> → <strong>En vrac</strong></span>
                                 </div>
                             </div>
                         </div>
@@ -263,52 +328,74 @@ function showBusinessRules() {
                 </div>
 
                 <!-- Section Règles de validation -->
-                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200 shadow-sm">
+                <div class="bg-primary/10 dark:bg-primary/20 p-6 rounded-xl border border-primary/20 dark:border-primary/30 shadow-sm">
                     <div class="flex items-center gap-3 mb-4">
-                        <div class="bg-blue-100 p-2 rounded-lg">
-                            <span class="text-2xl">✅</span>
+                        <div class="bg-primary/20 dark:bg-primary/30 p-2 rounded-lg">
+                            <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
                         </div>
-                        <h3 class="font-bold text-blue-800 text-xl">Règles de validation</h3>
+                        <h3 class="font-bold text-gray-900 dark:text-white text-xl">Règles de validation</h3>
                     </div>
 
                     <div class="space-y-6">
                         <!-- Règles générales -->
-                        <div class="bg-white p-4 rounded-lg border border-blue-100">
+                        <div class="bg-white dark:bg-dark-bg p-4 rounded-lg border border-primary/20 dark:border-primary/30">
                             <div class="flex items-center gap-2 mb-3">
-                                <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
-                                <h4 class="font-semibold text-blue-900 text-lg">Règles générales</h4>
+                                <div class="w-3 h-3 bg-primary rounded-full"></div>
+                                <h4 class="font-semibold text-gray-900 dark:text-white text-lg">Règles générales</h4>
                             </div>
-                            <div class="text-blue-700 space-y-2">
+                            <div class="text-gray-700 dark:text-gray-300 space-y-2">
                                 <p class="flex items-start gap-2">
-                                    <span class="text-blue-500 mt-1">•</span>
+                                    <span class="text-primary mt-1">•</span>
                                     <span>Le <strong>1er comptage</strong> doit toujours avoir un mode défini.</span>
                                 </p>
                                 <p class="flex items-start gap-2">
-                                    <span class="text-blue-500 mt-1">•</span>
-                                    <span>Le <strong>2e comptage</strong> ne peut pas être "Image de stock".</span>
+                                    <span class="text-primary mt-1">•</span>
+                                    <span>Le <strong>2e comptage</strong> ne peut <strong>jamais</strong> être "Image de stock".</span>
                                 </p>
                                 <p class="flex items-start gap-2">
-                                    <span class="text-blue-500 mt-1">•</span>
-                                    <span>Le <strong>3e comptage</strong> doit correspondre au 1er OU au 2e comptage.</span>
+                                    <span class="text-primary mt-1">•</span>
+                                    <span>Le <strong>3e comptage</strong> doit avoir des <strong>options identiques</strong> au 1er <strong>OU</strong> au 2e comptage.</span>
                                 </p>
                             </div>
                         </div>
 
                         <!-- Règles spécifiques -->
-                        <div class="bg-white p-4 rounded-lg border border-blue-100">
+                        <div class="bg-white dark:bg-dark-bg p-4 rounded-lg border border-primary/20 dark:border-primary/30">
                             <div class="flex items-center gap-2 mb-3">
-                                <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
-                                <h4 class="font-semibold text-blue-900 text-lg">Règles spécifiques</h4>
+                                <div class="w-3 h-3 bg-primary rounded-full"></div>
+                                <h4 class="font-semibold text-gray-900 dark:text-white text-lg">Règles spécifiques</h4>
                             </div>
-                            <div class="text-blue-700 space-y-2">
+                            <div class="text-gray-700 dark:text-gray-300 space-y-2">
                                 <p class="flex items-start gap-2">
-                                    <span class="text-blue-500 mt-1">•</span>
-                                    <span>Si le 1er comptage est "Image de stock", le 3e doit correspondre au 2e.</span>
+                                    <span class="text-primary mt-1">•</span>
+                                    <span>Si le <strong>1er comptage</strong> est "Image de stock" :</span>
                                 </p>
-                                <p class="flex items-start gap-2">
-                                    <span class="text-blue-500 mt-1">•</span>
-                                    <span>Si le 1er comptage n'est pas "Image de stock", le 3e peut correspondre au 1er OU au 2e.</span>
+                                <ul class="ml-6 space-y-1 text-sm">
+                                    <li class="flex items-start gap-2">
+                                        <span class="text-primary mt-1">→</span>
+                                        <span>Le <strong>3e comptage</strong> doit correspondre au <strong>2e comptage</strong> (même mode et mêmes options).</span>
+                                    </li>
+                                    <li class="flex items-start gap-2">
+                                        <span class="text-primary mt-1">→</span>
+                                        <span>Les <strong>2e et 3e comptages</strong> doivent être identiques.</span>
+                                    </li>
+                                </ul>
+                                <p class="flex items-start gap-2 mt-3">
+                                    <span class="text-primary mt-1">•</span>
+                                    <span>Si le <strong>1er comptage</strong> n'est <strong>pas</strong> "Image de stock" :</span>
                                 </p>
+                                <ul class="ml-6 space-y-1 text-sm">
+                                    <li class="flex items-start gap-2">
+                                        <span class="text-primary mt-1">→</span>
+                                        <span>Le <strong>3e comptage</strong> peut correspondre au <strong>1er OU au 2e</strong> comptage (même mode et mêmes options).</span>
+                                    </li>
+                                    <li class="flex items-start gap-2">
+                                        <span class="text-primary mt-1">→</span>
+                                        <span>Si tous les comptages sont "Par article" ou "En vrac", les <strong>3 comptages</strong> doivent avoir des <strong>options identiques</strong>.</span>
+                                    </li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -316,17 +403,18 @@ function showBusinessRules() {
             </div>
         `,
         showConfirmButton: true,
-        showCancelButton: true,
+        showCancelButton: false,
         confirmButtonText: 'Compris',
-        confirmButtonColor: '#10b981',
-        width: '800px',
+        confirmButtonColor: '#4F46E5',
+        width: '95%',
+        heightAuto: false,
         customClass: {
-            popup: 'swal-custom-popup',
-            title: 'swal-custom-title',
-            htmlContainer: 'swal-custom-html',
-            confirmButton: 'swal-custom-confirm'
+            popup: '!max-w-[95vw] !w-[95vw] !max-h-[95vh] !m-[2.5vh_auto] !p-6',
+            title: '!text-2xl !font-bold !text-gray-900 !mb-6',
+            htmlContainer: '!max-h-[calc(95vh-200px)] !overflow-y-auto',
+            confirmButton: '!bg-primary !text-white !border-none !px-8 !py-3 !font-semibold !rounded-lg hover:!bg-primary-dark !transition-colors !duration-200'
         },
-        backdrop: 'rgba(0, 0, 0, 0.4)'
+        backdrop: 'rgba(0, 0, 0, 0.5)'
     });
 }
 
@@ -491,8 +579,10 @@ async function handleCreateInventory() {
         creationError.value = null; // Réinitialiser les erreurs
         wizardValidationError.value = null; // Réinitialiser les erreurs de validation
 
-        // Optionnel : rediriger vers la liste des inventaires
-        // router.push('/inventories');
+        // Rediriger vers la liste des inventaires après un court délai pour laisser voir le message
+        setTimeout(() => {
+            router.push({ name: 'inventory-list' });
+        }, 2000);
 
     } catch (error) {
         // Si c'est une erreur de validation métier, elle est déjà affichée
@@ -542,3 +632,4 @@ async function handleUpdateInventory(inventoryId: number | string) {
     border-color: #d1d5db;
 }
 </style>
+

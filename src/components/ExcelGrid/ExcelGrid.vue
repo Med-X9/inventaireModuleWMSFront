@@ -1,25 +1,27 @@
 <template>
-  <div class="excel-grid-container">
-    <!-- Header simple -->
-    <div class="excel-grid-header">
-      <h3>Grille de saisie</h3>
-      <div class="header-buttons">
-        <button @click="addRow" class="header-btn">+ Ligne</button>
-        <button @click="validateAll" class="header-btn">Valider</button>
-        <button @click="exportData" class="header-btn">Exporter</button>
-      </div>
-    </div>
-
+  <div class="w-full">
     <!-- Grille -->
-    <div class="excel-grid-wrapper" ref="gridWrapper">
-      <table class="excel-grid-table" @keydown="handleKeyNavigation">
+    <div class="border border-gray-300 rounded-b-lg overflow-auto max-h-[70vh] bg-white shadow-sm" ref="gridWrapper">
+      <table class="w-full border-collapse min-w-[800px] table-fixed" @keydown="handleKeyNavigation">
         <thead>
-          <tr>
-            <th class="excel-header-cell row-number">#</th>
-            <th class="excel-header-cell">Emplacement</th>
-            <th class="excel-header-cell">Article</th>
-            <th class="excel-header-cell">Quantité</th>
-            <th class="excel-header-cell">Actions</th>
+          <tr class="bg-gradient-to-b from-gray-50 to-gray-100">
+            <th class="border-r border-b border-gray-300 p-2 text-center font-semibold text-gray-800 sticky top-0 z-10 w-16 bg-gray-100 shadow-sm h-12 align-middle">
+              <span class="text-xs text-gray-600">#</span>
+            </th>
+            <th class="border-r border-b border-gray-300 p-2 text-left font-semibold text-gray-800 sticky top-0 z-10 bg-gray-100 shadow-sm h-12 align-middle" style="width: 30%;">
+              <div class="flex items-center gap-2">
+                <span class="text-sm">Emplacement</span>
+                <span v-if="loadingLocations" class="text-xs text-primary font-normal animate-pulse">(Chargement...)</span>
+              </div>
+            </th>
+            <th class="border-r border-b border-gray-300 p-2 text-left font-semibold text-gray-800 sticky top-0 z-10 bg-gray-100 shadow-sm h-12 align-middle" style="width: 30%;">
+              <div class="flex items-center gap-2">
+                <span class="text-sm">Article</span>
+                <span v-if="loadingArticles" class="text-xs text-primary font-normal animate-pulse">(Chargement...)</span>
+              </div>
+            </th>
+            <th class="border-r border-b border-gray-300 p-2 text-left font-semibold text-gray-800 sticky top-0 z-10 bg-gray-100 shadow-sm h-12 align-middle" style="width: 20%;">Quantité</th>
+            <th class="border-b border-gray-300 p-2 text-center font-semibold text-gray-800 sticky top-0 z-10 w-28 bg-gray-100 shadow-sm h-12 align-middle">Actions</th>
           </tr>
         </thead>
 
@@ -27,74 +29,130 @@
           <tr
             v-for="(row, rowIndex) in gridData"
             :key="row.id"
-            :class="{ 'row-selected': selectedCell.row === rowIndex }"
+            :class="[
+              'transition-all duration-150 border-b border-gray-200',
+              rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/50',
+              selectedCell.row === rowIndex && 'bg-blue-100 border-blue-300 shadow-sm',
+              'hover:bg-blue-50 hover:shadow-sm'
+            ]"
           >
-            <td class="excel-cell row-number">{{ rowIndex + 1 }}</td>
+            <td class="border-r border-gray-200 p-2 bg-gray-50 text-center font-medium text-gray-600 w-16 h-12 align-middle text-sm">
+              {{ rowIndex + 1 }}
+            </td>
 
             <!-- Emplacement -->
             <td
-              class="excel-cell"
-              :class="getCellClass(rowIndex, 0)"
+              class="border-r border-gray-200 p-2 relative h-12 transition-all duration-150 align-middle"
+              :class="[
+                selectedCell.row === rowIndex && selectedCell.col === 0 && 'ring-2 ring-primary ring-offset-1 bg-primary-50',
+                isEditing(rowIndex, 0) && 'ring-2 ring-success ring-offset-1 bg-success-50'
+              ]"
               @click="selectCell(rowIndex, 0)"
             >
-              <input
-                v-if="isEditing(rowIndex, 0)"
-                ref="cellInputs"
-                v-model="row.emplacement"
-                @blur="finishEdit"
-                @keydown="handleCellKeydown($event, rowIndex, 0)"
-                @input="validateCell(rowIndex, 'emplacement', ($event.target as HTMLInputElement)?.value)"
-                class="cell-input"
-                :class="{ 'invalid': row.errors.emplacement }"
-                placeholder="EMP-001"
-              />
+              <div v-if="isEditing(rowIndex, 0)" class="w-full h-full flex items-center">
+                <SelectField
+                  v-if="locationOptions && locationOptions.length > 0"
+                  :model-value="row.emplacement"
+                  :options="locationOptions"
+                  :searchable="true"
+                  :clearable="true"
+                  :loading="loadingLocations"
+                  placeholder="Sélectionner un emplacement"
+                  @update:model-value="(val) => handleEmplacementChange(rowIndex, val)"
+                  @blur="finishEdit"
+                  class="text-sm w-full"
+                  :class="{ 'border-error': row.errors.emplacement }"
+                />
+                <input
+                  v-else
+                  ref="cellInputs"
+                  v-model="row.emplacement"
+                  @blur="finishEdit"
+                  @keydown="handleCellKeydown($event, rowIndex, 0)"
+                  @input="validateCell(rowIndex, 'emplacement', ($event.target as HTMLInputElement)?.value)"
+                  class="w-full h-full border-none outline-none bg-transparent px-2 text-sm rounded focus:bg-white focus:ring-1 focus:ring-primary"
+                  :class="{ 'bg-error-50 text-error': row.errors.emplacement }"
+                  placeholder="EMP-001"
+                />
+              </div>
               <span
                 v-else
                 @dblclick="startEdit(rowIndex, 0)"
-                class="cell-display"
-                :class="{ 'invalid': row.errors.emplacement, 'empty': !row.emplacement }"
+                class="block w-full h-full px-2 cursor-pointer text-sm rounded transition-colors duration-150 flex items-center whitespace-nowrap overflow-hidden text-ellipsis"
+                :class="[
+                  !row.emplacement && 'text-gray-400 italic',
+                  row.errors.emplacement && 'text-error bg-error-50',
+                  !row.errors.emplacement && 'hover:bg-gray-100'
+                ]"
+                :title="getLocationLabel(row.emplacement) || 'Cliquez pour sélectionner'"
               >
-                {{ row.emplacement || 'Cliquez pour saisir' }}
+                {{ getLocationLabel(row.emplacement) || 'Cliquez pour sélectionner' }}
               </span>
-              <div v-if="row.errors.emplacement" class="cell-error">
-                {{ row.errors.emplacement }}
+              <div 
+                v-if="row.errors.emplacement" 
+                class="absolute top-full left-0 z-20 bg-error text-white text-xs p-2 rounded-md shadow-xl min-w-[180px] mt-1 border border-error-dark"
+              >
+                <div class="flex items-center gap-1">
+                  <span class="font-semibold">⚠</span>
+                  <span>{{ row.errors.emplacement }}</span>
+                </div>
               </div>
             </td>
 
             <!-- Article -->
             <td
-              class="excel-cell"
-              :class="getCellClass(rowIndex, 1)"
+              class="border-r border-gray-200 p-2 relative h-12 transition-all duration-150 align-middle"
+              :class="[
+                selectedCell.row === rowIndex && selectedCell.col === 1 && 'ring-2 ring-primary ring-offset-1 bg-primary-50',
+                isEditing(rowIndex, 1) && 'ring-2 ring-success ring-offset-1 bg-success-50'
+              ]"
               @click="selectCell(rowIndex, 1)"
             >
-              <input
-                v-if="isEditing(rowIndex, 1)"
-                ref="cellInputs"
-                v-model="row.article"
-                @blur="finishEdit"
-                @keydown="handleCellKeydown($event, rowIndex, 1)"
-                @input="validateCell(rowIndex, 'article', ($event.target as HTMLInputElement)?.value)"
-                class="cell-input"
-                :class="{ 'invalid': row.errors.article }"
-                placeholder="ART-001"
-              />
+              <div v-if="isEditing(rowIndex, 1)" class="w-full h-full flex items-center">
+                <SelectField
+                  :model-value="row.article"
+                  :options="articleOptions"
+                  :searchable="true"
+                  :clearable="true"
+                  :loading="loadingArticles"
+                  placeholder="Rechercher un article"
+                  @update:model-value="(val) => handleArticleChange(rowIndex, val)"
+                  @blur="finishEdit"
+                  class="text-sm w-full"
+                  :class="{ 'border-error': row.errors.article }"
+                />
+              </div>
               <span
                 v-else
                 @dblclick="startEdit(rowIndex, 1)"
-                class="cell-display"
-                :class="{ 'invalid': row.errors.article, 'empty': !row.article }"
+                class="block w-full h-full px-2 cursor-pointer text-sm rounded transition-colors duration-150 flex items-center whitespace-nowrap overflow-hidden text-ellipsis"
+                :class="[
+                  !row.article && 'text-gray-400 italic',
+                  row.errors.article && 'text-error bg-error-50',
+                  !row.errors.article && 'hover:bg-gray-100'
+                ]"
+                :title="getArticleLabel(row.article) || 'Cliquez pour rechercher'"
               >
-                {{ row.article || 'Cliquez pour saisir' }}
+                {{ getArticleLabel(row.article) || 'Cliquez pour rechercher' }}
               </span>
-              <div v-if="row.errors.article" class="cell-error">
-                {{ row.errors.article }}
+              <div 
+                v-if="row.errors.article" 
+                class="absolute top-full left-0 z-20 bg-error text-white text-xs p-2 rounded-md shadow-xl min-w-[180px] mt-1 border border-error-dark"
+              >
+                <div class="flex items-center gap-1">
+                  <span class="font-semibold">⚠</span>
+                  <span>{{ row.errors.article }}</span>
+                </div>
               </div>
             </td>
 
             <!-- Quantité -->
             <td
-              class="excel-cell"
-              :class="getCellClass(rowIndex, 2)"
+              class="border-r border-gray-200 p-2 relative h-12 transition-all duration-150 align-middle"
+              :class="[
+                selectedCell.row === rowIndex && selectedCell.col === 2 && 'ring-2 ring-primary ring-offset-1 bg-primary-50',
+                isEditing(rowIndex, 2) && 'ring-2 ring-success ring-offset-1 bg-success-50'
+              ]"
               @click="selectCell(rowIndex, 2)"
             >
               <input
@@ -104,8 +162,8 @@
                 @blur="finishEdit"
                 @keydown="handleCellKeydown($event, rowIndex, 2)"
                 @input="validateCell(rowIndex, 'quantite', ($event.target as HTMLInputElement)?.value)"
-                class="cell-input"
-                :class="{ 'invalid': row.errors.quantite }"
+                class="w-full h-full border-none outline-none bg-transparent px-2 text-sm rounded focus:bg-white focus:ring-1 focus:ring-primary text-right font-medium"
+                :class="{ 'bg-error-50 text-error': row.errors.quantite }"
                 type="number"
                 min="0"
                 step="1"
@@ -114,37 +172,43 @@
               <span
                 v-else
                 @dblclick="startEdit(rowIndex, 2)"
-                class="cell-display"
-                :class="{ 'invalid': row.errors.quantite, 'empty': row.quantite === null || row.quantite === undefined }"
+                class="block w-full h-full px-2 cursor-pointer text-sm rounded transition-colors duration-150 text-right font-medium flex items-center justify-end whitespace-nowrap"
+                :class="[
+                  (row.quantite === null || row.quantite === undefined) && 'text-gray-400 italic',
+                  row.errors.quantite && 'text-error bg-error-50',
+                  !row.errors.quantite && row.quantite !== null && row.quantite !== undefined && 'text-gray-900',
+                  !row.errors.quantite && 'hover:bg-gray-100'
+                ]"
               >
                 {{ row.quantite ?? 'Cliquez pour saisir' }}
               </span>
-              <div v-if="row.errors.quantite" class="cell-error">
-                {{ row.errors.quantite }}
+              <div 
+                v-if="row.errors.quantite" 
+                class="absolute top-full left-0 z-20 bg-error text-white text-xs p-2 rounded-md shadow-xl min-w-[180px] mt-1 border border-error-dark"
+              >
+                <div class="flex items-center gap-1">
+                  <span class="font-semibold">⚠</span>
+                  <span>{{ row.errors.quantite }}</span>
+                </div>
               </div>
             </td>
 
             <!-- Actions -->
-            <td class="excel-cell actions-cell">
-              <div class="actions">
-                <button
-                  @click="validateRow(rowIndex)"
-                  class="action-btn validate"
-                  :disabled="!isRowValid(rowIndex)"
-                >
-                  ✓
-                </button>
+            <td class="border-gray-200 p-2 w-28 h-12 align-middle">
+              <div class="flex justify-center gap-1.5 items-center h-full">
                 <button
                   @click="duplicateRow(rowIndex)"
-                  class="action-btn duplicate"
+                  class="p-1.5 bg-primary hover:bg-primary-dark text-white rounded-md transition-all duration-200 flex items-center justify-center shadow-sm hover:shadow-md hover:scale-105"
+                  title="Dupliquer la ligne"
                 >
-                  ⧉
+                  <IconCopy class="w-4 h-4" />
                 </button>
                 <button
                   @click="deleteRow(rowIndex)"
-                  class="action-btn delete"
+                  class="p-1.5 bg-error hover:bg-error-dark text-white rounded-md transition-all duration-200 flex items-center justify-center shadow-sm hover:shadow-md hover:scale-105"
+                  title="Supprimer la ligne"
                 >
-                  ✕
+                  <IconTrash class="w-4 h-4" />
                 </button>
               </div>
             </td>
@@ -153,25 +217,34 @@
       </table>
     </div>
 
-    <!-- Footer simple -->
-    <div class="excel-grid-footer">
-      <span>{{ gridData.length }} lignes</span>
-      <span>{{ validRowsCount }} valides</span>
-      <span>{{ invalidRowsCount }} erreurs</span>
-      <span>Total: {{ totalQuantity }}</span>
+    <!-- Footer -->
+    <div class="flex justify-around items-center p-3 bg-gradient-to-b from-gray-50 to-gray-100 border-t border-gray-300 rounded-b-lg text-sm">
+      <div class="flex items-center gap-2">
+        <span class="text-gray-600">Lignes:</span>
+        <span class="font-semibold text-gray-900">{{ gridData.length }}</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-gray-600">Valides:</span>
+        <span class="font-semibold text-success">{{ validRowsCount }}</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-gray-600">Erreurs:</span>
+        <span class="font-semibold text-error">{{ invalidRowsCount }}</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-gray-600">Total:</span>
+        <span class="font-semibold text-primary">{{ totalQuantity }}</span>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, nextTick, watch } from 'vue'
-import IconPlus from '@/components/icon/icon-plus.vue'
-import IconCheck from '@/components/icon/icon-check.vue'
-import IconDownload from '@/components/icon/icon-download.vue'
+import SelectField from '@/components/Form/SelectField.vue'
 import IconCopy from '@/components/icon/icon-copy.vue'
 import IconTrash from '@/components/icon/icon-trash.vue'
-import IconBox from '@/components/icon/icon-box.vue'
-import IconInfoCircle from '@/components/icon/icon-info-circle.vue'
+import type { SelectOption } from '@/interfaces/form'
 
 // Types
 interface GridRow {
@@ -196,16 +269,23 @@ interface CellPosition {
 interface Props {
   initialData?: Partial<GridRow>[]
   readonly?: boolean
+  locationOptions?: SelectOption[]
+  articleOptions?: SelectOption[]
+  loadingLocations?: boolean
+  loadingArticles?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   initialData: () => [],
-  readonly: false
+  readonly: false,
+  locationOptions: () => [],
+  articleOptions: () => [],
+  loadingLocations: false,
+  loadingArticles: false
 })
 
 // Emits
 const emit = defineEmits<{
-  'row-validated': [row: GridRow]
   'data-changed': [data: GridRow[]]
   'export-requested': [data: GridRow[]]
 }>()
@@ -323,17 +403,8 @@ const finishEdit = () => {
 }
 
 const getCellClass = (row: number, col: number): string => {
-  const classes: string[] = []
-
-  if (selectedCell.row === row && selectedCell.col === col) {
-    classes.push('selected')
-  }
-
-  if (isEditing(row, col)) {
-    classes.push('editing')
-  }
-
-  return classes.join(' ')
+  // Les classes sont maintenant gérées directement dans le template avec Tailwind
+  return ''
 }
 
 // Navigation au clavier
@@ -490,11 +561,37 @@ const duplicateRow = (index: number) => {
   emit('data-changed', gridData.value)
 }
 
-const validateRow = (index: number) => {
-  const row = gridData.value[index]
-  if (isRowValid(index)) {
-    emit('row-validated', row)
+
+// Gestion des changements pour emplacement et article
+const handleEmplacementChange = (rowIndex: number, value: string | number | null) => {
+  const row = gridData.value[rowIndex]
+  if (row) {
+    row.emplacement = value ? String(value) : ''
+    validateCell(rowIndex, 'emplacement', row.emplacement)
+    emit('data-changed', gridData.value)
   }
+}
+
+const handleArticleChange = (rowIndex: number, value: string | number | null) => {
+  const row = gridData.value[rowIndex]
+  if (row) {
+    row.article = value ? String(value) : ''
+    validateCell(rowIndex, 'article', row.article)
+    emit('data-changed', gridData.value)
+  }
+}
+
+// Obtenir le label pour affichage
+const getLocationLabel = (value: string | null | undefined): string => {
+  if (!value) return ''
+  const option = props.locationOptions?.find(opt => opt.value === value || opt.value === String(value))
+  return option ? option.label : value
+}
+
+const getArticleLabel = (value: string | null | undefined): string => {
+  if (!value) return ''
+  const option = props.articleOptions?.find(opt => opt.value === value || opt.value === String(value))
+  return option ? option.label : value
 }
 
 const validateAll = () => {
@@ -541,243 +638,3 @@ defineExpose({
 })
 </script>
 
-<style scoped>
-.excel-grid-container {
-  width: 100%;
-}
-
-.excel-grid-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  background-color: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.excel-grid-header h3 {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.header-buttons {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.header-btn {
-  padding: 0.5rem 1rem;
-  border: 1px solid #FECD1C;
-  background-color: #FECD1C;
-  color: #1f2937;
-  border-radius: 0.375rem;
-  cursor: pointer;
-  font-size: 0.875rem;
-  transition: all 0.2s;
-}
-
-.header-btn:hover {
-  background-color: #f59e0b;
-}
-
-.excel-grid-wrapper {
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  overflow: auto;
-  max-height: 70vh;
-}
-
-.excel-grid-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 800px;
-}
-
-.excel-header-cell {
-  background-color: #f3f4f6;
-  border: 1px solid #d1d5db;
-  padding: 0.75rem;
-  text-align: left;
-  font-weight: 600;
-  color: #374151;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.excel-header-cell.row-number {
-  width: 60px;
-  text-align: center;
-  background-color: #f3f4f6;
-  color: #374151;
-}
-
-.excel-cell {
-  border: 1px solid #e5e7eb;
-  padding: 0.5rem;
-  position: relative;
-  min-height: 45px;
-  vertical-align: top;
-  background-color: white;
-}
-
-.excel-cell.row-number {
-  background-color: #f3f4f6;
-  text-align: center;
-  font-weight: 600;
-  color: #374151;
-  width: 60px;
-}
-
-.excel-cell.selected {
-  box-shadow: 0 0 0 2px #3b82f6;
-  background-color: #eff6ff;
-}
-
-.excel-cell.editing {
-  box-shadow: 0 0 0 2px #10b981;
-  background-color: #ecfdf5;
-}
-
-.cell-input {
-  width: 100%;
-  height: 100%;
-  border: none;
-  outline: none;
-  background: transparent;
-  padding: 0.25rem;
-  font-size: 0.875rem;
-}
-
-.cell-input.invalid {
-  background-color: #fef2f2;
-  color: #dc2626;
-}
-
-.cell-display {
-  display: block;
-  width: 100%;
-  height: 100%;
-  padding: 0.25rem;
-  cursor: pointer;
-  min-height: 24px;
-}
-
-.cell-display.empty {
-  color: #9ca3af;
-  font-style: italic;
-}
-
-.cell-display.invalid {
-  color: #dc2626;
-  background-color: #fef2f2;
-}
-
-.cell-error {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 20;
-  background-color: #dc2626;
-  color: white;
-  font-size: 0.75rem;
-  padding: 0.5rem;
-  border-radius: 0.25rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  min-width: 150px;
-}
-
-.actions-cell {
-  width: 120px;
-}
-
-.actions {
-  display: flex;
-  justify-content: center;
-  gap: 0.25rem;
-}
-
-.action-btn {
-  padding: 0.25rem 0.5rem;
-  border: 1px solid;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  font-size: 0.875rem;
-  background-color: white;
-}
-
-.action-btn.validate {
-  border: 1px solid #FECD1C;
-  background-color: #FECD1C;
-  color: #1f2937;
-}
-
-.action-btn.validate:hover {
-  background-color: #f59e0b;
-}
-
-.action-btn.validate:disabled {
-  border-color: #d1d5db;
-  background-color: #f3f4f6;
-  color: #9ca3af;
-  cursor: not-allowed;
-}
-
-.action-btn.duplicate {
-  border: 1px solid #FECD1C;
-  background-color: #FECD1C;
-  color: #1f2937;
-}
-
-.action-btn.duplicate:hover {
-  background-color: #f59e0b;
-}
-
-.action-btn.delete {
-  border-color: #dc2626;
-  color: #dc2626;
-}
-
-.action-btn.delete:hover {
-  background-color: #fef2f2;
-}
-
-.row-selected {
-  background-color: #f8fafc;
-}
-
-.excel-grid-footer {
-  display: flex;
-  justify-content: space-around;
-  padding: 0.75rem;
-  background-color: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  margin-top: 1rem;
-  font-size: 0.875rem;
-  color: #6b7280;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .excel-grid-header {
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .header-buttons {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .excel-grid-footer {
-    flex-direction: column;
-    gap: 0.5rem;
-    text-align: center;
-  }
-}
-</style>

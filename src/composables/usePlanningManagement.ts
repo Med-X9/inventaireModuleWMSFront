@@ -11,23 +11,25 @@
  */
 
 // ===== IMPORTS VUE =====
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 
 // ===== IMPORTS ROUTER =====
 import { useRouter } from 'vue-router'
 
 // ===== IMPORTS SERVICES =====
 import { logger } from '@/services/loggerService'
+import { alertService } from '@/services/alertService'
 
 // ===== IMPORTS STORES =====
 import { useInventoryStore } from '@/stores/inventory'
 import { useAppStore } from '@/stores'
 
 // ===== IMPORTS COMPOSABLES =====
-import { useGenericDataTable } from './useInventoryDataTable'
+import { useBackendDataTable } from '@/components/DataTable/composables/useBackendDataTable'
 
 // ===== IMPORTS UTILS =====
 import { type StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
+import type { LocationDataTableParams } from '@/services/LocationService'
 
 // ===== IMPORTS TYPES =====
 import type { Store, PlanningAction, ViewModeType } from '@/interfaces/planningManagement'
@@ -97,41 +99,61 @@ export function usePlanningManagement() {
         set: (mode: ViewModeType) => appStore.setViewMode(mode)
     })
 
-    // ===== DATATABLE GÉNÉRIQUE =====
+    /** Indicateur d'initialisation */
+    const isInitialized = ref(false)
+
+    // ===== INITIALISATION DES DATATABLES =====
 
     /**
-     * Initialisation du composable générique DataTable pour les magasins
-     * Utilise useGenericDataTable pour gérer la pagination, le tri et le filtrage
+     * DataTable pour le planning management
+     * Utilise useBackendDataTable pour l'intégration avec le store Pinia
      */
     const {
         data: planningData,
         loading,
-        handlePaginationChanged: _handlePaginationChanged,
-        handleSortChanged: _handleSortChanged,
-        handleFilterChanged: _handleFilterChanged,
-        handleSearchChanged: _handleSearchChanged,
-        refresh
-    } = useGenericDataTable<Store>({
-        store: inventoryStore,
-        fetchAction: 'fetchPlanningManagement',
-        defaultPageSize: 25,
-        additionalParams: computed(() => inventoryId.value ? { id: inventoryId.value } : {})
+        currentPage,
+        pageSize,
+        searchQuery,
+        sortModel,
+        filters,
+        setPage,
+        setPageSize,
+        setSearch,
+        setSortModel,
+        setFilters,
+        resetFilters,
+        refresh: _refreshPlanningDataTable,
+        pagination
+    } = useBackendDataTable<Store>('', {
+        piniaStore: inventoryStore,
+        storeId: 'inventory',
+        autoLoad: false,
+        pageSize: 25
     })
 
     // ===== COMPUTED PROPERTIES =====
 
     /**
      * Convertit les données du planning en Stores
+     * Récupère les données depuis le store Pinia (comme mappedLocations dans usePlanning.ts)
      */
     const stores = computed(() => {
-        const data = planningData.value || []
-        return data.map((item: any): Store => ({
-            id: item.warehouse_id || item.id,
-            store_name: item.warehouse_name || item.store_name,
-            teams_count: item.teams_count || 0,
-            jobs_count: item.jobs_count || 0,
-            reference: item.warehouse_reference || item.reference
-        }))
+        // Récupérer les données directement depuis le store Pinia
+        // Même pattern que mappedLocations dans usePlanning.ts qui utilise locationStore.locations
+        const storeData = inventoryStore.planningManagementData || []
+        const data = Array.isArray(storeData) ? storeData : []
+
+        return data.map((item: any): Store => {
+            // L'API retourne: warehouse_reference, warehouse_name, jobs_count, teams_count
+            // Mapping vers le format Store attendu
+            return {
+                id: item.warehouse_id || item.id || 0,
+                store_name: item.warehouse_name || item.store_name || 'N/A',
+                teams_count: item.teams_count || 0,
+                jobs_count: item.jobs_count || 0,
+                reference: item.warehouse_reference || item.reference || ''
+            }
+        })
     })
 
     /**
@@ -255,16 +277,70 @@ export function usePlanningManagement() {
         }
     }
 
+    // ===== MÉTHODES DE CHARGEMENT DES DONNÉES =====
+
     /**
-     * Charge les magasins pour un inventaire
+     * Charger les données du planning management pour l'inventaire actuel
      *
-     * @param inventoryId - ID de l'inventaire
+     * @param params - Paramètres DataTable standard (pagination, tri, filtres)
      */
-    async function fetchStores(inventoryId: number): Promise<void> {
-        if (inventoryId) {
-            await refresh()
+    const loadPlanningData = async (params?: LocationDataTableParams) => {
+        if (!inventoryId.value) {
+            logger.warn('Impossible de charger les données du planning, ID inventaire manquant')
+            return
+        }
+
+        try {
+            // Utiliser les paramètres fournis ou construire à partir des valeurs actuelles
+            const finalParams: LocationDataTableParams = params || {
+                draw: currentPage.value || 1,
+                start: ((currentPage.value || 1) - 1) * pageSize.value,
+                length: pageSize.value
+            }
+
+            // S'assurer que length est bien défini
+            if (!finalParams.length) {
+                finalParams.length = pageSize.value
+            }
+
+            logger.debug('Chargement des données du planning management avec paramètres DataTable:', {
+                inventoryId: inventoryId.value,
+                pageSize: pageSize.value,
+                params: finalParams
+            })
+
+            // Appeler directement l'action du store avec l'ID de l'inventaire
+            await inventoryStore.fetchPlanningManagement(inventoryId.value, finalParams)
+            await nextTick()
+
+            logger.debug('Données du planning management mises à jour dans le store', {
+                count: (inventoryStore as any).planningManagementData?.length || 0
+            })
+        } catch (error) {
+            logger.error('Erreur lors du chargement des données du planning', error)
+            await alertService.error({ text: 'Erreur lors du chargement des données du planning' })
         }
     }
+
+    /**
+     * Rafraîchir les données du planning
+     *
+     * @param params - Paramètres DataTable optionnels
+     */
+    const refreshPlanningData = async (params?: LocationDataTableParams) => {
+        await loadPlanningData(params)
+    }
+
+    /**
+     * Réinitialiser la DataTable du planning (tri, filtres, recherche)
+     */
+    const resetPlanningDataTable = async () => {
+        setSortModel([])
+        resetFilters()
+        setSearch('')
+        await refreshPlanningData()
+    }
+
 
     // ===== MÉTHODES DE GESTION =====
 
@@ -299,118 +375,102 @@ export function usePlanningManagement() {
 
     /**
      * Handler pour le changement de pagination
-     * Accepte le format standard DataTable ou l'ancien format
+     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
      *
-     * @param params - Paramètres de pagination (standard ou ancien format)
+     * @param params - Paramètres de pagination (format standard ou ancien format)
      */
     const handlePaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams) => {
-        // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-        if ('draw' in params && 'start' in params && 'length' in params) {
-            const standardParams = params as StandardDataTableParams
-            const page = Math.floor((standardParams.start || 0) / (standardParams.length || 25)) + 1
-            await _handlePaginationChanged({ page, pageSize: standardParams.length || 25 })
-            return
-        }
-
-        // Sinon, convertir l'ancien format
-        const paginationParams = params as { page: number; pageSize: number }
-        await _handlePaginationChanged(paginationParams)
-    }
-
-    /**
-     * Handler pour le changement de tri
-     * Accepte le format standard DataTable ou l'ancien format
-     *
-     * @param sortModel - Modèle de tri (standard ou ancien format)
-     */
-    const handleSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }> | StandardDataTableParams) => {
-        // Si c'est déjà le format standard (venant du DataTable), extraire les informations
-        if ('draw' in sortModel && 'start' in sortModel && 'length' in sortModel) {
-            const standardParams = sortModel as StandardDataTableParams
-            const page = Math.floor((standardParams.start || 0) / (standardParams.length || 25)) + 1
-            await _handlePaginationChanged({ page, pageSize: standardParams.length || 25 })
-
-            // Extraire le tri depuis les paramètres standard
-            const extractedSort: Array<{ colId: string; sort: 'asc' | 'desc' }> = []
-            let sortIndex = 0
-            while (standardParams[`order[${sortIndex}][column]`] !== undefined) {
-                const columnIndex = standardParams[`order[${sortIndex}][column]`]
-                const direction = standardParams[`order[${sortIndex}][dir]`] as 'asc' | 'desc'
-                const fieldKey = `columns[${columnIndex}][data]`
-                const fieldName = standardParams[fieldKey]
-                if (fieldName) {
-                    extractedSort.push({
-                        colId: fieldName,
-                        sort: direction
-                    })
-                }
-                sortIndex++
+        try {
+            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
+            if ('draw' in params && 'start' in params && 'length' in params) {
+                const standardParams = params as StandardDataTableParams
+                const page = Math.floor((standardParams.start || 0) / (standardParams.length || 25)) + 1
+                setPageSize(standardParams.length || 25)
+                setPage(page)
+                await loadPlanningData(standardParams as LocationDataTableParams)
+                return
             }
-            // Convertir le format colId/sort vers field/direction
-            const convertedSort = extractedSort.map(s => ({
-                field: s.colId,
-                direction: s.sort
-            }))
-            await _handleSortChanged(convertedSort)
-            return
-        }
 
-        // Sinon, convertir l'ancien format
-        const sortModelArray = sortModel as Array<{ colId: string; sort: 'asc' | 'desc' }>
-        const convertedSortArray = sortModelArray.map(s => ({
-            field: s.colId,
-            direction: s.sort
-        }))
-        await _handleSortChanged(convertedSortArray)
+            // Sinon, convertir l'ancien format
+            const paginationParams = params as { page: number; pageSize: number }
+            setPageSize(paginationParams.pageSize)
+            setPage(paginationParams.page)
+            await loadPlanningData()
+        } catch (error) {
+            logger.error('Erreur dans handlePaginationChanged', error)
+            await alertService.error({ text: 'Erreur lors du changement de pagination' })
+        }
     }
 
     /**
-     * Handler pour le changement de filtres
-     * Accepte le format standard DataTable ou l'ancien format
+     * Handler pour les changements de tri
+     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
      *
-     * @param filterModel - Modèle de filtres (standard ou ancien format)
+     * @param sortModel - Modèle de tri (format standard ou ancien format)
      */
-    const handleFilterChanged = async (filterModel: Record<string, { filter: string }> | StandardDataTableParams) => {
-        // Si c'est déjà le format standard (venant du DataTable), extraire les informations
-        if ('draw' in filterModel && 'start' in filterModel && 'length' in filterModel) {
-            const standardParams = filterModel as StandardDataTableParams
-            const page = Math.floor((standardParams.start || 0) / (standardParams.length || 25)) + 1
-            await _handlePaginationChanged({ page, pageSize: standardParams.length || 25 })
+    const handleSortChanged = async (sortModel: Array<{ field: string; direction: 'asc' | 'desc' }> | StandardDataTableParams) => {
+        try {
+            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
+            if ('draw' in sortModel && 'start' in sortModel && 'length' in sortModel) {
+                await loadPlanningData(sortModel as LocationDataTableParams)
+                return
+            }
 
-            // Extraire les filtres depuis les paramètres standard
-            const extractedFilters: Record<string, { filter: string }> = {}
-            Object.keys(standardParams).forEach(key => {
-                if (key.startsWith('columns[') && key.includes('][search][value]')) {
-                    const match = key.match(/columns\[(\d+)\]\[search\]\[value\]/)
-                    if (match && standardParams[key]) {
-                        const columnIndex = parseInt(match[1])
-                        const fieldKey = `columns[${columnIndex}][data]`
-                        const fieldName = standardParams[fieldKey]
-                        if (fieldName) {
-                            extractedFilters[fieldName] = {
-                                filter: standardParams[key]
-                            }
-                        }
-                    }
-                }
-            })
-            await _handleFilterChanged(extractedFilters)
-            return
+            // Sinon, convertir l'ancien format
+            const sortModelArray = sortModel as Array<{ field: string; direction: 'asc' | 'desc' }>
+            setSortModel(sortModelArray)
+            await loadPlanningData()
+        } catch (error) {
+            logger.error('Erreur dans handleSortChanged', error)
+            await alertService.error({ text: 'Erreur lors du changement de tri' })
         }
-
-        // Sinon, utiliser directement l'ancien format
-        const filterModelObj = filterModel as Record<string, { filter: string }>
-        await _handleFilterChanged(filterModelObj)
     }
 
     /**
-     * Handler pour le changement de recherche globale
-     * Accepte le format standard DataTable ou une chaîne
+     * Handler pour les changements de filtres
+     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
      *
-     * @param searchTerm - Terme de recherche (standard ou string)
+     * @param filterModel - Modèle de filtres (format standard ou ancien format)
+     */
+    const handleFilterChanged = async (filterModel: Record<string, any> | StandardDataTableParams) => {
+        try {
+            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
+            if ('draw' in filterModel && 'start' in filterModel && 'length' in filterModel) {
+                await loadPlanningData(filterModel as LocationDataTableParams)
+                return
+            }
+
+            // Sinon, utiliser directement l'ancien format
+            const filterModelObj = filterModel as Record<string, any>
+            setFilters(filterModelObj)
+            await loadPlanningData()
+        } catch (error) {
+            logger.error('Erreur dans handleFilterChanged', error)
+            await alertService.error({ text: 'Erreur lors du changement de filtre' })
+        }
+    }
+
+    /**
+     * Handler pour les changements de recherche globale
+     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     *
+     * @param searchTerm - Terme de recherche (format standard ou string)
      */
     const handleGlobalSearchChanged = async (searchTerm: string | StandardDataTableParams) => {
-        await _handleSearchChanged(searchTerm)
+        try {
+            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
+            if (typeof searchTerm === 'object' && 'draw' in searchTerm && 'start' in searchTerm && 'length' in searchTerm) {
+                await loadPlanningData(searchTerm as LocationDataTableParams)
+                return
+            }
+
+            // Sinon, utiliser directement la valeur string
+            setSearch(searchTerm as string)
+            await loadPlanningData()
+        } catch (error) {
+            logger.error('Erreur dans handleGlobalSearchChanged', error)
+            await alertService.error({ text: 'Erreur lors de la recherche' })
+        }
     }
 
     // ===== HANDLERS GRIDVIEW =====
@@ -461,6 +521,52 @@ export function usePlanningManagement() {
 
     // ===== RETURN =====
 
+    // ===== INITIALISATION =====
+
+    /**
+     * Initialiser le composable
+     * Résout l'ID de l'inventaire et charge les données initiales
+     */
+    const initialize = async () => {
+        if (isInitialized.value) {
+            logger.debug('Planning management déjà initialisé')
+            return
+        }
+
+        try {
+            logger.debug('Initialisation du planning management', { inventoryReference: inventoryReference.value })
+
+            // Si l'inventoryId n'est pas encore résolu, le résoudre
+            if (!inventoryId.value && inventoryReference.value) {
+                logger.debug('Résolution de l\'ID de l\'inventaire', { reference: inventoryReference.value })
+                await fetchInventoryIdByReference(inventoryReference.value)
+                logger.debug('ID de l\'inventaire résolu', { inventoryId: inventoryId.value })
+            }
+
+            // Charger les données initiales si l'ID est disponible
+            if (inventoryId.value) {
+                logger.debug('Chargement des données du planning management', { inventoryId: inventoryId.value })
+                await loadPlanningData()
+            } else {
+                logger.warn('Impossible de charger les données, inventoryId manquant', {
+                    inventoryReference: inventoryReference.value,
+                    inventoryId: inventoryId.value
+                })
+            }
+
+            isInitialized.value = true
+            logger.debug('Initialisation du planning management terminée avec succès', {
+                inventoryId: inventoryId.value,
+                storesCount: stores.value.length
+            })
+        } catch (error) {
+            logger.error('Erreur lors de l\'initialisation du planning management', error)
+            await alertService.error({ text: 'Erreur lors de l\'initialisation du planning management' })
+        }
+    }
+
+    // ===== RETURN =====
+
     return {
         // État
         stores,
@@ -471,6 +577,7 @@ export function usePlanningManagement() {
         inventoryId,
         inventoryLoading,
         inventoryError,
+        isInitialized,
 
         // Colonnes et actions
         actions,
@@ -481,18 +588,28 @@ export function usePlanningManagement() {
         adaptedHandleActionsClick,
 
         // Méthodes
-        fetchStores,
         selectStore,
         setInventoryStatus,
         setInventoryReference,
         fetchInventoryIdByReference,
         goToInventoryDetail,
         goToAffectation,
+        initialize,
+        loadPlanningData,
+        refreshPlanningData,
+        resetPlanningDataTable,
 
         // Handlers DataTable
         handlePaginationChanged,
         handleSortChanged,
         handleFilterChanged,
-        handleGlobalSearchChanged
+        handleGlobalSearchChanged,
+
+        // Pagination et données depuis useBackendDataTable
+        currentPage,
+        pageSize,
+        pagination,
+        totalPages: computed(() => pagination.value.total_pages || 1),
+        totalItems: computed(() => pagination.value.total || 0)
     }
 }

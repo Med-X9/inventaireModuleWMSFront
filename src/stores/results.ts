@@ -4,6 +4,7 @@ import { InventoryResultsService } from '@/services/inventoryResultsService';
 import type { InventoryResult, StoreOption } from '@/interfaces/inventoryResults';
 import type { AxiosResponse } from 'axios';
 import { logger } from '@/services/loggerService';
+import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter';
 
 export const useResultsStore = defineStore('results', () => {
     // State
@@ -28,18 +29,28 @@ export const useResultsStore = defineStore('results', () => {
 
     /**
      * Récupérer les résultats pour un inventaire et un magasin
+     * @param inventoryId - ID de l'inventaire
+     * @param storeId - ID du magasin (warehouse)
+     * @param params - Paramètres DataTable optionnels (pagination, tri, filtres, recherche)
      */
-    const fetchResults = async (inventoryId: number, storeId: string | number) => {
+    const fetchResults = async (
+        inventoryId: number, 
+        storeId: string | number, 
+        params?: StandardDataTableParams | Record<string, any>
+    ) => {
         loading.value = true;
         error.value = null;
         try {
-            const data = await InventoryResultsService.getResults(inventoryId, storeId);
+            logger.debug('Store: Récupération des résultats', { inventoryId, storeId, params });
+            const data = await InventoryResultsService.getResults(inventoryId, storeId, params);
 
             results.value = data;
             currentInventoryId.value = inventoryId;
+            logger.debug('Store: Résultats chargés', { count: data.length });
             return data;
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erreur lors de la récupération des résultats';
+            logger.error('Store: Erreur lors de la récupération des résultats', err);
             throw err;
         } finally {
             loading.value = false;

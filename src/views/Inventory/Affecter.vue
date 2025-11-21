@@ -242,7 +242,7 @@
                                     {{ selectedRows.length - eligibleJobsForTransfer.length }} job(s) ne sont pas éligibles au transfert
                                 </p>
                                 <p class="text-xs text-warning-700 dark:text-warning-400 mt-1">
-                                    Seuls les jobs en statut PRET peuvent être transférés.
+                                    Seuls les jobs en statut TRANSFERT ou PRET, ou les jobs ENTAME avec au moins un assignment TRANSFERT ou PRET peuvent être transférés.
                                 </p>
                             </div>
                         </div>

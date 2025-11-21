@@ -20,6 +20,18 @@
                         </div>
                     </div>
                 </div>
+                <div class="flex items-center gap-4">
+                    <button
+                        @click="handlePrintJobs"
+                        :disabled="storeLoading"
+                        class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                        Imprimer job
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -43,11 +55,11 @@
                     </label>
                     <SelectField
                         v-model="selectedStore"
-                        :options="storeOptions"
+                        :options="storeOptions || []"
                         :clearable="false"
                         :searchable="false"
                         placeholder="Sélectionner un magasin"
-                        :disabled="storeLoading || storeOptions.length === 0"
+                        :disabled="storeLoading || !storeOptions || (storeOptions && storeOptions.length === 0)"
                         class="modern-select w-full"
                     />
                 </div>
@@ -61,11 +73,11 @@
                     </label>
                     <SelectField
                         v-model="selectedCountingOrder"
-                        :options="countingOptions"
+                        :options="countingOptions || []"
                         :clearable="false"
                         :searchable="false"
                         placeholder="Sélectionner un comptage"
-                        :disabled="storeLoading || countingOptions.length === 0"
+                        :disabled="storeLoading || !countingOptions || countingOptions.length === 0"
                         class="modern-select w-full"
                     />
                 </div>
@@ -130,7 +142,7 @@
             />
         </div>
     </div>
-</template>   
+</template>
 
 <script setup lang="ts">
 /**
@@ -189,7 +201,8 @@ const {
     rows,
     columns,
     initialize,
-    reinitialize
+    reinitialize,
+    printJobs
 } = useJobTracking({ inventoryReference: referenceParam.value })
 
 // ===== COMPUTED =====
@@ -213,6 +226,13 @@ const selectedWarehouse = computed(() => {
  * Colonnes formatées pour le DataTable
  */
 const displayColumns = computed<DataTableColumn[]>(() => columns.value as DataTableColumn[])
+
+/**
+ * Handler pour le bouton d'impression
+ */
+const handlePrintJobs = async () => {
+    await printJobs()
+}
 
 // ===== LIFECYCLE =====
 

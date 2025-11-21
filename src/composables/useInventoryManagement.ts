@@ -109,8 +109,6 @@ export function useInventoryManagement() {
             containerHeight: 400
         }
     }
-
-
     // Les fonctionnalités de dataTable sont maintenant fournies par useBackendDataTable
     // Pas besoin d'initialiser useGenericDataTable séparément
 
@@ -182,14 +180,28 @@ export function useInventoryManagement() {
             width: dataTableService.calculateOptimalColumnWidth({
                 field: 'status',
                 headerName: 'Statut',
-                dataType: 'text'
+                dataType: 'select'
             }),
-            editable: true, // Activé pour l'édition
+            editable: false, // Activé pour l'édition
             visible: true,
             draggable: true,
             autoSize: true,
             icon: 'icon-status',
             description: 'Statut de l\'inventaire',
+            /**
+             * Configuration du filtre select avec les options de statut disponibles
+             * Permet d'afficher la liste des statuts dans le filtre (comportement Excel)
+             */
+            filterConfig: {
+                dataType: 'select' as ColumnDataType,
+                operator: 'in' as const,
+                options: [
+                    { value: 'EN PREPARATION', label: 'EN PREPARATION' },
+                    { value: 'EN REALISATION', label: 'EN REALISATION' },
+                    { value: 'TERMINE', label: 'TERMINE' },
+                    { value: 'CLOTURE', label: 'CLOTURE' }
+                ]
+            },
             /**
              * Configuration des badges pour les différents statuts
              * Chaque statut a sa propre classe CSS pour un style distinctif

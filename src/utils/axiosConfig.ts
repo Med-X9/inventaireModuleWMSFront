@@ -10,15 +10,19 @@ interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
     _retry?: boolean;
 }
 
+const IS_PROD = import.meta.env.PROD;
+
 const axiosInstance = axios.create({
     baseURL: API.baseURL,
     headers: {
         'Content-Type': 'application/json',
     },
     timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
-    // withCredentials: true, // ✅ Important pour les cookies CSRF
-    // xsrfCookieName: 'csrftoken', // ✅ Cookie CSRF Django
-    // xsrfHeaderName: 'X-CSRFToken', // ✅ Header CSRF
+    // ✅ Important pour les cookies CSRF / sessions : uniquement en prod
+    withCredentials: IS_PROD,
+    // ⚠️ À adapter selon la stack backend (exemple pour Django) :
+    // xsrfCookieName: IS_PROD ? 'csrftoken' : undefined,
+    // xsrfHeaderName: IS_PROD ? 'X-CSRFToken' : undefined,
 });
 
 // Intercepteur de requête pour ajouter le token d'authentification

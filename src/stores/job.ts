@@ -459,6 +459,53 @@ export const useJobStore = defineStore('job', () => {
         return await JobService.jobTransfer({ job_ids, counting_order });
     };
 
+    /**
+     * Lancer un comptage pour un job, un emplacement et une session
+     */
+    const launchCounting = async (data: {
+        job_id: number;
+        location_id: number;
+        session_id: number;
+    }): Promise<any> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await JobService.launchCounting(data);
+            
+            // Vérifier si la réponse indique un échec (success: false)
+            if (response && response.success === false) {
+                const errorMessage = response.message || 'Erreur lors du lancement du comptage';
+                error.value = errorMessage;
+                // Créer un objet d'erreur qui sera intercepté par le catch
+                const errorData: any = {
+                    response: {
+                        data: {
+                            message: errorMessage,
+                            success: false
+                        }
+                    }
+                };
+                // Attacher le message directement à l'erreur pour faciliter l'accès
+                errorData.userMessage = errorMessage;
+                throw errorData;
+            }
+            
+            return response;
+        } catch (err: any) {
+            // Extraire le message d'erreur du backend
+            const errorMessage = err.response?.data?.message || 
+                                err.userMessage ||
+                                err.message || 
+                                'Erreur lors du lancement du comptage';
+            error.value = errorMessage;
+            // Attacher le message à l'erreur pour qu'il soit accessible dans le composable
+            err.userMessage = errorMessage;
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
     const clearError = () => {
         error.value = null;
     };
@@ -521,5 +568,6 @@ export const useJobStore = defineStore('job', () => {
         jobReady,
         jobReset,
         jobTransfer,
+        launchCounting,
     };
 });

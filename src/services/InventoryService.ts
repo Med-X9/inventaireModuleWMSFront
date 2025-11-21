@@ -214,9 +214,16 @@ export class InventoryService {
      * @param id - ID de l'inventaire
      * @returns Promise avec les statistiques de planning
      */
-    static async getPlanningManagement(id: number): Promise<AxiosResponse<PlanningManagementResponse>> {
+    static async getPlanningManagement(id: number, params?: any): Promise<AxiosResponse<PlanningManagementResponse>> {
         try {
-            return await axiosInstance.get<PlanningManagementResponse>(`${API.endpoints.inventory.base}${id}/warehouse-stats/`);
+            logger.debug('InventoryService.getPlanningManagement appelé', { id, params });
+            const url = `${API.endpoints.inventory.base}${id}/warehouse-stats/`;
+            const response = await axiosInstance.get<PlanningManagementResponse>(url, { params });
+            logger.debug('InventoryService.getPlanningManagement réponse reçue', { 
+                status: response.status,
+                dataCount: response.data?.data?.length || 0
+            });
+            return response;
         } catch (error) {
             logger.error(`Erreur lors de la récupération des statistiques de planning pour l'inventaire ${id}`, error);
             throw error;

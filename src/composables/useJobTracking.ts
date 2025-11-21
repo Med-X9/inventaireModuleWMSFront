@@ -21,10 +21,15 @@ import { storeToRefs } from 'pinia'
 import { useInventoryStore } from '@/stores/inventory'
 import { useWarehouseStore } from '@/stores/warehouse'
 import { useJobStore } from '@/stores/job'
+import { useSessionStore } from '@/stores/session'
 
 // ===== IMPORTS SERVICES =====
 import { alertService } from '@/services/alertService'
 import { logger } from '@/services/loggerService'
+import { JobService } from '@/services/JobService'
+
+// ===== IMPORTS EXTERNES =====
+import Swal from 'sweetalert2'
 
 // ===== IMPORTS TYPES =====
 import type { StoreOption } from '@/interfaces/inventoryResults'
@@ -142,6 +147,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
     const inventoryStore = useInventoryStore()
     const warehouseStore = useWarehouseStore()
     const jobStore = useJobStore()
+    const sessionStore = useSessionStore()
 
     // ===== STORE REFS =====
     const { loading: inventoryLoading } = storeToRefs(inventoryStore)
@@ -204,7 +210,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             field: 'statut',
             sortable: true,
             filterable: true,
-            dataType: 'text' as ColumnDataType,
+            dataType: 'select' as ColumnDataType,
             width: 140,
             description: 'Statut du job pour ce comptage'
         },
@@ -620,6 +626,212 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         }
     })
 
+    // ===== MÉTHODES D'IMPRESSION =====
+
+    /**
+     * Affiche une popup pour sélectionner une session, puis les jobs, et génère les PDFs
+     */
+    const printJobs = async () => {
+        try {
+            // Charger les sessions si nécessaire
+            if (sessionStore.getAllSessions.length === 0) {
+                await sessionStore.fetchSessions()
+            }
+
+            const sessions = sessionStore.getAllSessions
+
+            if (sessions.length === 0) {
+                await alertService.error({ text: 'Aucune session disponible' })
+                return
+            }
+
+            // Créer les options pour le select de sessions
+            const sessionOptions: Record<string, string> = {}
+            sessions.forEach(session => {
+                sessionOptions[session.id.toString()] = session.username
+            })
+
+            // Première popup : Sélection de la session
+            const sessionSelection = await Swal.fire({
+                title: 'Sélectionner une session',
+                html: `
+                    <div style="text-align: center; padding: 1rem 0;">
+                        <p style="color: #6b7280; font-size: 0.95rem; margin-bottom: 1.5rem;">
+                            Choisissez la session pour afficher les jobs
+                        </p>
+                    </div>
+                `,
+                input: 'select',
+                inputOptions: sessionOptions,
+                inputPlaceholder: 'Sélectionnez une session...',
+                showCancelButton: true,
+                confirmButtonText: 'Suivant',
+                cancelButtonText: 'Annuler',
+                confirmButtonColor: '#FECD1C',
+                cancelButtonColor: '#B4B6BA',
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'Veuillez sélectionner une session'
+                    }
+                    return null
+                },
+                customClass: {
+                    popup: 'sweet-alerts',
+                    confirmButton: 'btn btn-primary',
+                    cancelButton: 'btn btn-secondary'
+                },
+                width: '500px',
+                padding: '2rem'
+            })
+
+            if (!sessionSelection.isConfirmed || !sessionSelection.value) {
+                return
+            }
+
+            const selectedSessionId = Number(sessionSelection.value)
+            const selectedSession = sessions.find(s => s.id === selectedSessionId)
+
+            if (!selectedSession) {
+                await alertService.error({ text: 'Session sélectionnée introuvable' })
+                return
+            }
+
+            // Charger les jobs de la session
+            const assignmentsResponse = await JobService.getSessionAssignments(selectedSessionId)
+
+            if (!assignmentsResponse.success || !assignmentsResponse.data.jobs || assignmentsResponse.data.jobs.length === 0) {
+                await alertService.warning({ text: 'Aucun job disponible pour cette session' })
+                return
+            }
+
+            const jobs = assignmentsResponse.data.jobs
+
+            // Deuxième popup : Sélection des jobs (multi-sélection)
+            const jobsSelection = await Swal.fire({
+                title: 'Sélectionner les jobs',
+                html: `
+                    <div style="text-align: left; padding: 1rem 0;">
+                        <p style="color: #6b7280; font-size: 0.95rem; margin-bottom: 1rem;">
+                            Sélectionnez un ou plusieurs jobs à imprimer
+                        </p>
+                        <div id="jobs-checkboxes" style="max-height: 300px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem;">
+                            ${jobs.map(job => `
+                                <label style="display: flex; align-items: center; padding: 0.75rem; margin-bottom: 0.5rem; cursor: pointer; border-radius: 0.375rem; transition: background-color 0.2s;" 
+                                       onmouseover="this.style.backgroundColor='#f3f4f6'" 
+                                       onmouseout="this.style.backgroundColor='transparent'">
+                                    <input type="checkbox" value="${job.id}" class="job-checkbox" style="margin-right: 0.75rem; width: 1.25rem; height: 1.25rem; cursor: pointer;">
+                                    <span style="font-size: 0.95rem; color: #1f2937;">${job.reference}</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Imprimer',
+                cancelButtonText: 'Annuler',
+                confirmButtonColor: '#FECD1C',
+                cancelButtonColor: '#B4B6BA',
+                customClass: {
+                    popup: 'sweet-alerts',
+                    confirmButton: 'btn btn-primary',
+                    cancelButton: 'btn btn-secondary'
+                },
+                width: '600px',
+                padding: '2rem',
+                preConfirm: () => {
+                    const checkboxes = document.querySelectorAll<HTMLInputElement>('.job-checkbox:checked')
+                    const selectedJobIds = Array.from(checkboxes).map(cb => Number(cb.value))
+                    
+                    if (selectedJobIds.length === 0) {
+                        Swal.showValidationMessage('Veuillez sélectionner au moins un job')
+                        return false
+                    }
+                    
+                    return selectedJobIds
+                }
+            })
+
+            if (!jobsSelection.isConfirmed || !jobsSelection.value) {
+                return
+            }
+
+            const selectedJobIds = jobsSelection.value as number[]
+
+            // Pour chaque job sélectionné, générer les PDFs
+            await Swal.fire({
+                title: 'Génération en cours...',
+                html: 'Veuillez patienter pendant la génération des PDFs',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    Swal.showLoading()
+                }
+            })
+
+            const pdfPromises: Promise<{ jobId: number; blob: Blob; filename: string }>[] = []
+
+            for (const jobId of selectedJobIds) {
+                try {
+                    // Note: L'API nécessite job_id et assignment_id
+                    // Pour l'instant, on génère avec assignment_id = 1 (à adapter selon les besoins)
+                    const blob = await JobService.generateJobPDF(jobId, 1)
+                    const job = jobs.find(j => j.id === jobId)
+                    const filename = `job_${jobId}_${job?.reference || 'unknown'}.pdf`
+                    
+                    pdfPromises.push(Promise.resolve({ jobId, blob, filename }))
+                } catch (error) {
+                    logger.error(`Erreur lors de la génération du PDF pour le job ${jobId}`, error)
+                }
+            }
+
+            const pdfResults = await Promise.allSettled(pdfPromises)
+
+            // Télécharger tous les PDFs générés
+            let successCount = 0
+            let errorCount = 0
+
+            pdfResults.forEach((result) => {
+                if (result.status === 'fulfilled') {
+                    const { blob, filename } = result.value
+                    const url = window.URL.createObjectURL(blob)
+                    const link = document.createElement('a')
+                    link.href = url
+                    link.download = filename
+                    document.body.appendChild(link)
+                    link.click()
+                    document.body.removeChild(link)
+                    window.URL.revokeObjectURL(url)
+                    successCount++
+                } else {
+                    errorCount++
+                }
+            })
+
+            await Swal.fire({
+                title: successCount > 0 ? 'Succès !' : 'Erreur',
+                html: `
+                    <div style="text-align: center; padding: 1rem 0;">
+                        <p style="color: #6b7280; font-size: 0.95rem;">
+                            ${successCount > 0 ? `${successCount} PDF(s) généré(s) et téléchargé(s) avec succès.` : ''}
+                            ${errorCount > 0 ? `<br>${errorCount} erreur(s) lors de la génération.` : ''}
+                        </p>
+                    </div>
+                `,
+                icon: successCount > 0 ? 'success' : 'error',
+                confirmButtonColor: '#FECD1C',
+                customClass: {
+                    popup: 'sweet-alerts',
+                    confirmButton: 'btn btn-primary'
+                }
+            })
+        } catch (error: any) {
+            logger.error('Erreur lors de l\'impression des jobs', error)
+            await alertService.error({
+                text: error?.response?.data?.message || error?.message || 'Erreur lors de l\'impression des jobs'
+            })
+        }
+    }
+
     // ===== RETURN =====
 
     return {
@@ -643,6 +855,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         // Actions
         initialize,
         reinitialize,
-        refresh: fetchTrackingData
+        refresh: fetchTrackingData,
+        printJobs
     }
 }

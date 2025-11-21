@@ -89,6 +89,7 @@ export function useJobManagementPage() {
             headerName: 'Statut',
             sortable: true,
             filterable: true,
+            dataType: 'select',
             width: 120,
             rendererType: 'badge',
             badgeStyles: [

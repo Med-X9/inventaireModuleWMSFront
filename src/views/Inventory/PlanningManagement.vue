@@ -133,6 +133,9 @@
 // ===== IMPORTS VUE =====
 import { ref, onMounted } from 'vue'
 
+// ===== IMPORTS SERVICES =====
+import { logger } from '@/services/loggerService'
+
 // ===== IMPORTS COMPOSANTS =====
 import DataTable from '@/components/DataTable/DataTable.vue'
 import ToggleButtons from '@/components/ToggleButtons/ToggleButtons.vue'
@@ -184,18 +187,27 @@ const {
     adaptedHandleActionsClick,
 
     // Méthodes
-    fetchStores,
+    selectStore,
     setInventoryStatus,
     setInventoryReference,
     fetchInventoryIdByReference,
     goToInventoryDetail,
     goToAffectation,
+    initialize,
 
     // Handlers DataTable
     handlePaginationChanged,
     handleSortChanged,
     handleFilterChanged,
-    handleGlobalSearchChanged
+    handleGlobalSearchChanged,
+
+    // Pagination
+    currentPage,
+    totalPages,
+    totalItems,
+
+    // Méthodes de chargement
+    loadPlanningData
 } = usePlanningManagement()
 
 // ===== ÉTAT LOCAL =====
@@ -268,14 +280,11 @@ onMounted(async () => {
 
     if (props.reference) {
         setInventoryReference(props.reference)
-        await fetchInventoryIdByReference(props.reference)
-
-        if (inventoryId.value) {
-            try {
-                await fetchStores(inventoryId.value)
-            } catch (error) {
-                // Gestion silencieuse des erreurs
-            }
+        // Initialiser le composable (résout l'ID et charge les données)
+        try {
+            await initialize()
+        } catch (error) {
+            logger.error('Erreur lors de l\'initialisation du planning management', error)
         }
     }
 })

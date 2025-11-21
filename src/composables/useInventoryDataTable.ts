@@ -1,11 +1,11 @@
 /**
  * Composable générique pour la gestion de n'importe quel DataTable avec Pinia
- * 
+ *
  * Ce composable gère :
  * - La pagination, le tri et le filtrage côté serveur
  * - La conversion automatique des paramètres vers le format standard DataTable
  * - L'intégration avec les stores Pinia
- * 
+ *
  * @module useInventoryDataTable
  */
 
@@ -92,7 +92,7 @@ export interface PaginationInfo {
 
 /**
  * Composable générique pour gérer un DataTable avec Pinia
- * 
+ *
  * @param config - Configuration du composable
  * @returns État et méthodes pour gérer le DataTable
  */
@@ -100,30 +100,30 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
     const { store, fetchAction, defaultPageSize = 20, additionalParams } = config
 
     // ===== ÉTAT RÉACTIF =====
-    
+
     /** Données de la table */
     const data = ref<T[]>([])
-    
+
     /** État de chargement */
     const loading = ref(false)
-    
+
     /** Page courante */
     const currentPage = ref(1)
-    
+
     /** Taille de page */
     const pageSize = ref(defaultPageSize)
-    
+
     /** Requête de recherche globale */
     const searchQuery = ref('')
-    
+
     /** Modèle de tri */
     const sortModel = ref<DataTableSort[]>([])
-    
+
     /** Modèle de filtres */
     const filters = ref<DataTableFilters>({})
 
     // ===== PAGINATION =====
-    
+
     /** Informations de pagination */
     const pagination = ref<PaginationInfo>({
         total_pages: 0,
@@ -140,6 +140,14 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
     const loadData = async () => {
         loading.value = true
         try {
+            console.log('loadData', fetchAction)
+            console.log('store', store)
+            console.log('currentPage', currentPage.value)
+            console.log('pageSize', pageSize.value)
+            console.log('searchQuery', searchQuery.value)
+            console.log('filters', filters.value)
+            console.log('sortModel', sortModel.value)
+            console.log('additionalParams', additionalParams)
             // Vérifier que l'action existe dans le store
             if (typeof store[fetchAction] !== 'function') {
                 throw new Error(`Action ${fetchAction} introuvable dans le store`)
@@ -184,6 +192,9 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
                     has_previous: currentPage.value > 1
                 }
             }
+            console.log('result', result)
+            console.log('data', data.value)
+            console.log('pagination', pagination.value)
         } catch (error) {
             logger.error('Erreur lors du chargement des données', error)
             throw error
@@ -194,7 +205,7 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
 
     /**
      * Transformer les filtres du DataTable vers le format attendu
-     * 
+     *
      * @param filterModel - Modèle de filtres du DataTable
      * @returns Filtres transformés
      */
@@ -234,7 +245,7 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
 
     /**
      * Extraire les informations depuis les paramètres standard DataTable
-     * 
+     *
      * @param standardParams - Paramètres au format standard DataTable
      * @returns Objet contenant page, pageSize, searchQuery, sortModel, filters
      */
@@ -242,7 +253,7 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
         const page = Math.floor((standardParams.start || 0) / (standardParams.length || 20)) + 1
         const extractedPageSize = standardParams.length || 20
         const extractedSearch = standardParams['search[value]'] || ''
-        
+
         // Extraire les filtres depuis les paramètres standard
         const extractedFilters: DataTableFilters = {}
         Object.keys(standardParams).forEach(key => {
@@ -261,7 +272,7 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
                 }
             }
         })
-        
+
         // Extraire le tri depuis les paramètres standard
         const extractedSort: DataTableSort[] = []
         let sortIndex = 0
@@ -278,7 +289,7 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
             }
             sortIndex++
         }
-        
+
         return {
             page,
             pageSize: extractedPageSize,
@@ -291,7 +302,7 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
     /**
      * Handler pour les changements de filtres
      * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
-     * 
+     *
      * @param filterModel - Modèle de filtres (format standard ou ancien format)
      */
     const handleFilterChanged = async (filterModel: Record<string, { filter: string }> | StandardDataTableParams) => {
@@ -299,13 +310,13 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
         if ('draw' in filterModel && 'start' in filterModel && 'length' in filterModel) {
             const standardParams = filterModel as StandardDataTableParams
             const extracted = extractFromStandardParams(standardParams)
-            
+
             currentPage.value = extracted.page
             pageSize.value = extracted.pageSize
             searchQuery.value = extracted.searchQuery
             sortModel.value = extracted.sortModel
             filters.value = extracted.filters
-            
+
             await loadData()
             return
         }
@@ -321,7 +332,7 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
     /**
      * Handler pour les changements de tri
      * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
-     * 
+     *
      * @param newSortModel - Modèle de tri (format standard ou ancien format)
      */
     const handleSortChanged = async (newSortModel: Array<{ field: string; direction: 'asc' | 'desc' }> | StandardDataTableParams) => {
@@ -329,13 +340,13 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
         if ('draw' in newSortModel && 'start' in newSortModel && 'length' in newSortModel) {
             const standardParams = newSortModel as StandardDataTableParams
             const extracted = extractFromStandardParams(standardParams)
-            
+
             currentPage.value = extracted.page
             pageSize.value = extracted.pageSize
             searchQuery.value = extracted.searchQuery
             sortModel.value = extracted.sortModel
             filters.value = extracted.filters
-            
+
             await loadData()
             return
         }
@@ -353,7 +364,7 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
     /**
      * Handler pour les changements de recherche globale
      * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
-     * 
+     *
      * @param searchValue - Terme de recherche (format standard ou string)
      */
     const handleSearchChanged = async (searchValue: string | StandardDataTableParams) => {
@@ -361,13 +372,13 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
         if (typeof searchValue === 'object' && 'draw' in searchValue && 'start' in searchValue && 'length' in searchValue) {
             const standardParams = searchValue as StandardDataTableParams
             const extracted = extractFromStandardParams(standardParams)
-            
+
             currentPage.value = extracted.page
             pageSize.value = extracted.pageSize
             searchQuery.value = extracted.searchQuery
             sortModel.value = extracted.sortModel
             filters.value = extracted.filters
-            
+
             await loadData()
             return
         }
@@ -381,7 +392,7 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
     /**
      * Handler pour les changements de pagination
      * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
-     * 
+     *
      * @param params - Paramètres de pagination (format standard ou ancien format)
      */
     const handlePaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams) => {
@@ -389,13 +400,13 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
         if ('draw' in params && 'start' in params && 'length' in params) {
             const standardParams = params as StandardDataTableParams
             const extracted = extractFromStandardParams(standardParams)
-            
+
             currentPage.value = extracted.page
             pageSize.value = extracted.pageSize
             searchQuery.value = extracted.searchQuery
             sortModel.value = extracted.sortModel
             filters.value = extracted.filters
-            
+
             await loadData()
             return
         }
@@ -453,7 +464,7 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
 /**
  * Composable spécialisé pour les inventaires
  * Utilise le composable générique avec la configuration des inventaires
- * 
+ *
  * @returns État et méthodes pour gérer le DataTable des inventaires
  */
 export function useInventoryDataTable() {

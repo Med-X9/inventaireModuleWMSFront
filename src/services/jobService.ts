@@ -21,7 +21,7 @@ import type {
 import API from '@/api';
 
 export class JobService {
-    private static baseUrlInventory = API.endpoints.inventory?.base;
+    private static baseUrlInventory = API.endpoints.inventory?.base
     private static baseUrlJob = API.endpoints.job?.base;
     private static baseUrlWarehouse = API.endpoints.warehouse?.base;
 
@@ -175,6 +175,71 @@ export class JobService {
     static async setJobWaiting(id: number | string): Promise<UpdateJobStatusResponse> {
         return this.updateStatus(id, 'EN ATTENTE');
     }
+
+    // Lancer un comptage
+    static async launchCounting(data: {
+        job_id: number;
+        location_id: number;
+        session_id: number;
+    }): Promise<any> {
+        const response = await axiosInstance.post(
+            `${this.baseUrlJob}launch-counting/`,
+            data
+        );
+        return response.data;
+    }
+
+    /**
+     * Récupérer les jobs d'une session
+     * GET /web/api/inventory/session/<int:session_id>/assignments/
+     */
+    static async getSessionAssignments(sessionId: number): Promise<{
+        success: boolean;
+        message: string;
+        data: {
+            session_id: number;
+            session_username: string;
+            jobs: Array<{
+                id: number;
+                reference: string;
+                status: string;
+                warehouse_reference: string;
+                warehouse_name: string;
+                inventory_reference: string;
+                inventory_label: string;
+            }>;
+            total_jobs: number;
+        };
+    }> {
+        const response = await axiosInstance.get(
+            `${this.baseUrlInventory}session/${sessionId}/assignments/`
+        );
+        return response.data;
+    }
+
+    /**
+     * Générer un PDF pour un job/assignment
+     * POST /jobs/<int:job_id>/assignments/<int:assignment_id>/pdf/
+     * @param jobId - ID du job
+     * @param assignmentId - ID de l'assignment
+     * @param equipeId - ID de l'équipe (optionnel)
+     * @returns Blob du PDF
+     */
+    static async generateJobPDF(
+        jobId: number,
+        assignmentId: number,
+        equipeId?: number
+    ): Promise<Blob> {
+        const response = await axiosInstance.post(
+            `${this.baseUrlJob}${jobId}/assignments/${assignmentId}/pdf/`,
+            equipeId ? { equipe_id: equipeId } : {},
+            {
+                responseType: 'blob'
+            }
+        );
+        return response.data;
+    }
 }
 
 export const jobService = new JobService();
+

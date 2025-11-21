@@ -7,14 +7,17 @@ interface Tokens {
 
 const TOKENS_COOKIE_NAME = 'app_tokens';
 
+// Vite fournit ces booleans selon le mode
+const IS_PROD = import.meta.env.PROD;
+
 export function saveTokens(tokens: Tokens): void {
     const tokensString = JSON.stringify(tokens);
-    // Secure should be true in production
     Cookies.set(TOKENS_COOKIE_NAME, tokensString, {
-        secure: window.location.protocol === 'https:',
+        // ⚠️ Important : secure uniquement en production (HTTPS)
+        secure: IS_PROD,
         sameSite: 'strict',
-        // Setting a reasonable expiry time (14 days)
-        expires: 14
+        // Durée de vie raisonnable (14 jours)
+        expires: 14,
     });
 }
 

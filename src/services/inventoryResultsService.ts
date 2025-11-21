@@ -3,6 +3,7 @@ import type { StoreOption, InventoryResult } from '../interfaces/inventoryResult
 import type { AxiosResponse } from 'axios';
 import API from '@/api';
 import { logger } from '@/services/loggerService';
+import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter';
 
 export class InventoryResultsService {
     private static baseUrl = API.endpoints.inventory?.base;
@@ -11,11 +12,23 @@ export class InventoryResultsService {
      * Récupérer les résultats d'inventaire pour un inventaire et un magasin donnés
      * @param inventoryId - ID de l'inventaire
      * @param storeId - ID du magasin (warehouse)
+     * @param params - Paramètres DataTable optionnels (pagination, tri, filtres, recherche)
      */
-    static async getResults(inventoryId: number, storeId: string | number): Promise<InventoryResult[]> {
+    static async getResults(
+        inventoryId: number,
+        storeId: string | number,
+        params?: StandardDataTableParams | Record<string, any>
+    ): Promise<InventoryResult[]> {
         try {
+            logger.debug('Récupération des résultats avec paramètres DataTable', {
+                inventoryId,
+                storeId,
+                params
+            });
+
             const response = await axiosInstance.get(
-                `${this.baseUrl}${inventoryId}/warehouses/${storeId}/results/`
+                `${this.baseUrl}${inventoryId}/warehouses/${storeId}/results/`,
+                { params: params || {} }
             );
             const payload = response.data;
 
@@ -53,6 +66,8 @@ export class InventoryResultsService {
                 const differenceLabels: Record<string, string> = {};
 
                 Object.entries(item).forEach(([rawKey, value]) => {
+                    // Ne pas ignorer les valeurs null, seulement undefined
+                    // Les valeurs null sont valides pour les écarts (indiquent qu'il n'y a pas d'écart calculable)
                     if (value === undefined) return;
 
                     const keyNormalized = rawKey
@@ -70,14 +85,33 @@ export class InventoryResultsService {
                         return;
                     }
 
-                    const differenceMatch = keyNormalized.match(/^ecart_(\d+)_(\d+)$/i);
-                    if (differenceMatch) {
-                        const from = differenceMatch[1];
-                        const to = differenceMatch[2];
-                        const fieldKey = `ecart_${from}_${to}`;
-                        normalizedItem[fieldKey] = value;
-                        differenceLabels[fieldKey] = rawKey;
+                    // Pattern modifié pour accepter tous les formats d'écart :
+                    // - ecart_1_2 (deux nombres)
+                    // - ecart_1_2_3 (trois nombres)
+                    // - ecart_1_2_3_4 (quatre nombres ou plus)
+                    // Pattern: ecart_ suivi d'au moins un chiffre, puis un ou plusieurs groupes de _chiffres
+                    // Vérifier d'abord si la clé commence déjà par "ecart_" (format standard)
+                    if (rawKey.toLowerCase().startsWith('ecart_')) {
+                        // Utiliser la clé telle quelle si elle est déjà au bon format
+                        // Préserver la valeur même si elle est null (null signifie pas d'écart calculable)
+                        normalizedItem[rawKey] = value;
+                        differenceLabels[rawKey] = rawKey;
+                        logger.debug('Écart normalisé', { rawKey, value, fieldKey: rawKey });
                         return;
+                    }
+
+                    // Sinon, essayer de matcher avec le pattern normalisé
+                    const differenceMatch = keyNormalized.match(/^ecart_((?:\d+_?)+)$/i);
+                    if (differenceMatch) {
+                        // Préserver le format exact de la clé si elle est déjà au bon format
+                        // Sinon, normaliser en format standard
+                        const numbers = differenceMatch[1].split('_').filter(n => n.length > 0);
+                        if (numbers.length >= 2) {
+                            const fieldKey = `ecart_${numbers.join('_')}`;
+                            normalizedItem[fieldKey] = value;
+                            differenceLabels[fieldKey] = rawKey;
+                            return;
+                        }
                     }
 
                     switch (keyNormalized) {
@@ -101,6 +135,8 @@ export class InventoryResultsService {
                             normalizedItem.id = value;
                             break;
                         default:
+                            // Pour les champs non reconnus, les copier tels quels
+                            // Cela inclut les champs d'écart qui n'ont pas été normalisés précédemment
                             if (!(rawKey in normalizedItem)) {
                                 normalizedItem[rawKey] = value;
                             }
