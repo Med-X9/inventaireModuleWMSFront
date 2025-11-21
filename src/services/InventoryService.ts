@@ -87,7 +87,7 @@ export class InventoryService {
      */
     static async getByReference(reference: string): Promise<AxiosResponse<ResponseInventoryDetails>> {
         try {
-            return await axiosInstance.get<ResponseInventoryDetails>(`${API.endpoints.inventory.base}by-reference/${reference}`);
+            return await axiosInstance.get<ResponseInventoryDetails>(`${API.endpoints.inventory.base}by-reference/${reference}/`);
         } catch (error) {
             logger.error(`Erreur lors de la récupération de l'inventaire par référence ${reference}`, error);
             throw error;
@@ -219,7 +219,7 @@ export class InventoryService {
             logger.debug('InventoryService.getPlanningManagement appelé', { id, params });
             const url = `${API.endpoints.inventory.base}${id}/warehouse-stats/`;
             const response = await axiosInstance.get<PlanningManagementResponse>(url, { params });
-            logger.debug('InventoryService.getPlanningManagement réponse reçue', { 
+            logger.debug('InventoryService.getPlanningManagement réponse reçue', {
                 status: response.status,
                 dataCount: response.data?.data?.length || 0
             });
