@@ -1364,13 +1364,13 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         }
 
         // Filtrer les jobs éligibles (TRANSFERT, PRET, AFFECTE)
-        const validStatuses = ['TRANSFERT', 'PRET', 'AFFECTE']
+        const validStatuses = ['TRANSFERT', 'PRET', 'AFFECTE','VALIDE']
         const eligibleJobs = selectedRows.value.filter(job => validStatuses.includes(job.status))
         const ineligibleJobs = selectedRows.value.filter(job => !validStatuses.includes(job.status))
 
         if (eligibleJobs.length === 0) {
             alertService.warning({
-                text: 'Aucun job éligible. Seuls les jobs en statut TRANSFERT, PRET ou AFFECTE peuvent recevoir une affectation d\'équipe.'
+                text: 'Aucun job éligible. Seuls les jobs en statut VALIDE, AFFECTE, PRET ou TRANSFERT peuvent recevoir une affectation d\'équipe.'
             })
             return
         }
