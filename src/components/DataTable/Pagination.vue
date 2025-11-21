@@ -72,7 +72,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 // Options de taille de page
-const pageSizeOptions = [10, 20, 50, 100]
+const pageSizeOptions = [10, 20, 50, 100, 200, 500]
 
 // État du dropdown
 const isOpen = ref(false)
