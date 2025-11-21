@@ -1,5 +1,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { alertService } from '@/services/alertService'
+import type { DataTableColumn, ColumnDataType } from '@/components/DataTable/types/dataTable'
 
 // Types
 interface Job {
@@ -69,7 +70,7 @@ export function useJobManagementPage() {
     /**
      * Configuration des colonnes du DataTable
      */
-    const jobsColumns = computed(() => [
+    const jobsColumns = computed<DataTableColumn[]>(() => [
         {
             field: 'id',
             headerName: 'ID',
@@ -89,7 +90,7 @@ export function useJobManagementPage() {
             headerName: 'Statut',
             sortable: true,
             filterable: true,
-            dataType: 'select',
+            dataType: 'select' as ColumnDataType,
             width: 120,
             rendererType: 'badge',
             badgeStyles: [

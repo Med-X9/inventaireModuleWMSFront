@@ -214,7 +214,7 @@ export default {
 </script>
 
 <script setup lang="ts">
-import { ref, computed, watch, inject, toRef } from 'vue'
+import { ref, computed, watch, inject, toRef, type ComputedRef } from 'vue'
 import IconX from '../icon/icon-x.vue'
 import IconCheck from '../icon/icon-check.vue'
 import IconPlus from '../icon/icon-plus.vue'
@@ -233,7 +233,7 @@ interface Props {
 const props = defineProps<Props>()
 
 // Injecter les données de la table depuis le parent (évite le rendu comme attribut HTML)
-const tableDataComputed = inject<ReturnType<typeof computed<any[]>>>('tableData', computed(() => []))
+const tableDataComputed = inject<ComputedRef<any[]>>('tableData', computed(() => []))
 const tableData = computed(() => {
     const data = tableDataComputed.value
     return Array.isArray(data) ? data : []

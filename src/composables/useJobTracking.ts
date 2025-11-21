@@ -26,7 +26,7 @@ import { useSessionStore } from '@/stores/session'
 // ===== IMPORTS SERVICES =====
 import { alertService } from '@/services/alertService'
 import { logger } from '@/services/loggerService'
-import { JobService } from '@/services/JobService'
+import { JobService } from '@/services/jobService'
 
 // ===== IMPORTS EXTERNES =====
 import Swal from 'sweetalert2'
