@@ -12,7 +12,7 @@
  */
 
 // ===== IMPORTS VUE =====
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 
 // ===== IMPORTS ROUTER =====
 import { useRoute, useRouter } from 'vue-router'
@@ -27,14 +27,27 @@ import { useSessionStore } from '@/stores/session'
 // ===== IMPORTS SERVICES =====
 import { alertService } from '@/services/alertService'
 import { logger } from '@/services/loggerService'
+import { Validators } from '@/utils/validators'
 
 // ===== IMPORTS COMPOSABLES =====
-import { useJobValidatedDataTable } from '@/composables/useJobValidatedDataTable'
-
 // ===== IMPORTS TYPES =====
 import type { FieldConfig } from '@/interfaces/form'
 import { JobManualAssignmentsRequest } from '@/models/Job'
-import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
+import {
+    convertToStandardDataTableParams,
+    type StandardDataTableParams
+} from '@/components/DataTable/utils/dataTableParamsConverter'
+import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
+import { convertQueryModelToQueryParams, convertQueryModelToRestApi, createQueryModelFromDataTableParams } from '@/components/DataTable/utils/queryModelConverter'
+import type { QueryModel } from '@/components/DataTable/types/QueryModel'
+import {
+    extractFiltersFromStandardParams,
+    extractPageFromStandardParams,
+    extractPageSizeFromStandardParams,
+    extractSortFromStandardParams,
+    isStandardDataTableParams
+} from '@/composables/utils/dataTableHelpers'
+import type { InventoryDetails } from '@/models/Inventory'
 
 // ===== INITIALISATION DES STORES =====
 const jobStore = useJobStore()
@@ -42,7 +55,6 @@ const resourceStore = useResourceStore()
 const warehouseStore = useWarehouseStore()
 const inventoryStore = useInventoryStore()
 const sessionStore = useSessionStore()
-const route = useRoute()
 
 // ===== INTERFACES =====
 
@@ -108,12 +120,18 @@ export interface RowAction {
  * @param reference - Référence de l'inventaire
  * @returns ID de l'inventaire ou null si non trouvé
  */
-const fetchInventoryIdByReference = async (reference: string): Promise<number | null> => {
+const fetchInventoryIdByReference = async (
+    reference: string,
+    options?: {
+        onInventoryResolved?: (inventory: InventoryDetails | null) => void
+    }
+): Promise<number | null> => {
     try {
         logger.debug('Résolution de l\'ID de l\'inventaire par référence', { reference })
 
         // Utiliser fetchInventoryByReference qui récupère directement l'inventaire par référence
         const inventory = await inventoryStore.fetchInventoryByReference(reference)
+        options?.onInventoryResolved?.(inventory ?? null)
 
         if (inventory && inventory.id) {
             logger.debug('ID de l\'inventaire résolu avec succès', {
@@ -216,6 +234,7 @@ export const dateValueSetter = (params: any) => {
  * @returns Objet contenant toutes les propriétés et méthodes nécessaires
  */
 export function useAffecter(options?: { inventoryReference?: string, warehouseReference?: string }) {
+    const route = useRoute()
     const router = useRouter()
 
     // ===== RÉFÉRENCES =====
@@ -247,6 +266,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     const showTeamModal = ref(false)
     const showResourceModal = ref(false)
     const showTransferModal = ref(false)
+    const showManualModal = ref(false)
 
     /** Type d'équipe en cours d'affectation */
     const currentTeamType = ref<'premier' | 'deuxieme'>('premier')
@@ -255,9 +275,63 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     const teamForm = ref<Record<string, unknown>>({ team: '', date: '' })
     const resourceForm = ref({ resources: [] })
     const transferForm = ref({ premierComptage: false, deuxiemeComptage: false })
+    const manualForm = ref({ premierComptage: false, deuxiemeComptage: false })
 
     /** Titre de la modale d'équipe */
     const modalTitle = computed(() => `Affecter ${currentTeamType.value === 'premier' ? 'Premier' : 'Deuxième'} Comptage`)
+
+    /** États DataTable des jobs validés */
+    const jobsCurrentPage = ref(1)
+    const jobsPageSize = ref(20)
+    const jobsSearchQuery = ref('')
+    const jobsSortModel = ref<Array<{ field: string; direction: 'asc' | 'desc' }>>([])
+    const jobsFilters = ref<Record<string, { filter: any; operator?: string }>>({})
+    const lastJobsParams = ref<StandardDataTableParams | null>(null)
+
+    // ===== QUERYMODEL =====
+    
+    /**
+     * Mode de sortie pour les paramètres de requête (défaut: 'queryParams')
+     */
+    const queryOutputMode = ref<'queryModel' | 'dataTable' | 'restApi' | 'queryParams'>('queryParams')
+
+    /**
+     * Colonnes pour QueryModel
+     */
+    const columnsRef = computed(() => columns.value)
+
+    /**
+     * QueryModel pour gérer les requêtes avec mode de sortie configurable
+     */
+    const {
+        queryModel: queryModelRef,
+        toStandardParams,
+        updatePagination: updateQueryPagination,
+        updateSort: updateQuerySort,
+        updateFilter: updateQueryFilter,
+        updateGlobalSearch: updateQueryGlobalSearch,
+        fromDataTableParams: fromDataTableParamsQueryModel
+    } = useQueryModel({
+        columns: columnsRef,
+        enabled: true
+    })
+
+    /**
+     * Convertit le QueryModel selon le mode configuré
+     */
+    const convertQueryModelToOutput = (queryModelData: QueryModel) => {
+        switch (queryOutputMode.value) {
+            case 'queryModel':
+                return queryModelData
+            case 'restApi':
+                return convertQueryModelToRestApi(queryModelData)
+            case 'queryParams':
+                return convertQueryModelToQueryParams(queryModelData)
+            case 'dataTable':
+            default:
+                return toStandardParams.value
+        }
+    }
 
     // ===== RÉFÉRENCES COMPOSANTS =====
 
@@ -270,11 +344,11 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     /** État d'ouverture du dropdown */
     const showDropdown = ref(false)
 
-    /** Référence au composable DataTable pour les jobs validés */
-    const jobValidatedDataTableRef = ref<any>(null)
-
     /** Statut de l'inventaire */
     const inventoryStatus = ref<string>('')
+
+    /** Cache local de l'inventaire pour éviter les doubles appels */
+    const inventoryDetailsCache = ref<InventoryDetails | null>(null)
 
     // ===== MÉTHODES D'INITIALISATION =====
 
@@ -292,7 +366,14 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
         if (inventoryReference) {
             promises.push(
-                fetchInventoryIdByReference(inventoryReference).then(id => {
+                fetchInventoryIdByReference(inventoryReference, {
+                    onInventoryResolved: (inventory) => {
+                        inventoryDetailsCache.value = inventory
+                        if (inventory?.status) {
+                            inventoryStatus.value = inventory.status
+                        }
+                    }
+                }).then(id => {
                     inventoryId.value = id
                     logger.debug('inventoryId défini', { inventoryId: id })
                 }).catch(error => {
@@ -339,9 +420,14 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
      * Récupère le statut de l'inventaire
      */
     const fetchInventoryStatus = async () => {
+        if (inventoryDetailsCache.value?.status) {
+            inventoryStatus.value = inventoryDetailsCache.value.status
+            return
+        }
         try {
             const inventory = await inventoryStore.fetchInventoryByReference(inventoryReference)
             if (inventory) {
+                inventoryDetailsCache.value = inventory
                 inventoryStatus.value = inventory.status
             }
         } catch (error) {
@@ -351,27 +437,23 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
     /**
      * Initialise le composable DataTable
+     * Retourne true si l'initialisation a réussi, false sinon
      */
-    const initializeDataTable = async () => {
-        if (inventoryId.value && warehouseId.value && !jobValidatedDataTableRef.value) {
+    const initializeDataTable = async (): Promise<boolean> => {
+        if (inventoryId.value && warehouseId.value) {
             logger.debug('Initialisation du DataTable pour les jobs validés', {
                 inventoryId: inventoryId.value,
                 warehouseId: warehouseId.value
             })
-            jobValidatedDataTableRef.value = useJobValidatedDataTable(inventoryId.value, warehouseId.value)
-
-            // Charger les données immédiatement après l'initialisation
-            if (jobValidatedDataTableRef.value?.loadData) {
-                logger.debug('Chargement des données du DataTable')
-                await jobValidatedDataTableRef.value.loadData()
-            }
-        } else {
-            logger.warn('Impossible d\'initialiser le DataTable, IDs manquants', {
-                inventoryId: inventoryId.value,
-                warehouseId: warehouseId.value,
-                hasDataTable: !!jobValidatedDataTableRef.value
-            })
+            await loadValidatedJobs()
+            return true
         }
+
+        logger.warn('Impossible d\'initialiser le DataTable, IDs manquants', {
+            inventoryId: inventoryId.value,
+            warehouseId: warehouseId.value
+        })
+        return false
     }
 
     /**
@@ -423,84 +505,98 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     // ===== WATCHERS =====
 
     /**
-     * Watch pour réinitialiser le composable quand les IDs changent
+     * Flag pour éviter les doubles chargements
      */
-    watch([inventoryId, warehouseId], async ([newInventoryId, newWarehouseId]) => {
-        if (newInventoryId && newWarehouseId && !jobValidatedDataTableRef.value) {
-            logger.debug('Watch: Initialisation du DataTable suite au changement des IDs', {
+    const isInitializing = ref(false)
+
+    /**
+     * Watch pour réinitialiser le composable quand les IDs changent
+     * Utilise { immediate: false } pour éviter le double chargement lors de l'initialisation
+     */
+    watch([inventoryId, warehouseId], async ([newInventoryId, newWarehouseId], [oldInventoryId, oldWarehouseId]) => {
+        if (!newInventoryId || !newWarehouseId) {
+            return
+        }
+
+        if (newInventoryId === oldInventoryId && newWarehouseId === oldWarehouseId) {
+            return
+        }
+
+        if (isInitializing.value) {
+            logger.debug('Watch: Initialisation déjà en cours, ignore le déclenchement')
+            return
+        }
+
+        isInitializing.value = true
+        try {
+            logger.debug('Watch: Rechargement du DataTable suite au changement des IDs', {
                 inventoryId: newInventoryId,
                 warehouseId: newWarehouseId
             })
-            jobValidatedDataTableRef.value = useJobValidatedDataTable(newInventoryId, newWarehouseId)
-
-            // Charger les données immédiatement après l'initialisation
-            if (jobValidatedDataTableRef.value?.loadData) {
-                logger.debug('Watch: Chargement des données du DataTable')
-                await jobValidatedDataTableRef.value.loadData()
-            }
+            await loadValidatedJobs()
+        } finally {
+            isInitializing.value = false
         }
-    })
+    }, { immediate: false })
 
     // ===== HANDLERS DATATABLE =====
 
     /**
      * Handler pour les changements de pagination
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
      *
-     * @param params - Paramètres de pagination (format standard ou ancien format)
+     * @param params - Paramètres de pagination (format configuré ou ancien format)
      */
-    const handlePaginationChanged = async (params: { page: number, pageSize: number } | StandardDataTableParams) => {
-        if (!jobValidatedDataTableRef.value) return
+    const handlePaginationChanged = async (params: StandardDataTableParams | { page: number, pageSize: number } | QueryModel | Record<string, any>) => {
+        const standardParams = isStandardDataTableParams(params)
+            ? params
+            : buildJobsStandardParams({
+                page: (params as { page: number }).page,
+                pageSize: (params as { page: number, pageSize: number }).pageSize
+            })
 
-        // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-        if ('draw' in params && 'start' in params && 'length' in params) {
-            await jobValidatedDataTableRef.value.handlePaginationChanged(params as StandardDataTableParams)
-            return
-        }
-
-        // Sinon, convertir l'ancien format
-        const paginationParams = params as { page: number, pageSize: number }
-        await jobValidatedDataTableRef.value.handlePaginationChanged({ page: paginationParams.page, pageSize: paginationParams.pageSize })
+        syncJobsStateFromStandardParams(standardParams)
+        await loadValidatedJobs(standardParams)
     }
 
     /**
      * Handler pour les changements de tri
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
      *
-     * @param sortModel - Modèle de tri (format standard ou ancien format)
+     * @param sortModel - Modèle de tri (format configuré ou ancien format)
      */
-    const handleSortChanged = async (sortModel: Array<{ field: string; direction: 'asc' | 'desc' }> | StandardDataTableParams) => {
-        if (!jobValidatedDataTableRef.value) return
-
-        // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-        if ('draw' in sortModel && 'start' in sortModel && 'length' in sortModel) {
-            await jobValidatedDataTableRef.value.handleSortChanged(sortModel as StandardDataTableParams)
-            return
+    const handleSortChanged = async (sortModel: Array<{ field: string; direction: 'asc' | 'desc' }> | StandardDataTableParams | QueryModel | Record<string, any>) => {
+        if (!isStandardDataTableParams(sortModel)) {
+            jobsSortModel.value = sortModel as Array<{ field: string; direction: 'asc' | 'desc' }>
         }
 
-        // Sinon, convertir l'ancien format
-        const sortModelArray = sortModel as Array<{ field: string; direction: 'asc' | 'desc' }>
-        await jobValidatedDataTableRef.value.handleSortChanged(sortModelArray)
+        const standardParams = isStandardDataTableParams(sortModel)
+            ? sortModel
+            : buildJobsStandardParams({
+                sort: jobsSortModel.value
+            })
+
+        syncJobsStateFromStandardParams(standardParams)
+        await loadValidatedJobs(standardParams)
     }
 
     /**
      * Handler pour les changements de filtres
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
      *
-     * @param filterModel - Modèle de filtres (format standard ou ancien format)
+     * @param filterModel - Modèle de filtres (format configuré ou ancien format)
      */
-    const handleFilterChanged = async (filterModel: Record<string, any> | StandardDataTableParams) => {
-        if (!jobValidatedDataTableRef.value) return
-
-        // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-        if ('draw' in filterModel && 'start' in filterModel && 'length' in filterModel) {
-            await jobValidatedDataTableRef.value.handleFilterChanged(filterModel as StandardDataTableParams)
-            return
+    const handleFilterChanged = async (filterModel: Record<string, any> | StandardDataTableParams | QueryModel | Record<string, any>) => {
+        if (!isStandardDataTableParams(filterModel)) {
+            jobsFilters.value = filterModel as Record<string, { filter: any; operator?: string }>
         }
 
-        // Sinon, convertir l'ancien format
-        const filterModelObj = filterModel as Record<string, any>
-        await jobValidatedDataTableRef.value.handleFilterChanged(filterModelObj)
+        const standardParams = isStandardDataTableParams(filterModel)
+            ? filterModel
+            : buildJobsStandardParams({ filters: jobsFilters.value })
+
+        syncJobsStateFromStandardParams(standardParams)
+        await loadValidatedJobs(standardParams)
     }
 
     /**
@@ -510,16 +606,15 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
      * @param searchTerm - Terme de recherche (format standard ou string)
      */
     const handleGlobalSearchChanged = async (searchTerm: string | StandardDataTableParams) => {
-        if (!jobValidatedDataTableRef.value) return
+        const standardParams = typeof searchTerm === 'object' && isStandardDataTableParams(searchTerm)
+            ? searchTerm
+            : buildJobsStandardParams({
+                page: 1,
+                search: typeof searchTerm === 'string' ? searchTerm : ''
+            })
 
-        // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-        if (typeof searchTerm === 'object' && 'draw' in searchTerm && 'start' in searchTerm && 'length' in searchTerm) {
-            await jobValidatedDataTableRef.value.handleSearchChanged(searchTerm as StandardDataTableParams)
-            return
-        }
-
-        // Sinon, utiliser directement la valeur string
-        await jobValidatedDataTableRef.value.handleSearchChanged(searchTerm as string)
+        syncJobsStateFromStandardParams(standardParams)
+        await loadValidatedJobs(standardParams)
     }
 
     // ===== COMPUTED PROPERTIES =====
@@ -559,8 +654,9 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     const resourceOptions = computed(() => {
         const resources = resourceStore.getResources
 
+        // Ne pas appeler fetchResources dans un computed - utiliser un watcher ou onMounted à la place
+        // Si les ressources sont vides, elles seront chargées par initializeStores()
         if (resources.length === 0) {
-            resourceStore.fetchResources()
             return []
         }
 
@@ -572,31 +668,28 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     })
 
     /**
-     * Données formatées pour l'affichage dans le DataTable
+     * Transforme les jobs en lignes compatibles DataTable
      */
-    const displayData = computed(() => {
-        // Utiliser les données du composable générique si disponible, sinon fallback sur le store
-        const jobs = jobValidatedDataTableRef.value?.data.value || jobStore.jobsValidated
+    const mapJobsToRows = (jobs: any[] | undefined | null): RowNode[] => {
+        if (!jobs || jobs.length === 0) {
+            return []
+        }
+
         const newData: RowNode[] = []
 
         jobs.forEach((parentRow) => {
-            // Trouver les assignments pour premier et deuxième comptage
-            const premierAssignment = parentRow.assignments?.find(a => a.counting_order === 1)
-            const deuxiemeAssignment = parentRow.assignments?.find(a => a.counting_order === 2)
+            const premierAssignment = parentRow.assignments?.find((a: any) => a.counting_order === 1)
+            const deuxiemeAssignment = parentRow.assignments?.find((a: any) => a.counting_order === 2)
 
-            // Formater les ressources
-            const ressourcesList = (parentRow.ressources || []).map(r => r.reference)
+            const ressourcesList = (parentRow.ressources || []).map((r: any) => r.reference)
             const ressourcesString = ressourcesList.length > 0 ? ressourcesList.join(', ') : ''
 
-            // Formater les équipes - session est un objet avec username et id
             const team1Name = premierAssignment?.session?.username || premierAssignment?.session?.id?.toString() || ''
             const team2Name = deuxiemeAssignment?.session?.username || deuxiemeAssignment?.session?.id?.toString() || ''
 
-            // Extraire les statuts des assignments
             const team1Status = premierAssignment?.status || ''
             const team2Status = deuxiemeAssignment?.status || ''
 
-            // Formater les emplacements avec toutes leurs propriétés
             const locations = (parentRow.emplacements || []).map((loc: any) => ({
                 id: loc.id,
                 reference: loc.reference,
@@ -609,25 +702,30 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
             newData.push({
                 id: String(parentRow.id),
-                job: parentRow.reference || `Job ${parentRow.id}`, // Référence du job
-                locations: locations, // Emplacements pour la nestedTable
+                job: parentRow.reference || `Job ${parentRow.id}`,
+                locations,
                 team1: team1Name,
-                team1Status: team1Status,
+                team1Status,
                 date1: premierAssignment?.date_start || '',
                 team2: team2Name,
-                team2Status: team2Status,
+                team2Status,
                 date2: deuxiemeAssignment?.date_start || '',
                 resourcesList: ressourcesList,
                 resources: ressourcesString,
                 nbResources: ressourcesList.length,
-                status: (['AFFECTE', 'VALIDE', 'TRANSFERT', 'PRET', 'ENTAME'].includes(String(parentRow.status)) ? String(parentRow.status) : 'AFFECTE') as 'AFFECTE' | 'VALIDE' | 'TRANSFERT' | 'PRET' | 'ENTAME',
+                status: (['AFFECTE', 'VALIDE', 'TRANSFERT', 'PRET', 'ENTAME'].includes(String(parentRow.status))
+                    ? String(parentRow.status)
+                    : 'AFFECTE') as RowNode['status'],
                 isChild: false,
                 parentId: null
             })
         })
 
         return newData
-    })
+    }
+
+    const jobsData = computed(() => jobStore.jobsValidated)
+    const displayData = computed(() => mapJobsToRows(jobsData.value))
 
     /**
      * Vérifie si un job a au moins un assignment avec le statut TRANSFERT ou PRET
@@ -637,8 +735,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
      */
     const hasTransferableAssignment = (jobId: string): boolean => {
         // Récupérer les données originales du job
-        const jobs = jobValidatedDataTableRef.value?.data.value || jobStore.jobsValidated
-        const job = jobs.find((j: any) => String(j.id) === jobId)
+        const job = jobsData.value.find((j: any) => String(j.id) === jobId)
 
         if (!job || !job.assignments || !Array.isArray(job.assignments)) {
             return false
@@ -673,6 +770,16 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     })
 
     /**
+     * Jobs éligibles pour l'action manuelle
+     * - Jobs avec statut PRET, TRANSFERT ou ENTAME
+     */
+    const eligibleJobsForManual = computed(() => {
+        return selectedRows.value.filter(job => {
+            return job.status === 'PRET' || job.status === 'TRANSFERT' || job.status === 'ENTAME'
+        })
+    })
+
+    /**
      * Afficher le bouton de transfert si l'inventaire est en réalisation
      */
     const showTransferButton = computed(() => {
@@ -680,9 +787,23 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     })
 
     /**
+     * Afficher le bouton Manuel si l'inventaire est en réalisation
+     */
+    const showManualButton = computed(() => {
+        return inventoryStatus.value === 'EN REALISATION'
+    })
+
+    /**
      * Afficher le bouton prêt si l'inventaire est en préparation
      */
     const showReadyButton = computed(() => {
+        return inventoryStatus.value === 'EN PREPARATION'
+    })
+
+    /**
+     * Afficher le bouton Annuler si l'inventaire est en préparation
+     */
+    const showResetButton = computed(() => {
         return inventoryStatus.value === 'EN PREPARATION'
     })
 
@@ -997,15 +1118,18 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                         value: 'AFFECTE',
                         class: 'inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-800 ring-1 ring-slate-600/20 ring-inset',
                         icon: '<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>'
+                    },
+                    {
+                        value: 'TERMINE',
+                        class: 'inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-800 ring-1 ring-slate-600/20 ring-inset',
+                        icon: '<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>'
                     }
                 ],
                 badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
                 cellRenderer: (value: any, column: any, row: any) => {
                     const teamName = value || ''
                     const status = row?.team2Status || ''
-
                     if (!teamName) return '-'
-
                     // Trouver le style de badge pour ce statut
                     const badgeStyle = column.badgeStyles?.find((s: any) => s.value === status)
                     const defaultClass = column.badgeDefaultClass || 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
@@ -1072,6 +1196,129 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
         return cols
     })
+
+    const jobsLoading = computed(() => jobStore.loading)
+
+    const syncJobsStateFromStandardParams = (standardParams: StandardDataTableParams) => {
+        const pageSize = extractPageSizeFromStandardParams(standardParams, jobsPageSize.value)
+        const page = extractPageFromStandardParams(standardParams, pageSize)
+        const filters = extractFiltersFromStandardParams(standardParams, columns.value)
+        const sortModel = extractSortFromStandardParams(standardParams, columns.value)
+
+        jobsPageSize.value = pageSize
+        jobsCurrentPage.value = page
+        jobsFilters.value = filters
+
+        if (sortModel.length > 0) {
+            jobsSortModel.value = sortModel
+        }
+
+        if (standardParams['search[value]'] !== undefined) {
+            jobsSearchQuery.value = standardParams['search[value]'] || ''
+        }
+    }
+
+    const buildJobsStandardParams = (options?: {
+        page?: number
+        pageSize?: number
+        filters?: Record<string, { filter: any; operator?: string }>
+        sort?: Array<{ field: string; direction: 'asc' | 'desc' }>
+        search?: string
+    }): StandardDataTableParams => {
+        return convertToStandardDataTableParams(
+            {
+                page: options?.page ?? jobsCurrentPage.value,
+                pageSize: options?.pageSize ?? jobsPageSize.value,
+                filters: options?.filters ?? jobsFilters.value,
+                sort: (options?.sort ?? jobsSortModel.value).map(sort => ({
+                    colId: sort.field,
+                    sort: sort.direction
+                })),
+                globalSearch: options?.search ?? (jobsSearchQuery.value || undefined)
+            },
+            {
+                columns: columns.value,
+                draw: 1,
+                customParams: {
+                    inventory_id: inventoryId.value,
+                    warehouse_id: warehouseId.value
+                }
+            }
+        )
+    }
+
+    /**
+     * Pagination calculée pour les jobs validés
+     * Utilise le totalCount du store pour calculer les informations de pagination
+     */
+    const jobsPaginationComputed = computed(() => {
+        const totalCount = jobStore.totalCount || 0
+        const pageSizeValue = jobsPageSize.value || 20
+        const currentPageValue = jobsCurrentPage.value || 1
+
+        return {
+            current_page: currentPageValue,
+            total_pages: Math.max(1, Math.ceil(totalCount / pageSizeValue)),
+            has_next: currentPageValue < Math.ceil(totalCount / pageSizeValue),
+            has_previous: currentPageValue > 1,
+            page_size: pageSizeValue,
+            total: totalCount
+        }
+    })
+
+    async function loadValidatedJobs(params?: StandardDataTableParams) {
+        if (!inventoryId.value || !warehouseId.value) {
+            logger.warn('Impossible de charger les jobs validés, IDs manquants')
+            return
+        }
+
+        const finalParams = params ?? buildJobsStandardParams()
+        lastJobsParams.value = finalParams
+        syncJobsStateFromStandardParams(finalParams)
+
+        try {
+            // Utiliser les paramètres fournis ou construire à partir des valeurs actuelles
+            let standardParams: StandardDataTableParams
+            if (params && 'start' in params && 'length' in params) {
+                // C'est déjà StandardDataTableParams
+                standardParams = params
+            } else {
+                // Construire depuis les valeurs actuelles
+                standardParams = buildJobsStandardParams()
+            }
+
+            // S'assurer que length et start sont bien définis
+            if (!standardParams.length) {
+                standardParams.length = jobsPageSize.value || 20
+            }
+            if (standardParams.start === undefined) {
+                standardParams.start = ((jobsCurrentPage.value || 1) - 1) * (jobsPageSize.value || 20)
+            }
+
+            logger.debug('Chargement des jobs validés avec paramètres DataTable:', {
+                inventoryId: inventoryId.value,
+                warehouseId: warehouseId.value,
+                pageSize: jobsPageSize.value,
+                params: standardParams
+            })
+
+            await jobStore.fetchJobsValidated(inventoryId.value, warehouseId.value, standardParams)
+            await nextTick()
+
+            logger.debug('Jobs validés mis à jour dans le store', {
+                count: jobStore.jobsValidated.length,
+                totalCount: jobStore.totalCount,
+                sample: jobStore.jobsValidated.slice(0, 2).map(j => ({ id: j.id, reference: j.reference }))
+            })
+        } catch (error) {
+            logger.error('Erreur lors du chargement des jobs validés', error)
+            throw error
+        }
+    }
+
+    const refreshJobsData = async () => {
+        await loadValidatedJobs(lastJobsParams.value ?? buildJobsStandardParams())
+    }
 
     // ===== GESTION DES MODIFICATIONS =====
 
@@ -1169,11 +1416,9 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             })
 
             // Réinitialiser la sélection après la sauvegarde
-            clearAllSelections()
+            await clearAllSelections()
 
-            if (jobValidatedDataTableRef.value) {
-                await jobValidatedDataTableRef.value.refresh()
-            }
+            await refreshJobsData()
         } catch (error) {
             logger.error('Erreur lors de la sauvegarde', error)
             alertService.error({
@@ -1181,6 +1426,29 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                 text: 'Certaines modifications n\'ont pas pu être sauvegardées. Veuillez réessayer.'
             })
         }
+    }
+
+    /**
+     * Réinitialise toutes les modifications en attente
+     * Cette fonction annule toutes les modifications non sauvegardées et restaure les valeurs originales
+     */
+    async function resetAllChanges() {
+        if (pendingChanges.value.size === 0) {
+            alertService.info({ text: 'Aucune modification à réinitialiser.' })
+            return
+        }
+
+        const changesCount = Array.from(pendingChanges.value.values()).reduce((total, changes) => total + changes.size, 0)
+
+        // Vider toutes les modifications en attente
+        pendingChanges.value.clear()
+
+        alertService.success({
+            text: `${changesCount} modification(s) réinitialisée(s). Les valeurs originales ont été restaurées.`
+        })
+
+        // Rafraîchir les données pour restaurer les valeurs originales
+        await refreshJobsData()
     }
 
     // ===== HANDLERS DATATABLE EVENTS =====
@@ -1277,9 +1545,19 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
     /**
      * Réinitialise toutes les sélections
+     * Cette fonction met à jour à la fois l'état local et la sélection dans le DataTable
      */
-    function clearAllSelections() {
+    async function clearAllSelections() {
+        // Réinitialiser d'abord l'état local
         selectedRows.value = []
+
+        // Réinitialiser la sélection dans le DataTable via la ref
+        // Cela va automatiquement émettre l'événement selection-changed qui mettra à jour selectedRows
+        if (dataTableRef.value && typeof dataTableRef.value.clearAllSelections === 'function') {
+            dataTableRef.value.clearAllSelections()
+            // Attendre que la mise à jour se propage
+            await nextTick()
+        }
     }
 
     // ===== GESTION DU DROPDOWN =====
@@ -1466,11 +1744,9 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         alertService.info({ text: 'La fonction de validation est désactivée pour l\'instant.' })
 
         // Réinitialiser la sélection après la validation
-        clearAllSelections()
+        await clearAllSelections()
 
-        if (jobValidatedDataTableRef.value) {
-            await jobValidatedDataTableRef.value.refresh()
-        }
+        await refreshJobsData()
     }
 
     /**
@@ -1481,15 +1757,32 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             alertService.warning({ text: 'Veuillez sélectionner au moins un job.' })
             return
         }
-        const jobIds: number[] = selectedRows.value.map(r => parseInt(r.id))
-        await jobStore.jobReady(jobIds)
-        alertService.success({ text: `${jobIds.length} job(s) mis en statut 'Prêt' avec succès !` })
 
-        // Réinitialiser la sélection après la mise en statut "Prêt"
-        clearAllSelections()
+        // Vérifier que tous les jobs sélectionnés ont le statut "AFFECTE"
+        const jobsWithInvalidStatus = selectedRows.value.filter(row => row.status !== 'AFFECTE')
 
-        if (jobValidatedDataTableRef.value) {
-            await jobValidatedDataTableRef.value.refresh()
+        if (jobsWithInvalidStatus.length > 0) {
+            const jobIds = jobsWithInvalidStatus.map(row => row.job || row.id).join(', ')
+            alertService.warning({
+                text: `Seuls les jobs avec le statut "AFFECTE" peuvent être mis en statut "Prêt". Les jobs suivants ne sont pas affectés : ${jobIds}`
+            })
+            return
+        }
+
+        try {
+            const jobIds: number[] = selectedRows.value.map(r => parseInt(r.id))
+            await jobStore.jobReady(jobIds)
+            alertService.success({ text: `${jobIds.length} job(s) mis en statut 'Prêt' avec succès !` })
+
+            // Réinitialiser la sélection après la mise en statut "Prêt"
+            await clearAllSelections()
+
+            await refreshJobsData()
+        } catch (error) {
+            // Extraire et afficher le message d'erreur backend
+            const errorMessage = Validators.extractBackendError(error, 'Erreur lors de la mise en statut "Prêt" des jobs')
+            alertService.error({ text: errorMessage })
+            logger.error('Erreur lors de la mise en statut "Prêt" des jobs', error)
         }
     }
 
@@ -1506,11 +1799,9 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         alertService.success({ text: `${jobIds.length} job(s) réinitialisés avec succès !` })
 
         // Réinitialiser la sélection après la réinitialisation des jobs
-        clearAllSelections()
+        await clearAllSelections()
 
-        if (jobValidatedDataTableRef.value) {
-            await jobValidatedDataTableRef.value.refresh()
-        }
+        await refreshJobsData()
     }
 
     /**
@@ -1557,6 +1848,38 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         // Utiliser uniquement les jobs éligibles
         selectedRows.value = eligibleJobs
         showTransferModal.value = true
+    }
+
+    /**
+     * Handler pour l'action manuelle de jobs
+     */
+    const handleManualClick = () => {
+        if (!selectedRows.value.length) {
+            alertService.warning({ text: 'Veuillez sélectionner au moins un job.' })
+            return
+        }
+
+        // Filtrer les jobs éligibles pour l'action manuelle
+        // - Uniquement les jobs avec statut PRET ou TRANSFERT
+        const eligibleJobs = eligibleJobsForManual.value
+        const ineligibleJobs = selectedRows.value.filter(job => !eligibleJobs.includes(job))
+
+        if (eligibleJobs.length === 0) {
+            alertService.error({
+                text: 'Aucun job éligible pour l\'action manuelle. Seuls les jobs en statut PRET, TRANSFERT ou ENTAME peuvent être lancés manuellement.'
+            })
+            return
+        }
+
+        if (ineligibleJobs.length > 0) {
+            alertService.warning({
+                text: `${eligibleJobs.length} job(s) éligible(s). ${ineligibleJobs.length} job(s) ne sont pas éligibles (statuts: ${ineligibleJobs.map(j => j.status).join(', ')})`
+            })
+        }
+
+        // Utiliser uniquement les jobs éligibles
+        selectedRows.value = eligibleJobs
+        showManualModal.value = true
     }
 
     /**
@@ -1607,15 +1930,56 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             transferForm.value = { premierComptage: false, deuxiemeComptage: false }
 
             // Réinitialiser la sélection après le transfert
-            clearAllSelections()
+            await clearAllSelections()
 
-            if (jobValidatedDataTableRef.value) {
-                await jobValidatedDataTableRef.value.refresh()
-            }
+            await refreshJobsData()
         } catch (error) {
             logger.error('Erreur lors du transfert des jobs', error)
             alertService.error({
                 text: 'Erreur lors du transfert des jobs'
+            })
+        }
+    }
+
+    /**
+     * Handler pour la soumission du formulaire d'action manuelle
+     *
+     * @param data - Données du formulaire (premierComptage, deuxiemeComptage)
+     */
+    const handleManualSubmit = async (data: Record<string, unknown>) => {
+        const { premierComptage, deuxiemeComptage } = data as { premierComptage: boolean; deuxiemeComptage: boolean }
+
+        // Déterminer les ordres de comptage à transférer
+        const countingOrder: number[] = []
+        if (premierComptage) countingOrder.push(1)
+        if (deuxiemeComptage) countingOrder.push(2)
+
+        if (countingOrder.length === 0) {
+            alertService.warning({ text: 'Veuillez sélectionner au moins un comptage à lancer.' })
+            return
+        }
+
+        // Utiliser uniquement les jobs éligibles (PRET ou TRANSFERT)
+        const eligibleJobIds = eligibleJobsForManual.value.map(r => parseInt(r.id))
+
+        try {
+            await jobStore.jobTransfer(eligibleJobIds, countingOrder)
+
+            alertService.success({
+                text: `${eligibleJobIds.length} job(s) lancé(s) manuellement avec succès pour ${countingOrder.length === 2 ? 'les deux comptages' : countingOrder[0] === 1 ? 'le 1er comptage' : 'le 2e comptage'}`
+            })
+
+            showManualModal.value = false
+            manualForm.value = { premierComptage: false, deuxiemeComptage: false }
+
+            // Réinitialiser la sélection après l'action manuelle
+            await clearAllSelections()
+
+            await refreshJobsData()
+        } catch (error) {
+            logger.error('Erreur lors de l\'action manuelle des jobs', error)
+            alertService.error({
+                text: 'Erreur lors de l\'action manuelle des jobs'
             })
         }
     }
@@ -1667,11 +2031,9 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             resourceForm.value = { resources: [] }
 
             // Réinitialiser la sélection après l'affectation de ressources
-            clearAllSelections()
+            await clearAllSelections()
 
-            if (jobValidatedDataTableRef.value) {
-                await jobValidatedDataTableRef.value.refresh()
-            }
+            await refreshJobsData()
         } catch (error) {
             logger.error('Erreur lors de l\'affectation des ressources', error)
             alertService.error({
@@ -1709,11 +2071,9 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             teamForm.value = { team: '', date: '' }
 
             // Réinitialiser la sélection après l'affectation d'équipe
-            clearAllSelections()
+            await clearAllSelections()
 
-            if (jobValidatedDataTableRef.value) {
-                await jobValidatedDataTableRef.value.refresh()
-            }
+            await refreshJobsData()
         } catch (error) {
             logger.error('Erreur lors de l\'affectation de l\'équipe', error)
             alertService.error({
@@ -1759,24 +2119,27 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                 warehouseReference
             })
 
-            // Paralléliser l'initialisation des stores et des IDs pour améliorer les performances
-            await Promise.all([
-                initializeStores(),
-                initializeIdsFromReferences()
-            ])
+            // Charger les stores en tâche de fond
+            void initializeStores()
 
-            logger.debug('IDs résolus', {
-                inventoryId: inventoryId.value,
-                warehouseId: warehouseId.value
-            })
+            isInitializing.value = true
+            try {
+                await initializeIdsFromReferences()
 
-            // Une fois les IDs obtenus, initialiser le DataTable et charger les données
-            await initializeDataTable()
+                logger.debug('IDs résolus', {
+                    inventoryId: inventoryId.value,
+                    warehouseId: warehouseId.value
+                })
 
-            // Charger le statut de l'inventaire en parallèle (non bloquant)
-            fetchInventoryStatus().catch(error => {
-                logger.warn('Erreur lors de la récupération du statut de l\'inventaire (non bloquant)', error)
-            })
+                await initializeDataTable()
+
+                // Rafraîchir le statut sans bloquer l'affichage
+                fetchInventoryStatus().catch(error => {
+                    logger.warn('Erreur lors de la récupération du statut de l\'inventaire (non bloquant)', error)
+                })
+            } finally {
+                isInitializing.value = false
+            }
         } catch (error) {
             logger.error('Erreur lors de l\'initialisation', error)
             await alertService.error({
@@ -1810,6 +2173,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         showTeamModal,
         showResourceModal,
         showTransferModal,
+        showManualModal,
         modalTitle,
 
         // Formulaires
@@ -1819,12 +2183,14 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         resourceFields,
         transferForm,
         transferFields,
+        manualForm,
 
         // Dropdown
         dropdownItems,
 
         // Actions
         saveAllChanges,
+        resetAllChanges,
         clearAllSelections,
         onCellValueChanged,
         onSelectionChanged,
@@ -1843,17 +2209,27 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         handleResourceSubmit,
         handleTeamSubmit,
         handleTransferSubmit,
+        handleManualSubmit,
         handleReadyClick,
         handleResetClick,
         handleGoToInventoryDetail,
         handleGoToAffectation,
         handleTransferClick,
+        handleManualClick,
 
         // Pagination et filtrage
-        currentPage: computed(() => jobValidatedDataTableRef.value?.currentPage.value || 1),
-        totalPages: computed(() => jobValidatedDataTableRef.value?.pagination.value.total_pages || 1),
-        totalItems: computed(() => jobValidatedDataTableRef.value?.pagination.value.total || 0),
-        loading: computed(() => jobValidatedDataTableRef.value?.loading.value || false),
+        currentPage: computed(() => jobsCurrentPage.value),
+        pageSize: computed(() => jobsPageSize.value),
+
+        // QueryModel
+        queryModel: computed(() => queryModelRef.value),
+        queryOutputMode: computed(() => queryOutputMode.value),
+        convertQueryModelToOutput,
+        totalPages: computed(() => jobsPaginationComputed.value.total_pages),
+        totalItems: computed(() => jobsPaginationComputed.value.total),
+        jobsPagination: jobsPaginationComputed,
+        jobsTotalItems: computed(() => jobStore.totalCount || 0),
+        loading: jobsLoading,
         handlePaginationChanged,
         handleSortChanged,
         handleFilterChanged,
@@ -1869,11 +2245,14 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
         // Computed
         eligibleJobsForTransfer,
+        eligibleJobsForManual,
         columns,
         sessionOptions,
         resourceOptions,
         showTransferButton,
+        showManualButton,
         showReadyButton,
+        showResetButton,
 
         // Utilitaires
         loadSessionsIfNeeded,

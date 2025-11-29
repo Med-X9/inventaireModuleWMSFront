@@ -71,7 +71,7 @@ export function useGenericDataTable<T>(
     /**
      * Taille de page courante
      */
-    const pageSize = ref(options?.initialPageSize || 10)
+    const pageSize = ref(options?.initialPageSize || 20)
 
     // ===== FONCTIONS DE GESTION =====
 

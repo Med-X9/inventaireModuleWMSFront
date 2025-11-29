@@ -1011,9 +1011,11 @@ const resourceFields = (index: number): FieldConfig[] => [
  */
 const loadAvailableResources = async () => {
     try {
-        availableResources.value = await getAvailableResources()
+        const resources = await getAvailableResources()
+        availableResources.value = resources || []
     } catch (error) {
         logger.error('Erreur lors du chargement des ressources disponibles', error)
+        availableResources.value = []
     }
 }
 
@@ -1049,7 +1051,10 @@ const onAddResources = async () => {
  * Ouvre le modal d'ajout de ressources
  */
 const openAddResourceModal = async () => {
-    await resourceStore.fetchResources()
+    // Ne charger les ressources que si elles ne sont pas déjà chargées
+    if (resourceStore.getResources.length === 0) {
+        await resourceStore.fetchResources()
+    }
     await loadAvailableResources()
     resourceLines.value = [{ resource: '', quantity: 1 }]
     showAddResourceModal.value = true
@@ -1062,7 +1067,10 @@ const openAddResourceModal = async () => {
  * Initialisation au montage du composant
  */
 onMounted(async () => {
-    await resourceStore.fetchResources()
+    // Ne charger les ressources que si elles ne sont pas déjà chargées
+    if (resourceStore.getResources.length === 0) {
+        await resourceStore.fetchResources()
+    }
     loadDetailData()
 })
 </script>

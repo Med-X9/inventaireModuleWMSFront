@@ -6,7 +6,7 @@
 
         <Teleport to="body">
             <div v-if="visible && text" ref="tooltipElement" :style="tooltipStyle"
-                class="fixed z-50 px-2 py-1 text-xs text-white bg-primary rounded shadow-lg pointer-events-none max-w-xs break-words">
+                class="fixed z-50 px-2 py-1 text-xs text-card bg-primary rounded shadow-lg pointer-events-none max-w-xs break-words font-body">
                 {{ text }}
                 <div class="absolute w-2 h-2 bg-primary transform rotate-45" :class="arrowClass"></div>
             </div>

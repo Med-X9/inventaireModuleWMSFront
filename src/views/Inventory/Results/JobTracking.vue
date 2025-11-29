@@ -38,12 +38,40 @@
         <!-- Carte de filtres -->
         <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 mb-6 shadow-xl border border-slate-200 dark:border-slate-700">
             <div class="border-b-2 border-slate-200 dark:border-slate-700 pb-4 mb-6">
-                <h2 class="flex items-center gap-3 text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
-                    <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                    </svg>
-                    Filtres de sélection
-                </h2>
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <h2 class="flex items-center gap-3 text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
+                        <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                        </svg>
+                        Filtres de sélection
+                    </h2>
+                    <!-- Informations intégrées -->
+                    <div class="flex flex-wrap items-center gap-4 lg:gap-6">
+                        <!-- Référence inventaire -->
+                        <div class="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <div>
+                                <div class="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase">Référence</div>
+                                <div class="text-sm font-bold text-blue-900 dark:text-blue-100">{{ inventoryReference || 'N/A' }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Entrepôt sélectionné -->
+                        <div v-if="selectedWarehouse" class="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl border border-green-200 dark:border-green-800">
+                            <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                            <div>
+                                <div class="text-xs font-semibold text-green-600 dark:text-green-400 uppercase">Entrepôt</div>
+                                <div class="text-sm font-bold text-green-900 dark:text-green-100 truncate max-w-[150px]">
+                                    {{ selectedWarehouse.warehouse_name || selectedWarehouse.reference || `Entrepôt ${selectedWarehouse.id}` }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div class="flex flex-col gap-2">
@@ -84,61 +112,23 @@
             </div>
         </div>
 
-        <!-- Cartes d'information -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700 flex items-center gap-4 transition-all duration-200 hover:shadow-xl hover:transform hover:-translate-y-1">
-                <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-md">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-7 h-7 text-white">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                </div>
-                <div class="flex-1">
-                    <div class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1">Référence inventaire</div>
-                    <div class="text-lg font-bold text-slate-900 dark:text-white">{{ inventoryReference || 'N/A' }}</div>
-                </div>
-            </div>
-
-            <div v-if="selectedWarehouse" class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700 flex items-center gap-4 transition-all duration-200 hover:shadow-xl hover:transform hover:-translate-y-1">
-                <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-green-700 flex items-center justify-center shadow-md">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-7 h-7 text-white">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                </div>
-                <div class="flex-1">
-                    <div class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1">Entrepôt sélectionné</div>
-                    <div class="text-lg font-bold text-slate-900 dark:text-white">
-                        {{ selectedWarehouse.warehouse_name || selectedWarehouse.reference || `Entrepôt ${selectedWarehouse.id}` }}
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700 flex items-center gap-4 transition-all duration-200 hover:shadow-xl hover:transform hover:-translate-y-1">
-                <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-md">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-7 h-7 text-white">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                </div>
-                <div class="flex-1">
-                    <div class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1">Lignes affichées</div>
-                    <div class="text-lg font-bold text-slate-900 dark:text-white">{{ rows.length }}</div>
-                </div>
-            </div>
-        </div>
-
         <!-- DataTable avec container moderne -->
         <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             <DataTable
                 :columns="displayColumns"
                 :rowDataProp="rows"
-                :loading="loading"
+                :loading="storeLoading"
                 :actions="[]"
                 :pagination="false"
+                :rowSelection="true"
                 :enableGlobalSearch="false"
                 :enableFiltering="false"
                 :enableAdvancedEditing="false"
                 :enableGrouping="false"
                 :enablePivot="false"
+                storageKey="job_tracking_table"
                 emptyMessage="Aucune donnée disponible pour ces critères"
+                @selection-changed="onSelectionChanged"
             />
         </div>
     </div>
@@ -200,9 +190,14 @@ const {
     selectedCountingOrder,
     rows,
     columns,
+    selectedRows,
+    selectedRowsCount,
+    hasSelectedRows,
     initialize,
     reinitialize,
-    printJobs
+    printJobs,
+    onSelectionChanged,
+    resetSelection
 } = useJobTracking({ inventoryReference: referenceParam.value })
 
 // ===== COMPUTED =====

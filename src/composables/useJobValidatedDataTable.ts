@@ -15,6 +15,7 @@ export function useJobValidatedDataTable(inventoryId: number, warehouseId: numbe
         store: jobStore,
         fetchAction: 'fetchJobsValidated',
         defaultPageSize: 20,
+        queryOutputMode: 'queryParams', // Format EXEMPLES_REQUETES_QUERYMODEL
         additionalParams: {
             inventoryId,
             warehouseId

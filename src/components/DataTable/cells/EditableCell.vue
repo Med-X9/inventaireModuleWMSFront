@@ -25,48 +25,35 @@
                    :class="inputClass" />
 
             <!-- Select simple -->
-            <select v-else-if="inputType === 'select' && !isMultiple"
-                    ref="inputRef"
-                    :value="editValue"
-                    @change="handleSelectChange"
-                    @keydown="handleKeydown"
-                    @blur="saveEdit"
-                    class="edit-select">
-                <option value="">Sélectionner...</option>
-                <option v-for="option in selectOptions"
-                        :key="option.value"
-                        :value="option.value">
-                    {{ option.label }}
-                </option>
-            </select>
-
-            <!-- Select multiple -->
-            <div v-else-if="inputType === 'select' && isMultiple" class="edit-multiple-select">
-                <div class="selected-items">
-                    <span v-for="item in selectedItems" :key="item.value" class="selected-item">
-                        {{ item.label }}
-                        <button @click="removeItem(item)" class="remove-item">×</button>
-                    </span>
-                </div>
-                <select ref="inputRef" @change="handleMultipleSelectChange" @keydown="handleKeydown" @blur="saveEdit" class="edit-select">
-                    <option value="">Ajouter...</option>
-                    <option v-for="option in availableOptions"
-                            :key="option.value"
-                            :value="option.value">
-                        {{ option.label }}
-                    </option>
-                </select>
-            </div>
+            <SelectField
+                v-else-if="inputType === 'select'"
+                ref="inputRef"
+                v-model="editValue"
+                :options="selectOptions"
+                :multiple="isMultiple"
+                :placeholder="selectPlaceholder"
+                :clearable="!props.column.required"
+                :disabled="!isEditable"
+                class="w-full"
+                compact
+                @keydown="handleKeydown"
+                @close="handleSelectClose"
+            />
 
             <!-- Input date -->
-            <input v-else-if="inputType === 'date'"
-                   ref="inputRef"
-                   type="date"
-                   :value="dateValue"
-                   @input="handleDateInput"
-                   @keydown="handleKeydown"
-                   @blur="saveEdit"
-                   class="edit-input" />
+            <DateInput
+                v-else-if="inputType === 'date'"
+                ref="inputRef"
+                :field="dateFieldConfig"
+                :value="editValue"
+                :error="false"
+                :disabled="!isEditable"
+                class="w-full"
+                @update:value="handleDateValueUpdate"
+                @change="handleDateChange"
+                @keydown="handleKeydown"
+                @blur="saveEdit"
+            />
 
             <!-- Input datetime -->
             <input v-else-if="inputType === 'datetime'"
@@ -127,7 +114,11 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
+import SelectField from '@/components/Form/SelectField.vue'
+import DateInput from '@/components/Form/fields/DateInput.vue'
 import { logger } from '@/services/loggerService'
+import type { FieldConfig } from '@/interfaces/form'
 
 interface Props {
     value: any
@@ -145,11 +136,10 @@ const emit = defineEmits<{
 }>()
 
 // Références
-const inputRef = ref<HTMLElement>()
+const inputRef = ref<HTMLElement | ComponentPublicInstance | null>(null)
 
 // État local pour l'édition
 const editValue = ref<any>(props.value)
-const selectedItems = ref<any[]>([])
 
 // Computed pour déterminer le type d'input
 const inputType = computed(() => {
@@ -174,7 +164,6 @@ const isEditable = computed(() => {
     return props.column.editable !== false
 })
 
-// Computed pour vérifier si c'est un select multiple
 const isMultiple = computed(() => {
     return props.column.dataType === 'select' && props.column.multiple
 })
@@ -216,10 +205,8 @@ const selectOptions = computed(() => {
     }
 })
 
-// Computed pour les options disponibles dans le select multiple
-const availableOptions = computed(() => {
-    const selectedValues = selectedItems.value.map(item => item.value)
-    return selectOptions.value.filter(option => !selectedValues.includes(option.value))
+const selectPlaceholder = computed(() => {
+    return props.column.editPlaceholder || 'Sélectionner...'
 })
 
 // Computed pour la valeur d'affichage
@@ -252,6 +239,18 @@ const dateValue = computed(() => {
         return ''
     }
 })
+
+const dateFieldConfig = computed<FieldConfig>(() => ({
+    key: `datatable-date-${props.column.field || 'col'}`,
+    label: props.column.headerName || props.column.field || 'Date',
+    type: 'date',
+    min: props.column.minDate || '1900-01-01',
+    max: props.column.maxDate,
+    props: {
+        placeholder: props.column.editPlaceholder || 'Choisir une date',
+        ...(props.column.dateProps || {})
+    }
+}))
 
 const datetimeValue = computed(() => {
     if (!props.value) return ''
@@ -289,23 +288,34 @@ const startEdit = () => {
     if (!isEditable.value) return
 
     editValue.value = props.value
-
-    // Initialiser les éléments sélectionnés pour le select multiple
-    if (isMultiple.value && Array.isArray(props.value)) {
-        selectedItems.value = props.value.map(value => {
-            const option = selectOptions.value.find(opt => opt.value === value)
-            return option || { value, label: value }
-        })
+    if (inputType.value === 'date') {
+        editValue.value = dateValue.value
+    } else if (inputType.value === 'datetime') {
+        editValue.value = datetimeValue.value
     }
 
     emit('start-edit')
 
     // Focus sur l'input après le rendu
     nextTick(() => {
-        if (inputRef.value) {
-            inputRef.value.focus()
-            if (inputRef.value instanceof HTMLInputElement || inputRef.value instanceof HTMLTextAreaElement) {
-                inputRef.value.select()
+        const element = inputRef.value
+        if (!element) return
+
+        if (element instanceof HTMLElement) {
+            element.focus()
+            if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+                element.select()
+            }
+            return
+        }
+
+        const componentElement = (element as ComponentPublicInstance).$el as HTMLElement | undefined
+        if (!componentElement) return
+        const focusable = componentElement.querySelector('input, select, textarea, button')
+        if (focusable instanceof HTMLElement) {
+            focusable.focus()
+            if (focusable instanceof HTMLInputElement || focusable instanceof HTMLTextAreaElement) {
+                focusable.select()
             }
         }
     })
@@ -320,12 +330,7 @@ const handleClick = () => {
 
 // Fonction pour sauvegarder l'édition
 const saveEdit = () => {
-    let finalValue = editValue.value
-
-    // Traitement spécial pour le select multiple
-    if (isMultiple.value) {
-        finalValue = selectedItems.value.map(item => item.value)
-    }
+    const finalValue = editValue.value
 
     // Validation basique
     if (inputType.value === 'number' && isNaN(Number(finalValue))) {
@@ -356,7 +361,6 @@ const saveEdit = () => {
 // Fonction pour annuler l'édition
 const cancelEdit = () => {
     editValue.value = props.value
-    selectedItems.value = []
     emit('cancel-edit')
 }
 
@@ -366,27 +370,12 @@ const handleInput = (event: Event) => {
     editValue.value = inputType.value === 'number' ? Number(target.value) : target.value
 }
 
-const handleSelectChange = (event: Event) => {
-    const target = event.target as HTMLSelectElement
-    editValue.value = target.value
+const handleDateValueUpdate = (value: unknown) => {
+    editValue.value = value
 }
 
-const handleMultipleSelectChange = (event: Event) => {
-    const target = event.target as HTMLSelectElement
-    const selectedValue = target.value
-
-    if (selectedValue) {
-        const option = selectOptions.value.find(opt => opt.value === selectedValue)
-        if (option && !selectedItems.value.find(item => item.value === selectedValue)) {
-            selectedItems.value.push(option)
-        }
-        target.value = '' // Reset le select
-    }
-}
-
-const handleDateInput = (event: Event) => {
-    const target = event.target as HTMLInputElement
-    editValue.value = target.value
+const handleDateChange = () => {
+    saveEdit()
 }
 
 const handleDatetimeInput = (event: Event) => {
@@ -404,9 +393,10 @@ const handleTextareaInput = (event: Event) => {
     editValue.value = target.value
 }
 
-// Fonction pour supprimer un élément du select multiple
-const removeItem = (item: any) => {
-    selectedItems.value = selectedItems.value.filter(i => i.value !== item.value)
+const handleSelectClose = () => {
+    if (props.isEditing) {
+        saveEdit()
+    }
 }
 
 // Watcher pour synchroniser la valeur d'édition avec les props
@@ -420,7 +410,6 @@ watch(() => props.value, (newValue) => {
 watch(() => props.isEditing, (isEditing) => {
     if (!isEditing) {
         editValue.value = props.value
-        selectedItems.value = []
     }
 })
 

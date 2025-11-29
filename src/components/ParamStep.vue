@@ -12,8 +12,8 @@
                 @validation-change="onValidationChange"
             />
             <div v-if="stepConfig.help">
-                <div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg">
-                    <p class="text-xs text-yellow-600 dark:text-yellow-300">
+                <div class="mt-2 p-2 bg-primary-50 border border-primary rounded-lg">
+                    <p class="text-xs text-primary-dark font-body">
                         {{ stepConfig.help }}
                     </p>
                 </div>
@@ -42,8 +42,8 @@
                 />
             </div>
             <div v-else
-                class="mb-4 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg">
-                <p class="text-xs text-yellow-600 dark:text-yellow-300">
+                class="mb-4 p-2 bg-primary-50 border border-primary rounded-lg">
+                <p class="text-xs text-primary-dark font-body">
                     Aucune option disponible pour le mode: {{ local.mode }}
                 </p>
             </div>

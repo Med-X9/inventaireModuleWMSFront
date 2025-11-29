@@ -13,8 +13,40 @@
             </button>
         </div>
 
-        <!-- Sélection de l'opérateur avec icônes -->
-        <div class="filter-section">
+        <!-- Filtre select avec checkboxes (comportement Excel) - Affiché en premier si c'est un filtre select -->
+        <div v-if="isSelectFilter" class="filter-section">
+            <label class="filter-label">
+                <IconSearch class="w-3 h-3" />
+                Sélectionner les valeurs
+            </label>
+            <div class="filter-input-group">
+                <div class="select-filter-list">
+                    <div v-if="columnOptions.length === 0" class="no-options-message">
+                        <IconInfoCircle class="w-4 h-4" />
+                        <span>Aucune option disponible</span>
+                    </div>
+                    <div v-else class="options-checkbox-list">
+                        <label
+                            v-for="option in columnOptions"
+                            :key="option.value"
+                            class="option-checkbox-item"
+                        >
+                            <input
+                                type="checkbox"
+                                :value="option.value"
+                                :checked="isValueSelected(option.value)"
+                                @change="toggleSelectValue(option.value)"
+                                class="option-checkbox"
+                            />
+                            <span class="option-label">{{ option.label }}</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sélection de l'opérateur avec icônes (masqué pour les filtres select) -->
+        <div v-if="!isSelectFilter" class="filter-section">
             <label class="filter-label">
                 <IconSettings class="w-3 h-3" />
                 Opérateur
@@ -26,8 +58,8 @@
             </select>
         </div>
 
-        <!-- Champs de valeur selon l'opérateur -->
-        <div class="filter-section">
+        <!-- Champs de valeur selon l'opérateur (masqués pour les filtres select) -->
+        <div v-if="!isSelectFilter" class="filter-section">
             <label class="filter-label">
                 <IconSearch class="w-3 h-3" />
                 Valeur
@@ -110,15 +142,6 @@
                 </div>
             </div>
 
-            <!-- Filtre select avec options -->
-            <div v-else-if="isSelectFilter" class="filter-input-group">
-                <select v-model="filterValue" class="filter-select" @change="applyFilter">
-                    <option value="">Sélectionner</option>
-                    <option v-for="option in columnOptions" :key="option.value" :value="option.value">
-                        {{ option.label }}
-                    </option>
-                </select>
-            </div>
 
             <!-- Filtre email -->
             <div v-else-if="isEmailFilter" class="filter-input-group">
@@ -173,6 +196,10 @@
 
         <!-- Actions avec animations -->
         <div class="filter-actions">
+            <!-- Debug temporaire -->
+            <div v-if="isSelectFilter" style="font-size: 10px; color: #666; margin-bottom: 4px;">
+                Sélections: {{ selectedSelectValues.size }}, canApply: {{ canApplyFilter }}
+            </div>
             <button @click="applyFilter" class="apply-btn" :disabled="!canApplyFilter">
                 <IconCheck class="w-4 h-4" />
                 Appliquer
@@ -215,6 +242,7 @@ const selectedOperator = ref<FilterOperator>('equals')
 const filterValue = ref('')
 const filterValue2 = ref('')
 const listValues = ref<string[]>([''])
+const selectedSelectValues = ref<Set<any>>(new Set()) // Pour les filtres select avec checkboxes
 
 // Computed pour les options booléennes
 const booleanOptions = computed(() => [
@@ -359,9 +387,16 @@ const availableOperators = computed(() => {
 
 // Computed pour récupérer les options des colonnes select
 const columnOptions = computed(() => {
-    if (props.column.dataType === 'select' && props.column.filterConfig?.options) {
+    // Si des options sont définies dans filterConfig, on les utilise (priorité)
+    if (props.column.filterConfig?.options && Array.isArray(props.column.filterConfig.options) && props.column.filterConfig.options.length > 0) {
         return props.column.filterConfig.options
     }
+    
+    // Sinon, si c'est un type select, retourner un tableau vide
+    if (props.column.dataType === 'select') {
+        return []
+    }
+    
     return []
 })
 
@@ -395,11 +430,14 @@ const isBetweenFilter = computed(() => {
 })
 
 const isListFilter = computed(() => {
+    // Ne pas utiliser isListFilter pour les filtres select (ils ont leur propre interface)
+    if (isSelectFilter.value) {
+        return false
+    }
     const dataType = props.column.dataType || 'text'
     const isListOperator = ['in', 'not_in'].includes(selectedOperator.value)
-    const isSelectType = dataType === 'select'
 
-    return isListOperator || isSelectType
+    return isListOperator
 })
 
 const isBooleanFilter = computed(() => {
@@ -408,7 +446,14 @@ const isBooleanFilter = computed(() => {
 })
 
 const isSelectFilter = computed(() => {
-    return props.column.dataType === 'select'
+    // Vérifier si c'est un filtre select basé sur le dataType OU si filterConfig.options est défini
+    const column = props.column
+    if (!column) return false
+    
+    const hasSelectDataType = column.dataType === 'select'
+    const hasFilterConfigOptions = column.filterConfig?.options && Array.isArray(column.filterConfig.options) && column.filterConfig.options.length > 0
+    
+    return hasSelectDataType || hasFilterConfigOptions
 })
 
 const isEmailFilter = computed(() => {
@@ -482,8 +527,68 @@ const getPlaceholder = (): string => {
     }
 }
 
+// Fonction pour comparer deux valeurs (gère les objets)
+const areValuesEqual = (val1: any, val2: any): boolean => {
+    if (val1 === val2) return true
+    if (val1 === null || val1 === undefined || val2 === null || val2 === undefined) return false
+    if (typeof val1 === 'object' && typeof val2 === 'object') {
+        try {
+            return JSON.stringify(val1) === JSON.stringify(val2)
+        } catch {
+            return false
+        }
+    }
+    return false
+}
+
+// Toggle une valeur dans le filtre select
+const toggleSelectValue = (value: any) => {
+    // Chercher si la valeur existe déjà (avec comparaison robuste)
+    let found = false
+    let foundValue: any = null
+    
+    for (const existingValue of selectedSelectValues.value) {
+        if (areValuesEqual(existingValue, value)) {
+            found = true
+            foundValue = existingValue
+            break
+        }
+    }
+    
+    // Créer un nouveau Set pour forcer la réactivité Vue
+    const newSet = new Set(selectedSelectValues.value)
+    
+    if (found && foundValue !== null) {
+        newSet.delete(foundValue)
+    } else {
+        newSet.add(value)
+    }
+    
+    selectedSelectValues.value = newSet
+    
+    // Debug temporaire
+    console.log('toggleSelectValue - Nouvelle taille:', selectedSelectValues.value.size, 'canApply:', canApplyFilter.value)
+}
+
+// Vérifier si une valeur est sélectionnée (pour les checkboxes)
+const isValueSelected = (value: any): boolean => {
+    for (const selectedValue of selectedSelectValues.value) {
+        if (areValuesEqual(selectedValue, value)) {
+            return true
+        }
+    }
+    return false
+}
+
 // Computed pour vérifier si le filtre peut être appliqué
 const canApplyFilter = computed(() => {
+    // Pour les filtres select, vérifier si au moins une valeur est sélectionnée
+    if (isSelectFilter.value) {
+        // Accéder explicitement à la taille pour forcer le tracking de réactivité
+        const size = selectedSelectValues.value.size
+        return size > 0
+    }
+    
     if (isNullFilter.value) return true
     if (isBetweenFilter.value) return filterValue.value && filterValue2.value
     if (isListFilter.value) return listValues.value.some(v => v.trim() !== '')
@@ -524,7 +629,15 @@ const applyFilter = () => {
     }
 
     // Ajouter les valeurs selon l'opérateur
-    if (isBetweenFilter.value) {
+    if (isSelectFilter.value) {
+        // Pour les filtres select, utiliser l'opérateur 'in' avec les valeurs sélectionnées
+        if (selectedSelectValues.value.size > 0) {
+            filter.operator = 'in'
+            filter.values = Array.from(selectedSelectValues.value)
+        } else {
+            return // Ne pas appliquer si aucune valeur sélectionnée
+        }
+    } else if (isBetweenFilter.value) {
         filter.value = filterValue.value
         filter.value2 = filterValue2.value
     } else if (isListFilter.value) {
@@ -541,6 +654,7 @@ const clearFilter = () => {
     filterValue.value = ''
     filterValue2.value = ''
     listValues.value = ['']
+    selectedSelectValues.value.clear()
     selectedOperator.value = 'equals'
     emit('clear')
 }
@@ -552,8 +666,16 @@ watch(() => props.currentFilter, (newFilter) => {
         filterValue.value = newFilter.value || ''
         filterValue2.value = newFilter.value2 || ''
         if (newFilter.values) {
-            listValues.value = [...newFilter.values, '']
+            if (isSelectFilter.value) {
+                // Pour les filtres select, utiliser les valeurs pour les checkboxes
+                selectedSelectValues.value = new Set(newFilter.values)
+            } else {
+                listValues.value = [...newFilter.values, '']
+            }
         }
+    } else {
+        // Réinitialiser si le filtre est effacé
+        selectedSelectValues.value.clear()
     }
 }, { immediate: true })
 </script>
@@ -871,5 +993,87 @@ watch(() => props.currentFilter, (newFilter) => {
 
 .dark .clear-btn:hover {
     background: #4a5568;
+}
+
+/* Styles pour le filtre select avec checkboxes */
+.select-filter-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+    padding: 0.5rem;
+    background: #f9fafb;
+}
+
+.dark .select-filter-list {
+    background: #1a202c;
+    border-color: #4a5568;
+}
+
+.no-options-message {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    color: #6b7280;
+    font-size: 0.875rem;
+    text-align: center;
+    justify-content: center;
+}
+
+.dark .no-options-message {
+    color: #9ca3af;
+}
+
+.options-checkbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.option-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    user-select: none;
+}
+
+.option-checkbox-item:hover {
+    background-color: #f3f4f6;
+}
+
+.dark .option-checkbox-item:hover {
+    background-color: #374151;
+}
+
+.option-checkbox {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+    accent-color: #3b82f6;
+    flex-shrink: 0;
+}
+
+.option-label {
+    font-size: 0.875rem;
+    color: #374151;
+    flex: 1;
+}
+
+.dark .option-label {
+    color: #f7fafc;
+}
+
+.option-checkbox-item:has(.option-checkbox:checked) {
+    background-color: #eff6ff;
+    font-weight: 500;
+}
+
+.dark .option-checkbox-item:has(.option-checkbox:checked) {
+    background-color: #1e3a8a;
 }
 </style>

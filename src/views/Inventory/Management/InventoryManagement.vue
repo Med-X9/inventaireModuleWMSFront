@@ -1,17 +1,19 @@
 <template>
-    <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 dark:from-slate-900 dark:to-slate-800 p-8">
-        <!-- Header -->
-        <div class="mb-8">
-            <div class="flex justify-between items-center flex-wrap gap-4">
-                <h1 class="text-3xl font-bold text-slate-900 dark:text-slate-100 m-0">
-                    <i class="icon-inventory mr-2 text-primary"></i>
-                    Gestion des inventaires
-                </h1>
-                <div class="flex gap-4 items-center">
+    <div class="min-h-screen bg-app p-8">
+        <!-- Header avec titre et navigation -->
+        <div class="bg-card rounded-[20px] p-8 mb-8 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-border">
+            <div class="flex justify-between items-center gap-8">
+                <div class="flex-1">
+                    <h1 class="flex items-center gap-4 text-[2.5rem] font-extrabold text-text-dark m-0 mb-2">
+                        <IconBox class="w-10 h-10 text-primary" />
+                        Gestion des inventaires
+                    </h1>
+                </div>
+                <div class="flex gap-4 items-center ml-auto">
                     <button @click="redirectToAdd"
-                        class="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-medium text-sm bg-gradient-to-r from-primary to-primary-light text-white hover:from-primary-dark hover:to-primary transition-all duration-200 hover:-translate-y-0.5">
-                        <i class="icon-plus"></i>
-                        Nouveau inventaire
+                        class="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold cursor-pointer transition-all duration-300 whitespace-nowrap bg-gradient-to-br from-primary to-primary-light text-white shadow-[0_4px_12px_rgba(79,70,229,0.3)] hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(79,70,229,0.4)] disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none">
+                        <IconPlus class="w-4 h-4" />
+                        <span>Nouveau inventaire</span>
                     </button>
                 </div>
             </div>
@@ -19,46 +21,46 @@
 
         <!-- Statistiques -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md border border-slate-200 dark:border-slate-700 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex items-center gap-4">
+            <div class="bg-card rounded-[20px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex items-center gap-4">
                 <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl text-white bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg">
                     <i class="icon-preparation"></i>
                 </div>
                 <div class="flex-1">
-                    <div class="text-3xl font-bold text-slate-900 dark:text-slate-100 leading-none">{{ getStatusCount('EN PREPARATION') }}</div>
-                    <div class="text-sm text-slate-600 dark:text-slate-400 mt-1">En préparation</div>
+                    <div class="text-3xl font-bold text-text-dark leading-none">{{ getStatusCount('EN PREPARATION') }}</div>
+                    <div class="text-sm text-text-muted mt-1">En préparation</div>
                 </div>
             </div>
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md border border-slate-200 dark:border-slate-700 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex items-center gap-4">
+            <div class="bg-card rounded-[20px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex items-center gap-4">
                 <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl text-white bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg">
                     <i class="icon-realisation"></i>
                 </div>
                 <div class="flex-1">
-                    <div class="text-3xl font-bold text-slate-900 dark:text-slate-100 leading-none">{{ getStatusCount('EN REALISATION') }}</div>
-                    <div class="text-sm text-slate-600 dark:text-slate-400 mt-1">En réalisation</div>
+                    <div class="text-3xl font-bold text-text-dark leading-none">{{ getStatusCount('EN REALISATION') }}</div>
+                    <div class="text-sm text-text-muted mt-1">En réalisation</div>
                 </div>
             </div>
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md border border-slate-200 dark:border-slate-700 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex items-center gap-4">
+            <div class="bg-card rounded-[20px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex items-center gap-4">
                 <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl text-white bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg">
                     <i class="icon-termine"></i>
                 </div>
                 <div class="flex-1">
-                    <div class="text-3xl font-bold text-slate-900 dark:text-slate-100 leading-none">{{ getStatusCount('TERMINE') }}</div>
-                    <div class="text-sm text-slate-600 dark:text-slate-400 mt-1">Terminés</div>
+                    <div class="text-3xl font-bold text-text-dark leading-none">{{ getStatusCount('TERMINE') }}</div>
+                    <div class="text-sm text-text-muted mt-1">Terminés</div>
                 </div>
             </div>
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md border border-slate-200 dark:border-slate-700 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex items-center gap-4">
+            <div class="bg-card rounded-[20px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex items-center gap-4">
                 <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl text-white bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg">
                     <i class="icon-cloture"></i>
                 </div>
                 <div class="flex-1">
-                    <div class="text-3xl font-bold text-slate-900 dark:text-slate-100 leading-none">{{ getStatusCount('CLOTURE') }}</div>
-                    <div class="text-sm text-slate-600 dark:text-slate-400 mt-1">Clôturés</div>
+                    <div class="text-3xl font-bold text-text-dark leading-none">{{ getStatusCount('CLOTURE') }}</div>
+                    <div class="text-sm text-text-muted mt-1">Clôturés</div>
                 </div>
             </div>
         </div>
 
         <!-- DataTable -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-md overflow-hidden border border-slate-200 dark:border-slate-700">
+        <div class="bg-card rounded-[20px] p-8 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-border overflow-hidden md:p-4">
             <DataTable
                 :columns="columns as DataTableColumnAny[]"
                 :rowDataProp="inventories"
@@ -78,6 +80,15 @@
                 :serverSidePagination="true"
                 :serverSideFiltering="true"
                 :serverSideSorting="true"
+                :debounceFilter="500"
+                :enableMultiSort="true"
+                :multiSortConfig="multiSortConfig"
+                :enableColumnPinning="true"
+                :columnPinningConfig="columnPinningConfig"
+                :enableColumnResize="true"
+                :columnResizeConfig="columnResizeConfig"
+                :enableSetFilters="true"
+                :setFiltersConfig="setFiltersConfig"
                 @pagination-changed="handlePaginationChanged"
                 @sort-changed="handleSortChanged"
                 @filter-changed="handleFilterChanged"
@@ -93,7 +104,7 @@
             size="fullscreen">
             <div class="flex flex-col h-screen max-h-screen overflow-hidden bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800">
                 <!-- Header du modal -->
-                <div class="relative bg-gradient-to-r from-[#FFCC11] to-[#e0ac06] p-4 shadow-md z-10 flex-shrink-0">
+                <div class="relative bg-gradient-to-r from-primary to-primary-dark p-4 shadow-md z-10 flex-shrink-0">
                     <div class="absolute inset-0 opacity-10"
                         style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
                     <div class="relative z-10 flex items-center justify-between gap-8">
@@ -153,7 +164,7 @@
                                     </div>
                                     <div v-if="isImporting" class="absolute -top-2.5 -left-2.5 w-[calc(100%+20px)] h-[calc(100%+20px)]">
                                         <svg class="w-full h-full progress-ring" viewBox="0 0 120 120" style="transform: rotate(-90deg);">
-                                            <circle class="progress-ring-circle" cx="60" cy="60" r="54" fill="none" stroke="#3b82f6" stroke-width="4" stroke-dasharray="339.292" stroke-dashoffset="339.292" style="animation: progress-ring 2s linear infinite;" />
+                                            <circle class="progress-ring-circle" cx="60" cy="60" r="54" fill="none" stroke="var(--color-info)" stroke-width="4" stroke-dasharray="339.292" stroke-dashoffset="339.292" style="animation: progress-ring 2s linear infinite;" />
                                         </svg>
                                     </div>
                                 </div>
@@ -415,7 +426,7 @@
  */
 
 // ===== IMPORTS VUE =====
-import { onMounted, ref } from 'vue'
+import { onMounted } from 'vue'
 
 // ===== IMPORTS COMPOSANTS =====
 import DataTable from '@/components/DataTable/DataTable.vue'
@@ -423,13 +434,13 @@ import Modal from '@/components/Modal.vue'
 
 // ===== IMPORTS COMPOSABLES =====
 import { useInventoryManagement } from '@/composables/useInventoryManagement'
-import { useInventoryDataTable } from '@/composables/useInventoryDataTable'
 
 // ===== IMPORTS TYPES =====
 import type { DataTableColumnAny, ActionConfigAny } from '@/types/dataTable'
 
 // ===== IMPORTS ICÔNES =====
 import IconBox from '@/components/icon/icon-box.vue'
+import IconPlus from '@/components/icon/icon-plus.vue'
 import IconX from '@/components/icon/icon-x.vue'
 import IconCalendar from '@/components/icon/icon-calendar.vue'
 import IconFile from '@/components/icon/icon-file.vue'
@@ -448,9 +459,37 @@ import IconDownload from '@/components/icon/icon-download.vue'
  * Fournit les colonnes, actions, et la logique d'import
  */
 const {
+    // Configuration de la table
     columns,
     actions,
+
+    // Données et état
+    inventories,
+    loading,
+    currentPage,
+    pageSize,
+    pagination,
+
+    // Handlers DataTable
+    handleSortChanged,
+    handleFilterChanged,
+    handlePaginationChanged,
+    handleGlobalSearchChanged,
+    handleCellValueChanged,
+
+    // Configuration des fonctionnalités AG-Grid
+    multiSortConfig,
+    columnPinningConfig,
+    columnResizeConfig,
+    setFiltersConfig,
+
+    // Méthodes de navigation
     redirectToAdd,
+
+    // Méthodes de rafraîchissement
+    refresh,
+
+    // États pour la modale d'import Excel
     showImportModal,
     isImporting,
     importError,
@@ -458,203 +497,37 @@ const {
     importSuccess,
     importSuccessMessage,
     currentImportInventory,
+
+    // États pour l'upload de fichier
+    selectedFile,
+    fileInput,
+    isDragging,
+    uploadProgress,
+
+    // Handlers de fichier
+    handleFileChange,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+
+    // Fonctions utilitaires
+    formatFileSize,
+    getFileType,
+    formatDate,
+    getStatusCount,
+
+    // Wrappers pour l'import
     processImportExcel,
+    processImportExcelWithProgress,
     closeImportModal,
+    closeImportModalWithCleanup,
+
+    // Services et erreurs
     alertService,
-    getStatusCount
+    handleLoadError
 } = useInventoryManagement()
 
-/**
- * Composable spécialisé pour le DataTable des inventaires
- * Gère la pagination, le tri et le filtrage côté serveur avec format standard
- */
-const {
-    data: inventories,
-    loading,
-    currentPage,
-    pageSize,
-    searchQuery,
-    sortModel,
-    pagination,
-    handleFilterChanged,
-    handleSortChanged,
-    handleSearchChanged: handleGlobalSearchChanged,
-    handlePaginationChanged,
-    resetFilters,
-    refresh
-} = useInventoryDataTable()
-
-// ===== ÉTAT LOCAL =====
-
-/** Fichier sélectionné pour l'import */
-const selectedFile = ref<File | null>(null)
-
-/** Référence à l'input file */
-const fileInput = ref<HTMLInputElement>()
-
-/** État de drag & drop */
-const isDragging = ref(false)
-
-/** Progression de l'upload */
-const uploadProgress = ref(0)
-
-// ===== HANDLERS =====
-
-/**
- * Handler pour les changements de valeur de cellule
- *
- * @param event - Événement contenant les données, le champ, l'ancienne et la nouvelle valeur
- */
-const handleCellValueChanged = (event: { data: any; field: string; newValue: any; oldValue: any }) => {
-    // TODO: Implémenter la logique de sauvegarde des modifications
-    // await inventoryStore.updateInventory(event.data.id, { [event.field]: event.newValue })
-}
-
-/**
- * Handler pour le changement de fichier
- *
- * @param event - Événement de changement de fichier
- */
-const handleFileChange = (event: Event) => {
-    const target = event.target as HTMLInputElement
-    if (target.files && target.files.length > 0) {
-        selectedFile.value = target.files[0]
-        uploadProgress.value = 0
-    }
-}
-
-/**
- * Handler pour le survol lors du drag & drop
- *
- * @param event - Événement de drag over
- */
-const handleDragOver = (event: DragEvent) => {
-    event.preventDefault()
-    isDragging.value = true
-}
-
-/**
- * Handler pour la sortie du drag & drop
- *
- * @param event - Événement de drag leave
- */
-const handleDragLeave = (event: DragEvent) => {
-    event.preventDefault()
-    isDragging.value = false
-}
-
-/**
- * Handler pour le dépôt de fichier
- *
- * @param event - Événement de drop
- */
-const handleDrop = (event: DragEvent) => {
-    event.preventDefault()
-    isDragging.value = false
-
-    if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
-        const file = event.dataTransfer.files[0]
-        // Vérifier le type de fichier
-        if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-            selectedFile.value = file
-            uploadProgress.value = 0
-        } else {
-            alertService.error('Seuls les fichiers Excel (.xlsx, .xls) sont acceptés')
-        }
-    }
-}
-
-// ===== FONCTIONS UTILITAIRES =====
-
-/**
- * Formater la taille d'un fichier en unités lisibles
- *
- * @param bytes - Taille en bytes
- * @returns Taille formatée (ex: "1.5 MB")
- */
-const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
-}
-
-/**
- * Obtenir le type de fichier depuis son nom
- *
- * @param fileName - Nom du fichier
- * @returns Type de fichier formaté
- */
-const getFileType = (fileName: string): string => {
-    const extension = fileName.split('.').pop()?.toUpperCase()
-    return extension ? `Fichier ${extension}` : 'Fichier inconnu'
-}
-
-/**
- * Formater une date en français
- *
- * @param date - Date à formater
- * @returns Date formatée en français
- */
-const formatDate = (date: string | Date): string => {
-    if (!date) return ''
-    const d = new Date(date)
-    return d.toLocaleDateString('fr-FR', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    })
-}
-
-/**
- * Wrapper pour processImportExcel avec gestion de progression
- *
- * @param file - Fichier à importer
- */
-const processImportExcelWithProgress = async (file: File) => {
-    uploadProgress.value = 0
-
-    // Simuler la progression pendant l'upload
-    const progressInterval = setInterval(() => {
-        if (uploadProgress.value < 90) {
-            uploadProgress.value += 10
-        }
-    }, 200)
-
-    try {
-        await processImportExcel(file)
-        clearInterval(progressInterval)
-        uploadProgress.value = 100
-        await new Promise(resolve => setTimeout(resolve, 500))
-    } catch (error) {
-        clearInterval(progressInterval)
-        uploadProgress.value = 0
-        throw error
-    }
-}
-
-/**
- * Wrapper pour closeImportModal avec nettoyage
- * Réinitialise tous les états liés à l'import
- */
-const closeImportModalWithCleanup = () => {
-    if (isImporting.value) return // Empêcher la fermeture pendant l'import
-
-    selectedFile.value = null
-    uploadProgress.value = 0
-    isDragging.value = false
-    closeImportModal()
-}
-
-/**
- * Handler pour les erreurs de chargement
- *
- * @param error - Erreur survenue
- */
-const handleLoadError = (error: any) => {
-    alertService.error('Erreur lors du chargement des inventaires')
-}
+// Toute la logique TypeScript a été migrée vers le composable useInventoryManagement
 
 // ===== LIFECYCLE =====
 

@@ -50,13 +50,13 @@
                                     (typeof action.disabled === 'function' ? action.disabled(row) : action.disabled) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer',
                                     action.class || '',
                                     props.actionItemClass || '',
-                                    // Couleurs de fond selon le type d'action (primary, secondary, success, warning, danger, info)
-                                    action.color === 'primary' ? 'hover:bg-blue-50 dark:hover:bg-blue-900/20' : '',
-                                    action.color === 'secondary' ? 'hover:bg-gray-50 dark:hover:bg-gray-800/60' : '',
-                                    action.color === 'success' ? 'hover:bg-green-50 dark:hover:bg-green-900/20' : '',
-                                    action.color === 'warning' ? 'hover:bg-yellow-50 dark:hover:bg-yellow-900/20' : '',
-                                    action.color === 'danger' ? 'hover:bg-red-50 dark:hover:bg-red-900/20' : '',
-                                    action.color === 'info' ? 'hover:bg-cyan-50 dark:hover:bg-cyan-900/20' : ''
+                                    // Couleurs de fond selon le type d'action - Utilisation du système de thème unifié
+                                    action.color === 'primary' ? 'hover:bg-primary-50' : '',
+                                    action.color === 'secondary' ? 'hover:bg-text-muted/10' : '',
+                                    action.color === 'success' ? 'hover:bg-success-50' : '',
+                                    action.color === 'warning' ? 'hover:bg-warning-50' : '',
+                                    action.color === 'danger' ? 'hover:bg-error-50' : '',
+                                    action.color === 'info' ? 'hover:bg-info-50' : ''
                                 ]" :disabled="typeof action.disabled === 'function' ? action.disabled(row) : action.disabled"
                                     tabindex="-1">
                                     <!-- Container pour l'icône avec gestion des différents types -->
@@ -501,18 +501,18 @@ const getIconComponent = (iconName: string) => {
     }
 
     .dt-menu-item:focus {
-        outline-color: #60a5fa;
+        outline-color: var(--color-primary);
     }
 }
 
 /* Éviter les conflits avec d'autres composants */
 .dt-menu-item:not(:disabled):hover {
-    background-color: #f9fafb;
+    background-color: var(--color-bg-app);
 }
 
 @media (prefers-color-scheme: dark) {
     .dt-menu-item:not(:disabled):hover {
-        background-color: var(--color-primary);
+        background-color: var(--color-bg-hover);
     }
 }
 
@@ -664,12 +664,12 @@ const getIconComponent = (iconName: string) => {
     align-items: center !important;
     justify-content: center !important;
     flex-shrink: 0 !important;
-    color: #6b7280;
+    color: var(--color-text-muted);
 }
 
 .dt-menu-item:hover .dt-menu-icon-wrapper {
     transform: scale(1.1);
-    color: #F7AA0B;
+    color: var(--color-primary);
 }
 
 /* Styles pour les différents types d'icônes */
@@ -689,35 +689,35 @@ const getIconComponent = (iconName: string) => {
     line-height: 1 !important;
 }
 
-/* Couleurs des icônes selon le type */
+/* Couleurs des icônes selon le type - Utilisation du système de thème unifié */
 .icon-primary .dt-menu-icon-component,
 .icon-primary .dt-menu-mdi-icon,
 .icon-primary .dt-menu-svg-icon {
-    color: #3b82f6;
+    color: var(--color-primary);
 }
 
 .icon-success .dt-menu-icon-component,
 .icon-success .dt-menu-mdi-icon,
 .icon-success .dt-menu-svg-icon {
-    color: #10b981;
+    color: var(--color-success);
 }
 
 .icon-warning .dt-menu-icon-component,
 .icon-warning .dt-menu-mdi-icon,
 .icon-warning .dt-menu-svg-icon {
-    color: #F7AA0B;
+    color: var(--color-warning);
 }
 
 .icon-danger .dt-menu-icon-component,
 .icon-danger .dt-menu-mdi-icon,
 .icon-danger .dt-menu-svg-icon {
-    color: #ef4444;
+    color: var(--color-error);
 }
 
 .icon-info .dt-menu-icon-component,
 .icon-info .dt-menu-mdi-icon,
 .icon-info .dt-menu-svg-icon {
-    color: #06b6d4;
+    color: var(--color-info);
 }
 
 /* Améliorer l'apparence du label */
@@ -733,26 +733,27 @@ const getIconComponent = (iconName: string) => {
     transition: all 0.2s ease-in-out;
     position: relative;
     z-index: 1;
-    color: #374151;
+    color: var(--color-text-dark);
     font-size: 14px;
     line-height: 1.5;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     width: 100%;
+    font-family: var(--font-body);
 }
 
 .dt-menu-item:hover .dt-menu-label-text {
-    color: #111827;
+    color: var(--color-text);
     font-weight: 600;
 }
 
 .dark .dt-menu-label-text {
-    color: #d1d5db;
+    color: var(--color-text-light);
 }
 
 .dark .dt-menu-item:hover .dt-menu-label-text {
-    color: #f9fafb;
+    color: var(--color-text);
 }
 
 /* Améliorer l'apparence du bouton principal */
@@ -775,7 +776,7 @@ const getIconComponent = (iconName: string) => {
     left: 50%;
     width: 0;
     height: 0;
-    background: linear-gradient(135deg, rgba(247, 170, 11, 0.1), rgba(254, 205, 28, 0.15));
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.1), rgba(99, 102, 241, 0.15));
     border-radius: 50%;
     transform: translate(-50%, -50%);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -798,16 +799,16 @@ const getIconComponent = (iconName: string) => {
     position: relative;
     z-index: 1;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    color: #6b7280;
+    color: var(--color-text-muted);
 }
 
 .dt-action-btn:hover .dt-action-icon {
     transform: rotate(90deg);
-    color: #F7AA0B;
+    color: var(--color-primary);
 }
 
 .dt-action-btn.bg-gray-100 .dt-action-icon {
-    color: #F7AA0B;
+    color: var(--color-primary);
 }
 
 /* Styles pour les états vides */
@@ -826,8 +827,9 @@ const getIconComponent = (iconName: string) => {
 }
 
 .dt-menu-empty-text {
-    color: #6b7280;
+    color: var(--color-text-muted);
     font-style: italic;
+    font-family: var(--font-body);
 }
 
 .dark .dt-menu-empty-text {

@@ -25,19 +25,24 @@ DataTable/
 ├── filters/                 # Composants de filtres
 │   ├── AdvancedFilter.vue
 │   └── FilterDropdown.vue
-├── composables/             # Composables réutilisables
-│   ├── useDataTable.ts
-│   ├── useBackendDataTable.ts
-│   ├── useDataTableEditing.ts
-│   ├── useDataTableExport.ts
-│   ├── useDataTableFilters.ts
-│   ├── useDataTableGrouping.ts
-│   ├── useDataTableHandlers.ts
-│   ├── useDataTableHelpers.ts
-│   ├── useDataTableLazyLoading.ts
+├── composables/             # Composables réutilisables (SOLID)
+│   ├── useDataTable.ts          # Composable principal (orchestrateur)
+│   ├── useDataTableCore.ts      # Gestion colonnes et état de base
+│   ├── useDataTableSelection.ts # Gestion sélection (DRY)
+│   ├── useBackendDataTable.ts   # Intégration backend
+│   ├── useQueryModel.ts         # Modèle de requête unifié
+│   ├── useAutoDataTable.ts      # Gestion automatique complète
+│   ├── useDataTableExport.ts    # Export (CSV, Excel, PDF)
+│   ├── useDataTableEditing.ts   # Édition inline
+│   ├── useDataTableGrouping.ts  # Groupement de lignes
 │   ├── useDataTableMasterDetail.ts
-│   ├── useDataTableOptimizations.ts
-│   └── useDataTablePivot.ts
+│   ├── useDataTablePivot.ts
+│   ├── useMultiSort.ts          # Tri multi-colonnes
+│   ├── useColumnPinning.ts      # Épinglage de colonnes
+│   ├── useColumnResize.ts       # Redimensionnement
+│   ├── useSetFilters.ts         # Filtres Set (valeurs uniques)
+│   ├── useInfiniteScroll.ts     # Scroll infini
+│   └── useVirtualScrolling.ts   # Virtual scrolling
 ├── types/                   # Types TypeScript
 │   └── dataTable.ts
 └── services/                # Services

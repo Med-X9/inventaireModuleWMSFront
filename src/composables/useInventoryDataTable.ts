@@ -16,7 +16,10 @@ import { ref, computed, type Ref, type ComputedRef } from 'vue'
 import { logger } from '@/services/loggerService'
 
 // ===== IMPORTS UTILS =====
-import { type StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
+import { type StandardDataTableParams, convertToStandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
+import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
+import { convertQueryModelToQueryParams, convertQueryModelToRestApi, createQueryModelFromDataTableParams } from '@/components/DataTable/utils/queryModelConverter'
+import type { QueryModel } from '@/components/DataTable/types/QueryModel'
 
 // ===== IMPORTS STORES =====
 import { useInventoryStore } from '@/stores/inventory'
@@ -25,6 +28,11 @@ import { useInventoryStore } from '@/stores/inventory'
 import type { InventoryTable } from '@/models/Inventory'
 
 // ===== INTERFACES =====
+
+/**
+ * Mode de sortie pour les paramètres de requête
+ */
+export type QueryOutputMode = 'queryModel' | 'dataTable' | 'restApi' | 'queryParams'
 
 /**
  * Configuration pour le composable générique DataTable
@@ -38,6 +46,9 @@ export interface GenericDataTableConfig<T = any> {
 
     /** Valeurs par défaut */
     defaultPageSize?: number
+
+    /** Mode de sortie pour les paramètres de requête (défaut: 'queryParams') */
+    queryOutputMode?: QueryOutputMode
 
     /** Paramètres additionnels pour certaines actions (ex: inventoryId, warehouseId) */
     additionalParams?: Record<string, any> | Ref<Record<string, any>> | ComputedRef<Record<string, any>>
@@ -97,7 +108,7 @@ export interface PaginationInfo {
  * @returns État et méthodes pour gérer le DataTable
  */
 export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) {
-    const { store, fetchAction, defaultPageSize = 20, additionalParams } = config
+    const { store, fetchAction, defaultPageSize = 20, queryOutputMode = 'queryParams', additionalParams } = config
 
     // ===== ÉTAT RÉACTIF =====
 
@@ -132,6 +143,46 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
         has_previous: false
     })
 
+    // ===== QUERYMODEL =====
+
+    /**
+     * Colonnes pour QueryModel (vide par défaut, sera rempli par les colonnes du DataTable)
+     */
+    const columnsRef = computed(() => [])
+
+    /**
+     * QueryModel pour gérer les requêtes avec mode de sortie configurable
+     */
+    const {
+        queryModel: queryModelRef,
+        toStandardParams,
+        updatePagination: updateQueryPagination,
+        updateSort: updateQuerySort,
+        updateFilter: updateQueryFilter,
+        updateGlobalSearch: updateQueryGlobalSearch,
+        fromDataTableParams: fromDataTableParamsQueryModel
+    } = useQueryModel({
+        columns: columnsRef,
+        enabled: true
+    })
+
+    /**
+     * Convertit le QueryModel selon le mode configuré
+     */
+    const convertQueryModelToOutputFn = (queryModelData: QueryModel) => {
+        switch (queryOutputMode) {
+            case 'queryModel':
+                return queryModelData
+            case 'restApi':
+                return convertQueryModelToRestApi(queryModelData)
+            case 'queryParams':
+                return convertQueryModelToQueryParams(queryModelData)
+            case 'dataTable':
+            default:
+                return toStandardParams.value
+        }
+    }
+
     // ===== MÉTHODES =====
 
     /**
@@ -140,26 +191,9 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
     const loadData = async () => {
         loading.value = true
         try {
-            console.log('loadData', fetchAction)
-            console.log('store', store)
-            console.log('currentPage', currentPage.value)
-            console.log('pageSize', pageSize.value)
-            console.log('searchQuery', searchQuery.value)
-            console.log('filters', filters.value)
-            console.log('sortModel', sortModel.value)
-            console.log('additionalParams', additionalParams)
             // Vérifier que l'action existe dans le store
             if (typeof store[fetchAction] !== 'function') {
                 throw new Error(`Action ${fetchAction} introuvable dans le store`)
-            }
-
-            // Préparer les paramètres
-            const params: DataTableParams = {
-                page: currentPage.value,
-                pageSize: pageSize.value,
-                globalSearch: searchQuery.value,
-                filters: filters.value,
-                sort: sortModel.value.length > 0 ? sortModel.value : undefined
             }
 
             // Récupérer les paramètres additionnels (déréférencer si c'est une ref ou computed)
@@ -172,14 +206,54 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
                 }
             }
 
-            // Appeler l'action du store
+            // Convertir DataTableParams en StandardDataTableParams pour le store
+            // Le store attend StandardDataTableParams avec 'length' au lieu de 'pageSize'
+            // Convertir DataTableFilters (value) en DataTableFilterModel (filter)
+            const convertedFilters: Record<string, { filter: string | string[] | number; operator?: string }> = {}
+            Object.keys(filters.value).forEach(key => {
+                const filter = filters.value[key]
+                if (filter && filter.value !== undefined && filter.value !== null) {
+                    convertedFilters[key] = {
+                        filter: filter.value,
+                        operator: filter.operator
+                    }
+                }
+            })
+
+            // Créer un QueryModel depuis les paramètres actuels
+            const queryModelData = createQueryModelFromDataTableParams({
+                page: currentPage.value,
+                pageSize: pageSize.value,
+                sort: sortModel.value.length > 0 ? sortModel.value.map(s => ({
+                    field: s.colId || '',
+                    direction: s.sort || 'asc'
+                })) : undefined,
+                filters: convertedFilters ? Object.fromEntries(
+                    Object.entries(convertedFilters).map(([field, filterConfig]) => [
+                        field,
+                        {
+                            field,
+                            dataType: 'text' as const,
+                            operator: (filterConfig.operator || 'contains') as any,
+                            value: filterConfig.filter
+                        }
+                    ])
+                ) : undefined,
+                globalSearch: searchQuery.value || undefined,
+                customParams: resolvedAdditionalParams || {}
+            })
+
+            // Convertir selon le mode configuré
+            const outputParams = convertQueryModelToOutputFn(queryModelData)
+
+            // Appeler l'action du store avec les paramètres convertis
             let result: DataTableResult<T>
             if (resolvedAdditionalParams && Object.keys(resolvedAdditionalParams).length > 0) {
                 const args: any[] = Object.values(resolvedAdditionalParams)
-                args.push(params)
+                args.push(outputParams)
                 result = await store[fetchAction](...args)
             } else {
-                result = await store[fetchAction](params)
+                result = await store[fetchAction](outputParams)
             }
 
             // Mettre à jour les données et la pagination
@@ -192,9 +266,6 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
                     has_previous: currentPage.value > 1
                 }
             }
-            console.log('result', result)
-            console.log('data', data.value)
-            console.log('pagination', pagination.value)
         } catch (error) {
             logger.error('Erreur lors du chargement des données', error)
             throw error
@@ -301,11 +372,11 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
 
     /**
      * Handler pour les changements de filtres
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
      *
-     * @param filterModel - Modèle de filtres (format standard ou ancien format)
+     * @param filterModel - Modèle de filtres (format configuré ou ancien format)
      */
-    const handleFilterChanged = async (filterModel: Record<string, { filter: string }> | StandardDataTableParams) => {
+    const handleFilterChanged = async (filterModel: Record<string, { filter: string }> | StandardDataTableParams | QueryModel | Record<string, any>) => {
         // Si c'est déjà le format standard (venant du DataTable), extraire les informations
         if ('draw' in filterModel && 'start' in filterModel && 'length' in filterModel) {
             const standardParams = filterModel as StandardDataTableParams
@@ -331,11 +402,11 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
 
     /**
      * Handler pour les changements de tri
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
      *
-     * @param newSortModel - Modèle de tri (format standard ou ancien format)
+     * @param newSortModel - Modèle de tri (format configuré ou ancien format)
      */
-    const handleSortChanged = async (newSortModel: Array<{ field: string; direction: 'asc' | 'desc' }> | StandardDataTableParams) => {
+    const handleSortChanged = async (newSortModel: Array<{ field: string; direction: 'asc' | 'desc' }> | StandardDataTableParams | QueryModel | Record<string, any>) => {
         // Si c'est déjà le format standard (venant du DataTable), extraire les informations
         if ('draw' in newSortModel && 'start' in newSortModel && 'length' in newSortModel) {
             const standardParams = newSortModel as StandardDataTableParams
@@ -363,11 +434,11 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
 
     /**
      * Handler pour les changements de recherche globale
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
      *
-     * @param searchValue - Terme de recherche (format standard ou string)
+     * @param searchValue - Terme de recherche (format configuré ou string)
      */
-    const handleSearchChanged = async (searchValue: string | StandardDataTableParams) => {
+    const handleSearchChanged = async (searchValue: string | StandardDataTableParams | QueryModel | Record<string, any>) => {
         // Si c'est déjà le format standard (venant du DataTable), extraire les informations
         if (typeof searchValue === 'object' && 'draw' in searchValue && 'start' in searchValue && 'length' in searchValue) {
             const standardParams = searchValue as StandardDataTableParams
@@ -391,11 +462,11 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
 
     /**
      * Handler pour les changements de pagination
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
      *
-     * @param params - Paramètres de pagination (format standard ou ancien format)
+     * @param params - Paramètres de pagination (format configuré ou ancien format)
      */
-    const handlePaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams) => {
+    const handlePaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams | QueryModel | Record<string, any>) => {
         // Si c'est déjà le format standard (venant du DataTable), extraire les informations
         if ('draw' in params && 'start' in params && 'length' in params) {
             const standardParams = params as StandardDataTableParams
@@ -443,10 +514,15 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
         data: computed(() => data.value),
         loading: computed(() => loading.value),
         currentPage: computed(() => currentPage.value),
-        pageSize: computed(() => pageSize.value),
+        pageSize: pageSize, // Exposer directement le ref pour une meilleure réactivité
         searchQuery: computed(() => searchQuery.value),
         sortModel: computed(() => sortModel.value),
         pagination: computed(() => pagination.value),
+
+        // QueryModel
+        queryModel: computed(() => queryModelRef.value),
+        queryOutputMode: computed(() => queryOutputMode),
+        convertQueryModelToOutput: convertQueryModelToOutputFn,
 
         // Actions
         handleFilterChanged,

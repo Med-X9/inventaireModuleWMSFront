@@ -10,10 +10,10 @@
                         <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                 </div>
-                <h3 class="text-2xl font-bold" :class="titleColorClass">{{ title }}</h3>
+                <h3 class="text-2xl font-bold font-heading" :class="titleColorClass">{{ title }}</h3>
             </div>
             <p class="mb-6 text-lg" :class="messageColorClass">{{ subtitle }}</p>
-            <div class="bg-white p-6 rounded-lg border shadow-sm mb-6" :class="contentBorderClass">
+            <div class="bg-card p-6 rounded-lg border shadow-sm mb-6" :class="contentBorderClass">
                 <p class="text-lg font-medium" :class="contentColorClass">{{ message }}</p>
             </div>
             <div class="flex gap-3 justify-center">
@@ -28,7 +28,7 @@
                 <button
                     v-if="secondaryAction"
                     @click="secondaryAction"
-                    class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition-all duration-200 transform hover:scale-105"
+                    class="bg-text-muted hover:bg-text-light text-card font-semibold py-3 px-6 rounded-lg shadow-md transition-all duration-200 transform hover:scale-105"
                 >
                     {{ secondaryActionText }}
                 </button>
@@ -48,83 +48,83 @@ const props = withDefaults(defineProps<Props>(), {
     secondaryActionText: 'Fermer'
 });
 
-// Classes conditionnelles basées sur le type
+// Classes conditionnelles basées sur le type - Utilisation du système de thème unifié
 const alertClasses = computed(() => {
     const classes: Record<AlertType, string> = {
-        error: 'bg-gradient-to-r from-red-50 to-pink-50 border-red-200',
-        warning: 'bg-gradient-to-r from-orange-50 to-yellow-50 border-orange-200',
-        success: 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200',
-        info: 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'
+        error: 'bg-alert-error border-error',
+        warning: 'bg-alert-warning border-warning',
+        success: 'bg-alert-success border-success',
+        info: 'bg-info-50 border-info'
     };
     return classes[props.type];
 });
 
 const iconBgClass = computed(() => {
     const classes: Record<AlertType, string> = {
-        error: 'bg-red-100',
-        warning: 'bg-orange-100',
-        success: 'bg-green-100',
-        info: 'bg-blue-100'
+        error: 'bg-error-light',
+        warning: 'bg-warning-light',
+        success: 'bg-success-light',
+        info: 'bg-info-100'
     };
     return classes[props.type];
 });
 
 const iconColorClass = computed(() => {
     const classes: Record<AlertType, string> = {
-        error: 'text-red-600',
-        warning: 'text-orange-600',
-        success: 'text-green-600',
-        info: 'text-blue-600'
+        error: 'text-error',
+        warning: 'text-warning',
+        success: 'text-success',
+        info: 'text-info'
     };
     return classes[props.type];
 });
 
 const titleColorClass = computed(() => {
     const classes: Record<AlertType, string> = {
-        error: 'text-red-700',
-        warning: 'text-orange-700',
-        success: 'text-green-700',
-        info: 'text-blue-700'
+        error: 'text-error-dark',
+        warning: 'text-warning-dark',
+        success: 'text-success-dark',
+        info: 'text-info-dark'
     };
     return classes[props.type];
 });
 
 const messageColorClass = computed(() => {
     const classes: Record<AlertType, string> = {
-        error: 'text-red-600',
-        warning: 'text-orange-600',
-        success: 'text-green-600',
-        info: 'text-blue-600'
+        error: 'text-error',
+        warning: 'text-warning',
+        success: 'text-success',
+        info: 'text-info'
     };
     return classes[props.type];
 });
 
 const contentBorderClass = computed(() => {
     const classes: Record<AlertType, string> = {
-        error: 'border-red-200',
-        warning: 'border-orange-200',
-        success: 'border-green-200',
-        info: 'border-blue-200'
+        error: 'border-error',
+        warning: 'border-warning',
+        success: 'border-success',
+        info: 'border-info'
     };
     return classes[props.type];
 });
 
 const contentColorClass = computed(() => {
     const classes: Record<AlertType, string> = {
-        error: 'text-red-700',
-        warning: 'text-orange-700',
-        success: 'text-green-700',
-        info: 'text-blue-700'
+        error: 'text-error-dark',
+        warning: 'text-warning-dark',
+        success: 'text-success-dark',
+        info: 'text-info-dark'
     };
     return classes[props.type];
 });
 
 const primaryButtonClasses = computed(() => {
     const classes: Record<AlertType, string> = {
-        error: 'bg-red-500 hover:bg-red-600 text-white',
-        warning: 'bg-orange-500 hover:bg-orange-600 text-white',
-        success: 'bg-green-500 hover:bg-green-600 text-white',
-        info: 'bg-blue-500 hover:bg-blue-600 text-white'
+        error: 'bg-error hover:bg-error-dark text-card',
+        warning: 'bg-warning hover:bg-warning-dark text-card',
+        success: 'bg-success hover:bg-success-dark text-card',
+        info: 'bg-info hover:bg-info-dark text-card'
     };
     return classes[props.type];
 });

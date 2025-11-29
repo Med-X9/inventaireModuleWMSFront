@@ -2,6 +2,7 @@
  * Utilitaires de validation pour l'application
  */
 import type { InventoryHeader, Comptage, ComptageMode } from '@/interfaces/inventoryCreation';
+import { AxiosError } from 'axios';
 
 export class Validators {
     /**
@@ -171,5 +172,105 @@ export class Validators {
         errors.push(...thirdComptageErrors);
 
         return errors;
+    }
+
+    /**
+     * Extrait le message d'erreur depuis une erreur backend
+     * Gère différents formats de réponse d'erreur API
+     */
+    static extractBackendError(error: unknown, defaultMessage: string = 'Une erreur est survenue'): string {
+        // Si c'est une erreur Axios
+        if (error && typeof error === 'object' && 'response' in error) {
+            const axiosError = error as AxiosError;
+            const responseData = axiosError.response?.data as any;
+
+            if (responseData) {
+                // Format 1: message simple
+                if (typeof responseData.message === 'string' && responseData.message.trim()) {
+                    return responseData.message;
+                }
+
+                // Format 2: detail (souvent utilisé par FastAPI)
+                if (typeof responseData.detail === 'string' && responseData.detail.trim()) {
+                    return responseData.detail;
+                }
+
+                // Format 3: error (format alternatif)
+                if (typeof responseData.error === 'string' && responseData.error.trim()) {
+                    return responseData.error;
+                }
+
+                // Format 4: errors (tableau d'erreurs de validation)
+                if (Array.isArray(responseData.errors)) {
+                    const errorMessages = responseData.errors
+                        .map((err: any) => {
+                            if (typeof err === 'string') {
+                                return err;
+                            }
+                            if (err?.message) {
+                                return err.message;
+                            }
+                            if (err?.field && err?.message) {
+                                return `${err.field}: ${err.message}`;
+                            }
+                            return null;
+                        })
+                        .filter((msg: string | null): msg is string => msg !== null);
+
+                    if (errorMessages.length > 0) {
+                        return errorMessages.join(' | ');
+                    }
+                }
+
+                // Format 5: data est une string directe
+                if (typeof responseData === 'string' && responseData.trim()) {
+                    return responseData;
+                }
+
+                // Format 6: message dans un sous-objet
+                if (responseData.data?.message) {
+                    return responseData.data.message;
+                }
+            }
+
+            // Si on a un status code mais pas de message, générer un message selon le code
+            const status = axiosError.response?.status;
+            if (status) {
+                switch (status) {
+                    case 400:
+                        return 'Requête invalide. Veuillez vérifier les données saisies.';
+                    case 401:
+                        return 'Non autorisé. Veuillez vous reconnecter.';
+                    case 403:
+                        return 'Accès refusé. Vous n\'avez pas les permissions nécessaires.';
+                    case 404:
+                        return 'Ressource non trouvée.';
+                    case 422:
+                        return 'Erreur de validation. Veuillez vérifier les données saisies.';
+                    case 500:
+                        return 'Erreur serveur. Veuillez réessayer plus tard.';
+                    default:
+                        return `Erreur HTTP ${status}. ${defaultMessage}`;
+                }
+            }
+        }
+
+        // Si c'est une erreur réseau (pas de réponse)
+        if (error && typeof error === 'object' && 'request' in error && !('response' in error)) {
+            return 'Erreur de connexion au serveur. Vérifiez votre connexion internet.';
+        }
+
+        // Si c'est une Error classique
+        if (error instanceof Error) {
+            return error.message || defaultMessage;
+        }
+
+        // Si c'est une string
+        if (typeof error === 'string') {
+            return error.trim() || defaultMessage;
+        }
+
+        // Par défaut
+        return defaultMessage;
     }
 }

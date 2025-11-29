@@ -12,16 +12,22 @@
 
     import appLayout from '@/layouts/app-layout.vue';
     import authLayout from '@/layouts/auth-layout.vue';
+    import monitoringLayout from '@/layouts/monitoring-layout.vue';
 
     import { useAppStore } from '@/stores/index';
     import { useMeta } from '@/composables/use-meta';
+    import { useRoute } from 'vue-router';
 
     const store = useAppStore();
+    const route = useRoute();
 
     // meta
     useMeta({ title: 'Inventaire' });
 
     const mainLayout = computed(() => {
+        if (route.meta.layout === 'monitoring') {
+            return monitoringLayout;
+        }
         return store.mainLayout === 'auth' ? authLayout : appLayout;
     });
 </script>

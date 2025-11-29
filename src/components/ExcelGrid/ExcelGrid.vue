@@ -2,25 +2,34 @@
   <div class="w-full">
     <!-- Grille -->
     <div class="border border-gray-300 rounded-b-lg overflow-auto max-h-[70vh] bg-white shadow-sm" ref="gridWrapper">
-      <table class="w-full border-collapse min-w-[800px] table-fixed" @keydown="handleKeyNavigation">
+      <table class="w-full border-collapse min-w-[1200px] table-fixed" @keydown="handleKeyNavigation">
         <thead>
           <tr class="bg-gradient-to-b from-gray-50 to-gray-100">
             <th class="border-r border-b border-gray-300 p-2 text-center font-semibold text-gray-800 sticky top-0 z-10 w-16 bg-gray-100 shadow-sm h-12 align-middle">
               <span class="text-xs text-gray-600">#</span>
             </th>
-            <th class="border-r border-b border-gray-300 p-2 text-left font-semibold text-gray-800 sticky top-0 z-10 bg-gray-100 shadow-sm h-12 align-middle" style="width: 30%;">
+            <th class="border-r border-b border-gray-300 p-2 text-left font-semibold text-gray-800 sticky top-0 z-10 bg-gray-100 shadow-sm h-12 align-middle" style="width: 20%;">
               <div class="flex items-center gap-2">
                 <span class="text-sm">Emplacement</span>
                 <span v-if="loadingLocations" class="text-xs text-primary font-normal animate-pulse">(Chargement...)</span>
               </div>
             </th>
-            <th class="border-r border-b border-gray-300 p-2 text-left font-semibold text-gray-800 sticky top-0 z-10 bg-gray-100 shadow-sm h-12 align-middle" style="width: 30%;">
+            <th class="border-r border-b border-gray-300 p-2 text-left font-semibold text-gray-800 sticky top-0 z-10 bg-gray-100 shadow-sm h-12 align-middle" style="width: 15%;">
               <div class="flex items-center gap-2">
-                <span class="text-sm">Article</span>
+                <span class="text-sm">Code barre</span>
                 <span v-if="loadingArticles" class="text-xs text-primary font-normal animate-pulse">(Chargement...)</span>
               </div>
             </th>
-            <th class="border-r border-b border-gray-300 p-2 text-left font-semibold text-gray-800 sticky top-0 z-10 bg-gray-100 shadow-sm h-12 align-middle" style="width: 20%;">Quantité</th>
+            <th class="border-r border-b border-gray-300 p-2 text-left font-semibold text-gray-800 sticky top-0 z-10 bg-gray-100 shadow-sm h-12 align-middle" style="width: 15%;">
+              <span class="text-sm">Article</span>
+            </th>
+            <th class="border-r border-b border-gray-300 p-2 text-left font-semibold text-gray-800 sticky top-0 z-10 bg-gray-100 shadow-sm h-12 align-middle" style="width: 15%;">
+              <span class="text-sm">Référence article</span>
+            </th>
+            <th class="border-r border-b border-gray-300 p-2 text-left font-semibold text-gray-800 sticky top-0 z-10 bg-gray-100 shadow-sm h-12 align-middle" style="width: 20%;">
+              <span class="text-sm">Désignation</span>
+            </th>
+            <th class="border-r border-b border-gray-300 p-2 text-left font-semibold text-gray-800 sticky top-0 z-10 bg-gray-100 shadow-sm h-12 align-middle" style="width: 10%;">Quantité</th>
             <th class="border-b border-gray-300 p-2 text-center font-semibold text-gray-800 sticky top-0 z-10 w-28 bg-gray-100 shadow-sm h-12 align-middle">Actions</th>
           </tr>
         </thead>
@@ -99,7 +108,7 @@
               </div>
             </td>
 
-            <!-- Article -->
+            <!-- Code barre -->
             <td
               class="border-r border-gray-200 p-2 relative h-12 transition-all duration-150 align-middle"
               :class="[
@@ -110,16 +119,29 @@
             >
               <div v-if="isEditing(rowIndex, 1)" class="w-full h-full flex items-center">
                 <SelectField
-                  :model-value="row.article"
-                  :options="articleOptions"
+                  v-if="codeBarreOptions && codeBarreOptions.length > 0"
+                  :model-value="row.codeBarre"
+                  :options="codeBarreOptions"
                   :searchable="true"
                   :clearable="true"
                   :loading="loadingArticles"
-                  placeholder="Rechercher un article"
-                  @update:model-value="(val) => handleArticleChange(rowIndex, val)"
+                  placeholder="Rechercher par code barre ou code interne"
+                  search-placeholder="Tapez pour rechercher..."
+                  @update:model-value="(val) => handleCodeBarreChange(rowIndex, val)"
                   @blur="finishEdit"
                   class="text-sm w-full"
-                  :class="{ 'border-error': row.errors.article }"
+                  :class="{ 'border-error': row.errors.codeBarre }"
+                />
+                <input
+                  v-else
+                  ref="cellInputs"
+                  v-model="row.codeBarre"
+                  @blur="finishEdit"
+                  @keydown="handleCellKeydown($event, rowIndex, 1)"
+                  @input="validateCell(rowIndex, 'codeBarre', ($event.target as HTMLInputElement)?.value)"
+                  class="w-full h-full border-none outline-none bg-transparent px-2 text-sm rounded focus:bg-white focus:ring-1 focus:ring-primary"
+                  :class="{ 'bg-error-50 text-error': row.errors.codeBarre }"
+                  placeholder="Code barre"
                 />
               </div>
               <span
@@ -127,40 +149,85 @@
                 @dblclick="startEdit(rowIndex, 1)"
                 class="block w-full h-full px-2 cursor-pointer text-sm rounded transition-colors duration-150 flex items-center whitespace-nowrap overflow-hidden text-ellipsis"
                 :class="[
-                  !row.article && 'text-gray-400 italic',
-                  row.errors.article && 'text-error bg-error-50',
-                  !row.errors.article && 'hover:bg-gray-100'
+                  !row.codeBarre && 'text-gray-400 italic',
+                  row.errors.codeBarre && 'text-error bg-error-50',
+                  !row.errors.codeBarre && 'hover:bg-gray-100'
                 ]"
-                :title="getArticleLabel(row.article) || 'Cliquez pour rechercher'"
+                :title="row.codeBarre || 'Cliquez pour rechercher'"
               >
-                {{ getArticleLabel(row.article) || 'Cliquez pour rechercher' }}
+                {{ row.codeBarre || 'Cliquez pour rechercher' }}
               </span>
               <div 
-                v-if="row.errors.article" 
+                v-if="row.errors.codeBarre" 
                 class="absolute top-full left-0 z-20 bg-error text-white text-xs p-2 rounded-md shadow-xl min-w-[180px] mt-1 border border-error-dark"
               >
                 <div class="flex items-center gap-1">
                   <span class="font-semibold">⚠</span>
-                  <span>{{ row.errors.article }}</span>
+                  <span>{{ row.errors.codeBarre }}</span>
                 </div>
               </div>
+            </td>
+
+            <!-- Article (rempli automatiquement) -->
+            <td
+              class="border-r border-gray-200 p-2 relative h-12 transition-all duration-150 align-middle bg-gray-50"
+              :class="[
+                selectedCell.row === rowIndex && selectedCell.col === 2 && 'ring-2 ring-primary ring-offset-1 bg-primary-50'
+              ]"
+            >
+              <span
+                class="block w-full h-full px-2 text-sm flex items-center whitespace-nowrap overflow-hidden text-ellipsis text-gray-700"
+                :title="row.article || 'Rempli automatiquement'"
+              >
+                {{ row.article || '-' }}
+              </span>
+            </td>
+
+            <!-- Référence article (rempli automatiquement) -->
+            <td
+              class="border-r border-gray-200 p-2 relative h-12 transition-all duration-150 align-middle bg-gray-50"
+              :class="[
+                selectedCell.row === rowIndex && selectedCell.col === 3 && 'ring-2 ring-primary ring-offset-1 bg-primary-50'
+              ]"
+            >
+              <span
+                class="block w-full h-full px-2 text-sm flex items-center whitespace-nowrap overflow-hidden text-ellipsis text-gray-700"
+                :title="row.referenceArticle || 'Rempli automatiquement'"
+              >
+                {{ row.referenceArticle || '-' }}
+              </span>
+            </td>
+
+            <!-- Désignation (rempli automatiquement) -->
+            <td
+              class="border-r border-gray-200 p-2 relative h-12 transition-all duration-150 align-middle bg-gray-50"
+              :class="[
+                selectedCell.row === rowIndex && selectedCell.col === 4 && 'ring-2 ring-primary ring-offset-1 bg-primary-50'
+              ]"
+            >
+              <span
+                class="block w-full h-full px-2 text-sm flex items-center whitespace-nowrap overflow-hidden text-ellipsis text-gray-700"
+                :title="row.designation || 'Rempli automatiquement'"
+              >
+                {{ row.designation || '-' }}
+              </span>
             </td>
 
             <!-- Quantité -->
             <td
               class="border-r border-gray-200 p-2 relative h-12 transition-all duration-150 align-middle"
               :class="[
-                selectedCell.row === rowIndex && selectedCell.col === 2 && 'ring-2 ring-primary ring-offset-1 bg-primary-50',
-                isEditing(rowIndex, 2) && 'ring-2 ring-success ring-offset-1 bg-success-50'
+                selectedCell.row === rowIndex && selectedCell.col === 5 && 'ring-2 ring-primary ring-offset-1 bg-primary-50',
+                isEditing(rowIndex, 5) && 'ring-2 ring-success ring-offset-1 bg-success-50'
               ]"
-              @click="selectCell(rowIndex, 2)"
+              @click="selectCell(rowIndex, 5)"
             >
               <input
-                v-if="isEditing(rowIndex, 2)"
+                v-if="isEditing(rowIndex, 5)"
                 ref="cellInputs"
                 v-model.number="row.quantite"
                 @blur="finishEdit"
-                @keydown="handleCellKeydown($event, rowIndex, 2)"
+                @keydown="handleCellKeydown($event, rowIndex, 5)"
                 @input="validateCell(rowIndex, 'quantite', ($event.target as HTMLInputElement)?.value)"
                 class="w-full h-full border-none outline-none bg-transparent px-2 text-sm rounded focus:bg-white focus:ring-1 focus:ring-primary text-right font-medium"
                 :class="{ 'bg-error-50 text-error': row.errors.quantite }"
@@ -171,7 +238,7 @@
               />
               <span
                 v-else
-                @dblclick="startEdit(rowIndex, 2)"
+                @dblclick="startEdit(rowIndex, 5)"
                 class="block w-full h-full px-2 cursor-pointer text-sm rounded transition-colors duration-150 text-right font-medium flex items-center justify-end whitespace-nowrap"
                 :class="[
                   (row.quantite === null || row.quantite === undefined) && 'text-gray-400 italic',
@@ -239,6 +306,60 @@
   </div>
 </template>
 
+<style scoped>
+/* Limiter le dropdown à 3 options visibles et z-index élevé */
+:deep(.vs__dropdown-menu) {
+  max-height: calc(3 * 3rem + 0.5rem) !important; /* 3 options + padding */
+  overflow-y: auto !important;
+  z-index: 9999 !important; /* Z-index élevé pour être au-dessus de tout */
+  position: absolute !important;
+}
+
+/* Assurer que le conteneur du select a un z-index élevé quand ouvert */
+:deep(.vs--open) {
+  z-index: 9999 !important;
+  position: relative;
+}
+
+/* Assurer que le dropdown toggle a un z-index correct */
+:deep(.vs__dropdown-toggle) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Scrollbar personnalisée pour le dropdown */
+:deep(.vs__dropdown-menu::-webkit-scrollbar) {
+  width: 6px;
+}
+
+:deep(.vs__dropdown-menu::-webkit-scrollbar-track) {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+:deep(.vs__dropdown-menu::-webkit-scrollbar-thumb) {
+  background: var(--color-primary);
+  border-radius: 10px;
+}
+
+:deep(.vs__dropdown-menu::-webkit-scrollbar-thumb:hover) {
+  background: var(--color-primary-dark);
+}
+
+/* Dark mode scrollbar */
+.dark :deep(.vs__dropdown-menu::-webkit-scrollbar-track) {
+  background: #1e293b;
+}
+
+.dark :deep(.vs__dropdown-menu::-webkit-scrollbar-thumb) {
+  background: var(--color-primary);
+}
+
+.dark :deep(.vs__dropdown-menu::-webkit-scrollbar-thumb:hover) {
+  background: var(--color-primary-light);
+}
+</style>
+
 <script setup lang="ts">
 import { ref, reactive, computed, nextTick, watch } from 'vue'
 import SelectField from '@/components/Form/SelectField.vue'
@@ -250,14 +371,25 @@ import type { SelectOption } from '@/interfaces/form'
 interface GridRow {
   id: string
   emplacement: string
+  codeBarre: string
   article: string
+  referenceArticle: string
+  designation: string
   quantite: number | null
   isValid: boolean
   errors: {
     emplacement?: string
+    codeBarre?: string
     article?: string
     quantite?: string
   }
+}
+
+interface ArticleData {
+  product_code?: string | null
+  internal_product_code?: string | null
+  product_name?: string | null
+  family_name?: string | null
 }
 
 interface CellPosition {
@@ -271,6 +403,8 @@ interface Props {
   readonly?: boolean
   locationOptions?: SelectOption[]
   articleOptions?: SelectOption[]
+  codeBarreOptions?: SelectOption[]
+  articlesMap?: Map<string, ArticleData>
   loadingLocations?: boolean
   loadingArticles?: boolean
 }
@@ -280,6 +414,8 @@ const props = withDefaults(defineProps<Props>(), {
   readonly: false,
   locationOptions: () => [],
   articleOptions: () => [],
+  codeBarreOptions: () => [],
+  articlesMap: () => new Map(),
   loadingLocations: false,
   loadingArticles: false
 })
@@ -412,7 +548,7 @@ const handleKeyNavigation = (event: KeyboardEvent) => {
   if (editingCell.row !== -1) return // Ne pas naviguer en mode édition
 
   const maxRow = gridData.value.length - 1
-  const maxCol = 2 // 0: emplacement, 1: article, 2: quantité
+  const maxCol = 5 // 0: emplacement, 1: code barre, 2: article, 3: reference article, 4: designation, 5: quantité
 
   switch (event.key) {
     case 'ArrowUp':
@@ -475,7 +611,7 @@ const handleKeyNavigation = (event: KeyboardEvent) => {
 }
 
 const handleCellKeydown = (event: KeyboardEvent, row: number, col: number) => {
-  const maxCol = 2
+  const maxCol = 5
 
   switch (event.key) {
     case 'Enter':
@@ -516,7 +652,10 @@ const handleCellKeydown = (event: KeyboardEvent, row: number, col: number) => {
 const createNewRow = (): GridRow => ({
   id: `row_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
   emplacement: '',
+  codeBarre: '',
   article: '',
+  referenceArticle: '',
+  designation: '',
   quantite: null,
   isValid: false,
   errors: {}
@@ -548,13 +687,17 @@ const duplicateRow = (index: number) => {
   const newRow = createNewRow()
 
   newRow.emplacement = originalRow.emplacement
+  newRow.codeBarre = originalRow.codeBarre
   newRow.article = originalRow.article
+  newRow.referenceArticle = originalRow.referenceArticle
+  newRow.designation = originalRow.designation
   newRow.quantite = originalRow.quantite
 
   gridData.value.splice(index + 1, 0, newRow)
 
   // Valider la nouvelle ligne
   validateCell(index + 1, 'emplacement', newRow.emplacement)
+  validateCell(index + 1, 'codeBarre', newRow.codeBarre)
   validateCell(index + 1, 'article', newRow.article)
   validateCell(index + 1, 'quantite', newRow.quantite)
 
@@ -581,6 +724,43 @@ const handleArticleChange = (rowIndex: number, value: string | number | null) =>
   }
 }
 
+// Gestion du changement de code barre avec remplissage automatique
+const handleCodeBarreChange = (rowIndex: number, value: string | number | null) => {
+  const row = gridData.value[rowIndex]
+  if (!row) return
+
+  const codeBarreValue = value ? String(value) : ''
+  row.codeBarre = codeBarreValue
+
+  // Remplir automatiquement les champs depuis articlesMap
+  if (codeBarreValue && props.articlesMap) {
+    const articleData = props.articlesMap.get(codeBarreValue)
+    if (articleData) {
+      // Remplir l'article (code interne)
+      row.article = articleData.internal_product_code || ''
+      
+      // Remplir la référence article (code produit)
+      row.referenceArticle = articleData.product_code || ''
+      
+      // Remplir la désignation (nom du produit)
+      row.designation = articleData.product_name || ''
+    } else {
+      // Si pas trouvé, vider les champs
+      row.article = ''
+      row.referenceArticle = ''
+      row.designation = ''
+    }
+  } else {
+    // Si code barre vide, vider les champs
+    row.article = ''
+    row.referenceArticle = ''
+    row.designation = ''
+  }
+
+  validateCell(rowIndex, 'codeBarre', row.codeBarre)
+  emit('data-changed', gridData.value)
+}
+
 // Obtenir le label pour affichage
 const getLocationLabel = (value: string | null | undefined): string => {
   if (!value) return ''
@@ -597,6 +777,7 @@ const getArticleLabel = (value: string | null | undefined): string => {
 const validateAll = () => {
   gridData.value.forEach((row, index) => {
     validateCell(index, 'emplacement', row.emplacement)
+    validateCell(index, 'codeBarre', row.codeBarre)
     validateCell(index, 'article', row.article)
     validateCell(index, 'quantite', row.quantite)
   })

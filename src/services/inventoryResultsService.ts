@@ -13,12 +13,13 @@ export class InventoryResultsService {
      * @param inventoryId - ID de l'inventaire
      * @param storeId - ID du magasin (warehouse)
      * @param params - Paramètres DataTable optionnels (pagination, tri, filtres, recherche)
+     * @returns Objet contenant les résultats et les informations de pagination
      */
     static async getResults(
         inventoryId: number,
         storeId: string | number,
         params?: StandardDataTableParams | Record<string, any>
-    ): Promise<InventoryResult[]> {
+    ): Promise<{ data: InventoryResult[]; recordsFiltered?: number; recordsTotal?: number; draw?: number }> {
         try {
             logger.debug('Récupération des résultats avec paramètres DataTable', {
                 inventoryId,
@@ -26,6 +27,9 @@ export class InventoryResultsService {
                 params
             });
 
+            // Si params est déjà au format QueryParams (objet avec sortModel, filterModel, etc.)
+            // ou StandardDataTableParams, axios le convertira automatiquement
+            // Le backend doit accepter le format QueryParams (sortModel, filterModel, search, startRow, endRow)
             const response = await axiosInstance.get(
                 `${this.baseUrl}${inventoryId}/warehouses/${storeId}/results/`,
                 { params: params || {} }
@@ -40,10 +44,15 @@ export class InventoryResultsService {
 
             if (!Array.isArray(rawResults)) {
                 logger.warn('Format de réponse inattendu pour les résultats d\'inventaire', payload);
-                return [];
+                return {
+                    data: [],
+                    recordsFiltered: 0,
+                    recordsTotal: 0,
+                    draw: 1
+                };
             }
 
-            return rawResults.map((item, index) => {
+            const normalizedResults = rawResults.map((item, index) => {
                 const jobId = item.jobId ?? item.job_id ?? item.id ?? `${inventoryId}-${storeId}-${index + 1}`;
                 const emplacement = item.emplacement ?? item.location ?? '';
                 const article = item.article ?? item.product ?? '';
@@ -153,6 +162,22 @@ export class InventoryResultsService {
 
                 return normalizedItem as InventoryResult;
             });
+
+            // Extraire les informations de pagination si elles existent
+            const recordsFiltered = Array.isArray(payload) 
+                ? normalizedResults.length 
+                : (payload?.recordsFiltered ?? payload?.records_filtered ?? normalizedResults.length);
+            const recordsTotal = Array.isArray(payload)
+                ? normalizedResults.length
+                : (payload?.recordsTotal ?? payload?.records_total ?? normalizedResults.length);
+            const draw = Array.isArray(payload) ? 1 : (payload?.draw ?? 1);
+
+            return {
+                data: normalizedResults,
+                recordsFiltered,
+                recordsTotal,
+                draw
+            };
         } catch (error) {
             logger.error('Erreur lors de la récupération des résultats', error);
             throw error;
@@ -204,6 +229,81 @@ export class InventoryResultsService {
             return response.data;
         } catch (error) {
             logger.error('Erreur lors de la récupération des magasins', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Exporter les résultats d'inventaire en CSV ou Excel
+     * @param inventoryId - ID de l'inventaire
+     * @param storeId - ID du magasin (warehouse)
+     * @param format - Format d'export ('csv' ou 'excel')
+     * @param params - Paramètres DataTable optionnels (pagination, tri, filtres, recherche)
+     * @returns Promise avec la réponse contenant le blob du fichier
+     */
+    static async exportResults(
+        inventoryId: number,
+        storeId: string | number,
+        format: 'csv' | 'excel' = 'excel',
+        params?: StandardDataTableParams | Record<string, any>
+    ): Promise<AxiosResponse<Blob>> {
+        try {
+            logger.debug('Export des résultats d\'inventaire', {
+                inventoryId,
+                storeId,
+                format,
+                params
+            });
+
+            // Construire les paramètres avec le format d'export
+            const exportParams = {
+                ...params,
+                export: format
+            };
+
+            const response = await axiosInstance.get(
+                `${this.baseUrl}${inventoryId}/warehouses/${storeId}/results/`,
+                {
+                    params: exportParams,
+                    responseType: 'blob'
+                }
+            );
+
+            logger.debug('Export réussi', {
+                format,
+                blobSize: response.data.size
+            });
+
+            return response;
+        } catch (error) {
+            logger.error('Erreur lors de l\'export des résultats', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Exporter les articles consolidés d'un inventaire en Excel
+     * @param inventoryId - ID de l'inventaire
+     * @returns Promise avec la réponse contenant le blob du fichier Excel
+     */
+    static async exportConsolidatedArticles(inventoryId: number): Promise<AxiosResponse<Blob>> {
+        try {
+            logger.debug('Export des articles consolidés', { inventoryId });
+
+            const response = await axiosInstance.get(
+                `${this.baseUrl}${inventoryId}/articles-consolides/export/`,
+                {
+                    responseType: 'blob'
+                }
+            );
+
+            logger.debug('Export des articles consolidés réussi', {
+                blobSize: response.data.size
+            });
+
+            return response;
+        } catch (error) {
+            logger.error('Erreur lors de l\'export des articles consolidés', error);
             throw error;
         }
     }

@@ -15,6 +15,7 @@ export const useResultsStore = defineStore('results', () => {
     const loading = ref(false);
     const error = ref<string | null>(null);
     const currentInventoryId = ref<number | null>(null);
+    const totalCount = ref(0);
 
     // Getters
     const getResults = computed(() => results.value);
@@ -42,12 +43,16 @@ export const useResultsStore = defineStore('results', () => {
         error.value = null;
         try {
             logger.debug('Store: Récupération des résultats', { inventoryId, storeId, params });
-            const data = await InventoryResultsService.getResults(inventoryId, storeId, params);
+            const response = await InventoryResultsService.getResults(inventoryId, storeId, params);
 
-            results.value = data;
+            results.value = response.data;
+            totalCount.value = response.recordsFiltered || response.data.length;
             currentInventoryId.value = inventoryId;
-            logger.debug('Store: Résultats chargés', { count: data.length });
-            return data;
+            logger.debug('Store: Résultats chargés', { 
+                count: response.data.length, 
+                totalCount: totalCount.value 
+            });
+            return response.data;
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erreur lors de la récupération des résultats';
             logger.error('Store: Erreur lors de la récupération des résultats', err);
@@ -184,6 +189,7 @@ export const useResultsStore = defineStore('results', () => {
         loading,
         error,
         currentInventoryId,
+        totalCount,
 
         // Getters
         getResults,

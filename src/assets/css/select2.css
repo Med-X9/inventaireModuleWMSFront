@@ -10,7 +10,7 @@
   --vs-border-style: solid;
   --vs-border-radius: 0.5rem;
   --vs-dropdown-bg: #fff;
-  --vs-dropdown-z-index: 1000;
+  --vs-dropdown-z-index: 9999;
   --vs-actions-padding: 4px 6px 0 3px;
 }
 
@@ -54,6 +54,16 @@
   border-radius: var(--vs-border-radius);
   background: white;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  max-height: calc(3 * 3rem + 0.5rem) !important; /* Limiter à 3 options visibles */
+  overflow-y: auto !important;
+  z-index: 9999 !important; /* Z-index élevé pour être au-dessus de tout */
+  position: absolute !important; /* Assurer le positionnement absolu */
+}
+
+/* Assurer que le conteneur du dropdown a un z-index élevé */
+.vs-custom.vs--open {
+  z-index: 9999 !important;
+  position: relative;
 }
 
 .vs-custom .vs__dropdown-option {

@@ -34,6 +34,7 @@ export function useJobManagement() {
         store: jobStore,
         fetchAction: 'fetchJobs',
         defaultPageSize: 20,
+        queryOutputMode: 'queryParams', // Format EXEMPLES_REQUETES_QUERYMODEL
         additionalParams: {
             inventoryId,
             warehouseId

@@ -62,6 +62,69 @@ body.swal2-toast-shown .swal2-container.toast {
     border-color: #3b3f5c;
 }
 
+/* Styles pour les boutons Annuler avec couleur primaire */
+.sweet-alerts .swal2-styled.swal2-cancel.btn-cancel-primary,
+.sweet-alerts-launch .swal2-styled.swal2-cancel.btn-cancel-primary {
+    background-color: transparent !important;
+    border: 2px solid #FECD1C !important;
+    color: #FECD1C !important;
+    font-weight: 600 !important;
+    padding: 8px 24px !important;
+    transition: all 0.3s ease !important;
+}
+
+.sweet-alerts .swal2-styled.swal2-cancel.btn-cancel-primary:hover,
+.sweet-alerts-launch .swal2-styled.swal2-cancel.btn-cancel-primary:hover {
+    background-color: #FECD1C !important;
+    color: #fff !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(254, 205, 28, 0.3) !important;
+}
+
+.dark .sweet-alerts .swal2-styled.swal2-cancel.btn-cancel-primary,
+.dark .sweet-alerts-launch .swal2-styled.swal2-cancel.btn-cancel-primary {
+    border-color: #FECD1C !important;
+    color: #FECD1C !important;
+    background-color: transparent !important;
+}
+
+.dark .sweet-alerts .swal2-styled.swal2-cancel.btn-cancel-primary:hover,
+.dark .sweet-alerts-launch .swal2-styled.swal2-cancel.btn-cancel-primary:hover {
+    background-color: #FECD1C !important;
+    color: #1f2937 !important;
+}
+
+/* Styles pour les icônes dans les boutons Annuler */
+.sweet-alerts .swal2-styled.swal2-cancel.btn-cancel-primary svg,
+.sweet-alerts-launch .swal2-styled.swal2-cancel.btn-cancel-primary svg,
+.sweet-alerts .swal2-styled.swal2-cancel.btn-cancel-primary i,
+.sweet-alerts-launch .swal2-styled.swal2-cancel.btn-cancel-primary i,
+.sweet-alerts .swal2-styled.swal2-cancel.btn-cancel-primary .icon,
+.sweet-alerts-launch .swal2-styled.swal2-cancel.btn-cancel-primary .icon {
+    background-color: #FECD1C !important;
+    color: #fff !important;
+    padding: 4px 6px;
+    border-radius: 4px;
+    margin-right: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+}
+
+.sweet-alerts .swal2-styled.swal2-cancel.btn-cancel-primary:hover svg,
+.sweet-alerts-launch .swal2-styled.swal2-cancel.btn-cancel-primary:hover svg,
+.sweet-alerts .swal2-styled.swal2-cancel.btn-cancel-primary:hover i,
+.sweet-alerts-launch .swal2-styled.swal2-cancel.btn-cancel-primary:hover i,
+.sweet-alerts .swal2-styled.swal2-cancel.btn-cancel-primary:hover .icon,
+.sweet-alerts-launch .swal2-styled.swal2-cancel.btn-cancel-primary:hover .icon {
+    background-color: #fff !important;
+    color: #FECD1C !important;
+}
+
 .swal2-popup .swal2-styled.swal2-confirm {
     background-color: #4361ee;
 }

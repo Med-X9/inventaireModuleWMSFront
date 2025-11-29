@@ -47,6 +47,12 @@ export class JobService {
         return response.data;
     }
 
+    // Récupérer les jobs avec discrepancies (nouvel endpoint)
+    static async getJobsDiscrepancies(inventoryId: number, warehouseId: number, params?: { page?: number; page_size?: number; [key: string]: any; }): Promise<any> {
+        const response = await axiosInstance.get(`${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/discrepancies/`, { params });
+        return response.data;
+    }
+
     // Récupérer un job par ID
     static async getById(id: number | string): Promise<Job> {
         const response = await axiosInstance.get<Job>(`${this.baseUrlInventory}${id}/`);

@@ -25,6 +25,12 @@
                         <IconEye class="w-5 h-5" />
                         <span>Détail inventaire</span>
                     </button>
+                    <button
+                        class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary to-primary-light text-white font-semibold rounded-xl shadow-md hover:from-primary-dark hover:to-primary transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-slate-800"
+                        @click="handleGoToJobTracking">
+                        <IconChartSquare class="w-5 h-5" />
+                        <span>Suivi</span>
+                    </button>
                     <ToggleButtons
                         v-model="viewMode"
                         :options="updatedViewOptions"
@@ -146,6 +152,7 @@ import IconCalendar from '@/components/icon/icon-calendar.vue'
 import IconListCheck from '@/components/icon/icon-list-check.vue'
 import IconLayoutGrid from '@/components/icon/icon-layout-grid.vue'
 import IconEye from '@/components/icon/icon-eye.vue'
+import IconChartSquare from '@/components/icon/icon-chart-square.vue'
 
 // ===== IMPORTS COMPOSABLES =====
 import { usePlanningManagement } from '@/composables/usePlanningManagement'
@@ -193,6 +200,7 @@ const {
     fetchInventoryIdByReference,
     goToInventoryDetail,
     goToAffectation,
+    goToJobTracking,
     initialize,
 
     // Handlers DataTable
@@ -268,6 +276,13 @@ const handleGoToInventoryDetail = () => {
  */
 const handleGoToAffectation = () => {
     goToAffectation(props.reference)
+}
+
+/**
+ * Navigue vers la page de suivi des jobs
+ */
+const handleGoToJobTracking = () => {
+    goToJobTracking(props.reference)
 }
 
 // ===== LIFECYCLE =====

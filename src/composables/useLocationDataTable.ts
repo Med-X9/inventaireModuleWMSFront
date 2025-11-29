@@ -11,7 +11,8 @@ export function useLocationDataTable() {
     return useGenericDataTable<Location>({
         store: locationStore,
         fetchAction: 'fetchLocations',
-        defaultPageSize: 20
+        defaultPageSize: 20,
+        queryOutputMode: 'queryParams' // Format EXEMPLES_REQUETES_QUERYMODEL
     });
 }
 

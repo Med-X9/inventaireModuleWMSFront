@@ -21,7 +21,7 @@
         <!-- Affichage des erreurs de validation -->
         <div v-if="validationError" class="wizard-validation-error">
             <div class="error-message">
-                <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
                 <span>{{ validationError }}</span>
@@ -113,10 +113,11 @@ watch(() => props.steps, () => {
     max-width: 100%;
     margin: 0 auto;
     padding: 1.5rem 1.5rem 1.25rem 1.5rem;
-    border: 1px solid #eee;
+    border: 1px solid var(--color-border);
     border-radius: 12px;
-    background: #fafbfc;
+    background: var(--color-bg-app);
     box-shadow: 0 4px 24px 0 rgba(0,0,0,0.07);
+    font-family: var(--font-body);
 }
 .wizard-steps {
     display: flex;
@@ -132,7 +133,7 @@ watch(() => props.steps, () => {
     left: 0;
     right: 0;
     height: 3px;
-    background: #eee;
+    background: var(--color-border);
     z-index: 0;
 }
 .wizard-step {
@@ -147,47 +148,49 @@ watch(() => props.steps, () => {
     width: 54px;
     height: 54px;
     border-radius: 50%;
-    background: #eee;
-    color: #888;
+    background: var(--color-border);
+    color: var(--color-text-muted);
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: bold;
     font-size: 1.5rem;
-    border: 3px solid #eee;
+    font-family: var(--font-heading);
+    border: 3px solid var(--color-border);
     transition: background 0.2s, color 0.2s, border 0.2s;
     margin-bottom: 0.5rem;
 }
 .wizard-step.active .wizard-step-circle {
-    background: #ffc107;
-    color: #222;
-    border: 3px solid #ffc107;
+    background: var(--color-primary);
+    color: var(--color-bg-card);
+    border: 3px solid var(--color-primary);
 }
 .wizard-step.done .wizard-step-circle {
-    background: #4caf50;
-    color: #fff;
-    border: 3px solid #4caf50;
+    background: var(--color-success);
+    color: var(--color-bg-card);
+    border: 3px solid var(--color-success);
 }
 .wizard-step-title {
     font-size: 1.15rem;
-    color: #888;
+    color: var(--color-text-muted);
     margin-top: 0.2rem;
     text-align: center;
     min-width: 90px;
     font-weight: 500;
+    font-family: var(--font-body);
 }
 .wizard-step.active .wizard-step-title {
-    color: #222;
+    color: var(--color-primary);
     font-weight: bold;
 }
 .wizard-step.done .wizard-step-title {
-    color: #4caf50;
+    color: var(--color-success);
     font-weight: bold;
 }
 .wizard-step-line {
     width: 100%;
     height: 3px;
-    background: #eee;
+    background: var(--color-border);
     position: absolute;
     left: 0;
     top: 27px;
@@ -196,10 +199,10 @@ watch(() => props.steps, () => {
 }
 .wizard-step.active ~ .wizard-step-line,
 .wizard-step.done ~ .wizard-step-line {
-    background: #ffc107;
+    background: var(--color-primary);
 }
 .wizard-step.done ~ .wizard-step-line {
-    background: #4caf50;
+    background: var(--color-success);
 }
 .wizard-step:last-child .wizard-step-line {
     display: none;
@@ -209,13 +212,15 @@ watch(() => props.steps, () => {
     margin-bottom: 1.5rem;
     transition: all 0.3s cubic-bezier(.4,0,.2,1);
     font-size: 1.15rem;
+    font-family: var(--font-body);
+    color: var(--color-text-dark);
 }
 
 .wizard-validation-error {
     margin-bottom: 1rem;
     padding: 0.75rem;
-    background: #fef2f2;
-    border: 1px solid #fecaca;
+    background: var(--color-bg-alert-error);
+    border: 1px solid var(--color-error-light);
     border-radius: 8px;
     animation: slideIn 0.3s ease-out;
 }
@@ -224,8 +229,9 @@ watch(() => props.steps, () => {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: #dc2626;
+    color: var(--color-error-dark);
     font-weight: 500;
+    font-family: var(--font-body);
 }
 
 @keyframes slideIn {
@@ -249,17 +255,21 @@ button {
     padding: 0.8rem 2.2rem;
     border-radius: 6px;
     border: none;
-    background: #ffc107;
-    color: #222;
+    background: var(--color-primary);
+    color: var(--color-bg-card);
     font-weight: bold;
     font-size: 1.1rem;
+    font-family: var(--font-heading);
     cursor: pointer;
     transition: background 0.2s;
     box-shadow: 0 2px 8px 0 rgba(0,0,0,0.04);
 }
+button:hover:not(:disabled) {
+    background: var(--color-primary-dark);
+}
 button:disabled {
-    background: #eee;
-    color: #aaa;
+    background: var(--color-border);
+    color: var(--color-text-muted);
     cursor: not-allowed;
 }
 

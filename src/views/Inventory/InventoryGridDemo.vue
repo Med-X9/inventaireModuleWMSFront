@@ -231,6 +231,8 @@
                 :initial-data="initialData"
                 :location-options="locationOptions"
                 :article-options="articleOptions"
+                :codeBarreOptions="codeBarreOptions"
+                :articles-map="articlesMap"
                 :loading-locations="loadingLocations"
                 :loading-articles="loadingArticles"
                 @data-changed="onDataChanged"
@@ -296,12 +298,11 @@ import { useRoute } from 'vue-router'
 import ExcelGrid from '@/components/ExcelGrid/ExcelGrid.vue'
 import { useExcelGrid, GridRow } from '@/composables/useExcelGrid'
 import { alertService } from '@/services/alertService'
-import { LocationService } from '@/services/LocationService'
 import { JobService } from '@/services/jobService'
-import { useLocationStore } from '@/stores/location'
+import { ArticleService } from '@/services/ArticleService'
 import { useJobStore } from '@/stores/job'
 import { useAuthStore } from '@/stores/auth'
-import type { Location } from '@/models/Location'
+import { useCountingDetailStore } from '@/stores/countingDetail'
 import type { SelectOption } from '@/interfaces/form'
 import type { Job } from '@/models/Job'
 import { useLocalStorage } from '@/utils/storage'
@@ -327,9 +328,9 @@ const route = useRoute()
 const excelGridRef = ref<InstanceType<typeof ExcelGrid>>()
 const fileInput = ref<HTMLInputElement>()
 const notifications = ref<Array<{ id: number; type: string; message: string }>>([])
-const locationStore = useLocationStore()
 const jobStore = useJobStore()
 const authStore = useAuthStore()
+const countingDetailStore = useCountingDetailStore()
 
 // Informations du job
 const jobInfo = ref<{
@@ -343,6 +344,8 @@ const loadingJob = ref(false)
 // État pour les options
 const locationOptions = ref<SelectOption[]>([])
 const articleOptions = ref<SelectOption[]>([])
+const codeBarreOptions = ref<SelectOption[]>([])
+const articlesMap = ref<Map<string, any>>(new Map())
 const loadingLocations = ref(false)
 const loadingArticles = ref(false)
 
@@ -493,42 +496,160 @@ const loadJobInfo = async () => {
     }
 }
 
-// Charger les emplacements automatiquement
+// Charger les emplacements depuis countingDetail uniquement
 const loadLocations = async () => {
     loadingLocations.value = true
     try {
-        const response = await LocationService.getAll({ page_size: 1000 })
-        const locations = response.data.results || []
+        // Récupérer les données de synchronisation
+        await countingDetailStore.fetchSyncData()
 
-        locationOptions.value = locations.map((loc: Location) => ({
-            label: `${loc.location_reference} - ${loc.reference}`,
-            value: loc.location_reference || loc.reference
-        }))
+        const jobs = countingDetailStore.getJobs
+        const locationReferencesSet = new Set<string>()
 
-        addNotification('success', `${locationOptions.value.length} emplacements chargés`)
+        // Extraire toutes les location_reference uniques depuis les job_details
+        jobs.forEach(job => {
+            if (job.job_details && Array.isArray(job.job_details)) {
+                job.job_details.forEach(jobDetail => {
+                    if (jobDetail.location_reference) {
+                        locationReferencesSet.add(jobDetail.location_reference)
+                    }
+                })
+            }
+        })
+
+        // Convertir en tableau d'options
+        locationOptions.value = Array.from(locationReferencesSet).map(locRef => ({
+            label: locRef,
+            value: locRef
+        })).sort((a, b) => a.label.localeCompare(b.label))
+
+        if (locationOptions.value.length > 0) {
+            addNotification('success', `${locationOptions.value.length} emplacements chargés depuis la synchronisation`)
+        } else {
+            addNotification('warning', 'Aucun emplacement trouvé dans les données de synchronisation')
+        }
     } catch (error) {
-        console.error('Erreur lors du chargement des emplacements:', error)
-        addNotification('error', 'Erreur lors du chargement des emplacements')
+        console.error('Erreur lors du chargement des emplacements depuis countingDetail:', error)
+        addNotification('error', 'Erreur lors du chargement des emplacements depuis la synchronisation')
+        locationOptions.value = []
     } finally {
         loadingLocations.value = false
     }
 }
 
-// Charger les articles (mock pour l'instant - à adapter selon votre API)
+// Charger les articles depuis ArticleService
 const loadArticles = async () => {
     loadingArticles.value = true
     try {
-        // TODO: Remplacer par un vrai appel API pour les articles
-        const mockArticles: SelectOption[] = [
-            { label: 'ART-001 - Article Test 1', value: 'ART-001' },
-            { label: 'ART-002 - Article Test 2', value: 'ART-002' },
-            { label: 'ART-003 - Article Test 3', value: 'ART-003' },
-            { label: 'ART-004 - Article Test 4', value: 'ART-004' },
-            { label: 'ART-005 - Article Test 5', value: 'ART-005' },
-        ]
+        // Récupérer les produits de l'utilisateur connecté
+        const articles = await ArticleService.getUserProductsList()
 
-        articleOptions.value = mockArticles
-        addNotification('info', `${articleOptions.value.length} articles disponibles`)
+        // Créer une map des articles pour le remplissage automatique
+        const newArticlesMap = new Map<string, any>()
+
+        // Convertir en options avec autocomplétion
+        // Format optimisé pour la recherche : Code Interne | Code Produit | Nom | [Famille]
+        articleOptions.value = articles.map(article => {
+            const labelParts: string[] = []
+
+            // Code interne (priorité d'affichage)
+            if (article.internal_product_code) {
+                labelParts.push(article.internal_product_code)
+            }
+
+            // Code produit (EAN/UPC)
+            if (article.product_code && article.product_code !== article.internal_product_code) {
+                labelParts.push(`| ${article.product_code}`)
+            }
+
+            // Nom du produit
+            if (article.product_name) {
+                labelParts.push(`| ${article.product_name}`)
+            }
+
+            // Famille
+            if (article.family_name) {
+                labelParts.push(`[${article.family_name}]`)
+            }
+
+            // Créer le label final
+            const label = labelParts.length > 0
+                ? labelParts.join(' ')
+                : article.product_code || article.internal_product_code || `Article ${article.web_id}`
+
+            // Utiliser product_code en priorité, puis internal_product_code, puis web_id
+            const value = article.product_code || article.internal_product_code || String(article.web_id)
+
+            return {
+                label,
+                value,
+                // Ajouter des métadonnées pour améliorer la recherche
+                searchText: [
+                    article.internal_product_code,
+                    article.product_code,
+                    article.product_name,
+                    article.family_name
+                ].filter(Boolean).join(' ').toLowerCase()
+            }
+        }).sort((a, b) => {
+            // Trier par code interne d'abord, puis par nom
+            const aCode = a.label.split('|')[0]?.trim() || ''
+            const bCode = b.label.split('|')[0]?.trim() || ''
+            return aCode.localeCompare(bCode)
+        })
+
+        // Créer les options de code barre (recherche par product_code ET internal_product_code)
+        const codeBarreSet = new Set<string>()
+        articles.forEach(article => {
+            // Ajouter product_code comme option de code barre
+            if (article.product_code) {
+                codeBarreSet.add(article.product_code)
+                // Stocker dans la map avec product_code comme clé
+                newArticlesMap.set(article.product_code, {
+                    product_code: article.product_code,
+                    internal_product_code: article.internal_product_code,
+                    product_name: article.product_name,
+                    family_name: article.family_name
+                })
+            }
+            // Ajouter internal_product_code comme option de code barre aussi
+            if (article.internal_product_code) {
+                codeBarreSet.add(article.internal_product_code)
+                // Stocker dans la map avec internal_product_code comme clé
+                newArticlesMap.set(article.internal_product_code, {
+                    product_code: article.product_code,
+                    internal_product_code: article.internal_product_code,
+                    product_name: article.product_name,
+                    family_name: article.family_name
+                })
+            }
+        })
+
+        // Créer les options de code barre avec format pour la recherche
+        codeBarreOptions.value = Array.from(codeBarreSet).map(code => {
+            const articleData = newArticlesMap.get(code)
+            const label = articleData?.product_name
+                ? `${code} - ${articleData.product_name}`
+                : code
+            return {
+                label,
+                value: code,
+                searchText: [
+                    code,
+                    articleData?.internal_product_code,
+                    articleData?.product_code,
+                    articleData?.product_name
+                ].filter(Boolean).join(' ').toLowerCase()
+            }
+        }).sort((a, b) => a.value.localeCompare(b.value))
+
+        articlesMap.value = newArticlesMap
+
+        if (articleOptions.value.length > 0) {
+            addNotification('success', `${articleOptions.value.length} articles chargés avec autocomplétion`)
+        } else {
+            addNotification('warning', 'Aucun article trouvé pour cet utilisateur')
+        }
     } catch (error) {
         console.error('Erreur lors du chargement des articles:', error)
         addNotification('error', 'Erreur lors du chargement des articles')
@@ -543,7 +664,10 @@ const saveToLocalStorage = () => {
         const data = excelGrid.getData()
         const dataToSave = data.map(row => ({
             emplacement: row.emplacement,
+            codeBarre: row.codeBarre,
             article: row.article,
+            referenceArticle: row.referenceArticle,
+            designation: row.designation,
             quantite: row.quantite
         }))
         savedData.value = dataToSave

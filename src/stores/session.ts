@@ -1,106 +1,122 @@
 // src/stores/session.ts
 import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
 import { SessoinService } from '@/services/SessionService';
 import type { Session, SessionResponse } from '@/models/Session';
 import { logger } from '@/services/loggerService';
 
-interface SessionState {
-    sessions: Session[];
-    loading: boolean;
-    error: string | null;
-}
+export const useSessionStore = defineStore('session', () => {
+    // State
+    const sessions = ref<Session[]>([]);
+    const loading = ref(false);
+    const error = ref<string | null>(null);
+    const isFetching = ref(false); // Protection contre les appels multiples simultanés
 
-export const useSessionStore = defineStore('session', {
-    state: (): SessionState => ({
-        sessions: [],
-        loading: false,
-        error: null,
-    }),
+    // Getters
+    const getAllSessions = computed(() => sessions.value);
+    const getSessionsCount = computed(() => sessions.value.length);
+    const isLoading = computed(() => loading.value);
+    const getError = computed(() => error.value);
 
-    getters: {
-        /**
-         * Retourne toutes les sessions
-         */
-        getAllSessions: (state): Session[] => {
-            return state.sessions;
-        },
+    // ===== FONCTIONS UTILITAIRES =====
 
-        /**
-         * Retourne le nombre total de sessions
-         */
-        getSessionsCount: (state): number => {
-            return state.sessions.length;
-        },
+    const setLoading = (isLoading: boolean) => {
+        loading.value = isLoading;
+    };
 
-        /**
-         * Retourne si le store est en cours de chargement
-         */
-        isLoading: (state): boolean => {
-            return state.loading;
-        },
+    const setError = (errorMessage: string | null) => {
+        error.value = errorMessage;
+    };
 
-        /**
-         * Retourne l'erreur actuelle
-         */
-        getError: (state): string | null => {
-            return state.error;
-        },
-    },
+    const clearError = () => {
+        error.value = null;
+    };
 
-    actions: {
-        /**
-         * Récupère toutes les sessions depuis l'API
-         */
-        async fetchSessions(): Promise<void> {
-            this.loading = true;
-            this.error = null;
+    // ===== ACTIONS =====
 
-            try {
-                const response: SessionResponse = await SessoinService.getSession();
+    /**
+     * Récupère toutes les sessions depuis l'API
+     */
+    const fetchSessions = async (): Promise<void> => {
+        // Éviter les appels multiples simultanés
+        if (isFetching.value) {
+            logger.debug('fetchSessions déjà en cours, abandon de la requête');
+            return;
+        }
 
-                if (response.status === 'success' && response.data) {
-                    this.sessions = response.data;
-                } else {
-                    throw new Error(response.message || 'Erreur lors de la récupération des sessions');
-                }
-            } catch (error) {
-                logger.error('Erreur dans le store session', error);
-                this.error = error instanceof Error ? error.message : 'Erreur inconnue';
-                throw error;
-            } finally {
-                this.loading = false;
+        // Si les sessions sont déjà chargées, ne pas refaire la requête
+        if (sessions.value.length > 0) {
+            logger.debug('Sessions déjà chargées, pas besoin de recharger');
+            return;
+        }
+
+        try {
+            isFetching.value = true;
+            setLoading(true);
+            clearError();
+
+            const response: SessionResponse = await SessoinService.getSession();
+
+            if (response.status === 'success' && response.data) {
+                sessions.value = response.data;
+            } else {
+                throw new Error(response.message || 'Erreur lors de la récupération des sessions');
             }
-        },
+        } catch (err: any) {
+            logger.error('Erreur dans le store session', err);
+            const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+            setError(errorMessage);
+            throw err;
+        } finally {
+            setLoading(false);
+            isFetching.value = false;
+        }
+    };
 
-        /**
-         * Efface l'erreur actuelle
-         */
-        clearError(): void {
-            this.error = null;
-        },
+    /**
+     * Efface toutes les sessions du store
+     */
+    const clearSessions = () => {
+        sessions.value = [];
+        error.value = null;
+    };
 
-        /**
-         * Efface toutes les sessions du store
-         */
-        clearSessions(): void {
-            this.sessions = [];
-            this.error = null;
-        },
+    /**
+     * Trouve une session par son ID
+     */
+    const getSessionById = (id: number): Session | undefined => {
+        return sessions.value.find(session => session.id === id);
+    };
 
-        /**
-         * Trouve une session par son ID
-         */
-        getSessionById(id: number): Session | undefined {
-            return this.sessions.find(session => session.id === id);
-        },
+    /**
+     * Trouve des sessions par nom d'utilisateur
+     */
+    const getSessionsByUsername = (username: string): Session[] => {
+        return sessions.value.filter(session =>
+            session.username.toLowerCase().includes(username.toLowerCase())
+        );
+    };
 
-        /**
-         * Trouve des sessions par nom d'utilisateur
-         */
-        getSessionsByUsername(username: string): Session[] {
-            return this.sessions.filter(session =>
-                session.username.toLowerCase().includes(username.toLowerCase())
-            );
-        },
-    },
+    return {
+        // State
+        sessions,
+        loading,
+        error,
+        isFetching,
+
+        // Getters
+        getAllSessions,
+        getSessionsCount,
+        isLoading,
+        getError,
+
+        // Actions
+        setLoading,
+        setError,
+        clearError,
+        fetchSessions,
+        clearSessions,
+        getSessionById,
+        getSessionsByUsername
+    };
 });

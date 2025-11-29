@@ -8,6 +8,7 @@ import { useInventoryStore } from '@/stores/inventory';
 import { useWarehouseStore } from '@/stores/warehouse';
 import type { CreateInventoryRequest } from '@/models/Inventory';
 import { logger } from '@/services/loggerService';
+import { Validators } from '@/utils/validators';
 
 export function useInventoryCreation() {
     const state = reactive({
@@ -495,7 +496,15 @@ export function useInventoryCreation() {
             return result;
         } catch (error) {
             logger.error('Erreur lors de la création de l\'inventaire', error);
-            throw error;
+            // Extraire le message d'erreur backend pour le propager
+            const errorMessage = Validators.extractBackendError(error, 'Erreur lors de la création de l\'inventaire');
+            // Créer une nouvelle erreur avec le message extrait pour garantir qu'il sera affiché
+            const enhancedError = new Error(errorMessage);
+            // Préserver la stack trace originale si disponible
+            if (error instanceof Error) {
+                enhancedError.stack = error.stack;
+            }
+            throw enhancedError;
         }
     }
 
@@ -551,7 +560,15 @@ export function useInventoryCreation() {
             return result;
         } catch (error) {
             logger.error('Erreur lors de la modification de l\'inventaire', error);
-            throw error;
+            // Extraire le message d'erreur backend pour le propager
+            const errorMessage = Validators.extractBackendError(error, 'Erreur lors de la modification de l\'inventaire');
+            // Créer une nouvelle erreur avec le message extrait
+            const enhancedError = new Error(errorMessage);
+            // Préserver la stack trace originale si disponible
+            if (error instanceof Error) {
+                enhancedError.stack = error.stack;
+            }
+            throw enhancedError;
         }
     }
 

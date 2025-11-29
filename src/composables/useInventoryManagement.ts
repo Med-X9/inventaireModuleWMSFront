@@ -1,12 +1,16 @@
-import { useBackendDataTable } from '@/components/DataTable/composables/useBackendDataTable'
 import { dataTableService } from '@/services/dataTableService'
 import { logger } from '@/services/loggerService'
 import type { InventoryTable } from '@/models/Inventory'
 import type { DataTableColumn, ColumnDataType, ActionConfig } from '@/types/dataTable'
 import type { StockImportErrorResponse } from '@/interfaces/stockImport'
-import { ref, markRaw } from 'vue'
+import { ref, markRaw, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useInventoryStore } from '@/stores/inventory'
+import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
+import { convertToStandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
+import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
+import { convertQueryModelToQueryParams, convertQueryModelToRestApi, createQueryModelFromDataTableParams } from '@/components/DataTable/utils/queryModelConverter'
+import type { QueryModel } from '@/components/DataTable/types/QueryModel'
 
 
 // Import des icônes
@@ -17,9 +21,8 @@ import IconEdit from '@/components/icon/icon-edit.vue'
 import IconCheck from '@/components/icon/icon-check.vue'
 import IconTrash from '@/components/icon/icon-trash.vue'
 
-// Import des nouvelles fonctionnalités
-import { useDataTableLazyLoading } from './useDataTableLazyLoading'
-import { useDataTableOptimizations } from './useDataTableOptimizations'
+// Note: Lazy loading et optimisations sont maintenant intégrés dans useBackendDataTable
+// Pas besoin d'imports séparés (KISS - Keep It Simple)
 
 /**
  * Composable pour la gestion des inventaires
@@ -30,100 +33,77 @@ export function useInventoryManagement() {
     const router = useRouter()
     const inventoryStore = useInventoryStore()
 
-    // Initialiser useBackendDataTable avec le store Pinia
-    const {
-        data: inventories,
-        loading,
-        currentPage,
-        pageSize,
-        searchQuery,
-        sortModel,
-        setPage,
-        setPageSize,
-        setSearch,
-        setSortModel,
-        setFilters,
-        resetFilters,
-        refresh,
-        pagination
-    } = useBackendDataTable<InventoryTable>('', {
-        piniaStore: inventoryStore,
-        storeId: 'inventory',
-        autoLoad: true,
-        pageSize: 20
+    // État local simple
+    const inventories = computed(() => inventoryStore.inventories)
+    const loading = computed(() => inventoryStore.loading)
+    const currentPage = computed(() => inventoryStore.currentPage)
+    const pageSize = computed(() => inventoryStore.pageSize)
+
+    // ===== QUERYMODEL =====
+    
+    /**
+     * Mode de sortie pour les paramètres de requête (défaut: 'queryParams')
+     */
+    const queryOutputMode = ref<'queryModel' | 'dataTable' | 'restApi' | 'queryParams'>('queryParams')
+
+    /**
+     * Colonnes pour QueryModel (sera défini plus tard)
+     */
+    const columnsRef = computed(() => {
+        // columns est défini plus tard dans le fichier, donc on retourne un tableau vide pour l'instant
+        return []
     })
 
     /**
-     * Configuration du lazy loading - adapté pour useBackendDataTable
+     * QueryModel pour gérer les requêtes avec mode de sortie configurable
      */
-    const lazyLoadingConfig = {
-        pageSize: 50, // Charger 50 éléments par page
-        debounceDelay: 300,
-        threshold: 0.8,
-        loadData: async (page: number, pageSize: number, filters?: any) => {
-            try {
-                // Utiliser les méthodes de useBackendDataTable
-                setPage(page)
-                setPageSize(pageSize)
-                if (filters) {
-                    setFilters(filters)
-                }
-                await refresh()
+    const {
+        queryModel: queryModelRef,
+        toStandardParams,
+        updatePagination: updateQueryPagination,
+        updateSort: updateQuerySort,
+        updateFilter: updateQueryFilter,
+        updateGlobalSearch: updateQueryGlobalSearch
+    } = useQueryModel({
+        columns: columnsRef,
+        enabled: true
+    })
 
-                return {
-                    data: inventories.value,
-                    total: pagination.value.total,
-                    hasMore: pagination.value.has_next
-                }
-            } catch (error) {
-                logger.error('Erreur lazy loading', error)
-                throw error
-            }
-        },
-        onDataLoaded: (data: any[], page: number) => {
-            logger.debug('Données chargées via lazy loading', { page, count: data.length })
-        },
-        onError: (error: any) => {
-            logger.error('Erreur lazy loading', error)
+    /**
+     * Convertit le QueryModel selon le mode configuré
+     */
+    const convertQueryModelToOutput = (queryModelData: QueryModel) => {
+        switch (queryOutputMode.value) {
+            case 'queryModel':
+                return queryModelData
+            case 'restApi':
+                return convertQueryModelToRestApi(queryModelData)
+            case 'queryParams':
+                return convertQueryModelToQueryParams(queryModelData)
+            case 'dataTable':
+            default:
+                return toStandardParams.value
         }
     }
 
     /**
-     * Configuration des optimisations de rendu - adapté pour useBackendDataTable
+     * Pagination calculée pour les inventaires
+     * Utilise le totalItems du store pour calculer les informations de pagination
      */
-    const optimizationConfig = {
-        rendering: {
-            enableVirtualScrolling: true,
-            enableCellCaching: true,
-            enableDataCompression: true,
-            enablePreRendering: true,
-            enableImageOptimization: true,
-            optimizationThreshold: 100
-        },
-        maxItemsBeforeOptimization: 500,
-        debounceDelay: 16, // ~60fps
-        cellCacheSize: 1000,
-        virtualScrolling: {
-            itemHeight: 50,
-            overscan: 5,
-            containerHeight: 400
+    const inventoryPaginationComputed = computed(() => {
+        const totalCount = inventoryStore.totalItems || 0
+        const pageSizeValue = pageSize.value || 20
+        const currentPageValue = currentPage.value || 1
+
+        return {
+            current_page: currentPageValue,
+            total_pages: Math.max(1, Math.ceil(totalCount / pageSizeValue)),
+            has_next: currentPageValue < Math.ceil(totalCount / pageSizeValue),
+            has_previous: currentPageValue > 1,
+            page_size: pageSizeValue,
+            total: totalCount
         }
-    }
-    // Les fonctionnalités de dataTable sont maintenant fournies par useBackendDataTable
-    // Pas besoin d'initialiser useGenericDataTable séparément
-
-    /**
-     * Initialisation du lazy loading
-     */
-    const lazyLoading = useDataTableLazyLoading(lazyLoadingConfig)
-
-    /**
-     * Initialisation des optimisations de rendu - adapté pour useBackendDataTable
-     */
-    const optimizations = useDataTableOptimizations(
-        inventories.value,
-        optimizationConfig
-    )
+    })
 
     /**
      * Initialisation de l'édition avancée - adapté pour useBackendDataTable
@@ -306,6 +286,51 @@ export function useInventoryManagement() {
         }
     })
 
+    /**
+     * Fonction pour rafraîchir les données avec le même pattern que usePlanning et useInventoryResults
+     */
+    const refresh = async (params?: StandardDataTableParams) => {
+        try {
+            // Utiliser les paramètres fournis ou construire à partir des valeurs actuelles
+            let finalParams: StandardDataTableParams
+            if (params && 'start' in params && 'length' in params) {
+                // C'est déjà StandardDataTableParams
+                finalParams = params
+            } else {
+                // Construire depuis les valeurs actuelles si nécessaire
+                finalParams = params || {
+                    draw: currentPage.value || 1,
+                    start: ((currentPage.value || 1) - 1) * (pageSize.value || 20),
+                    length: pageSize.value || 20
+                }
+            }
+
+            // S'assurer que length et start sont bien définis
+            if (!finalParams.length) {
+                finalParams.length = pageSize.value || 20
+            }
+            if (finalParams.start === undefined) {
+                finalParams.start = ((currentPage.value || 1) - 1) * (pageSize.value || 20)
+            }
+
+            logger.debug('Chargement des inventaires avec paramètres DataTable:', {
+                pageSize: pageSize.value,
+                params: finalParams
+            })
+
+            await inventoryStore.fetchInventories(finalParams)
+            await nextTick()
+
+            logger.debug('Inventaires mis à jour dans le store', {
+                count: inventoryStore.inventories.length,
+                totalItems: inventoryStore.totalItems
+            })
+        } catch (error) {
+            logger.error('Erreur lors du chargement des inventaires', error)
+            throw error
+        }
+    }
+
     // États pour la modale d'import Excel
     const showImportModal = ref(false)
     const isImporting = ref(false)
@@ -484,15 +509,285 @@ export function useInventoryManagement() {
         return inventories.value.filter((inv: InventoryTable) => inv.status === status).length
     }
 
+    // ===== CONFIGURATION DES FONCTIONNALITÉS AG-GRID =====
+
+    /**
+     * Configuration du tri multi-colonnes
+     */
+    const multiSortConfig = {
+        maxSortColumns: 3
+    }
+
+    /**
+     * Configuration de l'épinglage de colonnes
+     */
+    const columnPinningConfig = {
+        defaultPinnedColumns: [
+            { field: 'label', pinned: 'left' as const }
+        ]
+    }
+
+    /**
+     * Configuration du redimensionnement de colonnes
+     */
+    const columnResizeConfig = {
+        minWidth: 100,
+        maxWidth: 500,
+        defaultWidths: {
+            'label': 200,
+            'status': 150,
+            'date': 120,
+            'account_name': 150
+        }
+    }
+
+    /**
+     * Configuration des filtres Set (valeurs uniques)
+     */
+    const setFiltersConfig = {
+        extractUniqueValues: (field: string, data: any[]) => {
+            if (field === 'status') {
+                return ['EN PREPARATION', 'EN REALISATION', 'TERMINE', 'CLOTURE']
+            }
+            // Pour les autres champs, extraire les valeurs uniques depuis les données
+            const values = new Set<any>()
+            data.forEach(row => {
+                const value = row[field]
+                if (value !== null && value !== undefined && value !== '') {
+                    values.add(value)
+                }
+            })
+            return Array.from(values).sort()
+        },
+        formatValue: (value: any) => {
+            if (value === null || value === undefined) return '(Vide)'
+            if (typeof value === 'boolean') return value ? 'Oui' : 'Non'
+            return String(value)
+        }
+    }
+
+    // 🚀 Handlers simplifiés : reçoivent directement StandardDataTableParams du DataTable
+    const handleStandardParamsChanged = async (params: StandardDataTableParams) => {
+        await inventoryStore.fetchInventories(params)
+    }
+
+    // ===== HANDLERS DATATABLE =====
+
+    /**
+     * Handler pour les changements de tri
+     * Accepte StandardDataTableParams quand serverSideSorting est activé
+     */
+    const handleSortChanged = async (params: any) => {
+        if (params && typeof params === 'object' && ('start' in params || 'draw' in params)) {
+            await handleStandardParamsChanged(params as StandardDataTableParams)
+        }
+    }
+
+    /**
+     * Handler pour les changements de filtre
+     * Accepte StandardDataTableParams quand serverSideFiltering est activé
+     */
+    const handleFilterChanged = async (params: StandardDataTableParams | QueryModel | Record<string, any> | any) => {
+        if (params && typeof params === 'object' && ('start' in params || 'draw' in params)) {
+            await handleStandardParamsChanged(params as StandardDataTableParams)
+        }
+    }
+
+    /**
+     * Handler pour les changements de pagination
+     * Accepte StandardDataTableParams quand serverSidePagination est activé
+     */
+    const handlePaginationChanged = async (params: StandardDataTableParams | QueryModel | Record<string, any> | any) => {
+        if (params && typeof params === 'object' && ('start' in params || 'draw' in params)) {
+            await handleStandardParamsChanged(params as StandardDataTableParams)
+        }
+    }
+
+    /**
+     * Handler pour les changements de recherche globale
+     * Accepte StandardDataTableParams ou string
+     */
+    const handleGlobalSearchChanged = async (params: any) => {
+        if (params && typeof params === 'object') {
+            // Vérifier si c'est un StandardDataTableParams
+            if ('start' in params || 'draw' in params || 'length' in params) {
+                await handleStandardParamsChanged(params as StandardDataTableParams)
+            } else {
+                console.warn('Recherche globale reçue avec un objet de format inattendu', params)
+            }
+        } else if (typeof params === 'string') {
+            // Convertir string en StandardDataTableParams
+            const standardParams: StandardDataTableParams = {
+                start: 0,
+                length: pageSize.value || 10,
+                'search[value]': params || '',
+                draw: 1
+            }
+            await handleStandardParamsChanged(standardParams)
+        } else {
+            console.warn('Recherche globale reçue avec un format inattendu', typeof params, params)
+        }
+    }
+
+    /**
+     * Handler pour les changements de valeur de cellule
+     */
+    const handleCellValueChanged = (event: { data: any; field: string; newValue: any; oldValue: any }) => {
+        // TODO: Implémenter la logique de sauvegarde des modifications
+        // await inventoryStore.updateInventory(event.data.id, { [event.field]: event.newValue })
+    }
+
+    // ===== ÉTATS POUR L'UPLOAD DE FICHIER =====
+
+    /** Fichier sélectionné pour l'import */
+    const selectedFile = ref<File | null>(null)
+
+    /** Référence à l'input file */
+    const fileInput = ref<HTMLInputElement>()
+
+    /** État de drag & drop */
+    const isDragging = ref(false)
+
+    /** Progression de l'upload */
+    const uploadProgress = ref(0)
+
+    // ===== HANDLERS DE FICHIER =====
+
+    /**
+     * Handler pour le changement de fichier
+     */
+    const handleFileChange = (event: Event) => {
+        const target = event.target as HTMLInputElement
+        if (target.files && target.files.length > 0) {
+            selectedFile.value = target.files[0]
+            uploadProgress.value = 0
+        }
+    }
+
+    /**
+     * Handler pour le survol lors du drag & drop
+     */
+    const handleDragOver = (event: DragEvent) => {
+        event.preventDefault()
+        isDragging.value = true
+    }
+
+    /**
+     * Handler pour la sortie du drag & drop
+     */
+    const handleDragLeave = (event: DragEvent) => {
+        event.preventDefault()
+        isDragging.value = false
+    }
+
+    /**
+     * Handler pour le dépôt de fichier
+     */
+    const handleDrop = (event: DragEvent) => {
+        event.preventDefault()
+        isDragging.value = false
+
+        if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+            const file = event.dataTransfer.files[0]
+            // Vérifier le type de fichier
+            if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                selectedFile.value = file
+                uploadProgress.value = 0
+            } else {
+                alertService.error('Seuls les fichiers Excel (.xlsx, .xls) sont acceptés')
+            }
+        }
+    }
+
+    // ===== FONCTIONS UTILITAIRES =====
+
+    /**
+     * Formater la taille d'un fichier en unités lisibles
+     */
+    const formatFileSize = (bytes: number): string => {
+        if (bytes === 0) return '0 Bytes'
+        const k = 1024
+        const sizes = ['Bytes', 'KB', 'MB', 'GB']
+        const i = Math.floor(Math.log(bytes) / Math.log(k))
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+    }
+
+    /**
+     * Obtenir le type de fichier depuis son nom
+     */
+    const getFileType = (fileName: string): string => {
+        const extension = fileName.split('.').pop()?.toUpperCase()
+        return extension ? `Fichier ${extension}` : 'Fichier inconnu'
+    }
+
+    /**
+     * Formater une date en français
+     */
+    const formatDate = (date: string | Date): string => {
+        if (!date) return ''
+        const d = new Date(date)
+        return d.toLocaleDateString('fr-FR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        })
+    }
+
+    // ===== WRAPPERS POUR L'IMPORT =====
+
+    /**
+     * Wrapper pour processImportExcel avec gestion de progression
+     */
+    const processImportExcelWithProgress = async (file: File) => {
+        uploadProgress.value = 0
+
+        // Simuler la progression pendant l'upload
+        const progressInterval = setInterval(() => {
+            if (uploadProgress.value < 90) {
+                uploadProgress.value += 10
+            }
+        }, 200)
+
+        try {
+            await processImportExcel(file)
+            clearInterval(progressInterval)
+            uploadProgress.value = 100
+            await new Promise(resolve => setTimeout(resolve, 500))
+        } catch (error) {
+            clearInterval(progressInterval)
+            uploadProgress.value = 0
+            throw error
+        }
+    }
+
+    /**
+     * Wrapper pour closeImportModal avec nettoyage
+     * Réinitialise tous les états liés à l'import
+     */
+    const closeImportModalWithCleanup = () => {
+        if (isImporting.value) return // Empêcher la fermeture pendant l'import
+
+        selectedFile.value = null
+        uploadProgress.value = 0
+        isDragging.value = false
+        closeImportModal()
+    }
+
+    /**
+     * Handler pour les erreurs de chargement
+     */
+    const handleLoadError = (error: any) => {
+        alertService.error('Erreur lors du chargement des inventaires')
+    }
+
     return {
-        // Données réactives de useBackendDataTable
+        // Données réactives de useBackendDataTable (synchronisées avec QueryModel)
         inventories,
         loading,
         currentPage,
         pageSize,
-        searchQuery,
-        sortModel,
-        pagination,
+        pagination: inventoryPaginationComputed,
+        inventoryTotalItems: computed(() => inventoryStore.totalItems || 0),
 
         // Configuration de la table
         columns,
@@ -501,18 +796,18 @@ export function useInventoryManagement() {
         // Méthodes de navigation
         redirectToAdd,
 
-        // Méthodes de useBackendDataTable
-        setPage,
-        setPageSize,
-        setSearch,
-        setSortModel,
-        setFilters,
-        resetFilters,
+        // Méthodes de rafraîchissement
         refresh,
 
-        // Nouvelles fonctionnalités
-        lazyLoading,
-        optimizations,
+        // 🚀 Configuration des fonctionnalités AG-Grid
+        multiSortConfig,
+        columnPinningConfig,
+        columnResizeConfig,
+        setFiltersConfig,
+
+        // 🚀 Handler simplifié pour StandardDataTableParams
+        handleStandardParamsChanged,
+
         // Méthodes d'import
         importStockImageWithModal,
 
@@ -530,8 +825,42 @@ export function useInventoryManagement() {
         processImportExcel,
         closeImportModal,
 
+        // Handlers DataTable
+        handleSortChanged,
+        handleFilterChanged,
+        handlePaginationChanged,
+        handleGlobalSearchChanged,
+        handleCellValueChanged,
+
+        // États pour l'upload de fichier
+        selectedFile,
+        fileInput,
+        isDragging,
+        uploadProgress,
+
+        // Handlers de fichier
+        handleFileChange,
+        handleDragOver,
+        handleDragLeave,
+        handleDrop,
+
         // Fonctions utilitaires
+        formatFileSize,
+        getFileType,
+        formatDate,
         getStatusCount,
-        handleInventoryFilterChanged
+
+        // Wrappers pour l'import
+        processImportExcelWithProgress,
+        closeImportModalWithCleanup,
+        handleLoadError,
+
+        // Fonctions utilitaires (dépréciées mais conservées pour compatibilité)
+        handleInventoryFilterChanged,
+
+        // QueryModel
+        queryModel: computed(() => queryModelRef.value),
+        queryOutputMode: computed(() => queryOutputMode.value),
+        convertQueryModelToOutput
     }
 }

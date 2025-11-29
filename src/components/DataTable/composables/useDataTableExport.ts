@@ -8,7 +8,7 @@
 
 import { ref } from 'vue';
 import Swal from 'sweetalert2';
-import { buildDataTableParams } from './useDataTableHelpers';
+import { buildDataTableParams } from '../utils/dataTableHelpers';
 import type { Ref } from 'vue';
 
 export interface ExportConfig {
@@ -197,12 +197,72 @@ export function useDataTableExport(
         });
     };
 
+    /**
+     * Export CSV côté client (depuis les données en mémoire)
+     */
+    const exportToCsvClient = (data: any[], filename: string = 'export', columns?: string[]) => {
+        try {
+            // Déterminer les colonnes à exporter
+            const cols = columns || (data.length > 0 ? Object.keys(data[0]) : [])
+            
+            // Créer l'en-tête CSV
+            const header = cols.join(',')
+            
+            // Créer les lignes de données
+            const rows = data.map(row => {
+                return cols.map(col => {
+                    const value = row[col]
+                    // Échapper les valeurs contenant des virgules ou des guillemets
+                    if (value === null || value === undefined) return ''
+                    const stringValue = String(value).replace(/"/g, '""')
+                    return `"${stringValue}"`
+                }).join(',')
+            })
+            
+            // Combiner header et rows
+            const csvContent = [header, ...rows].join('\n')
+            
+            // Créer le blob et télécharger
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+            const downloadUrl = window.URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = downloadUrl
+            link.setAttribute('download', `${filename}.csv`)
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+            window.URL.revokeObjectURL(downloadUrl)
+            
+            return true
+        } catch (error: any) {
+            console.error('Erreur lors de l\'export CSV:', error)
+            Swal.fire({
+                title: 'Erreur',
+                text: error.message || 'Une erreur est survenue lors de l\'export CSV.',
+                icon: 'error'
+            })
+            return false
+        }
+    }
+
+    /**
+     * Export Excel côté client (utilise une bibliothèque externe si disponible)
+     * Pour l'instant, exporte en CSV avec extension .xlsx
+     */
+    const exportToExcelClient = (data: any[], filename: string = 'export', columns?: string[]) => {
+        // Pour un vrai export Excel, il faudrait utiliser une bibliothèque comme xlsx
+        // Pour l'instant, on exporte en CSV avec extension .xlsx
+        return exportToCsvClient(data, filename, columns)
+    }
+
     return {
         exportLoading,
         exportData,
         exportToExcel,
         exportToCsv,
-        exportToPdf
+        exportToPdf,
+        exportToCsvClient,
+        exportToExcelClient
     };
 }
 

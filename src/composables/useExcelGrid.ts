@@ -4,11 +4,15 @@ import { alertService } from '@/services/alertService'
 export interface GridRow {
   id: string
   emplacement: string
+  codeBarre: string
   article: string
+  referenceArticle: string
+  designation: string
   quantite: number | null
   isValid: boolean
   errors: {
     emplacement?: string
+    codeBarre?: string
     article?: string
     quantite?: string
   }
@@ -94,12 +98,14 @@ export function useExcelGrid(options: ExcelGridOptions = {}) {
         }
         break
 
-      case 'article':
+      case 'codeBarre':
         if (!value || value.trim() === '') {
-          row.errors.article = 'Article requis'
-        } else if (!/^[A-Z]{3}-\d{3}$/.test(value.trim())) {
-          row.errors.article = 'Format: ART-001'
+          row.errors.codeBarre = 'Code barre requis'
         }
+        break
+
+      case 'article':
+        // L'article est rempli automatiquement, pas besoin de validation stricte
         break
 
       case 'quantite':
@@ -144,6 +150,7 @@ export function useExcelGrid(options: ExcelGridOptions = {}) {
     if (!row) return false
 
     return Boolean(row.emplacement &&
+           row.codeBarre &&
            row.article &&
            row.quantite !== null &&
            row.quantite !== undefined &&
@@ -154,7 +161,10 @@ export function useExcelGrid(options: ExcelGridOptions = {}) {
   const createNewRow = (): GridRow => ({
     id: `row_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     emplacement: '',
+    codeBarre: '',
     article: '',
+    referenceArticle: '',
+    designation: '',
     quantite: null,
     isValid: false,
     errors: {}

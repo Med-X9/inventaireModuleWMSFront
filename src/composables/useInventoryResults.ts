@@ -11,19 +11,21 @@
  */
 
 // ===== IMPORTS VUE =====
-import { ref, computed, markRaw, watch } from 'vue'
+import { ref, computed, markRaw, watch, createApp, h, getCurrentInstance, nextTick } from 'vue'
 
 // ===== IMPORTS PINIA =====
 import { storeToRefs } from 'pinia'
 
 // ===== IMPORTS COMPOSABLES =====
 import { useBackendDataTable } from '@/components/DataTable/composables/useBackendDataTable'
+import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
 
 // ===== IMPORTS SERVICES =====
 import { dataTableService } from '@/services/dataTableService'
 import { logger } from '@/services/loggerService'
 import { alertService } from '@/services/alertService'
-import { EcartComptageService } from '@/services/EcartComptageService'
+import { EcartComptageService, type ResolveEcartRequest } from '@/services/EcartComptageService'
+import { InventoryResultsService } from '@/services/inventoryResultsService'
 
 // ===== IMPORTS STORES =====
 import { useResultsStore } from '@/stores/results'
@@ -40,6 +42,8 @@ import type { StandardDataTableParams } from '@/components/DataTable/utils/dataT
 
 // ===== IMPORTS UTILS =====
 import { convertToStandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
+import { convertQueryModelToRestApi, convertQueryModelToQueryParams, createQueryModelFromDataTableParams } from '@/components/DataTable/utils/queryModelConverter'
+import type { QueryModel } from '@/components/DataTable/types/QueryModel'
 
 // ===== IMPORTS EXTERNES =====
 import Swal from 'sweetalert2'
@@ -49,12 +53,133 @@ import IconCheck from '@/components/icon/icon-check.vue'
 import IconPencil from '@/components/icon/icon-edit.vue'
 import IconLaunch from '@/components/icon/icon-launch.vue'
 
+// ===== IMPORTS COMPOSANTS =====
+import Modal from '@/components/Modal.vue'
+import SelectField from '@/components/Form/SelectField.vue'
+import type { SelectOption } from '@/interfaces/form'
+
+// ===== IMPORTS PLUGINS =====
+import { createPinia } from 'pinia'
+import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
+import i18n from '@/i18n'
+
+/**
+ * Mode de sortie pour les paramètres de requête
+ */
+export type QueryOutputMode = 'queryModel' | 'dataTable' | 'restApi' | 'queryParams'
+
 /**
  * Options pour initialiser le composable
  */
 export interface UseInventoryResultsConfig {
     inventoryReference?: string
     initialInventoryId?: number
+    /** Mode de sortie pour les paramètres de requête (défaut: 'dataTable') */
+    queryOutputMode?: QueryOutputMode
+}
+
+/**
+ * Fonction helper pour afficher une modal avec SelectField pour sélectionner une session
+ *
+ * @param options - Options pour le select
+ * @param title - Titre de la modal
+ * @param description - Description à afficher
+ * @returns Promise qui se résout avec la valeur sélectionnée ou null si annulé
+ */
+function showSessionSelectModal(
+    options: SelectOption[],
+    title: string = 'Sélectionner une session',
+    description: string = 'Choisissez la session pour lancer le comptage'
+): Promise<string | number | null> {
+    return new Promise((resolve) => {
+        // Créer un conteneur pour la modal
+        const container = document.createElement('div')
+        document.body.appendChild(container)
+
+        // Créer l'application Vue
+        const app = createApp({
+            setup() {
+                const showModal = ref<boolean>(true)
+                const selectedValue = ref<string | number | null>(null)
+
+                const handleConfirm = () => {
+                    showModal.value = false
+                    setTimeout(() => {
+                        app.unmount()
+                        container.remove()
+                        resolve(selectedValue.value)
+                    }, 300)
+                }
+
+                const handleCancel = () => {
+                    showModal.value = false
+                    setTimeout(() => {
+                        app.unmount()
+                        container.remove()
+                        resolve(null)
+                    }, 300)
+                }
+
+                const handleSelectChange = (value: string | number | string[] | number[] | null) => {
+                    if (value !== null && !Array.isArray(value)) {
+                        selectedValue.value = value
+                    } else {
+                        selectedValue.value = null
+                    }
+                }
+
+                return () => h(Modal, {
+                    modelValue: showModal.value,
+                    'onUpdate:modelValue': (value: boolean) => {
+                        showModal.value = value
+                        if (!value) {
+                            handleCancel()
+                        }
+                    },
+                    title,
+                    size: 'md'
+                }, {
+                    default: () => [
+                        h('div', { class: 'space-y-6' }, [
+                            h('p', {
+                                class: 'text-sm text-slate-600 dark:text-slate-400 text-center mb-4'
+                            }, description),
+                            h(SelectField, {
+                                modelValue: selectedValue.value,
+                                options,
+                                searchable: true,
+                                clearable: false,
+                                placeholder: 'Rechercher une session...',
+                                searchPlaceholder: 'Tapez pour rechercher...',
+                                'onUpdate:modelValue': handleSelectChange,
+                                class: 'w-full'
+                            }),
+                            h('div', { class: 'flex justify-end gap-3 mt-6' }, [
+                                h('button', {
+                                    class: 'px-6 py-3 bg-transparent border-2 border-primary text-primary rounded-xl font-semibold text-sm transition-all duration-300 hover:bg-primary hover:text-white',
+                                    onClick: handleCancel
+                                }, 'Annuler'),
+                                h('button', {
+                                    class: 'px-6 py-3 bg-gradient-to-r from-primary to-primary-light text-white rounded-xl font-semibold text-sm transition-all duration-300 hover:from-primary-dark hover:to-primary disabled:opacity-50 disabled:cursor-not-allowed',
+                                    disabled: selectedValue.value === null,
+                                    onClick: handleConfirm
+                                }, 'Suivant')
+                            ])
+                        ])
+                    ]
+                })
+            }
+        })
+
+        // Utiliser les plugins nécessaires
+        const pinia = createPinia()
+        pinia.use(piniaPluginPersistedstate)
+        app.use(pinia)
+        app.use(i18n)
+
+        // Monter l'application
+        app.mount(container)
+    })
 }
 
 /**
@@ -80,6 +205,11 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     const inventoryId = ref<number | null>(config?.initialInventoryId || null)
     const accountId = ref<number | null>(null)
     const isInitialized = ref(false)
+
+    // Mode de sortie pour les requêtes
+    // Par défaut, utiliser 'dataTable' pour compatibilité avec le backend actuel
+    // Changer à 'queryParams' une fois que le backend supporte le nouveau format
+    const queryOutputMode = ref<QueryOutputMode>(config?.queryOutputMode || 'dataTable')
 
     // États pour les magasins
     const storeOptions = ref<StoreOption[]>([])
@@ -146,6 +276,25 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
 
     const hasResults = computed(() => results.value.length > 0)
 
+    /**
+     * Pagination calculée pour les résultats
+     * Utilise le totalCount du store pour calculer les informations de pagination
+     */
+    const resultsPaginationComputed = computed(() => {
+        const totalCount = resultsStore.totalCount || 0
+        const pageSizeValue = pageSize.value || 20
+        const currentPageValue = currentPage.value || 1
+
+        return {
+            current_page: currentPageValue,
+            total_pages: Math.max(1, Math.ceil(totalCount / pageSizeValue)),
+            has_next: currentPageValue < Math.ceil(totalCount / pageSizeValue),
+            has_previous: currentPageValue > 1,
+            page_size: pageSizeValue,
+            total: totalCount
+        }
+    })
+
     // ===== COLONNES DYNAMIQUES =====
 
     /**
@@ -195,60 +344,102 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         };
 
         const inferDifferenceLabel = (field: string) => {
-            if (!results.value.length) return 'Écart';
-
-            for (const result of results.value as ResultWithLabels[]) {
-                if (result.__differenceLabels?.[field]) {
-                    return result.__differenceLabels[field];
-                }
-            }
-
             // Pattern modifié pour extraire tous les nombres de l'écart
             // Exemples :
             // - ecart_1_2 -> "Écart 1-2"
-            // - ecart_1_2_3 -> "Écart 1-2-3"
-            // - ecart_3_4 -> "Écart 3-4"
+            // - ecart_2_3 -> "Écart 3" (prendre le dernier nombre)
+            // - ecart_3_4 -> "Écart 4"
+            // - ecart_4_5 -> "Écart 5"
             const match = field.match(/^ecart_((?:\d+_?)+)$/);
             if (!match) return 'Écart';
 
-            // Extraire tous les nombres et les joindre avec des tirets
+            // Extraire tous les nombres
             const numbers = match[1].split('_').filter(n => n.length > 0);
             if (numbers.length === 0) return 'Écart';
 
-            // Si deux nombres, format "Écart X-Y", sinon "Écart X-Y-Z..."
-            if (numbers.length === 2) {
+            // Si c'est ecart_1_2, garder le format "Écart 1-2"
+            if (numbers.length === 2 && numbers[0] === '1' && numbers[1] === '2') {
                 return `Écart ${numbers[0]}-${numbers[1]}`;
-            } else {
-                return `Écart ${numbers.join('-')}`;
             }
+
+            // Pour les autres écarts, prendre le dernier nombre (ex: ecart_2_3 -> "Écart 3")
+            // Ignorer les labels du backend pour forcer notre format
+            const lastNumber = numbers[numbers.length - 1];
+            return `Écart ${lastNumber}`;
+        };
+
+        const inferStatusFields = () => {
+            if (!results.value.length) return [] as string[];
+            // Détecter les champs de statut de comptage
+            // Formats possibles : statut_1er_comptage, statut_1_comptage, statut_1, statut_2eme_comptage, etc.
+            return Object.keys(results.value[0])
+                .filter(key => {
+                    const normalized = key.toLowerCase();
+                    // Pattern pour statut_X ou statut_X_comptage ou statut_Xer_comptage ou statut_Xeme_comptage
+                    return /^statut_\d+(?:er|eme)?(?:_comptage)?$/i.test(key) ||
+                           /^statut_(?:1er|2eme|3eme|premier|deuxieme|troisieme)(?:_comptage)?$/i.test(key);
+                })
+                .sort((a, b) => {
+                    // Extraire le numéro pour trier
+                    const numA = parseInt(a.match(/\d+/)?.[0] || '0');
+                    const numB = parseInt(b.match(/\d+/)?.[0] || '0');
+                    return numA - numB;
+                });
+        };
+
+        const inferStatusLabel = (field: string) => {
+            if (!results.value.length) return 'Statut comptage';
+
+            // Extraire le numéro du comptage
+            const match = field.match(/(\d+)|(1er|premier)|(2eme|deuxieme)|(3eme|troisieme)/i);
+            if (match) {
+                let order: number;
+                if (match[1]) {
+                    order = parseInt(match[1]);
+                } else if (match[2]) {
+                    order = 1;
+                } else if (match[3]) {
+                    order = 2;
+                } else if (match[4]) {
+                    order = 3;
+            } else {
+                    order = 1;
+                }
+
+                const suffix = order === 1 ? 'er' : 'ème';
+                return `Statut ${order}${suffix} comptage`;
+            }
+
+            return 'Statut comptage';
         };
 
         const sortedCountingFields = inferCountingFields();
+        const sortedStatusFields = inferStatusFields();
         const sortedDifferenceFields = inferDifferenceFields();
 
         const cols: DataTableColumn[] = [
+            // {
+            //     headerName: 'ID',
+            //     field: 'id',
+            //     sortable: true,
+            //     dataType: 'number' as ColumnDataType,
+            //     filterable: true,
+            //     width: 80,
+            //     editable: false,
+            //     hide: true,
+            //     draggable: true,
+            //     autoSize: true,
+            //     description: 'Identifiant unique'
+            // },
             {
-                headerName: 'ID',
-                field: 'id',
-                sortable: true,
-                dataType: 'number' as ColumnDataType,
-                filterable: true,
-                width: 80,
-                editable: false,
-                visible: false,
-                draggable: true,
-                autoSize: true,
-                description: 'Identifiant unique'
-            },
-            {
-                headerName: 'Article',
-                field: 'article',
+                headerName: 'JOB',
+                field: 'job_reference',
                 sortable: true,
                 dataType: 'text' as ColumnDataType,
                 filterable: true,
                 width: dataTableService.calculateOptimalColumnWidth({
-                    field: 'article',
-                    headerName: 'Article',
+                    field: 'job_reference',
+                    headerName: 'JOB',
                     dataType: 'text'
                 }),
                 editable: false,
@@ -256,7 +447,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 draggable: true,
                 autoSize: true,
                 icon: 'icon-box',
-                description: 'Référence de l\'article'
+                description: 'Référence du job'
             },
             {
                 headerName: 'Emplacement',
@@ -275,10 +466,32 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 autoSize: true,
                 icon: 'icon-map-pin',
                 description: 'Emplacement de l\'article'
+            },
+            {
+                headerName: 'Article',
+                field: 'article',
+                sortable: true,
+                dataType: 'text' as ColumnDataType,
+                filterable: true,
+                width: dataTableService.calculateOptimalColumnWidth({
+                    field: 'article',
+                    headerName: 'Article',
+                    dataType: 'text'
+                }),
+                editable: false,
+                visible: true,
+                draggable: true,
+                autoSize: true,
+                icon: 'icon-box',
+                description: 'Référence de l\'article'
             }
         ];
 
+        // Construire les colonnes dans l'ordre : Comptage 1, Comptage 2, Écart 1-2, Comptage 3, Écart 3, etc.
         sortedCountingFields.forEach((field, index) => {
+            const comptageNum = index + 1; // Numéro du comptage (1, 2, 3, etc.)
+
+            // Ajouter le comptage
             cols.push({
                 headerName: inferCountingLabel(field, index),
                 field,
@@ -291,14 +504,16 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 draggable: true,
                 autoSize: true,
                 icon: 'icon-calculator',
-                description: `Valeur du comptage ${index + 1}`
-            });
+                description: `Valeur du comptage ${comptageNum}`
         });
 
-        sortedDifferenceFields.forEach(field => {
+            // Après le comptage 2, ajouter Écart 1-2
+            if (comptageNum === 2) {
+                const ecart1_2 = sortedDifferenceFields.find(f => f.toLowerCase() === 'ecart_1_2');
+                if (ecart1_2) {
             cols.push({
-                headerName: inferDifferenceLabel(field),
-                field,
+                        headerName: inferDifferenceLabel(ecart1_2),
+                        field: ecart1_2,
                 sortable: true,
                 dataType: 'number' as ColumnDataType,
                 filterable: true,
@@ -309,65 +524,213 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 autoSize: true,
                 icon: 'icon-trending-up',
                 description: 'Écart entre les comptages',
-                // Utiliser cellRenderer qui peut être appelé de différentes manières
-                // Le service cellRenderers l'appelle avec (value, column, row)
-                // Mais le type attend (params: any), donc on doit gérer les deux cas
                 cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
-                    // Déterminer si c'est le format params ou (value, column, row)
                     let ecart: any;
                     let rowData: any;
 
                     if (column && row) {
-                        // Format (value, column, row) utilisé par cellRenderersService
                         ecart = paramsOrValue;
                         rowData = row;
                     } else {
-                        // Format params utilisé par AG-Grid
                         const params = paramsOrValue;
                         ecart = params?.value;
                         rowData = params?.data || params?.rowData || params?.node?.data;
                     }
 
-                    // Si la valeur n'est pas définie, chercher dans la ligne avec le nom du champ
                     if (ecart === undefined || ecart === null) {
-                        ecart = rowData?.[field];
-                    }
-
-                    // Si toujours pas trouvé, chercher toutes les clés qui commencent par "ecart_"
-                    if (ecart === undefined || ecart === null) {
-                        if (rowData) {
-                            const ecartKeys = Object.keys(rowData).filter(key =>
-                                key.toLowerCase().startsWith('ecart_')
-                            );
-                            if (ecartKeys.length > 0) {
-                                // Essayer de trouver celle qui correspond au pattern du champ
-                                const matchingKey = ecartKeys.find(key =>
-                                    key.toLowerCase() === field.toLowerCase()
-                                );
-                                ecart = matchingKey ? rowData[matchingKey] : rowData[ecartKeys[0]];
+                                ecart = rowData?.[ecart1_2];
                             }
-                        }
-                    }
 
-                    // Si la valeur est null, undefined ou chaîne vide, afficher '-'
                     if (ecart === undefined || ecart === null || ecart === '') {
                         return '-';
                     }
 
-                    // Convertir en nombre
                     const numEcart = Number(ecart);
-
-                    // Si la conversion échoue, afficher '-'
                     if (Number.isNaN(numEcart)) {
                         return '-';
                     }
 
-                    // Retourner le HTML avec les classes de couleur
-                    // Si écart = 0 → couleur succès (vert), sinon couleur erreur (rouge)
                     const color = numEcart === 0 ? 'text-green-600' : 'text-red-600';
                     return `<span class="${color} font-semibold">${numEcart}</span>`;
                 }) as any
             });
+                }
+            }
+
+            // Pour les comptages 3 et plus, ajouter leur écart correspondant (Écart 3, Écart 4, etc.)
+            if (comptageNum >= 3) {
+                // Trouver l'écart correspondant (ecart_2_3 pour comptage 3, ecart_3_4 pour comptage 4, etc.)
+                const ecartField = sortedDifferenceFields.find(e => {
+                    const numbers = e.match(/\d+/g) || [];
+                    const lastNum = numbers[numbers.length - 1];
+                    return lastNum === String(comptageNum) && e.toLowerCase() !== 'ecart_1_2';
+                });
+
+                if (ecartField) {
+                    const isEcart1_2 = false;
+                    cols.push({
+                        headerName: inferDifferenceLabel(ecartField),
+                        field: ecartField,
+                        sortable: isEcart1_2,
+                        dataType: 'number' as ColumnDataType,
+                        filterable: isEcart1_2,
+                        width: 120,
+                        editable: false,
+                        visible: true,
+                        draggable: true,
+                        autoSize: true,
+                        icon: 'icon-trending-up',
+                        description: 'Écart entre les comptages',
+                        cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
+                            // Déterminer si c'est le format params ou (value, column, row)
+                            let rowData: any;
+
+                            if (column && row) {
+                                rowData = row;
+                            } else {
+                                const params = paramsOrValue;
+                                rowData = params?.data || params?.rowData || params?.node?.data;
+                            }
+
+                            // Pour les autres écarts (ecart_2_3, ecart_3_4, etc.) : Vérifier si le dernier comptage est égal à un des précédents
+                            // Extraire les numéros des comptages depuis le nom du champ
+                            const match = ecartField.match(/^ecart_(\d+)(?:_(\d+))+$/);
+                            if (!match) {
+                                return '-';
+                            }
+
+                            // Extraire tous les numéros
+                            const numbers = ecartField.match(/\d+/g) || [];
+                            if (numbers.length < 2) {
+                                return '-';
+                            }
+
+                            // Prendre le dernier numéro (le comptage à vérifier)
+                            const lastNumber = numbers[numbers.length - 1];
+                            const comptageLastField = `contage_${lastNumber}`;
+                            const comptageLastValue = rowData?.[comptageLastField];
+
+                            // Vérifier si le dernier comptage est vide
+                            const isLastComptageEmpty = comptageLastValue === undefined || comptageLastValue === null || comptageLastValue === '';
+
+                            if (isLastComptageEmpty) {
+                                return '-';
+                            }
+
+                            // Récupérer TOUS les comptages précédents (de 1 jusqu'à N-1, pas seulement ceux dans le nom du champ)
+                            // Exemple: pour ecart_2_3 avec comptage 3, récupérer comptage 1 ET comptage 2
+                            const lastComptageNum = parseInt(lastNumber);
+                            const previousComptageValues: any[] = [];
+
+                            // Récupérer tous les comptages de 1 jusqu'à N-1
+                            for (let num = 1; num < lastComptageNum; num++) {
+                                const comptageField = `contage_${num}`;
+                                const comptageValue = rowData?.[comptageField];
+                                if (comptageValue !== undefined && comptageValue !== null && comptageValue !== '') {
+                                    const numValue = typeof comptageValue === 'number' ? comptageValue : Number(comptageValue);
+                                    if (!Number.isNaN(numValue)) {
+                                        previousComptageValues.push(numValue);
+                                    }
+                                }
+                            }
+
+                            // Si aucun comptage précédent n'existe, afficher icône d'erreur
+                            if (previousComptageValues.length === 0) {
+                                return `<span class="inline-flex items-center justify-center text-red-600">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                    </svg>
+                                </span>`;
+                            }
+
+                            // Convertir le dernier comptage en nombre
+                            const numComptageLast = typeof comptageLastValue === 'number' ? comptageLastValue : Number(comptageLastValue);
+                            if (Number.isNaN(numComptageLast)) {
+                                return `<span class="inline-flex items-center justify-center text-red-600">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                    </svg>
+                                </span>`;
+                            }
+
+                            // Vérifier si le dernier comptage est égal à l'un des comptages précédents
+                            const isEqualToOnePrevious = previousComptageValues.some(prevValue => {
+                                if (Number.isInteger(prevValue) && Number.isInteger(numComptageLast)) {
+                                    return prevValue === numComptageLast;
+                                }
+                                const diff = Math.abs(prevValue - numComptageLast);
+                                return diff < 0.0001;
+                            });
+
+                            if (isEqualToOnePrevious) {
+                                return `<span class="inline-flex items-center justify-center text-green-600">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                </span>`;
+                            } else {
+                                return `<span class="inline-flex items-center justify-center text-red-600">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                    </svg>
+                                </span>`;
+                            }
+                        }) as any
+                    });
+                }
+            }
+        });
+
+        // Ajouter les colonnes de statut des comptages après tous les comptages et écarts
+        sortedStatusFields.forEach(field => {
+            cols.push({
+                headerName: inferStatusLabel(field),
+                field,
+                sortable: true,
+                dataType: 'select' as ColumnDataType,
+                filterable: true,
+                width: 150,
+                editable: false,
+                visible: true,
+                draggable: true,
+                autoSize: true,
+                icon: 'icon-status',
+                description: 'Statut du comptage',
+                badgeStyles: [
+                    {
+                        value: 'ENTAME',
+                        class: 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-600/20 ring-inset'
+                    },
+                    {
+                        value: 'TERMINE',
+                        class: 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-800 ring-1 ring-green-600/20 ring-inset'
+                    },
+                    {
+                        value: 'VALIDE',
+                        class: 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-800 ring-1 ring-green-600/20 ring-inset'
+                    },
+                    {
+                        value: 'EN ATTENTE',
+                        class: 'inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-yellow-600/20 ring-inset'
+                    },
+                    {
+                        value: 'TRANSFERT',
+                        class: 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-600/20 ring-inset'
+                    }
+                ],
+                badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
+                cellRenderer: (value: any, column: any, row: any) => {
+                    const status = value || ''
+                    if (!status) return '-'
+
+                    // Trouver le style de badge pour ce statut
+                    const badgeStyle = column.badgeStyles?.find((s: any) => s.value === status)
+                    const defaultClass = column.badgeDefaultClass || 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+                    const badgeClass = badgeStyle?.class || defaultClass
+
+                    return `<span class="${badgeClass}">${status}</span>`
+                }
+            } as any);
         });
 
         cols.push({
@@ -395,6 +758,62 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             logger.warn('Configuration de colonne invalide', { column, errors: validation.errors })
         }
     })
+
+    // ===== QUERYMODEL =====
+
+    /**
+     * QueryModel pour gérer les requêtes avec mode de sortie configurable
+     */
+    const {
+        queryModel: queryModelRef,
+        toStandardParams,
+        updatePagination: updateQueryPagination,
+        updateSort: updateQuerySort,
+        updateFilter: updateQueryFilter,
+        updateGlobalSearch: updateQueryGlobalSearch,
+        fromDataTableParams: fromDataTableParamsQueryModel,
+        reset: resetQueryModel
+    } = useQueryModel({
+        columns,
+        enabled: true
+    })
+
+    /**
+     * Convertit le QueryModel selon le mode configuré
+     */
+    const convertQueryModelToOutput = (queryModelData: QueryModel) => {
+        switch (queryOutputMode.value) {
+            case 'queryModel':
+                return queryModelData
+            case 'restApi':
+                return convertQueryModelToRestApi(queryModelData)
+            case 'queryParams':
+                return convertQueryModelToQueryParams(queryModelData)
+            case 'dataTable':
+            default:
+                return toStandardParams.value
+        }
+    }
+
+    /**
+     * Crée un QueryModel depuis les paramètres DataTable actuels
+     */
+    const createQueryModelFromCurrentState = () => {
+        return createQueryModelFromDataTableParams({
+            page: currentPage.value || 1,
+            pageSize: pageSize.value || 20,
+            sort: (sortModel.value || []).map(s => ({
+                field: s.field,
+                direction: s.direction
+            })),
+            filters: undefined, // Les filtres sont gérés séparément
+            globalSearch: searchQuery.value || undefined,
+            customParams: {
+                inventory_id: inventoryId.value,
+                store_id: selectedStore.value
+            }
+        })
+    }
 
     // ===== ACTIONS =====
 
@@ -437,7 +856,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                         confirmButtonText: 'Suivant',
                         cancelButtonText: 'Annuler',
                         confirmButtonColor: '#FECD1C',
-                        cancelButtonColor: '#B4B6BA',
+                        cancelButtonColor: '#FECD1C',
                         inputValidator: (value) => {
                             if (!value || value === '') {
                                 return 'Veuillez entrer une valeur'
@@ -451,7 +870,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                         customClass: {
                             popup: 'sweet-alerts',
                             confirmButton: 'btn btn-primary',
-                            cancelButton: 'btn btn-secondary'
+                            cancelButton: 'btn-cancel-primary'
                         }
                     })
 
@@ -480,11 +899,11 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                         confirmButtonText: 'Confirmer',
                         cancelButtonText: 'Annuler',
                         confirmButtonColor: '#FECD1C',
-                        cancelButtonColor: '#B4B6BA',
+                        cancelButtonColor: '#FECD1C',
                         customClass: {
                             popup: 'sweet-alerts',
                             confirmButton: 'btn btn-primary',
-                            cancelButton: 'btn btn-secondary'
+                            cancelButton: 'btn-cancel-primary'
                         }
                     })
 
@@ -493,10 +912,14 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                     }
 
                     // Appeler l'API de mise à jour du résultat final
-                    await EcartComptageService.updateFinalResult(Number(ecartId), {
-                        final_result: newValue,
-                        justification: justificationResult.value || undefined
-                    })
+                    // Construire le payload : inclure justification seulement si elle est renseignée
+                    const updatePayload: { final_result: number; justification?: string } = {
+                        final_result: newValue
+                    }
+                    if (justificationResult.value && typeof justificationResult.value === 'string' && justificationResult.value.trim()) {
+                        updatePayload.justification = justificationResult.value.trim()
+                    }
+                    await EcartComptageService.updateFinalResult(Number(ecartId), updatePayload)
 
                     await alertService.success({ text: 'Résultat final modifié avec succès' })
                     await reloadResults()
@@ -557,11 +980,11 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                         confirmButtonText: 'Valider',
                         cancelButtonText: 'Annuler',
                         confirmButtonColor: '#10B981',
-                        cancelButtonColor: '#B4B6BA',
+                        cancelButtonColor: '#FECD1C',
                         customClass: {
                             popup: 'sweet-alerts',
                             confirmButton: 'btn btn-success',
-                            cancelButton: 'btn btn-secondary'
+                            cancelButton: 'btn-cancel-primary'
                         }
                     })
 
@@ -570,9 +993,12 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                     }
 
                     // Appeler l'API de résolution de l'écart (qui correspond à la validation)
-                    await EcartComptageService.resolveEcart(Number(ecartId), {
-                        justification: confirmation.value || undefined
-                    })
+                    // Construire le payload : inclure justification seulement si elle est renseignée
+                    const resolvePayload: ResolveEcartRequest = {}
+                    if (confirmation.value && typeof confirmation.value === 'string' && confirmation.value.trim()) {
+                        resolvePayload.justification = confirmation.value.trim()
+                    }
+                    await EcartComptageService.resolveEcart(Number(ecartId), resolvePayload)
 
                     await alertService.success({ text: 'Écart validé avec succès' })
                     await reloadResults()
@@ -630,50 +1056,24 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                         return
                     }
 
-                    // Créer les options pour le select
-                    const sessionOptions: Record<string, string> = {}
-                    sessions.forEach(session => {
-                        sessionOptions[session.id.toString()] = session.username
-                    })
+                    // Créer les options pour le select au format SelectOption
+                    const sessionSelectOptions: SelectOption[] = sessions.map(session => ({
+                        label: session.username,
+                        value: session.id.toString()
+                    }))
 
-                    // Première popup : Sélection de la session - Design amélioré
-                    const sessionSelection = await Swal.fire({
-                        title: '<div style="font-size: 1.5rem; font-weight: 600; color: #1f2937; margin-bottom: 0.5rem;">Sélectionner une session</div>',
-                        html: `
-                            <div style="text-align: center; padding: 1rem 0;">
-                                <p style="color: #6b7280; font-size: 0.95rem; margin-bottom: 1.5rem;">
-                                    Choisissez la session pour lancer le comptage
-                                </p>
-                            </div>
-                        `,
-                        input: 'select',
-                        inputOptions: sessionOptions,
-                        inputPlaceholder: 'Sélectionnez une session...',
-                        showCancelButton: true,
-                        confirmButtonText: 'Suivant',
-                        cancelButtonText: 'Annuler',
-                        confirmButtonColor: '#FECD1C',
-                        cancelButtonColor: '#B4B6BA',
-                        inputValidator: (value) => {
-                            if (!value) {
-                                return 'Veuillez sélectionner une session'
-                            }
-                            return null
-                        },
-                        customClass: {
-                            popup: 'sweet-alerts-launch',
-                            confirmButton: 'btn btn-primary',
-                            cancelButton: 'btn btn-secondary'
-                        },
-                        width: '500px',
-                        padding: '2rem'
-                    })
+                    // Première popup : Sélection de la session avec SelectField
+                    const selectedSessionValue = await showSessionSelectModal(
+                        sessionSelectOptions,
+                        'Sélectionner une session',
+                        'Choisissez la session pour lancer le comptage'
+                    )
 
-                    if (!sessionSelection.isConfirmed || !sessionSelection.value) {
+                    if (!selectedSessionValue) {
                         return
                     }
 
-                    const selectedSessionId = Number(sessionSelection.value)
+                    const selectedSessionId = Number(selectedSessionValue)
                     const selectedSession = sessions.find(s => s.id === selectedSessionId)
 
                     if (!selectedSession) {
@@ -735,11 +1135,11 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                         confirmButtonText: 'Confirmer',
                         cancelButtonText: 'Annuler',
                         confirmButtonColor: '#FECD1C',
-                        cancelButtonColor: '#B4B6BA',
+                        cancelButtonColor: '#FECD1C',
                         customClass: {
                             popup: 'sweet-alerts-launch',
                             confirmButton: 'btn btn-primary',
-                            cancelButton: 'btn btn-secondary'
+                            cancelButton: 'btn-cancel-primary'
                         },
                         width: '550px',
                         padding: '2rem'
@@ -837,22 +1237,116 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     }
 
     /**
-     * Convertir les paramètres vers le format standard DataTable pour les résultats
+     * Convertir les paramètres vers le format configuré (QueryModel, DataTable ou RestApi)
      *
      * @param page - Numéro de page
      * @param pageSize - Taille de page
      * @param filters - Modèle de filtres
      * @param sort - Modèle de tri
      * @param globalSearch - Recherche globale
-     * @returns Paramètres au format standard DataTable
+     * @returns Paramètres au format configuré selon queryOutputMode
+     */
+    const convertResultsParams = (
+        page: number,
+        pageSize: number,
+        filters?: Record<string, { filter: string; operator?: string }>,
+        sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>,
+        globalSearch?: string
+    ) => {
+        // Créer un QueryModel depuis les paramètres DataTable
+        // Filtrer les valeurs vides avant de créer le QueryModel
+        const filteredFilters = filters ? Object.fromEntries(
+            Object.entries(filters)
+                .filter(([field, filterConfig]) => {
+                    // Ignorer les filtres avec des valeurs vides
+                    if (!filterConfig || !filterConfig.filter) {
+                        return false
+                    }
+                    const filterValue = filterConfig.filter
+                    // Ignorer si la valeur est vide, null, undefined ou une chaîne vide
+                    if (filterValue === '' || filterValue === null || filterValue === undefined ||
+                        (typeof filterValue === 'string' && filterValue.trim() === '') ||
+                        String(filterValue) === 'undefined' || String(filterValue) === 'null') {
+                        // Sauf pour les opérateurs null/not_null qui sont valides même sans valeur
+                        if (filterConfig.operator === 'is_null' || filterConfig.operator === 'is_not_null') {
+                            return true
+                        }
+                        return false
+                    }
+                    return true
+                })
+                .map(([field, filterConfig]) => [
+                    field,
+                    {
+                        field,
+                        dataType: 'text' as const,
+                        operator: (filterConfig.operator || 'contains') as 'contains' | 'equals' | 'not_equals' | 'starts_with' | 'ends_with' | 'greater_than' | 'less_than' | 'greater_equal' | 'less_equal' | 'between' | 'in' | 'not_in' | 'is_null' | 'is_not_null',
+                        value: filterConfig.filter
+                    }
+                ])
+        ) : undefined
+
+        const queryModelData = createQueryModelFromDataTableParams({
+            page,
+            pageSize,
+            sort: sort?.map(s => ({ field: s.colId, direction: s.sort })),
+            filters: filteredFilters && Object.keys(filteredFilters).length > 0 ? filteredFilters : undefined,
+            globalSearch: globalSearch && globalSearch.trim() !== '' ? globalSearch : undefined,
+            customParams: {
+                inventory_id: inventoryId.value,
+                store_id: selectedStore.value
+            }
+        })
+
+            // Convertir selon le mode configuré
+        switch (queryOutputMode.value) {
+            case 'queryModel':
+                return queryModelData as QueryModel
+
+            case 'restApi':
+                return convertQueryModelToRestApi(queryModelData)
+
+            case 'queryParams':
+                return convertQueryModelToQueryParams(queryModelData)
+
+            case 'dataTable':
+            default:
+                return convertToStandardDataTableParams(
+                    {
+                        page,
+                        pageSize,
+                        filters: filters || {},
+                        sort: sort || [],
+                        globalSearch
+                    },
+                    {
+                        columns: columns.value,
+                        draw: 1,
+                        customParams: {
+                            inventory_id: inventoryId.value,
+                            store_id: selectedStore.value
+                        }
+                    }
+                )
+        }
+    }
+
+    /**
+     * Alias pour compatibilité avec l'ancien code
+     * @deprecated Utiliser convertResultsParams à la place
      */
     const convertResultsParamsToStandard = (
         page: number,
         pageSize: number,
-        filters?: Record<string, { filter: string }>,
+        filters?: Record<string, { filter: string; operator?: string }>,
         sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>,
         globalSearch?: string
-    ) => {
+    ): StandardDataTableParams => {
+        // Si le mode est dataTable, retourner directement
+        if (queryOutputMode.value === 'dataTable') {
+            return convertResultsParams(page, pageSize, filters, sort, globalSearch) as StandardDataTableParams
+        }
+        // Sinon, forcer la conversion vers StandardDataTableParams
         return convertToStandardDataTableParams(
             {
                 page,
@@ -890,12 +1384,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         try {
             resultsStore.setSelectedStore(storeId)
 
-            // Utiliser les paramètres fournis ou construire à partir des valeurs actuelles
-            let finalParams: StandardDataTableParams
-            if (params && 'draw' in params && 'start' in params && 'length' in params) {
-                finalParams = params as StandardDataTableParams
-            } else {
-                finalParams = convertResultsParamsToStandard(
+            // Utiliser convertResultsParams qui convertit automatiquement selon queryOutputMode
+            // Par défaut, queryOutputMode est 'queryParams' pour utiliser le nouveau format
+            // Si le backend ne supporte pas encore QueryParams, changer queryOutputMode à 'dataTable'
+            const finalParams = convertResultsParams(
                     currentPage.value || 1,
                     pageSize.value || 20,
                     undefined,
@@ -905,16 +1397,25 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                     })),
                     searchQuery.value || undefined
                 )
-            }
 
             logger.debug('Chargement des résultats avec paramètres', {
+                format: queryOutputMode.value,
                 inventoryId: inventoryId.value,
                 storeId,
-                params: finalParams
+                pageSize: pageSize.value,
+                params: finalParams,
+                paramsType: typeof finalParams,
+                paramsKeys: Object.keys(finalParams || {})
             })
 
             await resultsStore.fetchResults(inventoryId.value, storeId, finalParams)
-            logger.debug('Résultats chargés pour le magasin', storeId)
+            await nextTick()
+
+            logger.debug('Résultats mis à jour dans le store', {
+                count: resultsStore.results.length,
+                totalCount: resultsStore.totalCount,
+                sample: resultsStore.results.slice(0, 2).map(r => ({ id: r.id, article: r.article }))
+            })
         } catch (error) {
             logger.error('Erreur lors du chargement des résultats', error)
             await alertService.error({ text: 'Erreur lors du chargement des résultats' })
@@ -946,8 +1447,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     const fetchInventoryByReference = async (reference: string) => {
         try {
             const inventory = await inventoryStore.fetchInventoryByReference(reference)
-            inventoryId.value = inventory.id
-            accountId.value = inventory.account_id || null
+            if (inventory) {
+                inventoryId.value = inventory.id
+                accountId.value = inventory.account_id || null
+            }
             inventoryReference.value = reference
             logger.debug('Inventaire chargé', { id: inventoryId.value, accountId: accountId.value, reference })
             return inventory
@@ -1020,7 +1523,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
      *
      * @param params - Paramètres de pagination (format standard ou ancien format)
      */
-    const onPaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams) => {
+    const onPaginationChanged = async (params: { page: number; pageSize: number; start?: number; end?: number } | StandardDataTableParams | QueryModel | Record<string, any>) => {
         try {
             // Si c'est déjà le format standard (venant du DataTable), utiliser directement
             if ('draw' in params && 'start' in params && 'length' in params) {
@@ -1035,21 +1538,33 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 return
             }
 
-            // Sinon, convertir l'ancien format
+            // Si c'est le format simple avec page et pageSize (venant de useDataTable)
+            if ('page' in params && 'pageSize' in params && typeof params.page === 'number' && typeof params.pageSize === 'number') {
             const paginationParams = params as { page: number; pageSize: number }
             setPage(paginationParams.page)
             setPageSize(paginationParams.pageSize)
 
-            const standardParams = convertResultsParamsToStandard(
-                paginationParams.page,
-                paginationParams.pageSize,
-                undefined,
-                (sortModel.value || []).map(s => ({ colId: s.field, sort: s.direction as 'asc' | 'desc' })),
-                searchQuery.value || undefined
-            )
+                // Utiliser convertResultsParams qui respecte queryOutputMode (par défaut 'dataTable')
+                // et qui inclut les filtres, tri et recherche actuels
+                if (selectedStore.value) {
+                    await fetchResults(selectedStore.value)
+                }
+                return
+            }
 
+            // Si c'est un objet vide ou inconnu, utiliser les valeurs actuelles
+            if (typeof params === 'object' && params !== null && Object.keys(params).length === 0) {
+                logger.warn('Paramètres de pagination vides, utilisation des valeurs actuelles')
             if (selectedStore.value) {
-                await fetchResults(selectedStore.value, standardParams)
+                    await fetchResults(selectedStore.value)
+                }
+                return
+            }
+
+            // Sinon, essayer de convertir selon le mode configuré
+            logger.warn('Format de pagination non reconnu, utilisation des valeurs par défaut', params)
+            if (selectedStore.value) {
+                await fetchResults(selectedStore.value)
             }
         } catch (error) {
             logger.error('Erreur dans onPaginationChanged', error)
@@ -1059,11 +1574,11 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
 
     /**
      * Handler pour les changements de tri
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     * Accepte QueryModel, StandardDataTableParams, RestApi ou l'ancien format
      *
-     * @param sortModel - Modèle de tri (format standard ou ancien format)
+     * @param sortModel - Modèle de tri (format configuré ou ancien format)
      */
-    const onSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }> | StandardDataTableParams) => {
+    const onSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }> | StandardDataTableParams | QueryModel | Record<string, any>) => {
         try {
             // Si c'est déjà le format standard (venant du DataTable), extraire les informations
             if ('draw' in sortModel && 'start' in sortModel && 'length' in sortModel) {
@@ -1184,11 +1699,11 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
 
     /**
      * Handler pour les changements de recherche globale
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     * Accepte QueryModel, StandardDataTableParams, RestApi ou l'ancien format
      *
-     * @param searchTerm - Terme de recherche (format standard ou string)
+     * @param searchTerm - Terme de recherche (format configuré ou string)
      */
-    const onGlobalSearchChanged = async (searchTerm: string | StandardDataTableParams) => {
+    const onGlobalSearchChanged = async (searchTerm: string | StandardDataTableParams | QueryModel | Record<string, any>) => {
         try {
             // Si c'est déjà le format standard (venant du DataTable), extraire les informations
             if (typeof searchTerm === 'object' && 'draw' in searchTerm && 'start' in searchTerm && 'length' in searchTerm) {
@@ -1261,16 +1776,8 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 const defaultStoreId = storeOptions.value[0].value
                 resultsStore.setSelectedStore(defaultStoreId)
 
-                // Charger avec les paramètres par défaut
-                const standardParams = convertResultsParamsToStandard(
-                    1,
-                    pageSize.value || 20,
-                    undefined,
-                    [],
-                    undefined
-                )
-
-                await fetchResults(defaultStoreId, standardParams)
+                // Charger avec les paramètres par défaut (utilise convertResultsParams qui respecte queryOutputMode)
+                await fetchResults(defaultStoreId)
                 logger.debug('Premier magasin sélectionné par défaut', defaultStoreId)
             } else {
                 logger.warn('Aucun magasin disponible pour sélection automatique')
@@ -1304,6 +1811,121 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         }
     }
 
+    // ===== EXPORTS =====
+
+    /**
+     * Exporter les résultats en CSV ou Excel
+     * @param format - Format d'export ('csv' ou 'excel')
+     * @param selectedOnly - Si true, exporter uniquement les résultats sélectionnés
+     */
+    const exportResults = async (format: 'csv' | 'excel' = 'excel', selectedOnly: boolean = false) => {
+        if (!inventoryId.value || !selectedStore.value) {
+            await alertService.warning({ text: 'Veuillez sélectionner un magasin avant d\'exporter' })
+            return
+        }
+
+        try {
+            // Afficher un loader
+            const loadingSwal = Swal.fire({
+                title: 'Export en cours...',
+                text: 'Le fichier est en cours de préparation. Veuillez patienter.',
+                icon: 'info',
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading()
+                }
+            })
+
+            // Construire les paramètres DataTable actuels
+            const standardParams = convertResultsParamsToStandard(
+                currentPage.value || 1,
+                pageSize.value || 20,
+                undefined,
+                (sortModel.value || []).map(s => ({
+                    colId: s.field,
+                    sort: s.direction as 'asc' | 'desc'
+                })),
+                searchQuery.value || undefined
+            )
+
+            // Si on exporte uniquement les sélectionnés, ajouter les IDs
+            if (selectedOnly && resultsStore.selectedResults.length > 0) {
+                const selectedIds = resultsStore.selectedResults.map(r => r.id)
+                standardParams.selected_ids = selectedIds.join(',')
+            }
+
+            // Appeler le service d'export
+            const response = await InventoryResultsService.exportResults(
+                inventoryId.value,
+                selectedStore.value,
+                format,
+                standardParams
+            )
+
+            // Vérifier que la réponse contient un blob
+            if (!response.data || !(response.data instanceof Blob)) {
+                throw new Error('Aucune donnée reçue du backend')
+            }
+
+            // Déterminer le type MIME et l'extension
+            const mimeType = format === 'excel'
+                ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                : 'text/csv;charset=utf-8;'
+            const fileExtension = format === 'excel' ? 'xlsx' : 'csv'
+
+            // Créer le blob avec le bon type MIME
+            const blob = new Blob([response.data], { type: mimeType })
+
+            // Générer le nom du fichier
+            const timestamp = new Date().toISOString().split('T')[0]
+            const storeLabel = storeOptions.value.find(s => s.value === selectedStore.value)?.label || 'magasin'
+            const filename = `Resultats_Inventaire_${inventoryReference.value || inventoryId.value}_${storeLabel}_${timestamp}`
+
+            // Télécharger le fichier
+            const downloadUrl = window.URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = downloadUrl
+            link.setAttribute('download', `${filename}.${fileExtension}`)
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+            window.URL.revokeObjectURL(downloadUrl)
+
+            // Fermer le loader et afficher le succès
+            await Swal.close()
+            await alertService.success({
+                text: `Export ${format === 'excel' ? 'Excel' : 'CSV'} réussi`
+            })
+
+            logger.debug('Export réussi', { format, filename })
+        } catch (error: any) {
+            logger.error('Erreur lors de l\'export', error)
+
+            // Extraire le message d'erreur
+            const errorMessage = error?.response?.data?.message ||
+                                error?.message ||
+                                `Erreur lors de l'export ${format === 'excel' ? 'Excel' : 'CSV'}`
+
+            await Swal.close()
+            await alertService.error({ text: errorMessage })
+        }
+    }
+
+    /**
+     * Exporter en CSV
+     */
+    const exportToCsv = async (selectedOnly: boolean = false) => {
+        await exportResults('csv', selectedOnly)
+    }
+
+    /**
+     * Exporter en Excel
+     */
+    const exportToExcel = async (selectedOnly: boolean = false) => {
+        await exportResults('excel', selectedOnly)
+    }
+
     // ===== RETURN =====
 
     return {
@@ -1329,7 +1951,8 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         pageSize,
         searchQuery,
         sortModel,
-        pagination,
+        pagination: resultsPaginationComputed,
+        resultsTotalItems: computed(() => resultsStore.totalCount || 0),
 
         // Méthodes DataTable
         setPage,
@@ -1354,6 +1977,17 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         onSortChanged,
         onFilterChanged,
         onGlobalSearchChanged,
+
+        // Exports
+        exportResults,
+        exportToCsv,
+        exportToExcel,
+
+        // QueryModel
+        queryModel: computed(() => queryModelRef.value),
+        queryOutputMode: computed(() => queryOutputMode.value),
+        convertQueryModelToOutput,
+        createQueryModelFromCurrentState,
 
         // Alias pour compatibilité
         fetchInventoryByReference,

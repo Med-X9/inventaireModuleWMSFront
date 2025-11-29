@@ -11,7 +11,8 @@ export function useResourceDataTable() {
     return useGenericDataTable<Resource>({
         store: resourceStore,
         fetchAction: 'fetchResources',
-        defaultPageSize: 20
+        defaultPageSize: 20,
+        queryOutputMode: 'queryParams' // Format EXEMPLES_REQUETES_QUERYMODEL
     });
 }
 

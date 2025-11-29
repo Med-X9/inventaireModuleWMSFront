@@ -60,12 +60,17 @@
 
             <TableHeader :globalSearchTerm="dataTable?.globalSearchTerm" :filterState="dataTable?.filterState"
                 :advancedFilters="dataTable?.advancedFilters" :loading="dataTable?.loading"
-                @update:globalSearchTerm="handleGlobalSearchUpdate" @clear-all-filters="dataTable?.clearAllFilters()" />
+                @update:globalSearchTerm="handleGlobalSearchUpdate" @clear-all-filters="handleClearAllFilters" />
 
             <Toolbar :columns="columnsForManager" :visibleColumns="visibleColumnNames"
                 :columnWidths="dataTable?.columnWidths" :rowSelection="dataTable?.rowSelection"
                 :selectedRows="selectedRowsSet" :exportLoading="exportLoadingState" :loading="dataTable?.loading"
+                :enableColumnPinning="props.enableColumnPinning || false"
+                :columnPinning="columnPinning"
+                :stickyHeader="stickyHeaderState"
                 @columns-changed="dataTable?.handleVisibleColumnsChanged" @reorder-columns="dataTable?.reorderColumns"
+                @pin-column="handlePinColumn"
+                @sticky-header-changed="handleStickyHeaderChanged"
                 @export-csv="emit('export-csv')" @export-excel="emit('export-excel')"
                 @export-pdf="emit('export-pdf')" @export-selected-csv="emit('export-selected-csv')"
                 @export-selected-excel="emit('export-selected-excel')" @deselect-all="dataTable?.deselectAll()" />
@@ -84,7 +89,7 @@
                             :masterDetailState="masterDetail?.detailStates"
                             :currentPage="dataTable?.effectiveCurrentPage || 1"
                             :pageSize="dataTable?.effectivePageSize || 10"
-                            :globalStartIndex="(dataTable?.effectiveCurrentPage || 1) * (dataTable?.effectivePageSize || 10) - (dataTable?.effectivePageSize || 10)"
+                            :globalStartIndex="((dataTable?.effectiveCurrentPage || 1) - 1) * (dataTable?.effectivePageSize || 10)"
                             @sort-changed="handleSortChanged" @filter-changed="handleFilterChanged"
                             @selection-changed="handleSelectionChanged"
                             @cell-value-changed="(event) => emit('cell-value-changed', event)"
@@ -106,7 +111,10 @@
                     :inlineEditing="props.inlineEditing" :editingState="editing?.state.value"
                     :masterDetailState="masterDetail?.detailStates" :currentPage="dataTable?.effectiveCurrentPage || 1"
                     :pageSize="dataTable?.effectivePageSize || 10"
-                    :globalStartIndex="(dataTable?.effectiveCurrentPage || 1) * (dataTable?.effectivePageSize || 10) - (dataTable?.effectivePageSize || 10)"
+                    :globalStartIndex="((dataTable?.effectiveCurrentPage || 1) - 1) * (dataTable?.effectivePageSize || 10)"
+                    :columnPinning="columnPinning"
+                    :enableColumnPinning="props.enableColumnPinning || false"
+                    :stickyHeader="stickyHeaderState"
                     @sort-changed="handleSortChanged" @filter-changed="handleFilterChanged"
                     @selection-changed="handleSelectionChanged"
                     @cell-value-changed="(event) => emit('cell-value-changed', event)"
@@ -129,9 +137,10 @@
 
 <script setup lang="ts">
 /* eslint-disable */
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, nextTick } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import type { DataTableProps } from '@/components/DataTable/types/dataTable'
-import { cellRenderersService } from '@/services/cellRenderers'
+import { cellRenderersService } from './services/cellRenderers'
 import { logger } from '@/services/loggerService'
 import TableHeader from './TableHeader.vue'
 import Toolbar from './Toolbar.vue'
@@ -141,19 +150,33 @@ import DataTableSkeleton from './DataTableSkeleton.vue'
 
 // Import des fonctionnalités avancées
 import { useDataTable } from './composables/useDataTable'
-import { useVirtualScrolling } from '@/composables/useVirtualScrolling'
+import { useVirtualScrolling } from './composables/useVirtualScrolling'
 import { useDataTableGrouping } from './composables/useDataTableGrouping'
 import { useDataTableEditing } from './composables/useDataTableEditing'
 import { useDataTablePivot } from './composables/useDataTablePivot'
 import { useDataTableMasterDetail } from './composables/useDataTableMasterDetail'
 import { convertToStandardDataTableParams, type StandardDataTableParams } from './utils/dataTableParamsConverter'
+import { useQueryModel } from './composables/useQueryModel'
+import { convertQueryModelToRestApi, convertQueryModelToQueryParams, createQueryModelFromDataTableParams } from './utils/queryModelConverter'
+import type { QueryModel } from './types/QueryModel'
+
+// Import des nouvelles fonctionnalités AG-Grid
+import { useMultiSort } from './composables/useMultiSort'
+import { useColumnPinning } from './composables/useColumnPinning'
+import { useColumnResize } from './composables/useColumnResize'
+import { useInfiniteScroll } from './composables/useInfiniteScroll'
+import { useSetFilters } from './composables/useSetFilters'
+// 🚀 Gestion automatique
+import { useAutoDataTable } from './composables/useAutoDataTable'
+// 💾 Sauvegarde de configuration
+import { useDataTableConfig } from './composables/useDataTableConfig'
 
 const props = defineProps<DataTableProps>()
 const emit = defineEmits<{
-    'pagination-changed': [params: { page: number; pageSize: number; start: number; end: number } | StandardDataTableParams]
-    'sort-changed': [sortModel: any | StandardDataTableParams]
-    'filter-changed': [filterModel: any | StandardDataTableParams]
-    'global-search-changed': [searchTerm: string | StandardDataTableParams]
+    'pagination-changed': [params: { page: number; pageSize: number; start: number; end: number } | StandardDataTableParams | QueryModel | Record<string, any>]
+    'sort-changed': [sortModel: any | StandardDataTableParams | QueryModel | Record<string, any>]
+    'filter-changed': [filterModel: any | StandardDataTableParams | QueryModel | Record<string, any>]
+    'global-search-changed': [searchTerm: string | StandardDataTableParams | QueryModel | Record<string, any>]
     'selection-changed': [selectedRows: Set<string>]
     'cell-value-changed': [event: { data: any; field: string; newValue: any; oldValue: any }]
     'grouping-changed': [groups: any[]]
@@ -165,9 +188,98 @@ const emit = defineEmits<{
     'export-pdf': []
     'export-selected-csv': []
     'export-selected-excel': []
+    'query-model-changed': [queryModel: QueryModel]
 }>()
 
 const dataTable = useDataTable(props, emit)
+
+// === SAUVEGARDE DE CONFIGURATION ===
+// Initialiser la sauvegarde de configuration si storageKey est fourni
+const tableConfig = props.storageKey ? useDataTableConfig(
+    props.storageKey,
+    {
+        visibleColumns: dataTable?.visibleColumns || [],
+        columnOrder: dataTable?.visibleColumns || [],
+        columnWidths: dataTable?.columnWidths || {},
+        pinnedColumns: [],
+        stickyHeader: false,
+        pageSize: props.pageSizeProp || 20
+    }
+) : null
+
+// === QUERYMODEL ===
+/**
+ * QueryModel pour gérer les requêtes avec mode de sortie configurable
+ */
+const queryOutputMode = computed(() => props.queryOutputMode || 'dataTable')
+const columnsRef = computed(() => props.columns)
+
+const {
+    queryModel,
+    toStandardParams,
+    updatePagination: updateQueryPagination,
+    updateSort: updateQuerySort,
+    updateFilter: updateQueryFilter,
+    updateGlobalSearch: updateQueryGlobalSearch,
+    fromDataTableParams
+} = useQueryModel({
+    columns: columnsRef,
+    enabled: true
+})
+
+/**
+ * Convertit le QueryModel selon le mode configuré
+ */
+const convertQueryModelToOutput = (queryModelData: QueryModel) => {
+    switch (queryOutputMode.value) {
+        case 'queryModel':
+            return queryModelData
+        case 'restApi':
+            return convertQueryModelToRestApi(queryModelData)
+        case 'queryParams':
+            return convertQueryModelToQueryParams(queryModelData)
+        case 'dataTable':
+        default:
+            return toStandardParams.value
+    }
+}
+
+/**
+ * Crée un QueryModel depuis les paramètres DataTable actuels
+ */
+const createQueryModelFromCurrentState = () => {
+    return createQueryModelFromDataTableParams({
+        page: dataTable?.effectiveCurrentPage || 1,
+        pageSize: dataTable?.effectivePageSize || 10,
+        sort: currentSortModel.value?.map(s => ({
+            field: s.colId,
+            direction: s.sort
+        })),
+        filters: dataTable?.filterState || {},
+        globalSearch: dataTable?.globalSearchTerm || undefined,
+        customParams: props.customDataTableParams || {}
+    })
+}
+
+// === GESTION AUTOMATIQUE ===
+const autoDataTable = props.enableAutoManagement ? useAutoDataTable({
+    columns: computed(() => props.columns),
+    data: computed(() => props.rowDataProp),
+    endpoint: props.autoManagementConfig?.endpoint,
+    piniaStore: props.autoManagementConfig?.piniaStore,
+    storeAction: props.autoManagementConfig?.storeAction,
+    defaultPageSize: props.autoManagementConfig?.defaultPageSize || props.pageSizeProp || 20,
+    enableRowSelection: props.autoManagementConfig?.enableRowSelection ?? props.rowSelection ?? false,
+    enableMultiSort: props.autoManagementConfig?.enableMultiSort ?? props.enableMultiSort ?? true,
+    enableSetFilters: props.autoManagementConfig?.enableSetFilters ?? props.enableSetFilters ?? false,
+    autoLoad: true
+}) : null
+
+// Si gestion automatique activée, utiliser les handlers automatiques
+if (autoDataTable) {
+    // Les handlers sont déjà configurés dans useAutoDataTable
+    // Ils seront utilisés automatiquement via les événements
+}
 
 // === INITIALISATION DES FONCTIONNALITÉS AVANCÉES ===
 
@@ -235,6 +347,111 @@ const masterDetail = props.enableMasterDetail ? useDataTableMasterDetail(
     props.masterDetailConfig || {}
 ) : null
 
+// === NOUVELLES FONCTIONNALITÉS AG-GRID ===
+
+// Tri multi-colonnes
+const multiSort = props.enableMultiSort ? useMultiSort(
+    [],
+    props.multiSortConfig || { maxSortColumns: 3 }
+) : null
+
+// Épinglage de colonnes
+// Charger la configuration sauvegardée si disponible (tableConfig est défini plus haut)
+// Toujours épingler __rowNumber__ à gauche
+const pinnedColumnsSource = tableConfig?.pinnedColumns.value || props.columnPinningConfig?.defaultPinnedColumns || []
+const mappedPinnedColumns: Array<{ field: string; pinned: 'left' | 'right' | null }> = pinnedColumnsSource.map((col: any) => {
+    const pinnedValue = col.pinned
+    const pinned: 'left' | 'right' | null = (pinnedValue === 'left' || pinnedValue === 'right') ? pinnedValue : null
+    return {
+        field: col.field,
+        pinned
+    }
+})
+const defaultPinnedColumns: Array<{ field: string; pinned: 'left' | 'right' | null }> = [
+    { field: '__rowNumber__', pinned: 'left' }, // Toujours fixée à gauche
+    ...mappedPinnedColumns
+].filter((col, index, self) =>
+    // Éviter les doublons
+    index === self.findIndex(c => c.field === col.field)
+) as Array<{ field: string; pinned: 'left' | 'right' | null }>
+const columnPinning = props.enableColumnPinning ? useColumnPinning(
+    columnsRef,
+    {
+        ...props.columnPinningConfig,
+        defaultPinnedColumns
+    }
+) : null
+
+// S'assurer que __rowNumber__ est toujours épinglée à gauche
+if (columnPinning) {
+    // Épingler immédiatement
+    columnPinning.pinColumn('__rowNumber__', 'left')
+
+    // Watcher pour s'assurer qu'elle reste épinglée à gauche
+    watch(() => columnPinning.getPinDirection('__rowNumber__'), (direction) => {
+        if (direction !== 'left') {
+            columnPinning.pinColumn('__rowNumber__', 'left')
+        }
+    })
+}
+
+// État du header sticky (charger depuis la config sauvegardée)
+const stickyHeaderState = ref(tableConfig?.stickyHeader.value ?? false)
+
+// Handler pour le pinning des colonnes
+const handlePinColumn = (field: string, direction: 'left' | 'right' | null) => {
+    // Empêcher de désépingler ou de déplacer __rowNumber__
+    if (field === '__rowNumber__') {
+        // Toujours forcer à gauche
+        if (columnPinning) {
+            columnPinning.pinColumn('__rowNumber__', 'left')
+        }
+        return
+    }
+
+    if (columnPinning) {
+        columnPinning.pinColumn(field, direction)
+        // Sauvegarder la configuration
+        if (tableConfig) {
+            const pinnedCols = Array.from(columnPinning.pinnedColumns.value.entries()).map(([f, d]) => ({
+                field: f,
+                pinned: d
+            }))
+            tableConfig.updatePinnedColumns(pinnedCols)
+        }
+    }
+}
+
+// Handler pour le header sticky
+const handleStickyHeaderChanged = (enabled: boolean) => {
+    stickyHeaderState.value = enabled
+    // Sauvegarder la configuration
+    if (tableConfig) {
+        tableConfig.updateStickyHeader(enabled)
+    }
+}
+
+// Redimensionnement de colonnes
+const columnResize = props.enableColumnResize ? useColumnResize(
+    columnsRef,
+    props.columnResizeConfig || {}
+) : null
+
+// Scroll infini
+const infiniteScrollContainer = ref<HTMLElement | null>(null)
+const infiniteScroll = props.enableInfiniteScroll ? useInfiniteScroll(
+    infiniteScrollContainer,
+    props.infiniteScrollConfig || {}
+) : null
+
+// Filtres Set (valeurs uniques)
+const dataRef = computed(() => props.rowDataProp)
+const setFilters = props.enableSetFilters ? useSetFilters(
+    columnsRef,
+    dataRef,
+    props.setFiltersConfig || {}
+) : null
+
 // Référence au TableBody
 const tableBodyRef = ref()
 
@@ -243,29 +460,28 @@ const currentSortField = ref<string>('')
 const currentSortDirection = ref<'asc' | 'desc'>('asc')
 const currentSortModel = ref<Array<{ colId: string; sort: 'asc' | 'desc' }>>([])
 
-const handleGlobalSearchUpdate = (searchTerm: string) => {
-    dataTable.updateGlobalSearchTerm(searchTerm)
-    
-    // Si serverSideFiltering est activé, convertir vers le format standard DataTable
+// Debounce pour la recherche globale (utiliser debounceFilter ou 500ms par défaut)
+const debounceDelay = props.debounceFilter || 500
+const debouncedGlobalSearch = useDebounceFn((searchTerm: string) => {
+    // Mettre à jour le QueryModel
+    updateQueryGlobalSearch(searchTerm || '')
+
+    // Si serverSideFiltering est activé, convertir selon le mode configuré
     if (props.serverSideFiltering) {
-        const standardParams = convertToStandardDataTableParams(
-            {
-                page: dataTable?.effectiveCurrentPage || 1,
-                pageSize: dataTable?.effectivePageSize || 10,
-                filters: dataTable?.filterState || {},
-                sort: currentSortModel.value,
-                globalSearch: searchTerm || undefined
-            },
-            {
-                columns: props.columns,
-                draw: 1,
-                customParams: props.customDataTableParams || {}
-            }
-        )
-        emit('global-search-changed', standardParams)
+        const queryModelData = createQueryModelFromCurrentState()
+        const output = convertQueryModelToOutput(queryModelData)
+        emit('global-search-changed', output as any)
     } else {
         emit('global-search-changed', searchTerm)
     }
+}, debounceDelay)
+
+const handleGlobalSearchUpdate = (searchTerm: string) => {
+    // Mettre à jour immédiatement le terme de recherche pour l'affichage
+    dataTable.updateGlobalSearchTerm(searchTerm)
+
+    // Appeler la fonction debounced pour émettre l'événement avec un délai
+    debouncedGlobalSearch(searchTerm)
 }
 
 // Handler pour les changements de pagination
@@ -294,25 +510,31 @@ const handlePaginationChanged = (page: number) => {
 
 // Handler pour les changements de taille de page
 const handlePageSizeChanged = (size: number) => {
+    // Mettre à jour la taille de page dans useDataTable
+    if (dataTable && typeof dataTable.changePageSize === 'function') {
+        dataTable.changePageSize(size)
+    }
+
+    // Mettre à jour le QueryModel
+    updateQueryPagination(1, size) // Réinitialiser à la page 1
+
     if (props.serverSidePagination) {
-        // Convertir vers le format standard DataTable
-        const standardParams = convertToStandardDataTableParams(
-            {
-                page: 1, // Réinitialiser à la page 1 lors du changement de taille
-                pageSize: size,
-                filters: dataTable?.filterState || {},
-                sort: currentSortModel.value,
-                globalSearch: dataTable?.globalSearchTerm || undefined
-            },
-            {
-                columns: props.columns,
-                draw: 1,
-                customParams: props.customDataTableParams || {}
-            }
-        )
-        emit('pagination-changed', standardParams)
+        // Convertir selon le mode configuré
+        const queryModelData = createQueryModelFromDataTableParams({
+            page: 1,
+            pageSize: size,
+            sort: currentSortModel.value?.map(s => ({
+                field: s.colId,
+                direction: s.sort
+            })),
+            filters: dataTable?.filterState || {},
+            globalSearch: dataTable?.globalSearchTerm || undefined,
+            customParams: props.customDataTableParams || {}
+        })
+        const output = convertQueryModelToOutput(queryModelData)
+        emit('pagination-changed', output as any)
     } else {
-        dataTable?.changePageSize?.(size)
+        emit('pagination-changed', { page: 1, pageSize: size })
     }
 }
 
@@ -327,39 +549,117 @@ const handleSortChanged = (sortData: { field: string; direction: 'asc' | 'desc';
         currentSortDirection.value = 'asc'
     }
 
-    // Convertir le format pour correspondre à l'API
-    const sortModel = sortData.isActive ? [{
-        colId: sortData.field,
-        sort: sortData.direction
-    }] : []
+    // Si multi-sort est activé, utiliser le composable
+    if (multiSort) {
+        if (sortData.isActive) {
+            multiSort.addSort(sortData.field, sortData.direction)
+        } else {
+            multiSort.removeSort(sortData.field)
+        }
 
-    // Mettre à jour l'état local
-    currentSortModel.value = sortModel
+        const sortModel = multiSort.dataTablesSortModel.value
+        currentSortModel.value = sortModel
 
-    // Si serverSideSorting est activé, convertir vers le format standard DataTable
-    if (props.serverSideSorting) {
-        const standardParams = convertToStandardDataTableParams(
-            {
-                page: dataTable?.effectiveCurrentPage || 1,
-                pageSize: dataTable?.effectivePageSize || 10,
-                filters: dataTable?.filterState || {},
-                sort: sortModel,
-                globalSearch: dataTable?.globalSearchTerm || undefined
-            },
-            {
-                columns: props.columns,
-                draw: 1,
-                customParams: props.customDataTableParams || {}
-            }
-        )
-        emit('sort-changed', standardParams)
+        // Mettre à jour le QueryModel
+        const sortModels = sortModel.map((s, index) => ({
+            field: s.colId,
+            direction: s.sort,
+            priority: index + 1
+        }))
+        updateQuerySort(sortModels)
+
+        // Si serverSideSorting est activé, convertir selon le mode configuré
+        if (props.serverSideSorting) {
+            const queryModelData = createQueryModelFromCurrentState()
+            const output = convertQueryModelToOutput(queryModelData)
+            emit('sort-changed', output)
+        } else {
+            emit('sort-changed', multiSort.formattedSortModel.value)
+        }
     } else {
-        emit('sort-changed', sortModel)
+        // Tri simple
+        const sortModel = sortData.isActive ? [{
+            colId: sortData.field,
+            sort: sortData.direction
+        }] : []
+
+        currentSortModel.value = sortModel
+
+        // Si serverSideSorting est activé, convertir vers le format standard DataTable
+        if (props.serverSideSorting) {
+            const standardParams = convertToStandardDataTableParams(
+                {
+                    page: dataTable?.effectiveCurrentPage || 1,
+                    pageSize: dataTable?.effectivePageSize || 10,
+                    filters: dataTable?.filterState || {},
+                    sort: sortModel,
+                    globalSearch: dataTable?.globalSearchTerm || undefined
+                },
+                {
+                    columns: props.columns,
+                    draw: 1,
+                    customParams: props.customDataTableParams || {}
+                }
+            )
+            emit('sort-changed', standardParams)
+        } else {
+            emit('sort-changed', sortModel)
+        }
+    }
+}
+
+// Handler pour réinitialiser tous les filtres
+const handleClearAllFilters = () => {
+    // Réinitialiser l'état local
+    dataTable?.clearAllFilters()
+
+    // Créer un nouveau QueryModel sans filtres
+    fromDataTableParams({
+        page: 1,
+        pageSize: dataTable?.effectivePageSize || 10,
+        sort: currentSortModel.value?.map(s => ({
+            field: s.colId,
+            direction: s.sort
+        })),
+        filters: {},
+        globalSearch: undefined
+    })
+
+    // Si serverSideFiltering est activé, émettre les événements selon le mode configuré
+    if (props.serverSideFiltering || props.serverSidePagination) {
+        const queryModelData = createQueryModelFromDataTableParams({
+            page: 1,
+            pageSize: dataTable?.effectivePageSize || 10,
+            sort: currentSortModel.value?.map(s => ({
+                field: s.colId,
+                direction: s.sort
+            })),
+            filters: {},
+            globalSearch: undefined,
+            customParams: props.customDataTableParams || {}
+        })
+        const output = convertQueryModelToOutput(queryModelData)
+        emit('filter-changed', output as any)
+        emit('global-search-changed', output as any)
+    } else {
+        // Format client-side
+        emit('filter-changed', {})
+        emit('global-search-changed', '')
     }
 }
 
 // Handler pour les changements de filtre
 const handleFilterChanged = (filters: Record<string, any>) => {
+    // IMPORTANT: Mettre à jour le filterState interne du DataTable IMMÉDIATEMENT
+    // Le filterState doit être mis à jour même en mode server-side pour que le TableHeader puisse afficher le compteur
+    // Les filtres viennent directement de TableBody dans le format { field: filter }
+    // où filter contient { field, value/values, operator, dataType }
+    if (dataTable && 'setFilterState' in dataTable && typeof dataTable.setFilterState === 'function') {
+        // Mettre à jour le filterState directement avec les filtres reçus
+        // setFilterState filtre déjà les valeurs vides
+        dataTable.setFilterState(filters)
+    }
+
     // Si serverSideFiltering est activé, convertir vers le format standard DataTable
     if (props.serverSideFiltering) {
         const standardParams = convertToStandardDataTableParams(
@@ -384,20 +684,9 @@ const handleFilterChanged = (filters: Record<string, any>) => {
 
 // Handler pour les changements de sélection
 const handleSelectionChanged = (selectedRows: Set<string>) => {
-    // Mettre à jour les sélections dans useDataTable
-    if (dataTable?.selectedRows) {
-        // Créer un nouveau Set pour forcer la réactivité
-        const newSelection = new Set<string>(selectedRows)
-        
-        // Si c'est un Ref, utiliser .value, sinon assigner directement
-        if ('value' in dataTable.selectedRows) {
-            dataTable.selectedRows.value = newSelection
-        } else {
-            // Créer un nouveau Set et copier les valeurs
-            const currentSet = dataTable.selectedRows as Set<string>
-            currentSet.clear()
-            newSelection.forEach(row => currentSet.add(row))
-        }
+    // Mettre à jour les sélections dans useDataTable via la méthode setSelectedRows
+    if (dataTable && typeof dataTable.setSelectedRows === 'function') {
+        dataTable.setSelectedRows(selectedRows)
     }
     // Émettre vers le parent avec le nouveau Set
     emit('selection-changed', new Set(selectedRows))
@@ -424,20 +713,29 @@ const formatDateOnly = (value: any): string => {
 
 // Appliquer le formatage aux colonnes de type date
 const formattedColumns = computed(() => {
-    // Créer la colonne de numéro de ligne automatique
-    const rowNumberColumn = dataTable?.createRowNumberColumn() || {
+    // Créer la colonne de numéro de ligne automatique (toujours visible, fixée à gauche)
+    const rowNumberColumn = dataTable?.createRowNumberColumn?.() || {
         field: '__rowNumber__',
         headerName: '#',
         sortable: false,
         filterable: false,
-        width: 20,
+        width: 60,
         editable: false,
         visible: true,
         draggable: false,
         autoSize: false,
         hide: false,
+        resizable: false,
+        pinned: 'left', // Toujours fixée à gauche
         description: 'Numéro de ligne',
-        dataType: 'text' as const
+        dataType: 'text' as const,
+        cellRenderer: (params: any) => {
+            const currentPage = dataTable?.effectiveCurrentPage || 1
+            const pageSize = dataTable?.effectivePageSize || 10
+            const rowIndex = params?.rowIndex ?? 0
+            const rowNumber = (currentPage - 1) * pageSize + rowIndex + 1
+            return `<span class="row-number">${rowNumber}</span>`
+        }
     };
 
     // Ajouter la colonne de numéro de ligne en première position
@@ -499,16 +797,70 @@ const visibleColumnNames = computed(() => {
 
 // Filtrer les colonnes selon leur visibilité
 const visibleColumns = computed(() => {
-    if (!dataTable?.visibleColumns || !formattedColumns.value) return []
+    if (!formattedColumns.value) {
+        // Si pas de colonnes, créer au moins la colonne de numérotation
+        const rowNumberColumn = dataTable?.createRowNumberColumn?.() || {
+            field: '__rowNumber__',
+            headerName: '#',
+            sortable: false,
+            filterable: false,
+            width: 60,
+            editable: false,
+            visible: true,
+            draggable: false,
+            autoSize: false,
+            hide: false,
+            resizable: false,
+            pinned: 'left',
+            description: 'Numéro de ligne',
+            dataType: 'text' as const
+        }
+        return [rowNumberColumn]
+    }
 
-    // Toujours inclure la colonne de numéro de ligne
-    const rowNumberColumn = formattedColumns.value.find(col => col.field === '__rowNumber__')
-    const otherColumns = formattedColumns.value.filter(column =>
-        column.field !== '__rowNumber__' && dataTable.visibleColumns.includes(column.field)
-    )
+    // Toujours inclure la colonne de numéro de ligne en premier
+    let rowNumberColumn = formattedColumns.value.find(col => col.field === '__rowNumber__')
 
-    // Combiner la colonne de numéro de ligne avec les autres colonnes visibles
-    return rowNumberColumn ? [rowNumberColumn, ...otherColumns] : otherColumns
+    // Si la colonne n'existe pas, la créer
+    if (!rowNumberColumn) {
+        rowNumberColumn = dataTable?.createRowNumberColumn?.() || {
+            field: '__rowNumber__',
+            headerName: '#',
+            sortable: false,
+            filterable: false,
+            width: 60,
+            editable: false,
+            visible: true,
+            draggable: false,
+            autoSize: false,
+            hide: false,
+            resizable: false,
+            pinned: 'left',
+            description: 'Numéro de ligne',
+            dataType: 'text' as const,
+            cellRenderer: (params: any) => {
+                const currentPage = dataTable?.effectiveCurrentPage || 1
+                const pageSize = dataTable?.effectivePageSize || 10
+                const rowIndex = params?.rowIndex ?? 0
+                const rowNumber = (currentPage - 1) * pageSize + rowIndex + 1
+                return `<span class="row-number">${rowNumber}</span>`
+            }
+        }
+    }
+
+    // Filtrer les autres colonnes selon leur visibilité
+    let otherColumns: any[] = []
+    if (dataTable?.visibleColumns && dataTable.visibleColumns.length > 0) {
+        otherColumns = formattedColumns.value.filter(column =>
+            column.field !== '__rowNumber__' && dataTable.visibleColumns.includes(column.field)
+        )
+    } else {
+        // Si pas de visibleColumns défini, utiliser toutes les colonnes sauf __rowNumber__
+        otherColumns = formattedColumns.value.filter(column => column.field !== '__rowNumber__')
+    }
+
+    // Toujours inclure la colonne de numéro de ligne en première position
+    return [rowNumberColumn, ...otherColumns]
 })
 
 // Colonnes pour le gestionnaire (exclut les colonnes avec hide: true)
@@ -518,6 +870,10 @@ const columnsForManager = computed(() => {
 
 // Convertir selectedRows en Set<string>
 const selectedRowsSet = computed(() => {
+    // Si gestion automatique activée, utiliser les sélections automatiques
+    if (autoDataTable) {
+        return autoDataTable.selectedRows.value
+    }
     if (!dataTable?.selectedRows) return new Set<string>()
     return new Set<string>(Array.from(dataTable.selectedRows).map(row => String(row)))
 })
@@ -526,8 +882,90 @@ const selectedRowsSet = computed(() => {
 watch(() => dataTable?.visibleColumns, (newVisibleColumns) => {
     if (newVisibleColumns) {
         logger.debug('Colonnes visibles mises à jour', newVisibleColumns)
+
+        // S'assurer que __rowNumber__ est toujours inclus
+        if (!newVisibleColumns.includes('__rowNumber__')) {
+            dataTable?.handleVisibleColumnsChanged(
+                ['__rowNumber__', ...newVisibleColumns],
+                dataTable.columnWidths || {}
+            )
+            return
+        }
+
+        // S'assurer que __rowNumber__ est toujours épinglée à gauche
+        if (columnPinning && columnPinning.getPinDirection('__rowNumber__') !== 'left') {
+            columnPinning.pinColumn('__rowNumber__', 'left')
+        }
+
+        // Sauvegarder la configuration
+        if (tableConfig) {
+            tableConfig.updateVisibleColumns(newVisibleColumns)
+            tableConfig.updateColumnOrder(newVisibleColumns)
+        }
     }
 }, { deep: true })
+
+// Watcher pour les changements de largeurs de colonnes
+watch(() => dataTable?.columnWidths, (newWidths) => {
+    if (newWidths && tableConfig) {
+        tableConfig.updateColumnWidths(newWidths)
+    }
+}, { deep: true })
+
+// Charger la configuration au montage
+onMounted(() => {
+    if (tableConfig && props.storageKey) {
+        // Charger la configuration sauvegardée
+        tableConfig.loadConfig()
+
+        // Appliquer les colonnes visibles sauvegardées
+        if (tableConfig.visibleColumns.value.length > 0) {
+            // S'assurer que __rowNumber__ est toujours inclus
+            const savedColumns = tableConfig.visibleColumns.value
+            const columnsWithRowNumber = savedColumns.includes('__rowNumber__')
+                ? savedColumns
+                : ['__rowNumber__', ...savedColumns]
+
+            dataTable?.handleVisibleColumnsChanged(
+                columnsWithRowNumber,
+                tableConfig.columnWidths.value
+            )
+        }
+
+        // Appliquer les largeurs sauvegardées
+        if (Object.keys(tableConfig.columnWidths.value).length > 0) {
+            Object.entries(tableConfig.columnWidths.value).forEach(([field, width]) => {
+                if (dataTable) {
+                    dataTable.columnWidths[field] = width
+                }
+            })
+        }
+
+        // Appliquer les colonnes épinglées sauvegardées
+        // Toujours épingler __rowNumber__ à gauche en premier
+        if (columnPinning) {
+            columnPinning.pinColumn('__rowNumber__', 'left')
+
+            // Ensuite appliquer les autres colonnes épinglées sauvegardées
+            if (tableConfig.pinnedColumns.value.length > 0) {
+                tableConfig.pinnedColumns.value.forEach(({ field, pinned }) => {
+                    // Ne pas réappliquer __rowNumber__ car déjà épinglée
+                    if (pinned && field !== '__rowNumber__') {
+                        columnPinning.pinColumn(field, pinned)
+                    }
+                })
+            }
+        }
+
+        // Appliquer le sticky header sauvegardé
+        stickyHeaderState.value = tableConfig.stickyHeader.value
+
+        // Appliquer la taille de page sauvegardée
+        if (tableConfig.pageSize.value && dataTable) {
+            dataTable.changePageSize(tableConfig.pageSize.value)
+        }
+    }
+})
 
 // === LOGIQUE DES FONCTIONNALITÉS AVANCÉES ===
 
@@ -536,7 +974,7 @@ const finalRowData = computed(() => {
     // Pour la pagination côté serveur, utiliser directement rowDataProp
     // Pour la pagination côté client, utiliser paginatedData de useDataTable
     let data: any[] = []
-    
+
     if (props.serverSidePagination) {
         // Pagination côté serveur : utiliser directement rowDataProp
         // Forcer la création d'un nouveau tableau pour garantir la réactivité
@@ -593,17 +1031,17 @@ watch(() => props.rowDataProp, (newData, oldData) => {
     if (props.serverSidePagination) {
         const newLength = Array.isArray(newData) ? newData.length : 0
         const oldLength = Array.isArray(oldData) ? oldData.length : 0
-        
+
         logger.debug('DataTable: rowDataProp changed (server-side)', {
             oldLength,
             newLength,
             isArray: Array.isArray(newData),
             hasData: newLength > 0,
-            sample: Array.isArray(newData) && newData.length > 0 
+            sample: Array.isArray(newData) && newData.length > 0
                 ? newData.slice(0, 2).map((r: any) => ({ id: r?.id, ref: r?.reference }))
                 : []
         })
-        
+
         // Forcer la mise à jour du computed en accédant à sa valeur
         // Cela déclenchera le re-render si nécessaire
         const currentData = finalRowData.value
@@ -617,6 +1055,15 @@ watch(() => props.rowDataProp, (newData, oldData) => {
 // Colonnes finales (avec colonnes de groupement si nécessaire)
 const finalColumns = computed(() => {
     let columns = visibleColumns.value // Utiliser visibleColumns au lieu de formattedColumns
+
+    // S'assurer que __rowNumber__ est toujours en première position et épinglée à gauche
+    const rowNumberCol = columns.find(col => col.field === '__rowNumber__')
+    const otherColumns = columns.filter(col => col.field !== '__rowNumber__')
+
+    // Réorganiser : __rowNumber__ toujours en premier
+    if (rowNumberCol) {
+        columns = [rowNumberCol, ...otherColumns]
+    }
 
     // Ajouter les colonnes de groupement si activé
     if (grouping && grouping.isGrouped.value) {
@@ -633,7 +1080,26 @@ const finalColumns = computed(() => {
             dataType: 'text' as const,
             _isGroupColumn: true
         }))
+        // Les colonnes de groupement avant __rowNumber__
         columns = [...groupColumns, ...columns]
+    }
+
+    // Appliquer l'ordre des colonnes avec pinning si activé
+    if (columnPinning && props.enableColumnPinning) {
+        // S'assurer que __rowNumber__ est toujours épinglée à gauche
+        if (rowNumberCol && columnPinning.getPinDirection('__rowNumber__') !== 'left') {
+            columnPinning.pinColumn('__rowNumber__', 'left')
+        }
+
+        const ordered = columnPinning.orderedColumns.value
+        // S'assurer que __rowNumber__ est toujours en première position même après pinning
+        const rowNumberInOrdered = ordered.find(col => col.field === '__rowNumber__')
+        const otherColsInOrdered = ordered.filter(col => col.field !== '__rowNumber__')
+
+        if (rowNumberInOrdered) {
+            return [rowNumberInOrdered, ...otherColsInOrdered]
+        }
+        return ordered
     }
 
     return columns
@@ -651,18 +1117,26 @@ const isLoading = computed(() => {
 
 // Méthode pour vider toutes les sélections
 const clearAllSelections = () => {
-    // Utiliser la méthode de useDataTable
-    dataTable?.deselectAll()
-
-    // Et aussi la méthode de TableBody si disponible
-    if (tableBodyRef.value) {
+    // Appeler d'abord la méthode de TableBody pour mettre à jour l'état visuel
+    // Cela va émettre l'événement selection-changed qui sera géré par handleSelectionChanged
+    if (tableBodyRef.value && typeof tableBodyRef.value.clearAllSelections === 'function') {
         tableBodyRef.value.clearAllSelections()
+    } else {
+        // Fallback : utiliser la méthode de useDataTable
+        dataTable?.deselectAll()
     }
 }
 
 // Exposer les méthodes
 defineExpose({
-    clearAllSelections
+    clearAllSelections,
+    setFilterState: dataTable?.setFilterState,
+    filterState: computed(() => dataTable?.filterState),
+    // QueryModel
+    queryModel: computed(() => queryModel.value),
+    toStandardParams,
+    convertQueryModelToOutput,
+    createQueryModelFromCurrentState
 })
 </script>
 

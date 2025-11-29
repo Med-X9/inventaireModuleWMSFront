@@ -20,11 +20,12 @@ import type {
     JobReadyResponse
 } from '@/models/Job';
 import {
-    buildDataTableParams,
     processDataTableResponse,
-    type DataTableParams,
     type DataTableResponse
 } from '@/utils/dataTableUtils';
+import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter';
+import { buildStandardParamsUrl, normalizeToStandardParams } from '@/components/DataTable/utils/dataTableParamsConverter';
+import type { QueryModel } from '@/components/DataTable/types/QueryModel';
 import API from '@/api';
 
 export const useJobStore = defineStore('job', () => {
@@ -46,69 +47,82 @@ export const useJobStore = defineStore('job', () => {
     const getCurrentPage = computed(() => currentPage.value);
     const getPageSize = computed(() => pageSize.value);
 
-    // Actions
-    // Exemple d'utilisation des utilitaires DataTable pour fetchJobs
-    const fetchJobsDataTable = async (inventoryId: number, warehouseId: number, params?: DataTableParams) => {
-        loading.value = true;
-        error.value = null;
-        try {
-            // Construire les paramètres DataTable avec les utilitaires
-            const queryParams = buildDataTableParams({
-                page: params?.page || currentPage.value,
-                pageSize: params?.pageSize || pageSize.value,
-                globalSearch: params?.globalSearch,
-                sort: params?.sort,
-                filter: params?.filter
-            });
+    // ===== FONCTIONS UTILITAIRES =====
 
-            // Ajouter les paramètres spécifiques au job
-            queryParams.append('inventory_id', inventoryId.toString());
-            queryParams.append('warehouse_id', warehouseId.toString());
+    /**
+     * Gère les erreurs de manière uniforme avec extraction du message d'erreur backend
+     */
+    const handleError = async (err: unknown, defaultMessage: string): Promise<never> => {
+        let errorMessage = defaultMessage;
 
-            // Appeler l'API avec les paramètres DataTable
-            const response = await JobService.getAll(inventoryId, warehouseId, {
-                page: params?.page || currentPage.value,
-                pageSize: params?.pageSize || pageSize.value,
-                search: params?.globalSearch,
-                sort: params?.sort,
-                filter: params?.filter
-            });
-            const jobData = response.results || [];
-            jobs.value = jobData;
-            totalCount.value = response.count || jobData.length;
-        } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la récupération des jobs';
-            throw err;
-        } finally {
-            loading.value = false;
+        if (err && typeof err === 'object' && 'response' in err) {
+            const response = (err as any).response;
+            if (response?.data) {
+                const backendData = response.data;
+                if (backendData.message) {
+                    errorMessage = backendData.message;
+                } else if (backendData.detail) {
+                    errorMessage = backendData.detail;
+                } else if (backendData.error) {
+                    errorMessage = backendData.error;
+                } else if (typeof backendData === 'string') {
+                    errorMessage = backendData;
+                }
+            }
+        } else if (err instanceof Error) {
+            errorMessage = err.message;
         }
+
+        error.value = errorMessage;
+        throw err;
     };
 
-    const fetchJobs = async (inventoryId: number, warehouseId: number, params?: DataTableParams): Promise<DataTableResponse<JobTable>> => {
+    // ===== ACTIONS =====
+    // ⚠️ DÉPRÉCIÉ : Utiliser fetchJobs() à la place - cette méthode est conservée pour compatibilité
+    const fetchJobsDataTable = async (inventoryId: number, warehouseId: number, params?: QueryModel | StandardDataTableParams) => {
+        // Déléguer à fetchJobs qui utilise le nouveau modèle
+        return await fetchJobs(inventoryId, warehouseId, params);
+    };
+
+    // 🚀 Accepte QueryModel ou StandardDataTableParams - conversion automatique
+    const fetchJobs = async (
+        inventoryId: number, 
+        warehouseId: number, 
+        params?: QueryModel | StandardDataTableParams
+    ): Promise<DataTableResponse<JobTable>> => {
         loading.value = true;
         error.value = null;
         try {
-            // Construire les paramètres DataTable au format Django
-            const queryParams = buildDataTableParams({
-                page: params?.page || currentPage.value,
-                pageSize: params?.pageSize || pageSize.value,
-                globalSearch: params?.globalSearch,
-                sort: params?.sort,
-                filter: params?.filter
-            });
+            // Normaliser les paramètres (détecte et convertit QueryModel si nécessaire)
+            const standardParams: StandardDataTableParams = normalizeToStandardParams(
+                params,
+                {
+                    draw: 1,
+                    defaultPage: currentPage.value,
+                    defaultPageSize: pageSize.value
+                }
+            );
 
-            // Construire l'URL avec les paramètres DataTable
+            // Ajouter les paramètres spécifiques au job
+            const paramsWithJobData: StandardDataTableParams = {
+                ...standardParams,
+                inventory_id: inventoryId,
+                warehouse_id: warehouseId
+            };
+
+            // Construire l'URL avec les paramètres StandardDataTableParams
             const baseUrl = `${API.endpoints.inventory?.base}${inventoryId}/warehouse/${warehouseId}/jobs/`;
-            const url = `${baseUrl}?${queryParams.toString()}`;
+            const queryString = buildStandardParamsUrl(paramsWithJobData);
+            const url = `${baseUrl}?${queryString}`;
 
-            // Appeler l'API avec les paramètres DataTable
+            // Appeler l'API avec les paramètres StandardDataTableParams
             const responseData = await JobService.getAllByUrl(url);
 
             const jobData = responseData.data || [];
             jobs.value = jobData;
             totalCount.value = responseData.recordsFiltered || jobData.length;
 
-            // Retourner le format attendu par useGenericDataTable
+            // Retourner le format attendu
             return {
                 draw: responseData.draw || 1,
                 data: jobData,
@@ -116,31 +130,45 @@ export const useJobStore = defineStore('job', () => {
                 recordsFiltered: responseData.recordsFiltered || jobData.length
             };
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la récupération des jobs';
+            await handleError(err, 'Erreur lors de la récupération des jobs');
             throw err;
         } finally {
             loading.value = false;
         }
     };
 
-    const fetchJobsValidated = async (inventoryId: number, warehouseId: number, params?: DataTableParams) => {
+    // 🚀 Accepte QueryModel ou StandardDataTableParams - conversion automatique
+    const fetchJobsValidated = async (
+        inventoryId: number, 
+        warehouseId: number, 
+        params?: QueryModel | StandardDataTableParams
+    ): Promise<DataTableResponse<JobResult>> => {
         loading.value = true;
         error.value = null;
         try {
-            // Construire les paramètres DataTable au format Django
-            const queryParams = buildDataTableParams({
-                page: params?.page || currentPage.value,
-                pageSize: params?.pageSize || pageSize.value,
-                globalSearch: params?.globalSearch,
-                sort: params?.sort,
-                filter: params?.filter
-            });
+            // Normaliser les paramètres (détecte et convertit QueryModel si nécessaire)
+            const standardParams: StandardDataTableParams = normalizeToStandardParams(
+                params,
+                {
+                    draw: 1,
+                    defaultPage: currentPage.value,
+                    defaultPageSize: pageSize.value
+                }
+            );
 
-            // Construire l'URL avec les paramètres DataTable
+            // Ajouter les paramètres spécifiques au job
+            const paramsWithJobData: StandardDataTableParams = {
+                ...standardParams,
+                inventory_id: inventoryId,
+                warehouse_id: warehouseId
+            };
+
+            // Construire l'URL avec les paramètres StandardDataTableParams
             const baseUrl = `${API.endpoints.job?.base}valid/warehouse/${warehouseId}/inventory/${inventoryId}/`;
-            const url = `${baseUrl}?${queryParams.toString()}`;
+            const queryString = buildStandardParamsUrl(paramsWithJobData);
+            const url = `${baseUrl}?${queryString}`;
 
-            // Appeler l'API avec les paramètres DataTable
+            // Appeler l'API avec les paramètres StandardDataTableParams
             const responseData = await JobService.getAllValidatedByUrl(url);
 
             const jobData = responseData.data || [];
@@ -149,7 +177,7 @@ export const useJobStore = defineStore('job', () => {
             // Utiliser recordsFiltered pour la pagination
             totalCount.value = responseData.recordsFiltered || jobData.length;
 
-            // Retourner le format attendu par useGenericDataTable
+            // Retourner le format attendu
             return {
                 draw: responseData.draw || 1,
                 data: jobData,
@@ -157,7 +185,7 @@ export const useJobStore = defineStore('job', () => {
                 recordsFiltered: responseData.recordsFiltered || jobData.length
             };
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la récupération des jobs';
+            await handleError(err, 'Erreur lors de la récupération des jobs validés');
             throw err;
         } finally {
             loading.value = false;
@@ -171,8 +199,7 @@ export const useJobStore = defineStore('job', () => {
             currentJob.value = response;
             return response;
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la récupération du job';
-            throw err;
+            await handleError(err, 'Erreur lors de la récupération du job');
         } finally {
             loading.value = false;
         }
@@ -183,10 +210,9 @@ export const useJobStore = defineStore('job', () => {
         error.value = null;
         try {
             const response = await JobService.create(inventoryId, warehouseId, data);
-            // Rafraîchir la liste des jobs
             return response;
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la création du job';
+            await handleError(err, 'Erreur lors de la création du job');
             throw err;
         } finally {
             loading.value = false;
@@ -200,23 +226,7 @@ export const useJobStore = defineStore('job', () => {
             const response = await JobService.addLocationToJob( jobId, emplacement_ids);
             return response;
         } catch (err: any) {
-            // Récupérer le message d'erreur du backend
-            let errorMessage = 'Erreur lors de l\'ajout d\'emplacements au job';
-
-            if (err.response?.data) {
-                const backendData = err.response.data;
-                if (backendData.message) {
-                    errorMessage = backendData.message;
-                } else if (backendData.detail) {
-                    errorMessage = backendData.detail;
-                } else if (backendData.error) {
-                    errorMessage = backendData.error;
-                } else if (typeof backendData === 'string') {
-                    errorMessage = backendData;
-                }
-            }
-
-            error.value = errorMessage;
+            await handleError(err, 'Erreur lors de l\'ajout d\'emplacements au job');
             throw err;
         } finally {
             loading.value = false;
@@ -230,23 +240,7 @@ export const useJobStore = defineStore('job', () => {
             const response = await JobService.deleteLocationFromJob(jobId, emplacements);
             return response;
         } catch (err: any) {
-            // Récupérer le message d'erreur du backend
-            let errorMessage = 'Erreur lors de la suppression d\'emplacements du job';
-
-            if (err.response?.data) {
-                const backendData = err.response.data;
-                if (backendData.message) {
-                    errorMessage = backendData.message;
-                } else if (backendData.detail) {
-                    errorMessage = backendData.detail;
-                } else if (backendData.error) {
-                    errorMessage = backendData.error;
-                } else if (typeof backendData === 'string') {
-                    errorMessage = backendData;
-                }
-            }
-
-            error.value = errorMessage;
+            await handleError(err, 'Erreur lors de la suppression d\'emplacements du job');
             throw err;
         } finally {
             loading.value = false;
@@ -273,7 +267,7 @@ export const useJobStore = defineStore('job', () => {
             // Rafraîchir la liste des jobs
             return response;
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la suppression du job';
+            await handleError(err, 'Erreur lors de la suppression du job');
             throw err;
         } finally {
             loading.value = false;
@@ -285,14 +279,12 @@ export const useJobStore = defineStore('job', () => {
         error.value = null;
         try {
             const response = await JobService.updateStatus(id, status);
-            // Mettre à jour le job courant si c'est celui-ci
             if (currentJob.value?.id === Number(id)) {
                 currentJob.value = response.data.job;
             }
-            // Rafraîchir la liste des jobs
             return response;
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la mise à jour du statut';
+            await handleError(err, 'Erreur lors de la mise à jour du statut');
             throw err;
         } finally {
             loading.value = false;
@@ -324,8 +316,7 @@ export const useJobStore = defineStore('job', () => {
             totalCount.value = response.count;
             return response;
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la récupération des jobs par entrepôt';
-            throw err;
+            await handleError(err, 'Erreur lors de la récupération des jobs par entrepôt');
         } finally {
             loading.value = false;
         }
@@ -344,8 +335,7 @@ export const useJobStore = defineStore('job', () => {
             totalCount.value = response.count;
             return response;
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la récupération des jobs par inventaire';
-            throw err;
+            await handleError(err, 'Erreur lors de la récupération des jobs par inventaire');
         } finally {
             loading.value = false;
         }
@@ -364,8 +354,7 @@ export const useJobStore = defineStore('job', () => {
             totalCount.value = response.count;
             return response;
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la récupération des jobs par statut';
-            throw err;
+            await handleError(err, 'Erreur lors de la récupération des jobs par statut');
         } finally {
             loading.value = false;
         }
@@ -379,23 +368,7 @@ export const useJobStore = defineStore('job', () => {
             const response = await JobService.jobAssignmentsTeam(inventoryId, data);
             return response;
         } catch (err: any) {
-            // Récupérer le message d'erreur du backend
-            let errorMessage = 'Erreur lors de l\'assignation des équipes aux jobs';
-
-            if (err.response?.data) {
-                const backendData = err.response.data;
-                if (backendData.message) {
-                    errorMessage = backendData.message;
-                } else if (backendData.detail) {
-                    errorMessage = backendData.detail;
-                } else if (backendData.error) {
-                    errorMessage = backendData.error;
-                } else if (typeof backendData === 'string') {
-                    errorMessage = backendData;
-                }
-            }
-
-            error.value = errorMessage;
+            await handleError(err, 'Erreur lors de l\'assignation des équipes aux jobs');
             throw err;
         } finally {
             loading.value = false;
@@ -410,23 +383,7 @@ export const useJobStore = defineStore('job', () => {
             const response = await JobService.jobAssignmentsResource(data);
             return response;
         } catch (err: any) {
-            // Récupérer le message d'erreur du backend
-            let errorMessage = 'Erreur lors de l\'assignation des ressources aux jobs';
-
-            if (err.response?.data) {
-                const backendData = err.response.data;
-                if (backendData.message) {
-                    errorMessage = backendData.message;
-                } else if (backendData.detail) {
-                    errorMessage = backendData.detail;
-                } else if (backendData.error) {
-                    errorMessage = backendData.error;
-                } else if (typeof backendData === 'string') {
-                    errorMessage = backendData;
-                }
-            }
-
-            error.value = errorMessage;
+            await handleError(err, 'Erreur lors de l\'assignation des ressources aux jobs');
             throw err;
         } finally {
             loading.value = false;
@@ -440,7 +397,7 @@ export const useJobStore = defineStore('job', () => {
             const response = await JobService.jobManualAssignments(data);
             return response;
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de l\'assignation des jobs manuellement';
+            await handleError(err, 'Erreur lors de l\'assignation des jobs manuellement');
             throw err;
         } finally {
             loading.value = false;
@@ -492,13 +449,11 @@ export const useJobStore = defineStore('job', () => {
             
             return response;
         } catch (err: any) {
-            // Extraire le message d'erreur du backend
             const errorMessage = err.response?.data?.message || 
                                 err.userMessage ||
                                 err.message || 
                                 'Erreur lors du lancement du comptage';
             error.value = errorMessage;
-            // Attacher le message à l'erreur pour qu'il soit accessible dans le composable
             err.userMessage = errorMessage;
             throw err;
         } finally {

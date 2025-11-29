@@ -11,8 +11,9 @@
  */
 
 // ===== IMPORTS VUE =====
-import { ref, computed, markRaw, onMounted, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, markRaw, onMounted, nextTick, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import type { Router } from 'vue-router'
 
 // ===== IMPORTS COMPOSABLES =====
 import { useBackendDataTable } from '@/components/DataTable/composables/useBackendDataTable'
@@ -29,6 +30,16 @@ import { useWarehouseStore } from '@/stores/warehouse'
 
 // ===== IMPORTS UTILS =====
 import { convertToStandardDataTableParams, type StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
+import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
+import { convertQueryModelToQueryParams, convertQueryModelToRestApi, createQueryModelFromDataTableParams } from '@/components/DataTable/utils/queryModelConverter'
+import type { QueryModel } from '@/components/DataTable/types/QueryModel'
+import {
+    extractFiltersFromStandardParams,
+    isStandardDataTableParams,
+    extractPageFromStandardParams,
+    extractPageSizeFromStandardParams,
+    extractSortFromStandardParams
+} from './utils/dataTableHelpers'
 
 // ===== IMPORTS TYPES =====
 import type { DataTableColumn, ColumnDataType, ActionConfig } from '@/types/dataTable'
@@ -63,6 +74,7 @@ interface PlanningOptions {
 export function usePlanning(options?: PlanningOptions) {
     // ===== ROUTER & STORES =====
     const route = useRoute()
+    const router = useRouter()
     const jobStore = useJobStore()
     const locationStore = useLocationStore()
     const inventoryStore = useInventoryStore()
@@ -109,6 +121,7 @@ export function usePlanning(options?: PlanningOptions) {
         pageSize: jobsPageSize,
         searchQuery: jobsSearchQuery,
         sortModel: jobsSortModel,
+        filters: jobsFilters,
         setPage: setJobsPage,
         setPageSize: setJobsPageSize,
         setSearch: setJobsSearch,
@@ -124,6 +137,50 @@ export function usePlanning(options?: PlanningOptions) {
         pageSize: 20
     })
 
+    // ===== QUERYMODEL POUR JOBS =====
+    
+    /**
+     * Mode de sortie pour les paramètres de requête (défaut: 'queryParams')
+     */
+    const jobsQueryOutputMode = ref<'queryModel' | 'dataTable' | 'restApi' | 'queryParams'>('queryParams')
+
+    /**
+     * Colonnes pour QueryModel Jobs
+     */
+    const jobsColumnsRef = computed(() => jobsColumns.value)
+
+    /**
+     * QueryModel pour gérer les requêtes Jobs avec mode de sortie configurable
+     */
+    const {
+        queryModel: jobsQueryModelRef,
+        toStandardParams: jobsToStandardParams,
+        updatePagination: updateJobsQueryPagination,
+        updateSort: updateJobsQuerySort,
+        updateFilter: updateJobsQueryFilter,
+        updateGlobalSearch: updateJobsQueryGlobalSearch
+    } = useQueryModel({
+        columns: jobsColumnsRef,
+        enabled: true
+    })
+
+    /**
+     * Convertit le QueryModel Jobs selon le mode configuré
+     */
+    const convertJobsQueryModelToOutput = (queryModelData: QueryModel) => {
+        switch (jobsQueryOutputMode.value) {
+            case 'queryModel':
+                return queryModelData
+            case 'restApi':
+                return convertQueryModelToRestApi(queryModelData)
+            case 'queryParams':
+                return convertQueryModelToQueryParams(queryModelData)
+            case 'dataTable':
+            default:
+                return jobsToStandardParams.value
+        }
+    }
+
     /**
      * DataTable pour les locations disponibles
      * Utilise useBackendDataTable pour l'intégration avec le store Pinia
@@ -135,6 +192,7 @@ export function usePlanning(options?: PlanningOptions) {
         pageSize: locationsPageSize,
         searchQuery: locationsSearchQuery,
         sortModel: locationsSortModel,
+        filters: locationsFilters,
         setPage: setLocationsPage,
         setPageSize: setLocationsPageSize,
         setSearch: setLocationsSearch,
@@ -248,6 +306,25 @@ export function usePlanning(options?: PlanningOptions) {
      * Indicateur de sélection de jobs
      */
     const hasSelectedJobs = computed(() => selectedJobs.value.length > 0)
+
+    /**
+     * Pagination calculée pour les jobs
+     * Utilise le totalCount du store pour calculer les informations de pagination
+     */
+    const jobsPaginationComputed = computed(() => {
+        const totalCount = jobStore.totalCount || 0
+        const pageSize = jobsPageSize.value || 20
+        const currentPage = jobsCurrentPage.value || 1
+
+        return {
+            current_page: currentPage,
+            total_pages: Math.max(1, Math.ceil(totalCount / pageSize)),
+            has_next: currentPage < Math.ceil(totalCount / pageSize),
+            has_previous: currentPage > 1,
+            page_size: pageSize,
+            total: totalCount
+        }
+    })
 
     /**
      * Pagination calculée pour les locations
@@ -603,14 +680,49 @@ export function usePlanning(options?: PlanningOptions) {
      *
      * @param params - Paramètres DataTable standard (pagination, tri, filtres)
      */
-    const loadJobs = async (params?: LocationDataTableParams) => {
+    const loadJobs = async (params?: StandardDataTableParams | LocationDataTableParams) => {
         if (!inventoryId.value || !warehouseId.value) {
             logger.warn('Impossible de charger les jobs, IDs manquants')
             return
         }
 
         try {
-            await jobStore.fetchJobs(inventoryId.value, warehouseId.value, params)
+            // Utiliser les paramètres fournis ou construire à partir des valeurs actuelles
+            let finalParams: StandardDataTableParams
+            if (params && 'start' in params && 'length' in params) {
+                // C'est déjà StandardDataTableParams
+                finalParams = params as StandardDataTableParams
+            } else {
+                // Construire depuis les valeurs actuelles
+                finalParams = {
+                    draw: jobsCurrentPage.value || 1,
+                    start: ((jobsCurrentPage.value || 1) - 1) * jobsPageSize.value,
+                    length: jobsPageSize.value
+                }
+            }
+
+            // S'assurer que length et start sont bien définis
+            if (!finalParams.length) {
+                finalParams.length = jobsPageSize.value
+            }
+            if (finalParams.start === undefined) {
+                finalParams.start = ((jobsCurrentPage.value || 1) - 1) * jobsPageSize.value
+            }
+
+            logger.debug('Chargement des jobs avec paramètres DataTable:', {
+                inventoryId: inventoryId.value,
+                warehouseId: warehouseId.value,
+                pageSize: jobsPageSize.value,
+                params: finalParams
+            })
+
+            await jobStore.fetchJobs(inventoryId.value, warehouseId.value, finalParams)
+            await nextTick()
+
+            logger.debug('Jobs mis à jour dans le store', {
+                count: jobStore.jobs.length,
+                sample: jobStore.jobs.slice(0, 2).map(j => ({ id: j.id, ref: j.reference }))
+            })
         } catch (error) {
             logger.error('Erreur lors du chargement des jobs', error)
             await alertService.error({ text: 'Erreur lors du chargement des jobs' })
@@ -622,7 +734,7 @@ export function usePlanning(options?: PlanningOptions) {
      *
      * @param params - Paramètres DataTable standard (pagination, tri, filtres)
      */
-    const loadLocations = async (params?: LocationDataTableParams) => {
+    const loadLocations = async (params?: StandardDataTableParams | LocationDataTableParams) => {
         if (!accountId.value || !inventoryId.value || !warehouseId.value) {
             logger.warn('Impossible de charger les locations, IDs manquants', {
                 accountId: accountId.value,
@@ -814,111 +926,79 @@ export function usePlanning(options?: PlanningOptions) {
         }
     }
 
-    // ===== CONVERTISSEURS DE PARAMÈTRES =====
-
-    /**
-     * Convertir les paramètres vers le format standard DataTable pour les jobs
-     *
-     * @param page - Numéro de page
-     * @param pageSize - Taille de page
-     * @param filters - Modèle de filtres
-     * @param sort - Modèle de tri
-     * @param globalSearch - Recherche globale
-     * @returns Paramètres au format standard DataTable
-     */
-    const convertJobParamsToStandard = (
-        page: number,
-        pageSize: number,
-        filters?: Record<string, { filter: string }>,
-        sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>,
-        globalSearch?: string
-    ) => {
-        return convertToStandardDataTableParams(
-            {
-                page,
-                pageSize,
-                filters: filters || {},
-                sort: sort || [],
-                globalSearch
-            },
-            {
-                columns: jobsColumns.value,
-                draw: 1,
-                customParams: {
-                    inventory_id: inventoryId.value,
-                    warehouse_id: warehouseId.value
-                }
-            }
-        )
-    }
-
-    /**
-     * Convertir les paramètres vers le format standard DataTable pour les locations
-     *
-     * @param page - Numéro de page
-     * @param pageSize - Taille de page
-     * @param filters - Modèle de filtres
-     * @param sort - Modèle de tri
-     * @param globalSearch - Recherche globale
-     * @returns Paramètres au format standard DataTable
-     */
-    const convertLocationParamsToStandard = (
-        page: number,
-        pageSize: number,
-        filters?: Record<string, { filter: string }>,
-        sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>,
-        globalSearch?: string
-    ) => {
-        return convertToStandardDataTableParams(
-            {
-                page,
-                pageSize,
-                filters: filters || {},
-                sort: sort || [],
-                globalSearch
-            },
-            {
-                columns: locationsColumns.value,
-                draw: 1,
-                customParams: {
-                    account_id: accountId.value,
-                    inventory_id: inventoryId.value,
-                    warehouse_id: warehouseId.value
-                }
-            }
-        )
-    }
-
     // ===== HANDLERS DATATABLE =====
+    // Tous les handlers acceptent StandardDataTableParams directement depuis le DataTable
 
     /**
      * Handler pour les changements de pagination des jobs
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
      *
-     * @param params - Paramètres de pagination (format standard ou ancien format)
+     * @param params - Paramètres de pagination (format configuré ou ancien format)
      */
-    const onJobPaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams) => {
+    const onJobPaginationChanged = async (params: StandardDataTableParams | { page: number; pageSize: number; start?: number; end?: number } | QueryModel | Record<string, any>) => {
         try {
-            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-            if ('draw' in params && 'start' in params && 'length' in params) {
-                await loadJobs(params as LocationDataTableParams)
-                return
+            // Convertir si nécessaire
+            let standardParams: StandardDataTableParams
+            // Vérifier si c'est déjà StandardDataTableParams (a start et length)
+            if ('start' in params && 'length' in params && typeof params.start === 'number' && typeof params.length === 'number') {
+                // Déjà au format StandardDataTableParams
+                standardParams = params as StandardDataTableParams
+            } else {
+                // Convertir depuis { page, pageSize }
+                const simpleParams = params as { page: number; pageSize: number }
+                // Convertir jobsSortModel de { field, direction } vers { colId, sort } pour convertToStandardDataTableParams
+                const convertedSort = (jobsSortModel.value || []).map(s => ({
+                    colId: s.field,
+                    sort: s.direction
+                }))
+
+                // Créer un QueryModel depuis les paramètres actuels
+                const queryModelData = createQueryModelFromDataTableParams({
+                    page: simpleParams.page,
+                    pageSize: simpleParams.pageSize,
+                    sort: convertedSort.map(s => ({ field: s.colId, direction: s.sort })),
+                    filters: jobsFilters.value ? Object.fromEntries(
+                        Object.entries(jobsFilters.value).map(([field, filterConfig]) => [
+                            field,
+                            {
+                                field,
+                                dataType: 'text' as const,
+                                operator: 'contains' as any,
+                                value: filterConfig.filter || filterConfig.value
+                            }
+                        ])
+                    ) : undefined,
+                    globalSearch: jobsSearchQuery.value || undefined,
+                    customParams: jobsCustomParams.value || {}
+                })
+
+                // Convertir selon le mode configuré
+                if (jobsQueryOutputMode.value === 'dataTable') {
+                standardParams = convertToStandardDataTableParams(
+                    {
+                        page: simpleParams.page,
+                        pageSize: simpleParams.pageSize,
+                        filters: jobsFilters.value || {},
+                        sort: convertedSort,
+                        globalSearch: jobsSearchQuery.value || undefined
+                    },
+                    {
+                        columns: jobsColumns.value,
+                        draw: 1,
+                        customParams: jobsCustomParams.value || {}
+                    }
+                )
+                } else {
+                    standardParams = convertJobsQueryModelToOutput(queryModelData) as StandardDataTableParams
+                }
             }
 
-            // Sinon, convertir l'ancien format
-            const paginationParams = params as { page: number; pageSize: number }
-            setJobsPageSize(paginationParams.pageSize)
-            setJobsPage(paginationParams.page)
+            const pageSize = extractPageSizeFromStandardParams(standardParams, jobsPageSize.value)
+            const page = extractPageFromStandardParams(standardParams, pageSize)
 
-            const standardParams = convertJobParamsToStandard(
-                paginationParams.page,
-                paginationParams.pageSize,
-                undefined,
-                (jobsSortModel.value || []).map(s => ({ colId: s.field, sort: s.direction as 'asc' | 'desc' })),
-                jobsSearchQuery.value || undefined
-            )
-
-            await loadJobs(standardParams as LocationDataTableParams)
+            setJobsPageSize(pageSize)
+            setJobsPage(page)
+            await loadJobs(standardParams)
         } catch (error) {
             logger.error('Erreur dans onJobPaginationChanged', error)
             await alertService.error({ text: 'Erreur lors du changement de pagination' })
@@ -927,31 +1007,49 @@ export function usePlanning(options?: PlanningOptions) {
 
     /**
      * Handler pour les changements de tri des jobs
+     * Accepte StandardDataTableParams ou un modèle de tri simple
      *
-     * @param sortModel - Modèle de tri (format standard ou ancien format)
+     * @param params - Paramètres de tri au format standard
      */
-    const onJobSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }> | StandardDataTableParams) => {
+    const onJobSortChanged = async (params: StandardDataTableParams | any) => {
         try {
-            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-            if ('draw' in sortModel && 'start' in sortModel && 'length' in sortModel) {
-                await loadJobs(sortModel as LocationDataTableParams)
-                return
+            let standardParams: StandardDataTableParams
+            let sortModel: Array<{ field: string; direction: 'asc' | 'desc' }>
+
+            // Si c'est déjà StandardDataTableParams
+            if (isStandardDataTableParams(params)) {
+                standardParams = params
+                // Extraire le sortModel au format { field, direction } pour useBackendDataTable
+                sortModel = extractSortFromStandardParams(params, jobsColumns.value)
+            } else {
+                // Sinon, construire StandardDataTableParams depuis les paramètres actuels
+                standardParams = convertToStandardDataTableParams(
+                    {
+                        page: jobsCurrentPage.value || 1,
+                        pageSize: jobsPageSize.value || 20,
+                        filters: jobsFilters.value || {},
+                        sort: params.sortModel || [],
+                        globalSearch: jobsSearchQuery.value || undefined
+                    },
+                    {
+                        columns: jobsColumns.value,
+                        draw: 1,
+                        customParams: jobsCustomParams.value || {}
+                    }
+                )
+                // Si params.sortModel est au format { colId, sort }, convertir en { field, direction }
+                if (params.sortModel && Array.isArray(params.sortModel) && params.sortModel.length > 0) {
+                    sortModel = params.sortModel.map((s: any) => ({
+                        field: s.colId || s.field || '',
+                        direction: s.sort || s.direction || 'asc'
+                    })).filter((s: any) => s.field)
+                } else {
+                    sortModel = []
+                }
             }
 
-            // Sinon, convertir l'ancien format
-            const sortModelArray = sortModel as Array<{ colId: string; sort: 'asc' | 'desc' }>
-            const convertedSortModel = sortModelArray.map(s => ({ field: s.colId, direction: s.sort as 'asc' | 'desc' }))
-            setJobsSortModel(convertedSortModel)
-
-            const standardParams = convertJobParamsToStandard(
-                jobsCurrentPage.value,
-                jobsPageSize.value,
-                undefined,
-                sortModelArray,
-                jobsSearchQuery.value || undefined
-            )
-
-            await loadJobs(standardParams as LocationDataTableParams)
+            setJobsSortModel(sortModel)
+            await loadJobs(standardParams)
         } catch (error) {
             logger.error('Erreur dans onJobSortChanged', error)
             await alertService.error({ text: 'Erreur lors du changement de tri' })
@@ -960,30 +1058,20 @@ export function usePlanning(options?: PlanningOptions) {
 
     /**
      * Handler pour les changements de filtre des jobs
+     * Simplifié - accepte uniquement StandardDataTableParams
      *
-     * @param filterModel - Modèle de filtres (format standard ou ancien format)
+     * @param filterModel - Paramètres de filtre au format standard
      */
-    const onJobFilterChanged = async (filterModel: Record<string, { filter: string }> | StandardDataTableParams) => {
+    const onJobFilterChanged = async (filterModel: StandardDataTableParams) => {
         try {
-            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-            if ('draw' in filterModel && 'start' in filterModel && 'length' in filterModel) {
-                await loadJobs(filterModel as LocationDataTableParams)
-                return
-            }
+            // Extraire les filtres depuis les paramètres standard
+            const extractedFilters = extractFiltersFromStandardParams(filterModel, jobsColumns.value)
 
-            // Sinon, convertir l'ancien format
-            const filterModelObj = filterModel as Record<string, { filter: string }>
-            setJobsFilters(filterModelObj)
+            // Synchroniser avec useBackendDataTable pour que le bouton de compteur s'affiche
+            setJobsFilters(extractedFilters)
 
-            const standardParams = convertJobParamsToStandard(
-                jobsCurrentPage.value,
-                jobsPageSize.value,
-                filterModelObj,
-                (jobsSortModel.value || []).map(s => ({ colId: s.field, sort: s.direction as 'asc' | 'desc' })),
-                jobsSearchQuery.value || undefined
-            )
-
-            await loadJobs(standardParams as LocationDataTableParams)
+            // Charger les données avec les nouveaux filtres
+            await loadJobs(filterModel)
         } catch (error) {
             logger.error('Erreur dans onJobFilterChanged', error)
             await alertService.error({ text: 'Erreur lors du changement de filtre' })
@@ -992,35 +1080,49 @@ export function usePlanning(options?: PlanningOptions) {
 
     /**
      * Handler pour les changements de pagination des locations
+     * Accepte StandardDataTableParams (émis par DataTable quand serverSidePagination est activé)
      *
-     * @param params - Paramètres de pagination (format standard ou ancien format)
+     * @param params - Paramètres de pagination au format StandardDataTableParams
      */
-    const onLocationPaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams) => {
+    const onLocationPaginationChanged = async (params: StandardDataTableParams | { page: number; pageSize: number; start?: number; end?: number }) => {
         try {
-            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-            if ('draw' in params && 'start' in params && 'length' in params) {
-                const page = Math.floor((params.start || 0) / (params.length || 20)) + 1
-                setLocationsPageSize(params.length || 20)
-                setLocationsPage(page)
+            // Convertir si nécessaire
+            let standardParams: StandardDataTableParams
+            // Vérifier si c'est déjà StandardDataTableParams (a start et length)
+            if ('start' in params && 'length' in params && typeof params.start === 'number' && typeof params.length === 'number') {
+                // Déjà au format StandardDataTableParams
+                standardParams = params as StandardDataTableParams
+            } else {
+                // Convertir depuis { page, pageSize }
+                const simpleParams = params as { page: number; pageSize: number }
+                // Convertir locationsSortModel de { field, direction } vers { colId, sort } pour convertToStandardDataTableParams
+                const convertedSort = (locationsSortModel.value || []).map(s => ({
+                    colId: s.field,
+                    sort: s.direction
+                }))
 
-                await loadLocations(params as LocationDataTableParams)
-                return
+                standardParams = convertToStandardDataTableParams(
+                    {
+                        page: simpleParams.page,
+                        pageSize: simpleParams.pageSize,
+                        filters: locationsFilters.value || {},
+                        sort: convertedSort,
+                        globalSearch: locationsSearchQuery.value || undefined
+                    },
+                    {
+                        columns: locationsColumns.value,
+                        draw: 1,
+                        customParams: locationsCustomParams.value || {}
+                    }
+                )
             }
 
-            // Sinon, convertir l'ancien format
-            const paginationParams = params as { page: number; pageSize: number }
-            setLocationsPageSize(paginationParams.pageSize)
-            setLocationsPage(paginationParams.page)
+            const pageSize = extractPageSizeFromStandardParams(standardParams, locationsPageSize.value)
+            const page = extractPageFromStandardParams(standardParams, pageSize)
 
-            const standardParams = convertLocationParamsToStandard(
-                paginationParams.page,
-                paginationParams.pageSize,
-                undefined,
-                (locationsSortModel.value || []).map(s => ({ colId: s.field, sort: s.direction as 'asc' | 'desc' })),
-                locationsSearchQuery.value || undefined
-            )
-
-            await loadLocations(standardParams as LocationDataTableParams)
+            setLocationsPageSize(pageSize)
+            setLocationsPage(page)
+            await loadLocations(standardParams)
         } catch (error) {
             logger.error('Erreur dans onLocationPaginationChanged', error)
             await alertService.error({ text: 'Erreur lors du changement de pagination' })
@@ -1029,31 +1131,16 @@ export function usePlanning(options?: PlanningOptions) {
 
     /**
      * Handler pour les changements de tri des locations
+     * Simplifié - accepte uniquement StandardDataTableParams
      *
-     * @param sortModel - Modèle de tri (format standard ou ancien format)
+     * @param params - Paramètres de tri au format standard
      */
-    const onLocationSortChanged = async (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }> | StandardDataTableParams) => {
+    const onLocationSortChanged = async (params: StandardDataTableParams) => {
         try {
-            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-            if ('draw' in sortModel && 'start' in sortModel && 'length' in sortModel) {
-                await loadLocations(sortModel as LocationDataTableParams)
-                return
-            }
-
-            // Sinon, convertir l'ancien format
-            const sortModelArray = sortModel as Array<{ colId: string; sort: 'asc' | 'desc' }>
-            const convertedSortModel = sortModelArray.map(s => ({ field: s.colId, direction: s.sort as 'asc' | 'desc' }))
-            setLocationsSortModel(convertedSortModel)
-
-            const standardParams = convertLocationParamsToStandard(
-                locationsCurrentPage.value,
-                locationsPageSize.value,
-                undefined,
-                sortModelArray,
-                locationsSearchQuery.value || undefined
-            )
-
-            await loadLocations(standardParams as LocationDataTableParams)
+            // Extraire le sortModel au format { field, direction } pour useBackendDataTable
+            const sortModel = extractSortFromStandardParams(params, locationsColumns.value)
+            setLocationsSortModel(sortModel)
+            await loadLocations(params)
         } catch (error) {
             logger.error('Erreur dans onLocationSortChanged', error)
             await alertService.error({ text: 'Erreur lors du changement de tri' })
@@ -1062,30 +1149,20 @@ export function usePlanning(options?: PlanningOptions) {
 
     /**
      * Handler pour les changements de filtre des locations
+     * Simplifié - accepte uniquement StandardDataTableParams
      *
-     * @param filterModel - Modèle de filtres (format standard ou ancien format)
+     * @param filterModel - Paramètres de filtre au format standard
      */
-    const onLocationFilterChanged = async (filterModel: Record<string, { filter: string }> | StandardDataTableParams) => {
+    const onLocationFilterChanged = async (filterModel: StandardDataTableParams) => {
         try {
-            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-            if ('draw' in filterModel && 'start' in filterModel && 'length' in filterModel) {
-                await loadLocations(filterModel as LocationDataTableParams)
-                return
-            }
+            // Extraire les filtres depuis les paramètres standard
+            const extractedFilters = extractFiltersFromStandardParams(filterModel, locationsColumns.value)
 
-            // Sinon, convertir l'ancien format
-            const filterModelObj = filterModel as Record<string, { filter: string }>
-            setLocationsFilters(filterModelObj)
+            // Synchroniser avec useBackendDataTable pour que le bouton de compteur s'affiche
+            setLocationsFilters(extractedFilters)
 
-            const standardParams = convertLocationParamsToStandard(
-                locationsCurrentPage.value,
-                locationsPageSize.value,
-                filterModelObj,
-                (locationsSortModel.value || []).map(s => ({ colId: s.field, sort: s.direction as 'asc' | 'desc' })),
-                locationsSearchQuery.value || undefined
-            )
-
-            await loadLocations(standardParams as LocationDataTableParams)
+            // Charger les données avec les nouveaux filtres
+            await loadLocations(filterModel as LocationDataTableParams)
         } catch (error) {
             logger.error('Erreur dans onLocationFilterChanged', error)
             await alertService.error({ text: 'Erreur lors du changement de filtre' })
@@ -1109,6 +1186,43 @@ export function usePlanning(options?: PlanningOptions) {
     const onJobSelectionChanged = (selectedRows: Set<string>) => {
         selectedJobs.value = selectedRows ? Array.from(selectedRows) : []
     }
+
+    // ===== RÉFÉRENCES DATATABLE =====
+
+    /** Références aux composants DataTable pour accéder à leurs méthodes */
+    const availableLocationsTableRef = ref<any>(null)
+    const jobsTableRef = ref<any>(null)
+
+    /** Clés pour forcer le re-render des tables */
+    const availableLocationsKey = ref(0)
+    const jobsKey = ref(0)
+    const selectFieldKey = ref(0)
+
+    // ===== COMPUTED PROPERTIES =====
+
+    /**
+     * Nombre de jobs sélectionnés
+     */
+    const selectedJobsCount = computed(() => selectedJobs.value.length)
+
+    /**
+     * Paramètres personnalisés pour la DataTable des jobs
+     * Inclut les IDs nécessaires pour les appels API
+     */
+    const jobsCustomParams = computed(() => ({
+        inventory_id: inventoryId.value,
+        warehouse_id: warehouseId.value
+    }))
+
+    /**
+     * Paramètres personnalisés pour la DataTable des locations
+     * Inclut les IDs nécessaires pour les appels API
+     */
+    const locationsCustomParams = computed(() => ({
+        account_id: accountId.value,
+        inventory_id: inventoryId.value,
+        warehouse_id: warehouseId.value
+    }))
 
     // ===== INITIALISATION =====
 
@@ -1164,12 +1278,11 @@ export function usePlanning(options?: PlanningOptions) {
         }
     }
 
-    // Initialiser au montage
-    onMounted(() => {
-        selectedAvailableLocations.value = []
-        selectedJobs.value = []
-        void initialize()
-    })
+
+    // ===== ÉTAT EXPANSION JOBS =====
+
+    /** IDs des jobs expandés */
+    const expandedJobIds = ref<Set<string>>(new Set<string>())
 
     // ===== COMPUTED POUR COMPATIBILITÉ =====
 
@@ -1180,7 +1293,7 @@ export function usePlanning(options?: PlanningOptions) {
         selectedAvailable: selectedAvailableLocations.value,
         selectedJobs: selectedJobs.value,
         selectedJobToAddLocation: '',
-        expandedJobIds: new Set<string>(),
+        expandedJobIds: expandedJobIds.value,
         isSubmitting: false
     }))
 
@@ -1225,43 +1338,30 @@ export function usePlanning(options?: PlanningOptions) {
     // ===== MÉTHODES POUR COMPATIBILITÉ =====
 
     /**
-     * Appliquer des filtres aux jobs
-     *
-     * @param filterModel - Modèle de filtres
+     * Appliquer des filtres aux jobs (pour compatibilité)
+     * Désormais, le DataTable appelle directement onJobFilterChanged avec StandardDataTableParams
      */
-    const applyJobFilters = async (filterModel: Record<string, { filter: string }>) => {
+    const applyJobFilters = async (filterModel: StandardDataTableParams) => {
         await onJobFilterChanged(filterModel)
     }
 
     /**
-     * Appliquer des filtres aux locations
-     *
-     * @param filterModel - Modèle de filtres
+     * Appliquer des filtres aux locations (pour compatibilité)
+     * Désormais, le DataTable appelle directement onLocationFilterChanged avec StandardDataTableParams
      */
-    const applyLocationFilters = async (filterModel: Record<string, { filter: string }>) => {
+    const applyLocationFilters = async (filterModel: StandardDataTableParams) => {
         await onLocationFilterChanged(filterModel)
     }
 
     /**
      * Handler pour la recherche globale des jobs
+     * Le DataTable gère maintenant la recherche globale via global-search-changed qui émet StandardDataTableParams
      *
-     * @param searchQuery - Terme de recherche
+     * @param searchParams - Paramètres de recherche au format standard
      */
-    const onJobSearchChanged = async (searchQuery: string) => {
+    const onJobSearchChanged = async (searchParams: StandardDataTableParams) => {
         try {
-            setJobsSearch(searchQuery)
-
-            const convertedSortModel = (jobsSortModel.value || []).map(s => ({ colId: s.field, sort: s.direction as 'asc' | 'desc' }))
-
-            const standardParams = convertJobParamsToStandard(
-                jobsCurrentPage.value,
-                jobsPageSize.value,
-                undefined,
-                convertedSortModel,
-                searchQuery || undefined
-            )
-
-            await loadJobs(standardParams as LocationDataTableParams)
+            await loadJobs(searchParams)
         } catch (error) {
             logger.error('Erreur dans onJobSearchChanged', error)
             await alertService.error({ text: 'Erreur lors de la recherche' })
@@ -1270,24 +1370,13 @@ export function usePlanning(options?: PlanningOptions) {
 
     /**
      * Handler pour la recherche globale des locations
+     * Le DataTable gère maintenant la recherche globale via global-search-changed qui émet StandardDataTableParams
      *
-     * @param searchQuery - Terme de recherche
+     * @param searchParams - Paramètres de recherche au format standard
      */
-    const onLocationSearchChanged = async (searchQuery: string) => {
+    const onLocationSearchChanged = async (searchParams: StandardDataTableParams) => {
         try {
-            setLocationsSearch(searchQuery)
-
-            const convertedSortModel = (locationsSortModel.value || []).map(s => ({ colId: s.field, sort: s.direction as 'asc' | 'desc' }))
-
-            const standardParams = convertLocationParamsToStandard(
-                locationsCurrentPage.value,
-                locationsPageSize.value,
-                undefined,
-                convertedSortModel,
-                searchQuery || undefined
-            )
-
-            await loadLocations(standardParams as LocationDataTableParams)
+            await loadLocations(searchParams as LocationDataTableParams)
         } catch (error) {
             logger.error('Erreur dans onLocationSearchChanged', error)
             await alertService.error({ text: 'Erreur lors de la recherche' })
@@ -1416,11 +1505,178 @@ export function usePlanning(options?: PlanningOptions) {
     /**
      * Handler pour les filtres de la table imbriquée
      *
-     * @param filterModel - Modèle de filtres
+     * @param filterModel - Modèle de filtres (StandardDataTableParams)
      */
-    const onNestedTableFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
-        await onJobFilterChanged(filterModel)
+    const onNestedTableFilterChanged = async (filterModel: StandardDataTableParams | Record<string, { filter: string }>) => {
+        // Si c'est StandardDataTableParams, appeler directement
+        if (isStandardDataTableParams(filterModel)) {
+            await onJobFilterChanged(filterModel)
+        } else {
+            // Sinon, convertir via onJobFilterChanged qui gère les deux formats
+            await onJobFilterChanged(filterModel as any)
+        }
     }
+
+    // ===== HANDLERS DATATABLE SIMPLIFIÉS =====
+
+    /**
+     * Handler pour les changements de filtres des jobs
+     * Le filterState du DataTable est déjà mis à jour dans handleFilterChanged du DataTable
+     * Ici, on appelle simplement le handler du composable pour traiter les filtres côté serveur
+     */
+    const handleJobFilterChanged = async (filterModel: StandardDataTableParams | any) => {
+        await onJobFilterChanged(filterModel as StandardDataTableParams)
+    }
+
+    /**
+     * Handler pour les changements de filtres des locations
+     * Le filterState du DataTable est déjà mis à jour dans handleFilterChanged du DataTable
+     * Ici, on appelle simplement le handler du composable pour traiter les filtres côté serveur
+     */
+    const handleLocationFilterChanged = async (filterModel: StandardDataTableParams | any) => {
+        await onLocationFilterChanged(filterModel as StandardDataTableParams)
+    }
+
+    // ===== MÉTHODES UTILITAIRES =====
+
+    /**
+     * Réinitialiser les sélections dans les DataTables via les refs
+     * Appelée après certaines actions pour synchroniser l'état visuel
+     */
+    const resetDataTableSelections = () => {
+        nextTick(() => {
+            if (availableLocationsTableRef.value) {
+                availableLocationsTableRef.value.clearAllSelections()
+            }
+            if (jobsTableRef.value) {
+                jobsTableRef.value.clearAllSelections()
+            }
+        })
+    }
+
+    /**
+     * Supprimer un emplacement d'un job (depuis la table imbriquée)
+     *
+     * @param jobId - ID du job
+     * @param locationReference - Référence de l'emplacement à supprimer
+     */
+    const removeLocationFromNestedTable = async (jobId: string, locationReference: string) => {
+        try {
+            // TODO: Implémenter la logique de suppression d'emplacement
+            await refreshData()
+        } catch (error) {
+            logger.error('Erreur lors de la suppression de l\'emplacement', error)
+            await alertService.error({ text: 'Erreur lors de la suppression de l\'emplacement' })
+        }
+    }
+
+    /**
+     * Créer un job depuis les emplacements sélectionnés (wrapper)
+     */
+    const createSingleJob = async () => {
+        const ok = await createJobFromSelectedLocations()
+        return ok
+    }
+
+    /**
+     * Handler pour la validation en masse des jobs (wrapper)
+     */
+    const onBulkValidateHandler = async () => {
+        await onBulkValidate()
+    }
+
+    // ===== NAVIGATION =====
+
+    /**
+     * Navigation vers la page de détail de l'inventaire
+     */
+    const handleGoToInventoryDetail = () => {
+        router.push({
+            name: 'inventory-detail',
+            params: { reference: inventoryReference }
+        })
+    }
+
+    /**
+     * Navigation vers la page d'affectation
+     */
+    const handleGoToAffectation = () => {
+        router.push({
+            name: 'inventory-affecter',
+            params: {
+                reference: inventoryReference,
+                warehouse: warehouseReference
+            }
+        })
+    }
+
+    // ===== WATCHERS =====
+
+    /**
+     * Flags pour éviter les boucles infinies lors de la réinitialisation des sélections
+     */
+    let isResettingSelections = false
+    let isInitialMount = true
+
+    /**
+     * Watcher pour surveiller les changements de sélection
+     * Réinitialise les DataTables quand les sélections passent de non-vides à vides
+     */
+    watch(
+        () => [selectedAvailableLocations.value.length, selectedJobs.value.length],
+        ([availableLength, jobsLength], [oldAvailableLength, oldJobsLength]) => {
+            // Ignorer le premier déclenchement au montage
+            if (isInitialMount) {
+                isInitialMount = false
+                return
+            }
+
+            // Éviter les boucles infinies
+            if (isResettingSelections) return
+
+            // Si les sélections passent de non-vides à vides, réinitialiser aussi les DataTables
+            if (availableLength === 0 && jobsLength === 0 && (oldAvailableLength > 0 || oldJobsLength > 0)) {
+                isResettingSelections = true
+                resetDataTableSelections()
+                setTimeout(() => {
+                    isResettingSelections = false
+                }, 100)
+            }
+        },
+        { immediate: false }
+    )
+
+    // ===== SETUP EXPANSION JOBS =====
+
+    /**
+     * Configuration de l'expansion des jobs au montage
+     */
+    const setupJobExpansion = () => {
+        // Ajouter event listener pour l'expansion des jobs (seulement sur l'icône)
+        document.addEventListener('click', (event) => {
+            const target = event.target as HTMLElement
+            const chevronIcon = target.closest('.chevron-icon')
+            if (chevronIcon) {
+                const jobId = chevronIcon.getAttribute('data-job-id')
+                if (jobId) {
+                    if (expandedJobIds.value.has(jobId)) {
+                        expandedJobIds.value.delete(jobId)
+                    } else {
+                        expandedJobIds.value.add(jobId)
+                    }
+                    jobsKey.value++
+                }
+            }
+        })
+    }
+
+    // Initialiser au montage
+    onMounted(() => {
+        selectedAvailableLocations.value = []
+        selectedJobs.value = []
+        setupJobExpansion()
+        void initialize()
+    })
 
     // ===== RETURN =====
 
@@ -1444,9 +1700,21 @@ export function usePlanning(options?: PlanningOptions) {
         jobsLoading,
         jobsCurrentPage,
         jobsPageSize,
+
+        // QueryModel Jobs
+        jobsQueryModel: computed(() => jobsQueryModelRef.value),
+        jobsQueryOutputMode: computed(() => jobsQueryOutputMode.value),
+        convertJobsQueryModelToOutput,
+
+        // QueryModel Locations (non implémenté pour l'instant)
+        locationsQueryModel: computed(() => null),
+        locationsQueryOutputMode: computed(() => 'queryParams' as const),
+        convertLocationsQueryModelToOutput: () => ({}),
         jobsSearchQuery,
         jobsSortModel,
-        jobsPagination,
+        jobsFilters, // Exposer les filtres pour synchronisation avec DataTable
+        jobsPagination: jobsPaginationComputed,
+        jobsTotalItems: computed(() => jobStore.totalCount || 0),
         jobsColumns,
         jobsActions,
 
@@ -1458,6 +1726,7 @@ export function usePlanning(options?: PlanningOptions) {
         locationsPageSize,
         locationsSearchQuery,
         locationsSortModel,
+        locationsFilters, // Exposer les filtres pour synchronisation avec DataTable
         locationsPagination: locationsPaginationComputed,
         locationsTotalItems: computed(() => locationStore.totalCount || 0),
         locationsColumns,
@@ -1526,6 +1795,32 @@ export function usePlanning(options?: PlanningOptions) {
         onReturnSelectedJobs,
         onRefreshLocations,
         onRefreshData,
-        onNestedTableFilterChanged
+        onNestedTableFilterChanged,
+
+        // Handlers simplifiés pour la vue
+        handleJobFilterChanged,
+        handleLocationFilterChanged,
+
+        // Computed pour la vue
+        selectedJobsCount,
+        jobsCustomParams,
+        locationsCustomParams,
+
+        // Références DataTable
+        availableLocationsTableRef,
+        jobsTableRef,
+        availableLocationsKey,
+        jobsKey,
+        selectFieldKey,
+
+        // Méthodes utilitaires
+        resetDataTableSelections,
+        removeLocationFromNestedTable,
+        createSingleJob,
+        onBulkValidateHandler,
+
+        // Navigation
+        handleGoToInventoryDetail,
+        handleGoToAffectation
     }
 }

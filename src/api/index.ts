@@ -23,7 +23,7 @@ const API = {
         usersmobile: {
             base: '/masterdata/api/users/mobile/'
         },
-        account: {  
+        account: {
             base: '/masterdata/api/accounts/'
         },
         job: {
@@ -38,6 +38,12 @@ const API = {
         },
         inventoryResults: {
             base: '/web/api/inventory-results/'
+        },
+        article: {
+            base: '/mobile/api/'
+        },
+        countingDetail: {
+            base: '/mobile/api/sync/data/'
         }
     },
 };

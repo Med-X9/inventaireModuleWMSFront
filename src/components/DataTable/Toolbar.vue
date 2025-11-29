@@ -19,16 +19,31 @@
     <div v-else class="actions-container flex items-center justify-end">
         <!-- Gestionnaire de colonnes en premier -->
         <div class="action-group">
-            <div class="column-manager-container">
-                <button @click="toggleColumnManager" class="action-btn" title="Afficher/Masquer les colonnes">
-                    <IconLayout class="w-3.5 h-3.5" />
-                </button>
-                <div v-if="showColumnManager" class="column-manager-modal">
-                    <ColumnManager :columns="columns" :visibleColumns="visibleColumns" :columnWidths="columnWidths"
-                        @columns-changed="handleColumnsChanged" @reorder-columns="handleReorderColumns" @close="showColumnManager = false" />
+            <button @click="toggleColumnManager" class="action-btn" title="Afficher/Masquer les colonnes">
+                <IconLayout class="w-3.5 h-3.5" />
+            </button>
+        </div>
+        
+        <!-- Popup du gestionnaire de colonnes -->
+        <Transition name="popup-fade">
+            <div v-if="showColumnManager" class="column-manager-popup-overlay" @click.self="toggleColumnManager">
+                <div class="column-manager-popup" @click.stop>
+                    <ColumnManager 
+                        :columns="columns" 
+                        :visibleColumns="visibleColumns" 
+                        :columnWidths="columnWidths"
+                        :enableColumnPinning="enableColumnPinning"
+                        :columnPinning="columnPinning"
+                        :stickyHeader="stickyHeader"
+                        @columns-changed="handleColumnsChanged" 
+                        @reorder-columns="handleReorderColumns" 
+                        @pin-column="handlePinColumn"
+                        @sticky-header-changed="handleStickyHeaderChanged"
+                        @close="toggleColumnManager"
+                    />
                 </div>
             </div>
-        </div>
+        </Transition>
 
         <!-- Export avec dropdown amélioré en second -->
         <div class="action-group">
@@ -124,6 +139,9 @@ interface Props {
         excelSelection: boolean
     }
     loading?: boolean
+    enableColumnPinning?: boolean
+    columnPinning?: any
+    stickyHeader?: boolean
 }
 
 interface Emits {
@@ -135,6 +153,8 @@ interface Emits {
     (e: 'export-selected-csv'): void
     (e: 'export-selected-excel'): void
     (e: 'deselect-all'): void
+    (e: 'pin-column', field: string, direction: 'left' | 'right' | null): void
+    (e: 'sticky-header-changed', enabled: boolean): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -147,6 +167,14 @@ const showExportDropdown = ref(false)
 
 const toggleColumnManager = () => {
     showColumnManager.value = !showColumnManager.value
+}
+
+const handlePinColumn = (field: string, direction: 'left' | 'right' | null) => {
+    emit('pin-column', field, direction)
+}
+
+const handleStickyHeaderChanged = (enabled: boolean) => {
+    emit('sticky-header-changed', enabled)
 }
 
 const toggleExportDropdown = () => {
@@ -424,36 +452,75 @@ const deselectAll = () => {
     color: #fecaca;
 }
 
-/* Gestionnaire de colonnes */
-.column-manager-container {
-    position: relative;
-    display: inline-block;
-}
-
 /* Export container */
 .export-container {
     position: relative;
     display: inline-block;
 }
 
-.column-manager-modal {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    z-index: 1000;
-    margin-top: 0.5rem;
-    background-color: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.5rem;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    min-width: 300px;
-    max-width: 500px;
+/* Popup du gestionnaire de colonnes */
+.column-manager-popup-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
 }
 
-.dark .column-manager-modal {
-    background-color: #2d3748;
-    border-color: #4a5568;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+.column-manager-popup {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+    width: 100%;
+    animation: popup-scale 0.2s ease-out;
+    overflow: auto;
+}
+
+@media (max-width: 640px) {
+    .column-manager-popup-overlay {
+        padding: 0.5rem;
+    }
+    
+    .column-manager-popup {
+        max-width: 100vw;
+        max-height: 100vh;
+    }
+}
+
+@keyframes popup-scale {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Transitions pour le popup */
+.popup-fade-enter-active,
+.popup-fade-leave-active {
+    transition: opacity 0.2s ease;
+}
+
+.popup-fade-enter-active .column-manager-popup,
+.popup-fade-leave-active .column-manager-popup {
+    transition: transform 0.2s ease;
+}
+
+.popup-fade-enter-from,
+.popup-fade-leave-to {
+    opacity: 0;
+}
+
+.popup-fade-enter-from .column-manager-popup,
+.popup-fade-leave-to .column-manager-popup {
+    transform: scale(0.95);
 }
 
 /* Transitions */

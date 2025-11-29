@@ -40,15 +40,15 @@
                 </div>
             </div>
 
-            <div v-if="hasActiveFilters" class="active-filters-simple">
-                <div class="filters-counter">
-                    <IconSearch class="w-4 h-4" />
-                    <span class="filters-count-text">{{ activeFiltersCount }} filtre(s) actif(s)</span>
-                </div>
-                <button @click="clearAllFilters" class="clear-filters-btn-simple" title="Effacer tous les filtres">
-                    <IconTrash class="w-4 h-4" />
-                </button>
-            </div>
+            <button 
+                v-if="hasActiveFilters" 
+                @click="clearAllFilters" 
+                class="filter-reset-button" 
+                :title="`${activeFiltersCount} filtre(s) actif(s) - Cliquer pour réinitialiser`">
+                <span class="filter-badge">{{ activeFiltersCount }}</span>
+                <IconTrash class="filter-icon" />
+                <span class="filter-text">Réinitialiser</span>
+            </button>
         </div>
     </template>
 </template>
@@ -77,16 +77,100 @@ const props = withDefaults(defineProps<Props>(), {
 })
 const emit = defineEmits<Emits>()
 
+// Fonction pour vérifier si un filtre est actif (a une valeur non vide)
+const isFilterActive = (filter: any): boolean => {
+    if (!filter) return false
+    
+    // Vérifier différents formats de filtres
+    if (typeof filter === 'string') {
+        return filter.trim() !== ''
+    }
+    
+    if (typeof filter === 'object') {
+        // Format émis par FilterDropdown : { field, operator, dataType, value, values, value2 }
+        // Vérifier d'abord si c'est un objet filtre complet (émis par FilterDropdown)
+        if (filter.field !== undefined || filter.operator !== undefined || filter.dataType !== undefined) {
+            // Format FilterDropdown - vérifier les valeurs possibles
+            // Vérifier d'abord filter.values (pour les filtres select multi-choix)
+            if (filter.values !== undefined && Array.isArray(filter.values)) {
+                return filter.values.length > 0
+            }
+            // Ensuite filter.value (pour les filtres texte/nombre/date simple)
+            if (filter.value !== undefined && filter.value !== null) {
+                if (typeof filter.value === 'string') {
+                    return filter.value.trim() !== ''
+                }
+                if (Array.isArray(filter.value)) {
+                    return filter.value.length > 0
+                }
+                return true
+            }
+            // Ensuite filter.value2 (pour les filtres de plage "entre")
+            if (filter.value2 !== undefined && filter.value2 !== null) {
+                // Si value2 existe, vérifier aussi que value existe pour un filtre "entre" valide
+                return filter.value !== undefined && filter.value !== null
+            }
+            return false
+        }
+        
+        // Format { filter: value }
+        if (filter.filter !== undefined && filter.filter !== null) {
+            if (typeof filter.filter === 'string') {
+                return filter.filter.trim() !== ''
+            }
+            return true
+        }
+        
+        // Format { value: value }
+        if (filter.value !== undefined && filter.value !== null) {
+            if (typeof filter.value === 'string') {
+                return filter.value.trim() !== ''
+            }
+            if (Array.isArray(filter.value)) {
+                return filter.value.length > 0
+            }
+            return true
+        }
+        
+        // Format { values: [] }
+        if (filter.values !== undefined && Array.isArray(filter.values)) {
+            return filter.values.length > 0
+        }
+        
+        // Format { value2: value } (pour les filtres de plage)
+        if (filter.value2 !== undefined && filter.value2 !== null) {
+            return true
+        }
+    }
+    
+    return false
+}
+
 const hasActiveFilters = computed(() => {
-    const filterStateKeys = Object.keys(props.filterState || {})
-    const advancedFiltersKeys = Object.keys(props.advancedFilters || {})
-    return filterStateKeys.length > 0 || advancedFiltersKeys.length > 0
+    // Compter les filtres actifs dans filterState
+    const activeFilterStateCount = Object.keys(props.filterState || {}).filter(key => 
+        isFilterActive(props.filterState[key])
+    ).length
+    
+    // Compter les filtres actifs dans advancedFilters
+    const activeAdvancedFiltersCount = Object.keys(props.advancedFilters || {}).filter(key => 
+        isFilterActive(props.advancedFilters[key])
+    ).length
+    
+    return activeFilterStateCount > 0 || activeAdvancedFiltersCount > 0
 })
 
 const activeFiltersCount = computed(() => {
-    const filterStateKeys = Object.keys(props.filterState || {})
-    const advancedFiltersKeys = Object.keys(props.advancedFilters || {})
-    return filterStateKeys.length + advancedFiltersKeys.length
+    // Compter uniquement les filtres qui ont une valeur active
+    const activeFilterStateCount = Object.keys(props.filterState || {}).filter(key => 
+        isFilterActive(props.filterState[key])
+    ).length
+    
+    const activeAdvancedFiltersCount = Object.keys(props.advancedFilters || {}).filter(key => 
+        isFilterActive(props.advancedFilters[key])
+    ).length
+    
+    return activeFilterStateCount + activeAdvancedFiltersCount
 })
 
 const onSearchInput = (event: Event) => {
@@ -211,68 +295,95 @@ const clearAllFilters = () => {
     color: #f9fafb;
 }
 
-/* Styles pour les filtres actifs simplifiés */
-.active-filters-simple {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0.75rem;
-    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-    border: 1px solid #bae6fd;
-    border-radius: 0.5rem;
-    margin-left: 1rem;
-}
-
-.dark .active-filters-simple {
-    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-    border-color: #3b82f6;
-}
-
-.filters-counter {
-    display: flex;
+/* Bouton de réinitialisation des filtres avec compteur */
+.filter-reset-button {
+    display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    color: #0369a1;
+    padding: 0.625rem 1rem;
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 2px solid #f59e0b;
+    border-radius: 0.5rem;
+    color: #92400e;
     font-size: 0.875rem;
-    font-weight: 500;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-left: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.dark .filters-counter {
-    color: #93c5fd;
+.dark .filter-reset-button {
+    background: linear-gradient(135deg, #78350f 0%, #92400e 100%);
+    border-color: #f59e0b;
+    color: #fde68a;
 }
 
-.filters-count-text {
-    font-size: 0.875rem;
-    font-weight: 500;
+.filter-reset-button:hover {
+    background: linear-gradient(135deg, #fde68a 0%, #fcd34d 100%);
+    border-color: #d97706;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 
-.clear-filters-btn-simple {
-    display: flex;
+.dark .filter-reset-button:hover {
+    background: linear-gradient(135deg, #92400e 0%, #b45309 100%);
+    border-color: #fbbf24;
+    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4);
+}
+
+.filter-reset-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Badge avec le nombre de filtres */
+.filter-badge {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 0.375rem;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    padding: 0 0.375rem;
     background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    border: none;
-    border-radius: 0.375rem;
     color: white;
-    cursor: pointer;
-    transition: all 0.2s;
-    min-width: 32px;
-    height: 32px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
 }
 
-.dark .clear-filters-btn-simple {
+.dark .filter-badge {
     background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+    box-shadow: 0 2px 4px rgba(248, 113, 113, 0.4);
 }
 
-.clear-filters-btn-simple:hover {
-    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+/* Icône de réinitialisation */
+.filter-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
 }
 
-.dark .clear-filters-btn-simple:hover {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+/* Texte du bouton */
+.filter-text {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Animation du badge quand le compteur change */
+.filter-badge {
+    animation: pulse-badge 0.3s ease-in-out;
+}
+
+@keyframes pulse-badge {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
 }
 
 /* Responsive */
@@ -288,9 +399,11 @@ const clearAllFilters = () => {
         width: 100%;
     }
 
-    .active-filters-simple {
+    .filter-reset-button {
         margin-left: 0;
         margin-top: 0.5rem;
+        width: 100%;
+        justify-content: center;
     }
 }
 

@@ -1,12 +1,16 @@
 /**
  * Variables CSS pour le thème WMS
- * Ces variables sont utilisées dans les composants et peuvent être surchargées
+ * 
+ * IMPORTANT: Les valeurs ici sont synchronisées avec src/theme/colors.ts et src/theme/typography.ts
+ * Les variables sont aussi générées automatiquement par Tailwind via tailwind.config.cjs
+ * 
+ * Ce fichier sert de fallback pour les cas où les variables Tailwind ne sont pas disponibles
  * 
  * @module theme/theme.css
  */
 
 :root {
-    /* ===== COULEURS PRINCIPALES ===== */
+    /* ===== COULEURS PRINCIPALES (Source: src/theme/colors.ts) ===== */
     
     /* Primaire - Indigo */
     --color-primary: #4F46E5;
@@ -18,7 +22,7 @@
     --color-secondary-light: #818CF8;
     --color-secondary-dark: #4F46E5;
     
-    /* ===== COULEURS D'ÉTAT ===== */
+    /* ===== COULEURS D'ÉTAT (Source: src/theme/colors.ts) ===== */
     
     /* Erreur - Rouge vif */
     --color-error: #EF4444;
@@ -45,17 +49,15 @@
     --color-info-light: #DBEAFE;
     --color-info-dark: #2563EB;
     
-    /* ===== TYPOGRAPHIE ===== */
+    /* ===== TYPOGRAPHIE - Couleurs de texte (Source: src/theme/colors.ts) ===== */
     
-    /* Couleur du texte */
     --color-text: #0F172A;
     --color-text-light: #475569;
     --color-text-dark: #1E293B;
     --color-text-muted: #64748B;
     
-    /* ===== ARRIÈRE-PLANS ===== */
+    /* ===== ARRIÈRE-PLANS (Source: src/theme/colors.ts) ===== */
     
-    /* Arrière-plan principal */
     --color-bg-app: #F8FAFC;
     --color-bg-card: #FFFFFF;
     --color-bg-hover: #E0E7FF;
@@ -66,20 +68,20 @@
     --color-bg-alert-error: #FEE2E2;
     --color-bg-alert-success: #DCFCE7;
     
-    /* ===== BORDURES ===== */
+    /* ===== BORDURES (Source: src/theme/colors.ts) ===== */
     
     --color-border: #E2E8F0;
     --color-border-light: #F1F5F9;
     --color-border-dark: #334155;
     
-    /* ===== POLICES ===== */
+    /* ===== POLICES (Source: src/theme/typography.ts) ===== */
     
     --font-heading: 'Montserrat', sans-serif;
     --font-body: 'Roboto', sans-serif;
     --font-mono: 'Roboto Mono', monospace;
 }
 
-/* ===== MODE SOMBRE ===== */
+/* ===== MODE SOMBRE (Source: src/theme/colors.ts - darkColors) ===== */
 
 .dark {
     /* Typographie */
@@ -100,7 +102,16 @@
     --color-border-dark: #1E293B;
 }
 
-/* ===== CLASSES UTILITAIRES ===== */
+/* ===== CLASSES UTILITAIRES (Compatibilité avec Tailwind) ===== */
+/* 
+ * NOTE: Ces classes sont maintenant gérées par Tailwind.
+ * Elles sont conservées ici pour compatibilité avec le code existant.
+ * À terme, utiliser uniquement les classes Tailwind :
+ * - .text-primary → text-primary
+ * - .bg-primary → bg-primary
+ * - .bg-app → bg-app
+ * - .font-heading → font-heading
+ */
 
 /* Couleurs de texte */
 .text-primary {
@@ -201,4 +212,3 @@
 .font-mono {
     font-family: var(--font-mono);
 }
-

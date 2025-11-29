@@ -26,7 +26,7 @@
 
         <!-- Table normale quand pas de chargement -->
         <table v-else class="data-table">
-            <thead>
+            <thead :class="{ 'sticky-header': props.stickyHeader }">
                 <tr>
                     <!-- Colonne de sélection multiple si activée -->
                     <th v-if="rowSelection" class="selection-header">
@@ -34,7 +34,17 @@
                             class="select-all-checkbox-input" />
                     </th>
                     <!-- En-têtes de colonnes avec contrôles de tri et filtrage -->
-                    <th v-for="col in columns" :key="col.field" class="column-header">
+                    <th v-for="(col, colIndex) in columns" :key="col.field" 
+                        class="column-header"
+                        :class="{
+                            'pinned-left': props.enableColumnPinning && props.columnPinning?.getPinDirection(col.field) === 'left',
+                            'pinned-right': props.enableColumnPinning && props.columnPinning?.getPinDirection(col.field) === 'right'
+                        }"
+                        :style="props.enableColumnPinning && props.columnPinning?.getPinDirection(col.field) ? {
+                            position: 'sticky',
+                            zIndex: 10,
+                            [props.columnPinning.getPinDirection(col.field) === 'left' ? 'left' : 'right']: getPinnedColumnOffset(col.field, props.columnPinning.getPinDirection(col.field))
+                        } : {}">
                         <div class="header-content">
                             <span class="header-title">{{ col.headerName || col.field }}</span>
 
@@ -65,9 +75,12 @@
 
                         <!-- Filtre inline avec positionnement relatif -->
                         <div v-if="showFilter === col.field" class="filter-dropdown-container">
-                            <FilterDropdown :column="col"
-                                :isVisible="showFilter === col.field" :currentFilter="activeFilters[col.field]"
-                                @apply="applyFilter" @clear="() => clearFilter(col.field)"
+                            <FilterDropdown 
+                                :column="col"
+                                :isVisible="showFilter === col.field" 
+                                :currentFilter="activeFilters[col.field]"
+                                @apply="applyFilter" 
+                                @clear="() => clearFilter(col.field)"
                                 @close="() => closeFilter(col.field)" />
                         </div>
                     </th>
@@ -94,7 +107,17 @@
                                 @change="(e) => toggleRowSelection(getRowId(row, rowIndex))" />
                         </td>
                         <!-- Cellules de données avec support des slots personnalisés -->
-                        <td v-for="col in columns" :key="col.field" class="data-cell">
+                        <td v-for="col in columns" :key="col.field" 
+                            class="data-cell"
+                            :class="{
+                                'pinned-left': props.enableColumnPinning && props.columnPinning?.getPinDirection(col.field) === 'left',
+                                'pinned-right': props.enableColumnPinning && props.columnPinning?.getPinDirection(col.field) === 'right'
+                            }"
+                            :style="props.enableColumnPinning && props.columnPinning?.getPinDirection(col.field) ? {
+                                position: 'sticky',
+                                zIndex: 5,
+                                [props.columnPinning.getPinDirection(col.field) === 'left' ? 'left' : 'right']: getPinnedColumnOffset(col.field, props.columnPinning.getPinDirection(col.field))
+                            } : {}">
                             <!-- Correction pour la colonne de numérotation -->
                             <template v-if="col.field === '__rowNumber__'">
                                 <span class="row-number">
@@ -188,7 +211,7 @@ import NestedDataCell from './cells/NestedDataCell.vue'
 import SafeEditableCell from './cells/SafeEditableCell.vue'
 import AdvancedEditableCell from './cells/AdvancedEditableCell.vue'
 import FilterDropdown from './filters/FilterDropdown.vue'
-import { cellRenderersService } from '@/services/cellRenderers'
+import { cellRenderersService } from './services/cellRenderers'
 import { logger } from '@/services/loggerService'
 import { ref, onMounted, computed, watch, nextTick, provide, toRef } from 'vue'
 import IconSortBoth from '../icon/icon-sort-both.vue'
@@ -216,6 +239,11 @@ interface Props {
     pageSize: number
     // Ajout de la prop pour l'indexation globale
     globalStartIndex: number
+    // Props pour le pinning des colonnes
+    columnPinning?: any
+    enableColumnPinning?: boolean
+    // Prop pour le header sticky
+    stickyHeader?: boolean
 }
 
 /**
@@ -235,7 +263,9 @@ const props = withDefaults(defineProps<Props>(), {
     // Ajout de la prop pour l'indexation globale
     globalStartIndex: 0,
     // PaginatedData doit avoir une valeur par défaut
-    paginatedData: () => []
+    paginatedData: () => [],
+    // Props pour le pinning
+    enableColumnPinning: false
 })
 
 // Fournir les données paginées pour les filtres (évite de passer via prop)
@@ -584,6 +614,52 @@ const getSortTooltip = (field: string): string => {
     return 'Annuler le tri'
 }
 
+/**
+ * Calcule l'offset pour une colonne épinglée
+ * 
+ * @param field - Champ de la colonne
+ * @param direction - Direction du pinning ('left' ou 'right')
+ * @returns Offset en pixels
+ */
+const getPinnedColumnOffset = (field: string, direction: 'left' | 'right' | null): number => {
+    if (!props.enableColumnPinning || !props.columnPinning || !direction) {
+        return 0
+    }
+
+    const columns = props.columns
+    let offset = 0
+
+    if (direction === 'left') {
+        // Calculer l'offset en additionnant les largeurs des colonnes épinglées à gauche avant celle-ci
+        const currentIndex = columns.findIndex(col => col.field === field)
+        for (let i = 0; i < currentIndex; i++) {
+            const col = columns[i]
+            if (props.columnPinning.getPinDirection(col.field) === 'left') {
+                offset += col.width || 150 // Utiliser la largeur de la colonne ou une valeur par défaut
+            }
+        }
+        // Ajouter l'offset pour la colonne de sélection si elle existe
+        if (props.rowSelection) {
+            offset += 50 // Largeur approximative de la colonne de sélection
+        }
+    } else if (direction === 'right') {
+        // Calculer l'offset en additionnant les largeurs des colonnes épinglées à droite après celle-ci
+        const currentIndex = columns.findIndex(col => col.field === field)
+        for (let i = currentIndex + 1; i < columns.length; i++) {
+            const col = columns[i]
+            if (props.columnPinning.getPinDirection(col.field) === 'right') {
+                offset += col.width || 150
+            }
+        }
+        // Ajouter l'offset pour la colonne d'actions si elle existe
+        if (props.actions && props.actions.length > 0) {
+            offset += 100 // Largeur approximative de la colonne d'actions
+        }
+    }
+
+    return offset
+}
+
 // ===== MÉTHODES DE FILTRAGE =====
 
 /**
@@ -909,6 +985,8 @@ watch(() => props.paginatedData, (newData, oldData) => {
 
 .table-container {
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: calc(100vh - 300px);
     border: 1px solid #e9ecef;
     border-radius: 0.375rem;
     background-color: #ffffff;
@@ -923,6 +1001,29 @@ watch(() => props.paginatedData, (newData, oldData) => {
 .dark .table-container {
     background-color: #1a202c;
     border-color: #4a5568;
+}
+
+/* Header sticky */
+thead.sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background-color: #ffffff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+thead.sticky-header th {
+    background-color: #ffffff;
+    position: sticky;
+    top: 0;
+}
+
+.dark thead.sticky-header {
+    background-color: #1a202c;
+}
+
+.dark thead.sticky-header th {
+    background-color: #1a202c;
 }
 
 .data-table {
@@ -959,6 +1060,31 @@ th {
 }
 
 /* Permettre l'overflow visible pour les th qui contiennent des dropdowns */
+/* Styles pour les colonnes épinglées */
+.column-header.pinned-left,
+.data-cell.pinned-left {
+    background-color: #ffffff;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+}
+
+.dark .column-header.pinned-left,
+.dark .data-cell.pinned-left {
+    background-color: #1a202c;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.3);
+}
+
+.column-header.pinned-right,
+.data-cell.pinned-right {
+    background-color: #ffffff;
+    box-shadow: -2px 0 4px rgba(0, 0, 0, 0.1);
+}
+
+.dark .column-header.pinned-right,
+.dark .data-cell.pinned-right {
+    background-color: #1a202c;
+    box-shadow: -2px 0 4px rgba(0, 0, 0, 0.3);
+}
+
 .column-header {
     overflow: visible !important;
     position: relative;

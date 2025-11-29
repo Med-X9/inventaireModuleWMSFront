@@ -8,11 +8,12 @@ import API from '@/api';
 import { PlanningManagementResponse } from '@/models/PlanningManagement';
 import { logger } from '@/services/loggerService';
 import {
-    buildDataTableParams,
     processDataTableResponse,
-    type DataTableParams,
     type DataTableResponse
 } from '@/utils/dataTableUtils';
+import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter';
+import { buildStandardParamsUrl, normalizeToStandardParams } from '@/components/DataTable/utils/dataTableParamsConverter';
+import type { QueryModel } from '@/components/DataTable/types/QueryModel';
 
 export const useInventoryStore = defineStore('inventory', () => {
     // State
@@ -30,43 +31,94 @@ export const useInventoryStore = defineStore('inventory', () => {
     const currentPage = ref(1);
     const pageSize = ref(20);
 
-    // États pour le tri et le filtrage
-    const currentSortModel = ref<Array<{ colId: string; sort: 'asc' | 'desc' }>>([]);
-    const currentFilterModel = ref<Record<string, any>>({}); // Changé pour accepter les filtres transformés
-    const currentGlobalSearch = ref<string>('');
-
     // Getters
     const getCurrentInventory = computed(() => currentInventory.value);
     const getCurrentInventoryDetail = computed(() => currentInventoryDetail.value);
     const isLoading = computed(() => loading.value);
     const getError = computed(() => error.value);
 
-    // Actions
-    const fetchInventories = async (params?: DataTableParams): Promise<DataTableResponse<InventoryTable>> => {
+    // ===== FONCTIONS UTILITAIRES =====
+
+    /**
+     * Gère les erreurs de manière uniforme avec extraction du message d'erreur backend
+     */
+    const handleError = (err: unknown, defaultMessage: string): never => {
+        let errorMessage = defaultMessage;
+
+        if (err && typeof err === 'object' && 'response' in err) {
+            const response = (err as any).response;
+            if (response?.data) {
+                const backendData = response.data;
+                if (backendData.message) {
+                    errorMessage = backendData.message;
+                } else if (backendData.detail) {
+                    errorMessage = backendData.detail;
+                } else if (backendData.error) {
+                    errorMessage = backendData.error;
+                } else if (Array.isArray(backendData.errors)) {
+                    const errorMessages = backendData.errors
+                        .map((errItem: any) => {
+                            if (typeof errItem === 'string') {
+                                return errItem;
+                            }
+                            if (errItem?.message) {
+                                return errItem.message;
+                            }
+                            if (errItem?.field && errItem?.message) {
+                                return `${errItem.field}: ${errItem.message}`;
+                            }
+                            return null;
+                        })
+                        .filter((msg: string | null): msg is string => msg !== null);
+                    if (errorMessages.length > 0) {
+                        errorMessage = errorMessages.join(' | ');
+                    }
+                } else if (typeof backendData === 'string') {
+                    errorMessage = backendData;
+                }
+            }
+        } else if (err instanceof Error) {
+            errorMessage = err.message;
+        }
+
+        error.value = errorMessage;
+        throw err;
+    };
+
+    // ===== ACTIONS =====
+    // 🚀 Accepte QueryModel ou StandardDataTableParams - conversion automatique
+    const fetchInventories = async (
+        params?: QueryModel | StandardDataTableParams
+    ): Promise<DataTableResponse<InventoryTable>> => {
         loading.value = true;
         error.value = null;
         try {
-            // Construire les paramètres DataTable au format Django
-            const queryParams = buildDataTableParams({
-                page: params?.page || currentPage.value,
-                pageSize: params?.pageSize || pageSize.value,
-                globalSearch: params?.globalSearch,
-                sort: params?.sort,
-                filter: params?.filter
-            });
+            // Normaliser les paramètres (détecte et convertit QueryModel si nécessaire)
+            // Note: Les colonnes ne sont pas disponibles ici, mais le DataTable a déjà converti
+            // QueryModel -> StandardDataTableParams avant d'appeler le store
+            const standardParams: StandardDataTableParams = normalizeToStandardParams(
+                params,
+                {
+                    draw: 1,
+                    defaultPage: currentPage.value,
+                    defaultPageSize: pageSize.value
+                }
+            );
 
-            // Construire l'URL avec les paramètres DataTable
+            // Construire l'URL avec les paramètres StandardDataTableParams
+            // Utiliser buildStandardParamsUrl pour préserver les crochets dans les noms de paramètres
             const baseUrl = API.endpoints.inventory?.base;
-            const url = `${baseUrl}?${queryParams.toString()}`;
+            const queryString = buildStandardParamsUrl(standardParams);
+            const url = `${baseUrl}?${queryString}`;
 
-            // Appeler l'API avec les paramètres DataTable
+            // Appeler l'API avec les paramètres StandardDataTableParams
             const responseData = await InventoryService.getAllByUrl(url);
 
             const inventoryData = responseData.data || [];
             inventories.value = inventoryData;
             totalItems.value = responseData.recordsFiltered || inventoryData.length;
 
-            // Retourner le format attendu par useGenericDataTable
+            // Retourner le format attendu
             return {
                 draw: responseData.draw || 1,
                 data: inventoryData,
@@ -74,78 +126,15 @@ export const useInventoryStore = defineStore('inventory', () => {
                 recordsFiltered: responseData.recordsFiltered || inventoryData.length
             };
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la récupération des inventaires';
+            const errorMessage = err instanceof Error
+                ? err.message
+                : err?.response?.data?.message || 'Erreur lors de la récupération des inventaires';
+            error.value = errorMessage;
+            loading.value = false;
             throw err;
         } finally {
             loading.value = false;
         }
-    };
-
-    // Méthodes pour gérer le tri
-    const updateSortModel = (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }>) => {
-        currentSortModel.value = sortModel;
-        // Recharger les données avec le nouveau tri
-        return fetchInventories({
-            page: 1, // Retour à la première page lors d'un nouveau tri
-            pageSize: pageSize.value,
-            sort: sortModel,
-            filter: currentFilterModel.value,
-            globalSearch: currentGlobalSearch.value
-        });
-    };
-
-    // Méthodes pour gérer le filtrage
-    const updateFilterModel = (filterModel: Record<string, any>) => { // Changé pour accepter les filtres transformés
-        currentFilterModel.value = filterModel;
-        // Recharger les données avec le nouveau filtre
-        return fetchInventories({
-            page: 1, // Retour à la première page lors d'un nouveau filtre
-            pageSize: pageSize.value,
-            sort: currentSortModel.value,
-            filter: filterModel,
-            globalSearch: currentGlobalSearch.value
-        });
-    };
-
-    // Méthodes pour gérer la recherche globale
-    const updateGlobalSearch = (searchTerm: string) => {
-        currentGlobalSearch.value = searchTerm;
-        // Recharger les données avec la nouvelle recherche
-        return fetchInventories({
-            page: 1, // Retour à la première page lors d'une nouvelle recherche
-            pageSize: pageSize.value,
-            sort: currentSortModel.value,
-            filter: currentFilterModel.value,
-            globalSearch: searchTerm
-        });
-    };
-
-    // Méthodes pour gérer la pagination
-    const updatePagination = (page: number, newPageSize?: number) => {
-        if (newPageSize) {
-            pageSize.value = newPageSize;
-        }
-        currentPage.value = page;
-        return fetchInventories({
-            page,
-            pageSize: newPageSize || pageSize.value,
-            sort: currentSortModel.value,
-            filter: currentFilterModel.value,
-            globalSearch: currentGlobalSearch.value
-        });
-    };
-
-    // Méthodes pour réinitialiser les filtres
-    const clearFilters = () => {
-        currentFilterModel.value = {};
-        currentGlobalSearch.value = '';
-        return fetchInventories({
-            page: 1,
-            pageSize: pageSize.value,
-            sort: currentSortModel.value,
-            filter: {},
-            globalSearch: ''
-        });
     };
 
     const fetchInventoryById = async (id: number | string) => {
@@ -156,8 +145,7 @@ export const useInventoryStore = defineStore('inventory', () => {
             currentInventoryDetails.value = response.data.data;
             return response.data.data;
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la récupération de l\'inventaire';
-            throw err;
+            handleError(err, 'Erreur lors de la récupération de l\'inventaire');
         } finally {
             loading.value = false;
         }
@@ -172,13 +160,11 @@ export const useInventoryStore = defineStore('inventory', () => {
             currentInventoryDetails.value = response.data.data;
             return response.data.data;
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la récupération de l\'inventaire';
-            throw err;
+            handleError(err, 'Erreur lors de la récupération de l\'inventaire');
         } finally {
             loading.value = false;
         }
     };
-
 
     const fetchInventoryDetail = async (id: number | string) => {
         loading.value = true;
@@ -194,8 +180,7 @@ export const useInventoryStore = defineStore('inventory', () => {
                 throw new Error(response.data.message || 'Erreur lors de la récupération des détails');
             }
         } catch (err: any) {
-            error.value = err.response?.data?.message || err.message || 'Erreur lors de la récupération de l\'inventaire';
-            throw err;
+            handleError(err, 'Erreur lors de la récupération des détails de l\'inventaire');
         } finally {
             loading.value = false;
         }
@@ -210,8 +195,7 @@ export const useInventoryStore = defineStore('inventory', () => {
             const response = await InventoryService.create(data);
             return response.data;
         } catch (err: any) {
-            error.value = err.message || 'Erreur lors de la création';
-            throw err;
+            handleError(err, 'Erreur lors de la création de l\'inventaire');
         } finally {
             loading.value = false;
         }
@@ -224,8 +208,7 @@ export const useInventoryStore = defineStore('inventory', () => {
             const response: AxiosResponse<InventoryTable> = await InventoryService.update(id, data);
             return response.data;
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la mise à jour de l\'inventaire';
-            throw err;
+            handleError(err, 'Erreur lors de la mise à jour de l\'inventaire');
         } finally {
             loading.value = false;
         }
@@ -241,8 +224,7 @@ export const useInventoryStore = defineStore('inventory', () => {
                 currentInventory.value = null;
             }
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la suppression de l\'inventaire';
-            throw err;
+            handleError(err, 'Erreur lors de la suppression de l\'inventaire');
         } finally {
             loading.value = false;
         }
@@ -264,8 +246,7 @@ export const useInventoryStore = defineStore('inventory', () => {
 
             fetchInventories();
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors du lancement de l\'inventaire';
-            throw err;
+            handleError(err, 'Erreur lors du lancement de l\'inventaire');
         } finally {
             loading.value = false;
         }
@@ -278,8 +259,7 @@ export const useInventoryStore = defineStore('inventory', () => {
             await InventoryService.cancel(id);
             fetchInventories();
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de l\'annulation de l\'inventaire';
-            throw err;
+            handleError(err, 'Erreur lors de l\'annulation de l\'inventaire');
         } finally {
             loading.value = false;
         }
@@ -292,8 +272,7 @@ export const useInventoryStore = defineStore('inventory', () => {
             await InventoryService.terminate(id);
             fetchInventories();
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la terminaison de l\'inventaire';
-            throw err;
+            handleError(err, 'Erreur lors de la terminaison de l\'inventaire');
         } finally {
             loading.value = false;
         }
@@ -306,8 +285,7 @@ export const useInventoryStore = defineStore('inventory', () => {
             await InventoryService.close(id);
             fetchInventories();
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de la clôture de l\'inventaire';
-            throw err;
+            handleError(err, 'Erreur lors de la clôture de l\'inventaire');
         } finally {
             loading.value = false;
         }
@@ -339,8 +317,7 @@ export const useInventoryStore = defineStore('inventory', () => {
             };
         } catch (err: any) {
             logger.error('Erreur dans fetchPlanningManagement', err);
-            error.value = err.response?.data?.message || 'Erreur lors de la récupération des statistiques de planning';
-            throw err;
+            handleError(err, 'Erreur lors de la récupération des statistiques de planning');
         } finally {
             loading.value = false;
         }
@@ -353,8 +330,7 @@ export const useInventoryStore = defineStore('inventory', () => {
             const response = await InventoryService.importStocks(id, formData);
             return response.data;
         } catch (err: any) {
-            error.value = err.response?.data?.message || 'Erreur lors de l\'import du stock';
-            throw err;
+            handleError(err, 'Erreur lors de l\'import du stock');
         } finally {
             loading.value = false;
         }
@@ -388,11 +364,6 @@ export const useInventoryStore = defineStore('inventory', () => {
 
         // Actions
         fetchInventories,
-        updateSortModel,
-        updateFilterModel,
-        updateGlobalSearch,
-        updatePagination,
-        clearFilters,
         fetchInventoryById,
         fetchInventoryDetail,
         createInventory,

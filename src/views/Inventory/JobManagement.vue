@@ -56,6 +56,7 @@
                 :rowSelection="true"
                 :enableFiltering="true"
                 :enableGlobalSearch="true"
+                storageKey="job_management_table"
                 @pagination-changed="onPaginationChanged"
                 @sort-changed="onSortChanged"
                 @filter-changed="onFilterChanged"

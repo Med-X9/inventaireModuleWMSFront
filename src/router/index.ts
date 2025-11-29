@@ -111,6 +111,17 @@ const routes: RouteRecordRaw[] = [
             import(/* webpackChunkName: "inventory-job-management" */ '../views/Inventory/JobManagement.vue'),
         meta: { requiresAuth: true },
     },
+    {
+        path: '/inventory/:inventoryId/:warehouseId/monitoring',
+        name: 'inventory-monitoring',
+        component: () =>
+            import(/* webpackChunkName: "inventory-monitoring" */ '../views/Inventory/Monitoring.vue'),
+        props: route => ({
+            inventoryId: route.params.inventoryId as string,
+            warehouseId: route.params.warehouseId as string
+        }),
+        meta: { requiresAuth: true, layout: 'monitoring' },
+    },
 
     // Auth (login)
     {

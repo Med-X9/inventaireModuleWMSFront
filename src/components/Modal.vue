@@ -4,12 +4,12 @@
         <div :class="containerClasses">
             <!-- Overlay semi-transparent -->
             <div class="fixed inset-0 transition-opacity" @click="close">
-                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+                <div class="absolute inset-0 bg-text-dark opacity-75"></div>
             </div>
 
             <div :class="modalClasses" role="dialog" aria-modal="true" aria-labelledby="modal-headline">
                 <button type="button"
-                    class="absolute top-3 right-3 text-gray-500 hover:text-gray-700 focus:outline-none z-10" @click="close"
+                    class="absolute top-3 right-3 text-text-muted hover:text-text-dark focus:outline-none z-10" @click="close"
                     aria-label="Close modal">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
                         stroke="currentColor">
@@ -19,7 +19,7 @@
                 </button>
                 <div class="sm:flex mt-6 sm:items-start h-full">
                     <div class="mt-4 text-center sm:mt-0 sm:text-left w-full h-full flex flex-col">
-                        <h3 v-if="title" class="text-lg leading-6 font-medium text-gray-900 mb-6 mt-2 flex-shrink-0"
+                        <h3 v-if="title" class="text-lg leading-6 font-medium text-text-dark font-heading mb-6 mt-2 flex-shrink-0"
                             id="modal-headline">
                             {{ title }}
                         </h3>
@@ -92,7 +92,7 @@ const containerClasses = computed(() => {
 <style scoped>
 /* Styles spécifiques pour la modal fullscreen */
 .panel {
-    background: white;
+    background: var(--color-bg-card);
 }
 
 /* Pour la modal fullscreen, on retire les marges et on prend tout l'écran */

@@ -109,6 +109,28 @@
                         </Transition>
                     </div>
 
+                    <!-- Bouton Manuel -->
+                    <button
+                        v-if="showManualButton"
+                        @click="handleManualClick"
+                        class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span>Manuel</span>
+                    </button>
+
+                    <!-- Bouton Transférer -->
+                    <button
+                        v-if="showTransferButton"
+                        @click="handleTransferClick"
+                        class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                        <span>Transférer</span>
+                    </button>
+
                     <!-- Bouton Sauvegarder -->
                     <button
                         @click="saveAllChanges"
@@ -126,6 +148,23 @@
                         </span>
                     </button>
 
+                    <!-- Bouton Réinitialiser -->
+                    <button
+                        @click="resetAllChanges"
+                        :disabled="!hasUnsavedChanges"
+                        class="flex items-center justify-center gap-2 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                        :class="hasUnsavedChanges
+                            ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-md hover:shadow-lg focus:ring-red-500'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <span>Réinitialiser</span>
+                        <span v-if="hasUnsavedChanges" class="bg-white text-red-600 px-2 py-0.5 rounded-full text-xs font-bold">
+                            {{ Array.from(pendingChanges.values()).reduce((total, changes) => total + changes.size, 0) }}
+                        </span>
+                    </button>
+
                     <!-- Bouton Pret -->
                     <button
                         v-if="showReadyButton"
@@ -137,19 +176,9 @@
                         <span>Pret</span>
                     </button>
 
-                    <!-- Bouton Transférer -->
-                    <button
-                        v-if="showTransferButton"
-                        @click="handleTransferClick"
-                        class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                        </svg>
-                        <span>Transférer</span>
-                    </button>
-
                     <!-- Bouton Annuler -->
                     <button
+                        v-if="showResetButton"
                         @click="handleResetClick"
                         class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -177,6 +206,7 @@
                 :serverSideSorting="true"
                 :debounceFilter="500"
                 :loading="loading"
+                :pageSizeProp="pageSize"
                 @selection-changed="onSelectionChanged"
                 @row-clicked="onRowClicked"
                 @cell-value-changed="onCellValueChanged"
@@ -345,6 +375,141 @@
                 </div>
             </div>
         </Modal>
+
+        <Modal v-model="showManualModal" :title="`Lancer manuellement ${eligibleJobsForManual.length} Job(s)`" :size="'xl'">
+            <div class="flex flex-col" style="height: 75vh; max-height: 75vh;">
+                <!-- Section 1: Header et alert -->
+                <div class="flex-shrink-0 mb-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-base font-semibold text-slate-700 dark:text-slate-300">
+                            Jobs éligibles pour le lancement manuel
+                        </h3>
+                        <div class="flex items-center gap-2">
+                            <span class="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 text-xs font-medium rounded-full">
+                                {{ eligibleJobsForManual.length }} éligible(s)
+                            </span>
+                            <span
+                                v-if="selectedRows.length - eligibleJobsForManual.length > 0"
+                                class="px-3 py-1 bg-warning-100 dark:bg-warning-900/30 text-warning-800 dark:text-warning-400 text-xs font-medium rounded-full">
+                                {{ selectedRows.length - eligibleJobsForManual.length }} exclu(s)
+                            </span>
+                        </div>
+                    </div>
+                    <!-- Alert pour les jobs exclus -->
+                    <div
+                        v-if="selectedRows.length - eligibleJobsForManual.length > 0"
+                        class="p-3 bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-800 rounded-lg">
+                        <div class="flex items-start">
+                            <svg class="w-5 h-5 text-warning-600 dark:text-warning-400 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            <div class="flex-1">
+                                <p class="text-sm font-medium text-warning-800 dark:text-warning-300">
+                                    {{ selectedRows.length - eligibleJobsForManual.length }} job(s) ne sont pas éligibles pour le lancement manuel
+                                </p>
+                                <p class="text-xs text-warning-700 dark:text-warning-400 mt-1">
+                                    Seuls les jobs en statut PRET, TRANSFERT ou ENTAME peuvent être lancés manuellement.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Liste des jobs -->
+                <div class="flex-1 min-h-0 mb-4">
+                    <div class="h-full overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                        <div class="h-full overflow-y-auto custom-scrollbar">
+                            <div class="divide-y divide-slate-200 dark:divide-slate-700">
+                                <div
+                                    v-for="job in eligibleJobsForManual"
+                                    :key="job.id"
+                                    class="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                    <div class="flex items-center justify-between gap-4">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="font-medium text-slate-900 dark:text-white truncate">{{ job.job }}</div>
+                                            <div class="flex items-center gap-3 mt-1">
+                                                <span class="text-xs text-slate-500 dark:text-slate-400">
+                                                    <svg class="w-3.5 h-3.5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                                    </svg>
+                                                    {{ job.locations?.length || 0 }} emplacement(s)
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="flex-shrink-0">
+                                            <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                                :class="{
+                                                    'bg-warning-100 text-warning-800 dark:bg-warning-900/30 dark:text-warning-400': job.status === 'PRET',
+                                                    'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400': job.status === 'TRANSFERT',
+                                                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400': job.status === 'ENTAME'
+                                                }">
+                                                {{ job.status }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Divider -->
+                <div class="border-t border-slate-200 dark:border-slate-700 my-4"></div>
+
+                <!-- Formulaire de sélection du comptage -->
+                <div class="flex-shrink-0 bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-lg p-4 mb-4">
+                    <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                        </svg>
+                        Sélectionner le(s) comptage(s) à lancer manuellement
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label class="flex items-center p-3 bg-white dark:bg-slate-800 rounded-lg border-2 transition-all cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-700"
+                            :class="manualForm.premierComptage ? 'border-indigo-500 dark:border-indigo-600' : 'border-slate-200 dark:border-slate-700'">
+                            <input
+                                type="checkbox"
+                                v-model="manualForm.premierComptage"
+                                class="w-5 h-5 text-indigo-600 bg-slate-100 border-slate-300 rounded focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:ring-2 dark:bg-slate-700 dark:border-slate-600">
+                            <div class="ml-3 flex-1">
+                                <div class="text-sm font-medium text-slate-900 dark:text-white">1er Comptage</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">Lancement du premier comptage</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center p-3 bg-white dark:bg-slate-800 rounded-lg border-2 transition-all cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-700"
+                            :class="manualForm.deuxiemeComptage ? 'border-indigo-500 dark:border-indigo-600' : 'border-slate-200 dark:border-slate-700'">
+                            <input
+                                type="checkbox"
+                                v-model="manualForm.deuxiemeComptage"
+                                class="w-5 h-5 text-indigo-600 bg-slate-100 border-slate-300 rounded focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:ring-2 dark:bg-slate-700 dark:border-slate-600">
+                            <div class="ml-3 flex-1">
+                                <div class="text-sm font-medium text-slate-900 dark:text-white">2e Comptage</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">Lancement du deuxième comptage</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Boutons d'action -->
+                <div class="flex-shrink-0 flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <button
+                        @click="showManualModal = false"
+                        class="px-6 py-2.5 text-sm font-medium text-slate-700 bg-white border-2 border-slate-300 rounded-lg hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 dark:hover:bg-slate-700 transition-colors">
+                        Annuler
+                    </button>
+                    <button
+                        @click="handleManualSubmit({
+                            premierComptage: manualForm.premierComptage,
+                            deuxiemeComptage: manualForm.deuxiemeComptage
+                        })"
+                        :disabled="!manualForm.premierComptage && !manualForm.deuxiemeComptage"
+                        class="px-6 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-lg hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transform transition-all hover:scale-105 shadow-md hover:shadow-lg">
+                        Lancer {{ eligibleJobsForManual.length }} Job(s)
+                    </button>
+                </div>
+            </div>
+        </Modal>
     </div>
 </template>
 
@@ -402,6 +567,7 @@ const {
     showTeamModal,
     showResourceModal,
     showTransferModal,
+    showManualModal,
     modalTitle,
     teamForm,
     teamFields,
@@ -409,8 +575,10 @@ const {
     resourceFields,
     transferForm,
     transferFields,
+    manualForm,
     dropdownItems,
     saveAllChanges,
+    resetAllChanges,
     onCellValueChanged,
     onSelectionChanged,
     onRowClicked,
@@ -423,12 +591,15 @@ const {
     handleResourceSubmit,
     handleTeamSubmit,
     handleTransferSubmit,
+    handleManualSubmit,
     handleReadyClick,
     handleResetClick,
     handleGoToInventoryDetail,
     handleGoToAffectation,
     handleTransferClick,
+    handleManualClick,
     currentPage,
+    pageSize,
     totalPages,
     totalItems,
     loading,
@@ -440,11 +611,14 @@ const {
     inventoryReference,
     warehouseReference,
     eligibleJobsForTransfer,
+    eligibleJobsForManual,
     columns,
     sessionOptions,
     resourceOptions,
     showTransferButton,
+    showManualButton,
     showReadyButton,
+    showResetButton,
     dateValueParser,
     dateValueSetter,
 } = affecter

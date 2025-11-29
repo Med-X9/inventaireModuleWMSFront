@@ -88,14 +88,6 @@
                 </div>
             </div>
         </nav>
-
-        <!-- Debug: afficher les items pour diagnostiquer -->
-        <div v-if="showDebug" class="p-2 bg-gray-100 text-xs overflow-x-auto">
-            <strong>Debug breadcrumb:</strong>
-            <pre class="whitespace-pre-wrap break-words">{{ JSON.stringify(items, null, 2) }}</pre>
-            <strong>Debug inventory steps:</strong>
-            <pre class="whitespace-pre-wrap break-words">{{ JSON.stringify(inventorySteps, null, 2) }}</pre>
-        </div>
     </div>
 </template>
 
@@ -112,12 +104,9 @@ type BreadcrumbItem = {
 
 interface Props {
     items: BreadcrumbItem[];
-    showDebug?: boolean;
 }
 
-const props = withDefaults(defineProps<Props>(), {
-    showDebug: false
-});
+const props = defineProps<Props>();
 
 const route = useRoute();
 const { inventorySteps, shouldShowSteps, updateStatusFromInventory } = useInventoryStatus();
@@ -139,11 +128,14 @@ onMounted(async () => {
     await updateStatusFromInventory();
 });
 
-// Mettre à jour le statut quand l'ID de l'inventaire change
+// Mettre à jour le statut quand la référence de l'inventaire change
 watch(
-    () => route.params.id,
-    async () => {
-        await updateStatusFromInventory();
+    () => route.params.reference,
+    async (newReference, oldReference) => {
+        // Mettre à jour seulement si la référence a changé
+        if (newReference !== oldReference) {
+            await updateStatusFromInventory();
+        }
     },
     { immediate: false }
 );

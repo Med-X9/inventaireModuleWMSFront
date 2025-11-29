@@ -28,7 +28,10 @@ import { useAppStore } from '@/stores'
 import { useBackendDataTable } from '@/components/DataTable/composables/useBackendDataTable'
 
 // ===== IMPORTS UTILS =====
-import { type StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
+import { type StandardDataTableParams, convertToStandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
+import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
+import { convertQueryModelToQueryParams, convertQueryModelToRestApi, createQueryModelFromDataTableParams } from '@/components/DataTable/utils/queryModelConverter'
+import type { QueryModel } from '@/components/DataTable/types/QueryModel'
 import type { LocationDataTableParams } from '@/services/LocationService'
 
 // ===== IMPORTS TYPES =====
@@ -128,10 +131,73 @@ export function usePlanningManagement() {
         piniaStore: inventoryStore,
         storeId: 'inventory',
         autoLoad: false,
-        pageSize: 25
+        pageSize: 20
     })
 
+    // ===== QUERYMODEL =====
+    
+    /**
+     * Mode de sortie pour les paramètres de requête (défaut: 'queryParams')
+     */
+    const queryOutputMode = ref<'queryModel' | 'dataTable' | 'restApi' | 'queryParams'>('queryParams')
+
+    /**
+     * Colonnes pour QueryModel
+     */
+    const columnsRef = computed(() => adaptedColumns.value)
+
+    /**
+     * QueryModel pour gérer les requêtes avec mode de sortie configurable
+     */
+    const {
+        queryModel: queryModelRef,
+        toStandardParams,
+        updatePagination: updateQueryPagination,
+        updateSort: updateQuerySort,
+        updateFilter: updateQueryFilter,
+        updateGlobalSearch: updateQueryGlobalSearch
+    } = useQueryModel({
+        columns: columnsRef,
+        enabled: true
+    })
+
+    /**
+     * Convertit le QueryModel selon le mode configuré
+     */
+    const convertQueryModelToOutput = (queryModelData: QueryModel) => {
+        switch (queryOutputMode.value) {
+            case 'queryModel':
+                return queryModelData
+            case 'restApi':
+                return convertQueryModelToRestApi(queryModelData)
+            case 'queryParams':
+                return convertQueryModelToQueryParams(queryModelData)
+            case 'dataTable':
+            default:
+                return toStandardParams.value
+        }
+    }
+
     // ===== COMPUTED PROPERTIES =====
+
+    /**
+     * Pagination calculée pour le planning management
+     * Utilise le totalItems du store pour calculer les informations de pagination
+     */
+    const planningPaginationComputed = computed(() => {
+        const totalCount = inventoryStore.totalItems || 0
+        const pageSizeValue = pageSize.value || 20
+        const currentPageValue = currentPage.value || 1
+
+        return {
+            current_page: currentPageValue,
+            total_pages: Math.max(1, Math.ceil(totalCount / pageSizeValue)),
+            has_next: currentPageValue < Math.ceil(totalCount / pageSizeValue),
+            has_previous: currentPageValue > 1,
+            page_size: pageSizeValue,
+            total: totalCount
+        }
+    })
 
     /**
      * Convertit les données du planning en Stores
@@ -375,11 +441,11 @@ export function usePlanningManagement() {
 
     /**
      * Handler pour le changement de pagination
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
+     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
      *
-     * @param params - Paramètres de pagination (format standard ou ancien format)
+     * @param params - Paramètres de pagination (format configuré ou ancien format)
      */
-    const handlePaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams) => {
+    const handlePaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams | QueryModel | Record<string, any>) => {
         try {
             // Si c'est déjà le format standard (venant du DataTable), utiliser directement
             if ('draw' in params && 'start' in params && 'length' in params) {
@@ -408,7 +474,7 @@ export function usePlanningManagement() {
      *
      * @param sortModel - Modèle de tri (format standard ou ancien format)
      */
-    const handleSortChanged = async (sortModel: Array<{ field: string; direction: 'asc' | 'desc' }> | StandardDataTableParams) => {
+    const handleSortChanged = async (sortModel: Array<{ field: string; direction: 'asc' | 'desc' }> | StandardDataTableParams | QueryModel | Record<string, any>) => {
         try {
             // Si c'est déjà le format standard (venant du DataTable), utiliser directement
             if ('draw' in sortModel && 'start' in sortModel && 'length' in sortModel) {
@@ -432,7 +498,7 @@ export function usePlanningManagement() {
      *
      * @param filterModel - Modèle de filtres (format standard ou ancien format)
      */
-    const handleFilterChanged = async (filterModel: Record<string, any> | StandardDataTableParams) => {
+    const handleFilterChanged = async (filterModel: Record<string, any> | StandardDataTableParams | QueryModel | Record<string, any>) => {
         try {
             // Si c'est déjà le format standard (venant du DataTable), utiliser directement
             if ('draw' in filterModel && 'start' in filterModel && 'length' in filterModel) {
@@ -519,6 +585,18 @@ export function usePlanningManagement() {
         })
     }
 
+    /**
+     * Navigue vers la page de suivi des jobs
+     *
+     * @param reference - Référence de l'inventaire
+     */
+    const goToJobTracking = (reference: string): void => {
+        router.push({
+            name: 'inventory-job-tracking',
+            params: { reference }
+        })
+    }
+
     // ===== RETURN =====
 
     // ===== INITIALISATION =====
@@ -594,6 +672,7 @@ export function usePlanningManagement() {
         fetchInventoryIdByReference,
         goToInventoryDetail,
         goToAffectation,
+        goToJobTracking,
         initialize,
         loadPlanningData,
         refreshPlanningData,
@@ -608,8 +687,14 @@ export function usePlanningManagement() {
         // Pagination et données depuis useBackendDataTable
         currentPage,
         pageSize,
-        pagination,
-        totalPages: computed(() => pagination.value.total_pages || 1),
-        totalItems: computed(() => pagination.value.total || 0)
+        pagination: planningPaginationComputed,
+        planningTotalItems: computed(() => inventoryStore.totalItems || 0),
+        totalPages: computed(() => planningPaginationComputed.value.total_pages || 1),
+        totalItems: computed(() => planningPaginationComputed.value.total || 0),
+
+        // QueryModel
+        queryModel: computed(() => queryModelRef.value),
+        queryOutputMode: computed(() => queryOutputMode.value),
+        convertQueryModelToOutput
     }
 }

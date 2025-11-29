@@ -68,18 +68,14 @@ export interface JobTrackingRow {
     id: string
     /** Référence du job */
     jobReference: string
-    /** Emplacement concerné */
-    emplacement: string
-    /** Statut du job */
-    statut: string
-    /** Ordre du comptage */
-    countingOrder: number | null
-    /** Date de transfert */
-    dateTransfert: string | null
-    /** Date de lancement */
-    dateLancement: string | null
-    /** Date de fin */
-    dateFin: string | null
+    /** Statut du 1er comptage */
+    statut1erComptage: string | null
+    /** Statut du 2ème comptage */
+    statut2emeComptage: string | null
+    /** Nombre d'écarts */
+    discrepancyCount: number | null
+    /** Taux d'écarts (pourcentage) */
+    discrepancyRate: number | null
 }
 
 /**
@@ -189,62 +185,125 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
     /** Lignes de suivi */
     const trackingRows = ref<JobTrackingRow[]>([])
 
+    /** IDs des lignes sélectionnées */
+    const selectedRows = ref<string[]>([])
+
     // ===== COMPUTED PROPERTIES =====
 
     /** État de chargement global */
     const isLoading = computed(() => inventoryLoading.value || jobsLoading.value || isFetchingStores.value)
 
+    /** Styles de badges pour les statuts */
+    const badgeStyles = [
+        {
+            value: 'TERMINE',
+            class: 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-800 ring-1 ring-green-600/20 ring-inset'
+        },
+        {
+            value: 'TRANSFERT',
+            class: 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-600/20 ring-inset'
+        },
+        {
+            value: 'EN ATTENTE',
+            class: 'inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-yellow-600/20 ring-inset'
+        }
+    ]
+    const badgeDefaultClass = 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+
+    /** Fonction helper pour rendre un badge de statut */
+    const renderStatusBadge = (value: string | null) => {
+        if (!value) return '-'
+        const badgeStyle = badgeStyles.find(s => s.value === value)
+        const badgeClass = badgeStyle?.class || badgeDefaultClass
+        return `<span class="${badgeClass}">${value}</span>`
+    }
+
     /** Colonnes du DataTable */
     const columns = ref<DataTableColumn<JobTrackingRow>[]>([
         {
-            headerName: 'Emplacement',
-            field: 'emplacement',
+            headerName: 'Référence Job',
+            field: 'jobReference',
             sortable: true,
             filterable: true,
             dataType: 'text' as ColumnDataType,
-            width: 180,
-            description: 'Emplacement concerné'
+            width: 150,
+            description: 'Référence du job'
         },
         {
-            headerName: 'Statut',
-            field: 'statut',
+            headerName: 'Statut 1er comptage',
+            field: 'statut1erComptage',
             sortable: true,
             filterable: true,
             dataType: 'select' as ColumnDataType,
+            width: 160,
+            description: 'Statut du 1er comptage',
+            badgeStyles,
+            badgeDefaultClass,
+            cellRenderer: (value: any) => renderStatusBadge(value)
+        },
+        {
+            headerName: 'Statut 2ème comptage',
+            field: 'statut2emeComptage',
+            sortable: true,
+            filterable: true,
+            dataType: 'select' as ColumnDataType,
+            width: 160,
+            description: 'Statut du 2ème comptage',
+            badgeStyles,
+            badgeDefaultClass,
+            cellRenderer: (value: any) => renderStatusBadge(value)
+        },
+        {
+            headerName: 'Nombre d\'écarts',
+            field: 'discrepancyCount',
+            sortable: true,
+            filterable: true,
+            dataType: 'number' as ColumnDataType,
             width: 140,
-            description: 'Statut du job pour ce comptage'
+            description: 'Nombre d\'écarts détectés',
+            valueFormatter: (params: any) => {
+                const count = params.value
+                if (count === null || count === undefined) return '-'
+                return String(count)
+            },
+            cellRenderer: (value: any) => {
+                const count = value
+                if (count === null || count === undefined) return '-'
+                const colorClass = count === 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'
+                return `<span class="${colorClass}">${count}</span>`
+            }
         },
         {
-            headerName: 'Date transfert',
-            field: 'dateTransfert',
+            headerName: 'Taux d\'écarts (%)',
+            field: 'discrepancyRate',
             sortable: true,
             filterable: true,
-            dataType: 'datetime' as ColumnDataType,
-            width: 165,
-            valueFormatter: (params: any) => params.value || '-'
-        },
-        {
-            headerName: 'Date lancement',
-            field: 'dateLancement',
-            sortable: true,
-            filterable: true,
-            dataType: 'datetime' as ColumnDataType,
-            width: 165,
-            valueFormatter: (params: any) => params.value || '-'
-        },
-        {
-            headerName: 'Date fin',
-            field: 'dateFin',
-            sortable: true,
-            filterable: true,
-            dataType: 'datetime' as ColumnDataType,
-            width: 165,
-            valueFormatter: (params: any) => params.value || '-'
+            dataType: 'number' as ColumnDataType,
+            width: 140,
+            description: 'Pourcentage d\'écarts',
+            valueFormatter: (params: any) => {
+                const rate = params.value
+                if (rate === null || rate === undefined) return '-'
+                return `${Number(rate).toFixed(2)}%`
+            },
+            cellRenderer: (value: any) => {
+                const rate = value
+                if (rate === null || rate === undefined) return '-'
+                const numRate = Number(rate)
+                const colorClass = numRate === 0 ? 'text-green-600 font-semibold' : numRate < 10 ? 'text-yellow-600 font-semibold' : 'text-red-600 font-semibold'
+                return `<span class="${colorClass}">${numRate.toFixed(2)}%</span>`
+            }
         }
     ])
 
     /** Indique si des lignes existent */
     const hasRows = computed(() => trackingRows.value.length > 0)
+
+    /** Nombre de lignes sélectionnées */
+    const selectedRowsCount = computed(() => selectedRows.value.length)
+
+    /** Indicateur de sélection */
+    const hasSelectedRows = computed(() => selectedRows.value.length > 0)
 
     // ===== MÉTHODES DE RÉSOLUTION =====
 
@@ -302,90 +361,40 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
     /**
      * Transforme les jobs en lignes de suivi pour le DataTable
+     * Une ligne par job avec les statuts des comptages
      *
      * @param jobs - Liste des jobs à transformer
      * @returns Lignes de suivi formatées
      */
     const transformJobsToRows = (jobs: JobResult[]): JobTrackingRow[] => {
         const rows: JobTrackingRow[] = []
-        const countingTarget = selectedCountingOrder.value
 
         jobs.forEach(job => {
             const assignments = job.assignments || []
-            const filteredAssignments = countingTarget
-                ? assignments.filter(assignment => assignment.counting_order === countingTarget)
-                : assignments
 
-            if (filteredAssignments.length === 0) {
-                const emplacementList = job.emplacements || []
-                if (emplacementList.length === 0) {
-                    rows.push({
-                        id: `${job.id}-no-assignment`,
-                        jobReference: job.reference,
-                        emplacement: 'Non défini',
-                        statut: job.status || 'Inconnu',
-                        countingOrder: countingTarget,
-                        dateTransfert: formatDateTime((job as any)?.date_transfer || job.valide_date || null),
-                        dateLancement: formatDateTime(job.en_attente_date || null),
-                        dateFin: formatDateTime(job.termine_date || null)
-                    })
-                } else {
-                    emplacementList.forEach((emplacement, emplacementIndex) => {
-                        rows.push({
-                            id: `${job.id}-${emplacement.id ?? emplacementIndex}-no-assignment`,
-                            jobReference: job.reference,
-                            emplacement: mapEmplacementLabel(emplacement, emplacementIndex),
-                            statut: job.status || 'Inconnu',
-                            countingOrder: countingTarget,
-                            dateTransfert: formatDateTime((job as any)?.date_transfer || job.valide_date || null),
-                            dateLancement: formatDateTime(job.en_attente_date || null),
-                            dateFin: formatDateTime(job.termine_date || null)
-                        })
-                    })
+            // Extraire les statuts par ordre de comptage
+            let statut1erComptage: string | null = null
+            let statut2emeComptage: string | null = null
+
+            assignments.forEach(assignment => {
+                const countingOrder = assignment.counting_order
+                const status = assignment.status || job.status || null
+
+                if (countingOrder === 1) {
+                    statut1erComptage = status
+                } else if (countingOrder === 2) {
+                    statut2emeComptage = status
                 }
-                return
-            }
+            })
 
-            filteredAssignments.forEach((assignment, assignmentIndex) => {
-                const assignmentWithDates = assignment as AssignmentWithDates
-                const emplacementList = job.emplacements || []
-                const dateTransfert = assignmentWithDates.date_transfer
-                    || assignmentWithDates.dateTransfert
-                    || (job as any)?.date_transfer
-                    || job.valide_date
-                const dateLancement = assignmentWithDates.date_lancement
-                    || assignmentWithDates.date_launch
-                    || assignmentWithDates.date_start
-                const dateFin = assignmentWithDates.date_fin
-                    || assignmentWithDates.date_end
-                    || job.termine_date
-
-                if (emplacementList.length === 0) {
-                    rows.push({
-                        id: `${job.id}-${assignment.counting_order}-${assignmentIndex}`,
-                        jobReference: job.reference,
-                        emplacement: 'Non défini',
-                        statut: assignment.status || job.status || 'Inconnu',
-                        countingOrder: assignment.counting_order,
-                        dateTransfert: formatDateTime(dateTransfert || null),
-                        dateLancement: formatDateTime(dateLancement || null),
-                        dateFin: formatDateTime(dateFin || null)
-                    })
-                    return
-                }
-
-                emplacementList.forEach((emplacement, emplacementIndex) => {
-                    rows.push({
-                        id: `${job.id}-${assignment.counting_order}-${emplacement.id ?? emplacementIndex}`,
-                        jobReference: job.reference,
-                        emplacement: mapEmplacementLabel(emplacement, emplacementIndex),
-                        statut: assignment.status || job.status || 'Inconnu',
-                        countingOrder: assignment.counting_order,
-                        dateTransfert: formatDateTime(dateTransfert || null),
-                        dateLancement: formatDateTime(dateLancement || null),
-                        dateFin: formatDateTime(dateFin || null)
-                    })
-                })
+            // Créer une ligne par job avec les statuts des comptages
+            rows.push({
+                id: `${job.id}`,
+                jobReference: job.reference,
+                statut1erComptage,
+                statut2emeComptage,
+                discrepancyCount: null,
+                discrepancyRate: null
             })
         })
 
@@ -393,7 +402,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
     }
 
     /**
-     * Calcule l'ordre maximum de comptage depuis les jobs
+     * Calcule l'ordre maximum de comptage depuis les jobs (ancien format)
      *
      * @param jobs - Liste des jobs
      * @returns Ordre maximum de comptage
@@ -408,6 +417,70 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             })
         })
         return Math.max(maxOrder, 1)
+    }
+
+    /**
+     * Calcule l'ordre maximum de comptage depuis les jobs discrepancies (nouveau format)
+     *
+     * @param jobs - Liste des jobs depuis l'endpoint discrepancies
+     * @returns Ordre maximum de comptage
+     */
+    const calculateMaxCountingOrderFromDiscrepancies = (jobs: any[]): number => {
+        let maxOrder = 0
+        jobs.forEach(job => {
+            (job.assignments || []).forEach((assignment: any) => {
+                if (typeof assignment.counting_order === 'number') {
+                    maxOrder = Math.max(maxOrder, assignment.counting_order)
+                }
+            })
+        })
+        return Math.max(maxOrder, 1)
+    }
+
+    /**
+     * Transforme les jobs discrepancies en lignes de suivi pour le DataTable
+     * Une ligne par job avec les statuts des comptages
+     *
+     * @param jobs - Liste des jobs depuis l'endpoint discrepancies
+     * @returns Lignes de suivi formatées
+     */
+    const transformDiscrepanciesToRows = (jobs: any[]): JobTrackingRow[] => {
+        const rows: JobTrackingRow[] = []
+
+        jobs.forEach(job => {
+            const assignments = job.assignments || []
+
+            // Récupérer les informations d'écarts du job
+            const discrepancyCount = job.discrepancy_count ?? null
+            const discrepancyRate = job.discrepancy_rate ?? null
+
+            // Extraire les statuts par ordre de comptage
+            let statut1erComptage: string | null = null
+            let statut2emeComptage: string | null = null
+
+            assignments.forEach((assignment: any) => {
+                const countingOrder = assignment.counting_order
+                const status = assignment.status || job.job_status || null
+
+                if (countingOrder === 1) {
+                    statut1erComptage = status
+                } else if (countingOrder === 2) {
+                    statut2emeComptage = status
+                }
+            })
+
+            // Créer une ligne par job
+            rows.push({
+                id: `job-${job.job_id}`,
+                jobReference: job.job_reference || `job-${job.job_id}`,
+                statut1erComptage,
+                statut2emeComptage,
+                discrepancyCount,
+                discrepancyRate
+            })
+        })
+
+        return rows
     }
 
     // ===== MÉTHODES DE CHARGEMENT =====
@@ -469,7 +542,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
     }
 
     /**
-     * Charge les données de suivi des jobs
+     * Charge les données de suivi des jobs depuis l'endpoint discrepancies
      * Prérequis : inventory et selectedStore doivent être définis
      * Les comptages doivent être résolus depuis l'inventaire (ou seront calculés depuis les jobs en fallback)
      */
@@ -482,20 +555,23 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         try {
             const warehouseId = Number(selectedStore.value)
 
-            // Charger les jobs depuis l'API
-            await jobStore.fetchJobsValidated(inventoryId.value, warehouseId)
+            // Charger les jobs depuis le nouvel endpoint discrepancies
+            const response = await JobService.getJobsDiscrepancies(inventoryId.value, warehouseId, {
+                page: 1,
+                page_size: 1000 // Charger toutes les données pour le moment
+            })
 
-            const jobs = jobsValidated.value || []
+            const jobs = response.results || []
 
             // Si les comptages n'ont pas été résolus depuis l'inventaire, les calculer depuis les jobs (fallback)
             if (countingOptions.value.length === 0 && jobs.length > 0) {
-                const maxOrder = calculateMaxCountingOrder(jobs)
+                const maxOrder = calculateMaxCountingOrderFromDiscrepancies(jobs)
                 resolveCountingOptions(maxOrder)
                 logger.debug('Comptages calculés depuis les jobs (fallback)', countingOptions.value)
             }
 
             // Transformer les jobs en lignes pour le DataTable
-            trackingRows.value = transformJobsToRows(jobs)
+            trackingRows.value = transformDiscrepanciesToRows(jobs)
         } catch (error) {
             logger.error('Erreur lors du chargement des données de suivi des jobs', error)
             trackingRows.value = []
@@ -716,8 +792,8 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                         </p>
                         <div id="jobs-checkboxes" style="max-height: 300px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem;">
                             ${jobs.map(job => `
-                                <label style="display: flex; align-items: center; padding: 0.75rem; margin-bottom: 0.5rem; cursor: pointer; border-radius: 0.375rem; transition: background-color 0.2s;" 
-                                       onmouseover="this.style.backgroundColor='#f3f4f6'" 
+                                <label style="display: flex; align-items: center; padding: 0.75rem; margin-bottom: 0.5rem; cursor: pointer; border-radius: 0.375rem; transition: background-color 0.2s;"
+                                       onmouseover="this.style.backgroundColor='#f3f4f6'"
                                        onmouseout="this.style.backgroundColor='transparent'">
                                     <input type="checkbox" value="${job.id}" class="job-checkbox" style="margin-right: 0.75rem; width: 1.25rem; height: 1.25rem; cursor: pointer;">
                                     <span style="font-size: 0.95rem; color: #1f2937;">${job.reference}</span>
@@ -741,12 +817,12 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 preConfirm: () => {
                     const checkboxes = document.querySelectorAll<HTMLInputElement>('.job-checkbox:checked')
                     const selectedJobIds = Array.from(checkboxes).map(cb => Number(cb.value))
-                    
+
                     if (selectedJobIds.length === 0) {
                         Swal.showValidationMessage('Veuillez sélectionner au moins un job')
                         return false
                     }
-                    
+
                     return selectedJobIds
                 }
             })
@@ -777,7 +853,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                     const blob = await JobService.generateJobPDF(jobId, 1)
                     const job = jobs.find(j => j.id === jobId)
                     const filename = `job_${jobId}_${job?.reference || 'unknown'}.pdf`
-                    
+
                     pdfPromises.push(Promise.resolve({ jobId, blob, filename }))
                 } catch (error) {
                     logger.error(`Erreur lors de la génération du PDF pour le job ${jobId}`, error)
@@ -832,6 +908,24 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         }
     }
 
+    // ===== HANDLERS DE SÉLECTION =====
+
+    /**
+     * Handler pour les changements de sélection dans le DataTable
+     *
+     * @param selectedRowsSet - Set des IDs de lignes sélectionnées
+     */
+    const onSelectionChanged = (selectedRowsSet: Set<string>) => {
+        selectedRows.value = selectedRowsSet ? Array.from(selectedRowsSet) : []
+    }
+
+    /**
+     * Réinitialiser toutes les sélections
+     */
+    const resetSelection = () => {
+        selectedRows.value = []
+    }
+
     // ===== RETURN =====
 
     return {
@@ -846,6 +940,9 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         selectedStore,
         countingOptions,
         selectedCountingOrder,
+        selectedRows,
+        selectedRowsCount,
+        hasSelectedRows,
 
         // Données tableau
         rows: trackingRows,
@@ -856,6 +953,8 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         initialize,
         reinitialize,
         refresh: fetchTrackingData,
-        printJobs
+        printJobs,
+        onSelectionChanged,
+        resetSelection
     }
 }

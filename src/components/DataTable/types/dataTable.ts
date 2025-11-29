@@ -9,6 +9,9 @@
 
 import type { Ref, ComputedRef } from 'vue'
 
+// Export du QueryModel pour utilisation dans DataTable
+export type { QueryModel, SortModel, FilterModel, QueryModelResponse } from './QueryModel'
+
 // ===== TYPES DE COLONNES =====
 
 /**
@@ -272,6 +275,9 @@ export interface DataTableProps<T = Record<string, unknown>> {
     /** État de chargement pour afficher le skeleton */
     loading?: boolean
 
+    /** Mode de sortie pour les paramètres de requête (queryModel, dataTable, restApi, queryParams) */
+    queryOutputMode?: 'queryModel' | 'dataTable' | 'restApi' | 'queryParams'
+
     // === FONCTIONNALITÉS AVANCÉES ===
 
     /** Active le virtual scrolling */
@@ -334,6 +340,70 @@ export interface DataTableProps<T = Record<string, unknown>> {
     debounceFilter?: number
     /** Paramètres personnalisés à ajouter aux paramètres DataTable standard */
     customDataTableParams?: Record<string, any>
+
+    // === FONCTIONNALITÉS AG-GRID ===
+
+    /** Active le tri multi-colonnes */
+    enableMultiSort?: boolean
+    /** Configuration du tri multi-colonnes */
+    multiSortConfig?: {
+        maxSortColumns?: number
+    }
+
+    /** Active l'épinglage de colonnes */
+    enableColumnPinning?: boolean
+    /** Configuration de l'épinglage */
+    columnPinningConfig?: {
+        defaultPinnedColumns?: Array<{ field: string; pinned: 'left' | 'right' | null }>
+    }
+
+    /** Active le redimensionnement de colonnes */
+    enableColumnResize?: boolean
+    /** Configuration du redimensionnement */
+    columnResizeConfig?: {
+        defaultWidths?: Record<string, number>
+        minWidth?: number
+        maxWidth?: number
+    }
+
+    /** Active le scroll infini */
+    enableInfiniteScroll?: boolean
+    /** Configuration du scroll infini */
+    infiniteScrollConfig?: {
+        batchSize?: number
+        threshold?: number
+        loadMore?: (startIndex: number, endIndex: number) => Promise<any[]>
+    }
+
+    /** Active les filtres Set (valeurs uniques) */
+    enableSetFilters?: boolean
+    /** Configuration des filtres Set */
+    setFiltersConfig?: {
+        extractUniqueValues?: (field: string, data: any[]) => any[]
+        formatValue?: (value: any) => string
+    }
+
+    // === GESTION AUTOMATIQUE ===
+
+    /** Active la gestion automatique complète (sélection, filtres, tri, recherche, pagination) */
+    enableAutoManagement?: boolean
+    /** Configuration de la gestion automatique */
+    autoManagementConfig?: {
+        /** Endpoint API pour charger les données */
+        endpoint?: string
+        /** Store Pinia pour charger les données */
+        piniaStore?: any
+        /** Action du store */
+        storeAction?: string
+        /** Taille de page par défaut */
+        defaultPageSize?: number
+        /** Activer la sélection multiple */
+        enableRowSelection?: boolean
+        /** Activer le tri multi-colonnes */
+        enableMultiSort?: boolean
+        /** Activer les filtres Set */
+        enableSetFilters?: boolean
+    }
 }
 
 /**

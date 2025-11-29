@@ -10,9 +10,16 @@
             <h3 class="manager-title">Gestion des colonnes</h3>
             <div class="header-actions">
                 <button @click="resetColumns" class="btn-secondary">Réinitialiser</button>
-                <button @click="autoSizeAll" class="btn-secondary">Auto-size</button>
                 <button @click="$emit('close')" class="btn-close">×</button>
             </div>
+        </div>
+
+        <!-- Options globales -->
+        <div v-if="enableColumnPinning" class="global-options">
+            <label class="option-label">
+                <input type="checkbox" :checked="stickyHeader" @change="toggleStickyHeader" />
+                <span>Fixer le header (sticky)</span>
+            </label>
         </div>
 
         <!-- Liste des colonnes visibles avec drag & drop -->
@@ -49,7 +56,7 @@
                     <div class="column-field">{{ column?.field || 'field' }}</div>
                 </div>
 
-                <!-- Contrôles de la colonne (visibilité, auto-size, largeur) -->
+                <!-- Contrôles de la colonne (visibilité, pinning) -->
                 <div class="column-controls">
                     <!-- Toggle de visibilité -->
                     <label class="visibility-toggle">
@@ -57,34 +64,26 @@
                             type="checkbox"
                             :checked="isColumnVisible(column?.field || '')"
                             @change="toggleColumnVisibility(column?.field || '')"
-                            :disabled="isColumnVisible(column?.field || '') && props.visibleColumns.length <= 1"
+                            :disabled="column?.field === '__rowNumber__' || (isColumnVisible(column?.field || '') && props.visibleColumns.length <= 1)"
                         />
                         <span class="toggle-slider"></span>
                     </label>
 
-                    <!-- Bouton auto-size pour ajuster automatiquement la largeur -->
-                    <button
-                        v-if="column?.autoSize !== false"
-                        @click="autoSizeColumn(column?.field || '')"
-                        class="auto-size-btn"
-                        :title="'Auto-size ' + (column?.headerName || column?.field)"
-                    >
-                        <IconResize class="w-3 h-3" />
-                    </button>
-
-                    <!-- Contrôle de largeur personnalisée -->
-                    <div class="width-control" v-if="column?.resizable !== false">
-                        <input
-                            type="number"
-                            :value="getColumnWidth(column?.field || '')"
-                            @input="handleWidthInput(column?.field || '', $event)"
-                            class="width-input"
-                            min="50"
-                            max="500"
-                            step="10"
-                        />
-                        <span class="width-unit">px</span>
+                    <!-- Contrôle de pinning (fixation) si activé -->
+                    <div v-if="enableColumnPinning" class="pinning-control">
+                        <select
+                            :value="getColumnPinDirection(column?.field || '')"
+                            @change="handlePinChange(column?.field || '', $event)"
+                            class="pin-select"
+                            :title="'Fixer la colonne ' + (column?.headerName || column?.field)"
+                            :disabled="column?.field === '__rowNumber__'"
+                        >
+                            <option value="">Non fixée</option>
+                            <option value="left">← Gauche</option>
+                            <option value="right">Droite →</option>
+                        </select>
                     </div>
+
                 </div>
             </div>
         </div>
@@ -134,11 +133,17 @@ import IconEye from '../icon/icon-eye.vue'
  * @param columns - Configuration complète des colonnes
  * @param visibleColumns - Liste des champs des colonnes visibles
  * @param columnWidths - Map des largeurs par champ de colonne
+ * @param enableColumnPinning - Active le contrôle de pinning des colonnes
+ * @param columnPinning - Instance du composable useColumnPinning
+ * @param stickyHeader - État du header sticky
  */
 const props = defineProps<{
     columns: DataTableColumn[]
     visibleColumns: string[]
     columnWidths: Record<string, number>
+    enableColumnPinning?: boolean
+    columnPinning?: any
+    stickyHeader?: boolean
 }>()
 
 /**
@@ -147,11 +152,15 @@ const props = defineProps<{
  * @param columns-changed - Émis quand les colonnes ou largeurs changent
  * @param reorder-columns - Émis lors du réordonnancement par drag & drop
  * @param close - Émis pour fermer le composant
+ * @param pin-column - Émis quand une colonne est épinglée/désépinglée
+ * @param sticky-header-changed - Émis quand l'état du header sticky change
  */
 const emit = defineEmits<{
     'columns-changed': [visibleColumns: string[], columnWidths: Record<string, number>]
     'reorder-columns': [fromIndex: number, toIndex: number]
     'close': []
+    'pin-column': [field: string, direction: 'left' | 'right' | null]
+    'sticky-header-changed': [enabled: boolean]
 }>()
 
 // ===== ÉTAT LOCAL =====
@@ -227,11 +236,17 @@ const isColumnVisible = (field: string) => {
 /**
  * Bascule la visibilité d'une colonne
  * Empêche de masquer la dernière colonne visible
+ * Empêche de masquer __rowNumber__
  *
  * @param field - Champ de la colonne
  */
 const toggleColumnVisibility = (field: string) => {
     if (!field) return
+    
+    // Empêcher de masquer __rowNumber__
+    if (field === '__rowNumber__') {
+        return
+    }
 
     const newVisibleColumns = [...props.visibleColumns]
     const index = newVisibleColumns.indexOf(field)
@@ -263,105 +278,6 @@ const showColumn = (field: string) => {
     emit('columns-changed', newVisibleColumns, props.columnWidths)
 }
 
-/**
- * Récupère la largeur d'une colonne
- *
- * @param field - Champ de la colonne
- * @returns Largeur en pixels
- */
-const getColumnWidth = (field: string) => {
-    if (!field) return 150
-    return props.columnWidths[field] || 150
-}
-
-/**
- * Définit la largeur d'une colonne
- *
- * @param field - Champ de la colonne
- * @param width - Nouvelle largeur en pixels
- */
-const setColumnWidth = (field: string, width: string) => {
-    if (!field) return
-
-    const newWidths = { ...props.columnWidths }
-    newWidths[field] = parseInt(width) || 150
-    emit('columns-changed', props.visibleColumns, newWidths)
-}
-
-// ===== MÉTHODES D'AUTO-SIZE =====
-
-/**
- * Ajuste automatiquement la largeur d'une colonne
- * Calcule la largeur optimale basée sur le contenu de l'en-tête
- *
- * @param field - Champ de la colonne
- */
-const autoSizeColumn = (field: string) => {
-    if (!field) return
-
-    const column = props.columns.find(col => col?.field === field)
-    if (!column) return
-
-    // Calcul de la largeur basée sur le contenu de l'en-tête
-    const headerText = column.headerName || column.field || ''
-    const headerWidth = headerText.length * 10 // ~10px par caractère
-
-    // Largeur minimale pour les contrôles (tri, filtre, etc.)
-    const controlsWidth = 80
-
-    // Largeur minimale selon le type de données
-    let minWidth = 120
-    if (column.dataType === 'boolean') minWidth = 80
-    else if (column.dataType === 'date' || column.dataType === 'datetime') minWidth = 120
-    else if (column.dataType === 'number') minWidth = 100
-
-    // Largeur maximale
-    const maxWidth = 500
-
-    // Calcul de la largeur optimale
-    const optimalWidth = Math.max(minWidth, Math.min(maxWidth, headerWidth + controlsWidth))
-
-    // Appliquer la nouvelle largeur
-    const newWidths = { ...props.columnWidths }
-    newWidths[field] = optimalWidth
-
-    emit('columns-changed', props.visibleColumns, newWidths)
-}
-
-/**
- * Ajuste automatiquement la largeur de toutes les colonnes
- * Applique l'auto-size à toutes les colonnes qui le supportent
- */
-const autoSizeAll = () => {
-    const newWidths = { ...props.columnWidths }
-
-    props.columns.forEach(column => {
-        if (column.autoSize !== false && column.field) {
-            // Calcul de la largeur basée sur le contenu de l'en-tête
-            const headerText = column.headerName || column.field || ''
-            const headerWidth = headerText.length * 10 // ~10px par caractère
-
-            // Largeur minimale pour les contrôles (tri, filtre, etc.)
-            const controlsWidth = 80
-
-            // Largeur minimale selon le type de données
-            let minWidth = 120
-            if (column.dataType === 'boolean') minWidth = 80
-            else if (column.dataType === 'date' || column.dataType === 'datetime') minWidth = 120
-            else if (column.dataType === 'number') minWidth = 100
-
-            // Largeur maximale
-            const maxWidth = 500
-
-            // Calcul de la largeur optimale
-            const optimalWidth = Math.max(minWidth, Math.min(maxWidth, headerWidth + controlsWidth))
-
-            newWidths[column.field] = optimalWidth
-        }
-    })
-
-    emit('columns-changed', props.visibleColumns, newWidths)
-}
 
 /**
  * Réinitialise toutes les colonnes à leur état par défaut
@@ -462,6 +378,7 @@ const onDragLeave = (event: DragEvent) => {
  */
 const onDrop = (event: DragEvent, index: number) => {
     event.preventDefault()
+    event.stopPropagation()
 
     // Retirer la classe visuelle
     const target = event.currentTarget as HTMLElement
@@ -470,8 +387,28 @@ const onDrop = (event: DragEvent, index: number) => {
     }
 
     if (draggedIndex.value !== null && draggedIndex.value !== index) {
-        // Émettre l'événement de réordonnancement
-        emit('reorder-columns', draggedIndex.value, index)
+        // Empêcher de déplacer __rowNumber__
+        const draggedCol = visibleColumnsData.value[draggedIndex.value]
+        const targetCol = visibleColumnsData.value[index]
+        
+        if (draggedCol?.field === '__rowNumber__' || targetCol?.field === '__rowNumber__') {
+            return // Ne pas permettre de déplacer __rowNumber__
+        }
+        
+        // Calculer les index réels dans la liste des colonnes visibles uniquement
+        const visibleCols = visibleColumnsData.value.filter(col => 
+            props.visibleColumns.includes(col?.field || '')
+        )
+        
+        if (draggedCol && targetCol) {
+            const fromIndexInVisible = props.visibleColumns.indexOf(draggedCol.field || '')
+            const toIndexInVisible = props.visibleColumns.indexOf(targetCol.field || '')
+            
+            if (fromIndexInVisible !== -1 && toIndexInVisible !== -1) {
+                // Émettre l'événement de réordonnancement avec les index des colonnes visibles
+                emit('reorder-columns', fromIndexInVisible, toIndexInVisible)
+            }
+        }
     }
 }
 
@@ -486,16 +423,46 @@ const onDragEnd = () => {
     draggedIndex.value = null
 }
 
+
+// ===== MÉTHODES DE PINNING =====
+
 /**
- * Gère la saisie de largeur personnalisée
+ * Obtient la direction de pinning d'une colonne
  *
  * @param field - Champ de la colonne
- * @param event - Événement de saisie
+ * @returns Direction du pinning ('left', 'right' ou '')
  */
-const handleWidthInput = (field: string, event: Event) => {
+const getColumnPinDirection = (field: string): string => {
+    if (!props.enableColumnPinning || !props.columnPinning || !field) return ''
+    return props.columnPinning.getPinDirection(field) || ''
+}
+
+/**
+ * Gère le changement de pinning d'une colonne
+ *
+ * @param field - Champ de la colonne
+ * @param event - Événement de changement
+ */
+const handlePinChange = (field: string, event: Event) => {
+    if (!field || !props.enableColumnPinning) return
+    
+    // Empêcher de modifier le pinning de __rowNumber__
+    if (field === '__rowNumber__') {
+        return
+    }
+    
+    const target = event.target as HTMLSelectElement
+    const direction = target.value as 'left' | 'right' | null
+    
+    emit('pin-column', field, direction || null)
+}
+
+/**
+ * Bascule l'état du header sticky
+ */
+const toggleStickyHeader = (event: Event) => {
     const target = event.target as HTMLInputElement
-    const width = target.value
-    setColumnWidth(field, width)
+    emit('sticky-header-changed', target.checked)
 }
 </script>
 
@@ -507,13 +474,30 @@ const handleWidthInput = (field: string, event: Event) => {
 
 .column-manager {
     background: white;
-    border-radius: 0.5rem;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-    max-width: 340px;
-    max-height: 400px;
+    border-radius: 1rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    min-width: 360px;
+    max-width: 480px;
+    max-height: 85vh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    margin: auto;
+}
+
+.dark .column-manager {
+    background: #1f2937;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 640px) {
+    .column-manager {
+        min-width: 100%;
+        max-width: 100%;
+        max-height: 100vh;
+        border-radius: 0;
+    }
 }
 
 /* Header avec titre et actions */
@@ -521,16 +505,17 @@ const handleWidthInput = (field: string, event: Event) => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.75rem;
-    border-bottom: 1px solid #e5e7eb;
-    background: #f9fafb;
+    padding: 1rem;
+    border-bottom: 2px solid #e5e7eb;
+    background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
 }
 
 .manager-title {
-    font-size: 1rem;
-    font-weight: 600;
+    font-size: 1.125rem;
+    font-weight: 700;
     color: #111827;
     margin: 0;
+    letter-spacing: -0.025em;
 }
 
 .header-actions {
@@ -541,18 +526,21 @@ const handleWidthInput = (field: string, event: Event) => {
 .btn-secondary,
 .btn-primary,
 .btn-close {
-    padding: 0.375rem 0.75rem;
-    border: 1px solid #d1d5db;
-    border-radius: 0.375rem;
+    padding: 0.5rem 0.875rem;
+    border: 1.5px solid #d1d5db;
+    border-radius: 0.5rem;
     background: white;
     color: #374151;
     cursor: pointer;
-    font-size: 0.8rem;
+    font-size: 0.875rem;
+    font-weight: 500;
     transition: all 0.2s;
 }
 
 .btn-secondary:hover {
     background: #f3f4f6;
+    border-color: var(--color-primary);
+    color: var(--color-primary);
 }
 
 .btn-primary {
@@ -573,22 +561,47 @@ const handleWidthInput = (field: string, event: Event) => {
 
 /* Liste des colonnes */
 .columns-list {
-    padding: 0.5rem;
-    max-height: 140px;
+    padding: 0.75rem;
+    max-height: 400px;
     overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) rgba(0, 0, 0, 0.1);
+}
+
+.columns-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.columns-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+}
+
+.columns-list::-webkit-scrollbar-thumb {
+    background: var(--color-primary);
+    border-radius: 3px;
+}
+
+.columns-list::-webkit-scrollbar-thumb:hover {
+    background: var(--color-primary-dark);
 }
 
 .column-item {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.375rem;
-    margin-bottom: 0.375rem;
+    gap: 0.75rem;
+    padding: 0.875rem;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 0.5rem;
+    margin-bottom: 0.5rem;
     background: white;
     transition: all 0.2s;
     cursor: move;
+    min-width: 0;
+    overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .column-item:hover {
@@ -617,11 +630,19 @@ const handleWidthInput = (field: string, event: Event) => {
 
 .drag-handle {
     cursor: grab;
-    padding: 0.25rem;
+    padding: 0.5rem;
+    color: #9ca3af;
+    transition: color 0.2s;
+    flex-shrink: 0;
+}
+
+.drag-handle:hover {
+    color: var(--color-primary);
 }
 
 .drag-handle:active {
     cursor: grabbing;
+    color: var(--color-primary);
 }
 
 .column-icon {
@@ -631,21 +652,26 @@ const handleWidthInput = (field: string, event: Event) => {
     width: 1.5rem;
     height: 1.5rem;
     color: #6b7280;
+    flex-shrink: 0;
 }
 
 .column-info {
     flex: 1;
     min-width: 0;
+    overflow: hidden;
 }
 
 .column-name {
     font-size: 0.875rem;
-    font-weight: 500;
+    font-weight: 600;
     color: #111827;
     margin-bottom: 0.25rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .hidden-indicator {
@@ -657,12 +683,16 @@ const handleWidthInput = (field: string, event: Event) => {
     font-size: 0.7rem;
     color: #6b7280;
     font-family: monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .column-controls {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    flex-shrink: 0;
 }
 
 /* Toggle de visibilité */
@@ -711,70 +741,132 @@ input:checked + .toggle-slider:before {
     transform: translateX(1rem);
 }
 
-.auto-size-btn {
-    padding: 0.25rem;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #6b7280;
-    border-radius: 0.25rem;
+
+
+/* Options globales */
+.global-options {
+    padding: 0.75rem;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
 }
 
-.auto-size-btn:hover {
-    background: #f3f4f6;
-    color: #374151;
-}
-
-.width-control {
+.option-label {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: #374151;
+    cursor: pointer;
 }
 
-.width-input {
-    width: 3rem;
-    padding: 0.25rem;
-    border: 1px solid #d1d5db;
-    border-radius: 0.25rem;
-    font-size: 0.75rem;
-    text-align: center;
+.option-label input[type="checkbox"] {
+    cursor: pointer;
 }
 
-.width-unit {
-    font-size: 0.75rem;
-    color: #6b7280;
+/* Contrôle de pinning */
+.pinning-control {
+    display: flex;
+    align-items: center;
+}
+
+.pin-select {
+    padding: 0.5rem 0.75rem;
+    border: 1.5px solid #d1d5db;
+    border-radius: 0.375rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: white;
+    color: #374151;
+    cursor: pointer;
+    min-width: 100px;
+    transition: all 0.2s;
+}
+
+.pin-select:hover {
+    border-color: var(--color-primary);
+    background: #fefce8;
+}
+
+.pin-select:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(254, 205, 28, 0.15);
+    background: #ffffff;
+}
+
+.dark .pin-select {
+    background: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+}
+
+.dark .pin-select:hover {
+    border-color: var(--color-primary);
+    background: #2d3748;
 }
 
 /* Section des colonnes masquées */
 .hidden-section {
-    padding: 0.75rem;
-    border-top: 1px solid #e5e7eb;
-    background: #f9fafb;
+    padding: 1rem;
+    border-top: 2px solid #e5e7eb;
+    background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
 }
 
 .hidden-title {
     font-size: 0.875rem;
-    font-weight: 500;
+    font-weight: 600;
     color: #374151;
-    margin: 0 0 0.5rem 0;
+    margin: 0 0 0.75rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .hidden-list {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    max-height: 140px;
+    gap: 0.5rem;
+    max-height: 200px;
     overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) rgba(0, 0, 0, 0.1);
+}
+
+.hidden-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.hidden-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+}
+
+.hidden-list::-webkit-scrollbar-thumb {
+    background: var(--color-primary);
+    border-radius: 3px;
+}
+
+.hidden-list::-webkit-scrollbar-thumb:hover {
+    background: var(--color-primary-dark);
 }
 
 .hidden-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.5rem;
+    padding: 0.75rem;
     background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.25rem;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 0.5rem;
+    transition: all 0.2s;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.hidden-item:hover {
+    border-color: var(--color-primary);
+    background: #fefce8;
+    transform: translateX(2px);
 }
 
 .show-btn {
@@ -794,7 +886,7 @@ input:checked + .toggle-slider:before {
 /* Dark mode */
 .dark .column-manager {
     background: #1f2937;
-    border-color: #374151;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
 }
 
 .dark .manager-header {

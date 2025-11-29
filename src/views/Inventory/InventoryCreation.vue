@@ -585,12 +585,24 @@ async function handleCreateInventory() {
         }, 2000);
 
     } catch (error) {
-        // Si c'est une erreur de validation métier, elle est déjà affichée
+        // Extraire le message d'erreur backend de manière cohérente
+        const errorMessage = Validators.extractBackendError(error, 'Erreur lors de la création de l\'inventaire');
+
+        // Si c'est une erreur de validation métier, elle est déjà affichée dans wizardValidationError
         if (!wizardValidationError.value) {
-            creationError.value = error instanceof Error ? error.message : 'Erreur lors de la création de l\'inventaire';
+            // Afficher l'erreur backend dans creationError
+            creationError.value = errorMessage;
+        } else {
+            // Si on a déjà une erreur de validation, combiner avec l'erreur backend si différente
+            if (wizardValidationError.value !== errorMessage) {
+                creationError.value = errorMessage;
+            }
         }
+
         creationSuccess.value = null; // Réinitialiser le succès
-        throw error; // Re-lancer l'erreur pour que le Wizard puisse la gérer
+
+        // Re-lancer l'erreur pour que le Wizard puisse la gérer
+        throw error;
     }
 }
 
