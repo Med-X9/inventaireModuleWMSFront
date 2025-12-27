@@ -1,118 +1,116 @@
-import { dataTableService } from '@/services/dataTableService'
-import { logger } from '@/services/loggerService'
-import type { InventoryTable } from '@/models/Inventory'
-import type { DataTableColumn, ColumnDataType, ActionConfig } from '@/types/dataTable'
-import type { StockImportErrorResponse } from '@/interfaces/stockImport'
-import { ref, markRaw, computed, nextTick } from 'vue'
+/**
+ * Composable pour la gestion complète des inventaires
+ *
+ * Fournit :
+ * - Configuration des colonnes DataTable
+ * - Actions disponibles sur les inventaires
+ * - Gestion des modales d'import et de planification
+ * - Handlers pour les opérations DataTable
+ *
+ * @module useInventoryManagement
+ */
+
+// ===== IMPORTS =====
+
+import { ref, markRaw } from 'vue'
 import { useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import { alertService } from '@/services/alertService'
+import { dataTableService } from '@/services/dataTableService'
 import { useInventoryStore } from '@/stores/inventory'
-import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
-import { convertToStandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
-import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
-import { convertQueryModelToQueryParams, convertQueryModelToRestApi, createQueryModelFromDataTableParams } from '@/components/DataTable/utils/queryModelConverter'
+import type { DataTableColumn, ColumnDataType, ActionConfig } from '@/types/dataTable'
+import type { InventoryTable } from '@/models/Inventory'
 import type { QueryModel } from '@/components/DataTable/types/QueryModel'
 
-
-// Import des icônes
+// ===== IMPORTS ICÔNES =====
 import IconEye from '@/components/icon/icon-eye.vue'
 import IconUpload from '@/components/icon/icon-upload.vue'
 import IconCalendar from '@/components/icon/icon-calendar.vue'
 import IconEdit from '@/components/icon/icon-edit.vue'
 import IconCheck from '@/components/icon/icon-check.vue'
 import IconTrash from '@/components/icon/icon-trash.vue'
+import IconPlus from '@/components/icon/icon-plus.vue'
 
-// Note: Lazy loading et optimisations sont maintenant intégrés dans useBackendDataTable
-// Pas besoin d'imports séparés (KISS - Keep It Simple)
+// ===== CONSTANTES =====
 
 /**
- * Composable pour la gestion des inventaires
- * Utilise useBackendDataTable pour l'intégration avec Pinia et les paramètres DataTable
- * Intègre le lazy loading, les optimisations de rendu et l'édition avancée
+ * Options de statut disponibles pour les inventaires
+ */
+const INVENTORY_STATUS_OPTIONS = [
+    { value: 'EN PREPARATION', label: 'EN PREPARATION' },
+    { value: 'EN REALISATION', label: 'EN REALISATION' },
+    { value: 'TERMINE', label: 'TERMINE' },
+    { value: 'CLOTURE', label: 'CLOTURE' }
+]
+
+/**
+ * Styles des badges pour chaque statut
+ */
+const STATUS_BADGE_STYLES = [
+    {
+        value: 'EN PREPARATION',
+        class: 'inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-yellow-600/20 ring-inset'
+    },
+    {
+        value: 'EN REALISATION',
+        class: 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-600/20 ring-inset'
+    },
+    {
+        value: 'TERMINE',
+        class: 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-800 ring-1 ring-green-600/20 ring-inset'
+    },
+    {
+        value: 'CLOTURE',
+        class: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+    }
+]
+
+// ===== COMPOSABLE =====
+
+/**
+ * Composable pour la gestion complète des inventaires
+ *
+ * @returns Configuration et handlers pour la gestion des inventaires
  */
 export function useInventoryManagement() {
     const router = useRouter()
     const inventoryStore = useInventoryStore()
+    const { inventories } = storeToRefs(inventoryStore)
 
-    // État local simple
-    const inventories = computed(() => inventoryStore.inventories)
-    const loading = computed(() => inventoryStore.loading)
-    const currentPage = computed(() => inventoryStore.currentPage)
-    const pageSize = computed(() => inventoryStore.pageSize)
+    // ===== ÉTATS RÉACTIFS =====
 
-    // ===== QUERYMODEL =====
-    
-    /**
-     * Mode de sortie pour les paramètres de requête (défaut: 'queryParams')
-     */
-    const queryOutputMode = ref<'queryModel' | 'dataTable' | 'restApi' | 'queryParams'>('queryParams')
+    // États des modales
+    const showImportModal = ref(false)
+    const showPlanningModal = ref(false)
+    const currentImportInventory = ref<InventoryTable | null>(null)
+    const currentPlanningInventory = ref<InventoryTable | null>(null)
 
-    /**
-     * Colonnes pour QueryModel (sera défini plus tard)
-     */
-    const columnsRef = computed(() => {
-        // columns est défini plus tard dans le fichier, donc on retourne un tableau vide pour l'instant
-        return []
-    })
+    // États d'import
+    const isImporting = ref(false)
+    const importError = ref<string | null>(null)
+    const importErrorDetails = ref<any>(null)
+    const importSuccess = ref(false)
+    const importSuccessMessage = ref<string | null>(null)
+    const selectedFile = ref<File | null>(null)
+    const uploadProgress = ref(0)
+    const isDragging = ref(false)
 
-    /**
-     * QueryModel pour gérer les requêtes avec mode de sortie configurable
-     */
-    const {
-        queryModel: queryModelRef,
-        toStandardParams,
-        updatePagination: updateQueryPagination,
-        updateSort: updateQuerySort,
-        updateFilter: updateQueryFilter,
-        updateGlobalSearch: updateQueryGlobalSearch
-    } = useQueryModel({
-        columns: columnsRef,
-        enabled: true
-    })
+    // États de planification
+    const planningFile = ref<File | null>(null)
+    const isDraggingPlanning = ref(false)
+    const isUploadingPlanning = ref(false)
+    const planningUploadProgress = ref(0)
+    const planningSuccess = ref(false)
+    const planningSuccessMessage = ref<string | null>(null)
+    const planningError = ref<string | null>(null)
+    const planningErrorDetails = ref<any>(null)
+    const planningInfoMessage = ref<string | null>(null)
+
+    // ===== CONFIGURATION DES COLONNES =====
 
     /**
-     * Convertit le QueryModel selon le mode configuré
-     */
-    const convertQueryModelToOutput = (queryModelData: QueryModel) => {
-        switch (queryOutputMode.value) {
-            case 'queryModel':
-                return queryModelData
-            case 'restApi':
-                return convertQueryModelToRestApi(queryModelData)
-            case 'queryParams':
-                return convertQueryModelToQueryParams(queryModelData)
-            case 'dataTable':
-            default:
-                return toStandardParams.value
-        }
-    }
-
-    /**
-     * Pagination calculée pour les inventaires
-     * Utilise le totalItems du store pour calculer les informations de pagination
-     */
-    const inventoryPaginationComputed = computed(() => {
-        const totalCount = inventoryStore.totalItems || 0
-        const pageSizeValue = pageSize.value || 20
-        const currentPageValue = currentPage.value || 1
-
-        return {
-            current_page: currentPageValue,
-            total_pages: Math.max(1, Math.ceil(totalCount / pageSizeValue)),
-            has_next: currentPageValue < Math.ceil(totalCount / pageSizeValue),
-            has_previous: currentPageValue > 1,
-            page_size: pageSizeValue,
-            total: totalCount
-        }
-    })
-
-    /**
-     * Initialisation de l'édition avancée - adapté pour useBackendDataTable
-     */
-
-
-    /**
-     * Configuration des colonnes avec validation
-     * Utilise le service DataTable pour la validation
+     * Configuration des colonnes du DataTable
+     * Chaque colonne est configurée avec ses propriétés d'affichage, tri, filtrage
      */
     const columns: DataTableColumn[] = [
         {
@@ -126,7 +124,7 @@ export function useInventoryManagement() {
                 headerName: 'Libellé',
                 dataType: 'text'
             }),
-            editable: true, // Activé pour l'édition
+            editable: true,
             visible: true,
             draggable: true,
             autoSize: true,
@@ -144,10 +142,11 @@ export function useInventoryManagement() {
                 headerName: 'Date',
                 dataType: 'date'
             }),
-            editable: true, // Activé pour l'édition
+            editable: true,
             visible: true,
             draggable: true,
             autoSize: true,
+            align: 'center',
             icon: 'icon-calendar',
             description: 'Date inventaire'
         },
@@ -162,50 +161,21 @@ export function useInventoryManagement() {
                 headerName: 'Statut',
                 dataType: 'select'
             }),
-            editable: false, // Activé pour l'édition
+            editable: false,
             visible: true,
             draggable: true,
             autoSize: true,
             icon: 'icon-status',
             description: 'Statut de l\'inventaire',
-            /**
-             * Configuration du filtre select avec les options de statut disponibles
-             * Permet d'afficher la liste des statuts dans le filtre (comportement Excel)
-             */
             filterConfig: {
                 dataType: 'select' as ColumnDataType,
                 operator: 'in' as const,
-                options: [
-                    { value: 'EN PREPARATION', label: 'EN PREPARATION' },
-                    { value: 'EN REALISATION', label: 'EN REALISATION' },
-                    { value: 'TERMINE', label: 'TERMINE' },
-                    { value: 'CLOTURE', label: 'CLOTURE' }
-                ]
+                options: INVENTORY_STATUS_OPTIONS
             },
-            /**
-             * Configuration des badges pour les différents statuts
-             * Chaque statut a sa propre classe CSS pour un style distinctif
-             */
-            badgeStyles: [
-                {
-                    value: 'EN PREPARATION',
-                    class: 'inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-yellow-600/20 ring-inset'
-                },
-                {
-                    value: 'EN REALISATION',
-                    class: 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-600/20 ring-inset'
-                },
-                {
-                    value: 'TERMINE',
-                    class: 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-800 ring-1 ring-green-600/20 ring-inset'
-                },
-                {
-                    value: 'CLOTURE',
-                    class: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
-                }
-            ],
+            badgeStyles: STATUS_BADGE_STYLES,
             badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
         },
+        // Colonnes de dates de statut (masquées par défaut)
         {
             headerName: 'Date préparation',
             field: 'en_preparation_status_date',
@@ -217,6 +187,7 @@ export function useInventoryManagement() {
             visible: false,
             draggable: true,
             autoSize: true,
+            align: 'center',
             icon: 'icon-clock',
             description: 'Date passage en préparation'
         },
@@ -231,6 +202,7 @@ export function useInventoryManagement() {
             visible: false,
             draggable: true,
             autoSize: true,
+            align: 'center',
             icon: 'icon-clock',
             description: 'Date passage en réalisation'
         },
@@ -245,6 +217,7 @@ export function useInventoryManagement() {
             visible: false,
             draggable: true,
             autoSize: true,
+            align: 'center',
             icon: 'icon-clock',
             description: 'Date passage terminé'
         },
@@ -259,6 +232,7 @@ export function useInventoryManagement() {
             visible: false,
             draggable: true,
             autoSize: true,
+            align: 'center',
             icon: 'icon-clock',
             description: 'Date passage clôturé'
         },
@@ -275,200 +249,142 @@ export function useInventoryManagement() {
             autoSize: true,
             icon: 'icon-user',
             description: 'Compte'
-        },
+        }
     ]
 
     // Validation des colonnes
     columns.forEach(column => {
         const validation = dataTableService.validateColumnConfig(column)
         if (!validation.isValid) {
-            logger.warn('Configuration de colonne invalide', { column, errors: validation.errors })
+            console.warn(`Configuration de colonne invalide pour ${column.field}:`, validation.errors)
         }
     })
 
+    // ===== ACTIONS SUR LES INVENTAIRES =====
+
     /**
-     * Fonction pour rafraîchir les données avec le même pattern que usePlanning et useInventoryResults
+     * Actions disponibles dans le DataTable
+     * Chaque action définit son comportement et ses conditions d'affichage
      */
-    const refresh = async (params?: StandardDataTableParams) => {
-        try {
-            // Utiliser les paramètres fournis ou construire à partir des valeurs actuelles
-            let finalParams: StandardDataTableParams
-            if (params && 'start' in params && 'length' in params) {
-                // C'est déjà StandardDataTableParams
-                finalParams = params
-            } else {
-                // Construire depuis les valeurs actuelles si nécessaire
-                finalParams = params || {
-                    draw: currentPage.value || 1,
-                    start: ((currentPage.value || 1) - 1) * (pageSize.value || 20),
-                    length: pageSize.value || 20
-                }
-            }
-
-            // S'assurer que length et start sont bien définis
-            if (!finalParams.length) {
-                finalParams.length = pageSize.value || 20
-            }
-            if (finalParams.start === undefined) {
-                finalParams.start = ((currentPage.value || 1) - 1) * (pageSize.value || 20)
-            }
-
-            logger.debug('Chargement des inventaires avec paramètres DataTable:', {
-                pageSize: pageSize.value,
-                params: finalParams
-            })
-
-            await inventoryStore.fetchInventories(finalParams)
-            await nextTick()
-
-            logger.debug('Inventaires mis à jour dans le store', {
-                count: inventoryStore.inventories.length,
-                totalItems: inventoryStore.totalItems
-            })
-        } catch (error) {
-            logger.error('Erreur lors du chargement des inventaires', error)
-            throw error
-        }
-    }
-
-    // États pour la modale d'import Excel
-    const showImportModal = ref(false)
-    const isImporting = ref(false)
-    const importError = ref<string | null>(null)
-    const importErrorDetails = ref<StockImportErrorResponse | null>(null)
-    const importSuccess = ref<boolean>(false)
-    const importSuccessMessage = ref<string | null>(null)
-    const currentImportInventory = ref<InventoryTable | null>(null)
-
-    // Fonction pour gérer l'import Excel depuis les actions
-    const handleImportExcel = (inventory: InventoryTable) => {
-        currentImportInventory.value = inventory
-        showImportModal.value = true
-    }
-
-    // Fonction pour gérer la suppression
-    const handleDelete = async (inventory: InventoryTable) => {
-        try {
-            const result = await alertService.confirm({
-                title: 'Confirmer la suppression',
-                text: `Êtes-vous sûr de vouloir supprimer l'inventaire "${inventory.label}" ?`,
-                icon: 'warning'
-            })
-
-            if (result.isConfirmed) {
-                // Ici vous pouvez appeler votre API pour supprimer l'inventaire
-                // await inventoryStore.deleteInventory(inventory.id)
-                logger.success('Inventaire supprimé avec succès')
-                await refresh()
-            }
-        } catch (error) {
-            logger.error('Erreur lors de la suppression', error)
-            alertService.error('Erreur lors de la suppression')
-        }
-    }
-
-    // Actions pour les inventaires
-    const actions: ActionConfig<InventoryTable>[] = [
+    const actions: ActionConfig[] = [
         {
             label: 'Détail',
             icon: markRaw(IconEye),
             color: 'primary',
-            onClick: inv => { void router.push({ name: 'inventory-detail', params: { reference: inv.reference } }) },
-            show: () => true,
+            onClick: (row: any) => handleDetail(row as InventoryTable),
+        },
+        {
+            label: 'Planifier',
+            icon: markRaw(IconCalendar),
+            color: 'primary',
+            onClick: (row: any) => handlePlan(row as InventoryTable),
+            show: (row: any) => ['EN PREPARATION', 'EN REALISATION'].includes((row as InventoryTable).status),
+        },
+        {
+            label: 'Ajouter planification',
+            icon: markRaw(IconPlus),
+            color: 'primary',
+            onClick: (row: any) => handleAddPlanning(row as InventoryTable),
+            show: (row: any) => (row as InventoryTable).status === 'EN PREPARATION',
         },
         {
             label: 'Importer image de stock',
             icon: markRaw(IconUpload),
-            color: 'secondary',
-            onClick: handleImportExcel,
-            show: inv => inv.status === 'EN PREPARATION',
-        },
-        {
-            label: inv => inv.status === 'EN REALISATION' ? 'Transférer' : 'Préparer',
-            icon: markRaw(IconCalendar),
-            color: 'warning',
-            onClick: inv => { void router.push({ name: 'planning-management', params: { reference: inv.reference } }) },
-            show: inv => ['EN PREPARATION', 'EN REALISATION'].includes(inv.status),
+            color: 'primary',
+            onClick: (row: any) => handleImportExcel(row as InventoryTable),
+            show: (row: any) => (row as InventoryTable).status === 'EN PREPARATION',
         },
         {
             label: 'Modifier',
             icon: markRaw(IconEdit),
-            color: 'success',
-            onClick: inv => { void router.push({ name: 'inventory-edit', params: { reference: inv.reference } }) },
-            show: inv => inv.status === 'EN PREPARATION',
+            color: 'primary',
+            onClick: (row: any) => handleEdit(row as InventoryTable),
+            show: (row: any) => (row as InventoryTable).status === 'EN PREPARATION',
         },
         {
             label: 'Résultats',
             icon: markRaw(IconCheck),
-            color: 'info',
-            onClick: inv => { void router.push({ name: 'inventory-results', params: { reference: inv.reference } }) },
-            show: inv => ['EN REALISATION', 'TERMINE', 'CLOTURE'].includes(inv.status),
+            color: 'primary',
+            onClick: (row: any) => handleResults(row as InventoryTable),
+            show: (row: any) => ['EN REALISATION', 'TERMINE', 'CLOTURE'].includes((row as InventoryTable).status),
         },
         {
             label: 'Supprimer',
             icon: markRaw(IconTrash),
             color: 'danger',
-            onClick: handleDelete,
-            show: inv => inv.status === 'EN PREPARATION',
+            onClick: async (row: any) => await handleDelete(row as InventoryTable),
+            show: (row: any) => (row as InventoryTable).status === 'EN PREPARATION',
         },
     ]
 
-    // Fonction de redirection
-    const redirectToAdd = () => {
-        void router.push({ name: 'inventory-create' })
+    // ===== HANDLERS DES ACTIONS =====
+
+    /**
+     * Navigation vers la page de détail d'un inventaire
+     */
+    const handleDetail = (inventory: InventoryTable) => {
+        router.push({ name: 'inventory-detail', params: { reference: inventory.reference } })
     }
 
-    // Fonction d'import Excel
-    const processImportExcel = async (file: File) => {
-        if (!currentImportInventory.value) return
+    /**
+     * Navigation vers la page de planning d'un inventaire
+     */
+    const handlePlan = (inventory: InventoryTable) => {
+        router.push({ name: 'planning-management', params: { reference: inventory.reference } })
+    }
 
-        isImporting.value = true
-        importError.value = null
-        importErrorDetails.value = null
+    /**
+     * Navigation vers la page d'édition d'un inventaire
+     */
+    const handleEdit = (inventory: InventoryTable) => {
+        router.push({ name: 'inventory-edit', params: { reference: inventory.reference } })
+    }
 
-        try {
-            const formData = new FormData()
-            formData.append('file', file)
+    /**
+     * Navigation vers la page des résultats d'un inventaire
+     */
+    const handleResults = (inventory: InventoryTable) => {
+        router.push({ name: 'inventory-results', params: { reference: inventory.reference } })
+    }
 
-            const response = await inventoryStore.importStockImage(currentImportInventory.value.id, formData)
-            logger.success('Import Excel réussi', response)
+    /**
+     * Ouverture de la modal d'import d'image de stock
+     */
+    const handleImportExcel = (inventory: InventoryTable) => {
+        currentImportInventory.value = inventory
+        showImportModal.value = true
+    }
 
-            // Afficher le message de succès
-            importSuccess.value = true
-            importSuccessMessage.value = response?.message || 'Import terminé avec succès'
-            importError.value = null
-            importErrorDetails.value = null
+    /**
+     * Ouverture de la modal d'ajout de planification
+     */
+    const handleAddPlanning = (inventory: InventoryTable) => {
+        console.log('[handleAddPlanning] Définition de currentPlanningInventory avec:', inventory)
+        console.log('[handleAddPlanning] ID de l\'inventaire:', inventory?.id)
+        currentPlanningInventory.value = inventory
+        showPlanningModal.value = true
+        console.log('[handleAddPlanning] currentPlanningInventory défini:', currentPlanningInventory.value)
+    }
 
-            // Attendre 2 secondes avant de fermer et rafraîchir
-            setTimeout(async () => {
-                closeImportModal()
-                await refresh()
-            }, 2000)
-        } catch (error: any) {
-            importSuccess.value = false
-            importSuccessMessage.value = null
-            // Extraire les détails de l'erreur depuis la réponse API
-            const errorResponse = error.response?.data || error
-
-            // Construire l'objet d'erreur selon la documentation API
-            importErrorDetails.value = {
-                success: false,
-                message: errorResponse.message || 'Erreur lors de l\'import',
-                inventory_type: errorResponse.inventory_type || null,
-                existing_stocks_count: errorResponse.existing_stocks_count ?? null,
-                action_required: errorResponse.action_required || null,
-                summary: errorResponse.summary || null,
-                errors: errorResponse.errors || []
-            }
-
-            importError.value = importErrorDetails.value.message
-            logger.error('Erreur import Excel', error)
-        } finally {
-            isImporting.value = false
+    /**
+     * Suppression d'un inventaire avec confirmation
+     */
+    const handleDelete = async (inventory: InventoryTable): Promise<void> => {
+        const confirmed = await alertService.confirm({
+            title: 'Confirmer la suppression',
+            text: `Supprimer l'inventaire "${inventory.label}" ?`
+        })
+        if (confirmed.isConfirmed) {
+            // TODO: Implement delete logic
+            alertService.success({ text: 'Inventaire supprimé' })
         }
     }
 
-    // Fonction de fermeture de modale
+    // ===== GESTION DES MODALES =====
+
+    /**
+     * Fermeture de la modal d'import avec nettoyage complet
+     */
     const closeImportModal = () => {
         showImportModal.value = false
         isImporting.value = false
@@ -477,390 +393,407 @@ export function useInventoryManagement() {
         importSuccess.value = false
         importSuccessMessage.value = null
         currentImportInventory.value = null
+        selectedFile.value = null
+        uploadProgress.value = 0
+        isDragging.value = false
     }
 
-    // Fonction d'import avec modale
-    const importStockImageWithModal = async (id: number, formData: FormData, callbacks: any) => {
+    /**
+     * Fermeture de la modal de planification
+     */
+    const closePlanningModal = () => {
+        console.log('[closePlanningModal] Fermeture de la modal - remise à null de currentPlanningInventory')
+        console.log('[closePlanningModal] currentPlanningInventory avant:', currentPlanningInventory.value)
+        showPlanningModal.value = false
+        planningFile.value = null
+        isDraggingPlanning.value = false
+        currentPlanningInventory.value = null
+        console.log('[closePlanningModal] currentPlanningInventory après:', currentPlanningInventory.value)
+    }
+
+    // ===== IMPORT D'IMAGE DE STOCK =====
+
+    /**
+     * Import d'image de stock sans barre de progression
+     */
+    const processImportExcel = async (file: File) => {
+        await processImport(file, false)
+    }
+
+    /**
+     * Import d'image de stock avec barre de progression simulée
+     */
+    const processImportExcelWithProgress = async (file: File) => {
+        await processImport(file, true)
+    }
+
+    /**
+     * Méthode commune pour l'import d'image de stock
+     */
+    const processImport = async (file: File, withProgress: boolean = false) => {
+        if (!currentImportInventory.value) return
+
+        isImporting.value = true
+        importError.value = null
+        importErrorDetails.value = null
+
+        if (withProgress) {
+            uploadProgress.value = 0
+        }
+
         try {
-            const result = await inventoryStore.importStockImage(id, formData)
-            callbacks?.onSuccess?.(result)
-            logger.success('Import avec modale réussi', { id })
-        } catch (error) {
-            callbacks?.onError?.(error)
-            logger.error('Erreur import avec modale', { id, error })
-        }
-    }
+            const formData = new FormData()
+            formData.append('file', file)
 
-    // Exemple d'utilisation du service centralisé de transformation des filtres
-    const handleInventoryFilterChanged = async (filterModel: Record<string, { filter: string }>) => {
-        // Cette fonction n'est plus utilisée car on utilise useInventoryDataTable
-        // Gardée pour compatibilité si nécessaire
-    };
-
-    // Service d'alerte mock
-    const alertService = {
-        success: (params: any) => logger.success('Succès', params),
-        error: (params: any) => logger.error('Erreur', params),
-        confirm: (params: any) => Promise.resolve({ isConfirmed: true })
-    }
-
-    // Fonction pour compter les inventaires par statut
-    const getStatusCount = (status: string) => {
-        return inventories.value.filter((inv: InventoryTable) => inv.status === status).length
-    }
-
-    // ===== CONFIGURATION DES FONCTIONNALITÉS AG-GRID =====
-
-    /**
-     * Configuration du tri multi-colonnes
-     */
-    const multiSortConfig = {
-        maxSortColumns: 3
-    }
-
-    /**
-     * Configuration de l'épinglage de colonnes
-     */
-    const columnPinningConfig = {
-        defaultPinnedColumns: [
-            { field: 'label', pinned: 'left' as const }
-        ]
-    }
-
-    /**
-     * Configuration du redimensionnement de colonnes
-     */
-    const columnResizeConfig = {
-        minWidth: 100,
-        maxWidth: 500,
-        defaultWidths: {
-            'label': 200,
-            'status': 150,
-            'date': 120,
-            'account_name': 150
-        }
-    }
-
-    /**
-     * Configuration des filtres Set (valeurs uniques)
-     */
-    const setFiltersConfig = {
-        extractUniqueValues: (field: string, data: any[]) => {
-            if (field === 'status') {
-                return ['EN PREPARATION', 'EN REALISATION', 'TERMINE', 'CLOTURE']
+            // Simuler la progression si demandé
+            let progressInterval: NodeJS.Timeout | null = null
+            if (withProgress) {
+                progressInterval = setInterval(() => {
+                    uploadProgress.value += Math.random() * 15
+                    if (uploadProgress.value >= 90) {
+                        clearInterval(progressInterval!)
+                        progressInterval = null
+                    }
+                }, 200)
             }
-            // Pour les autres champs, extraire les valeurs uniques depuis les données
-            const values = new Set<any>()
-            data.forEach(row => {
-                const value = row[field]
-                if (value !== null && value !== undefined && value !== '') {
-                    values.add(value)
+
+            const response = await inventoryStore.importStockImage(currentImportInventory.value.id, formData)
+
+            if (progressInterval) {
+                clearInterval(progressInterval)
+            }
+            if (withProgress) {
+                uploadProgress.value = 100
+            }
+
+            importSuccess.value = true
+            importSuccessMessage.value = response?.message || 'Import terminé avec succès'
+
+            setTimeout(() => {
+                closeImportModal()
+                window.location.reload() // Recharger les données
+            }, 2000)
+
+        } catch (error: any) {
+            if (withProgress) {
+                uploadProgress.value = 0
+            }
+            importErrorDetails.value = error.response?.data || error
+            importError.value = importErrorDetails.value.message || 'Erreur lors de l\'import'
+        } finally {
+            isImporting.value = false
+        }
+    }
+
+    // ===== UPLOAD DE PLANIFICATION =====
+
+    /**
+     * Upload et traitement d'un fichier de planification
+     */
+    const processPlanningUpload = async (file: File) => {
+        console.log('[processPlanningUpload] Début avec fichier:', file?.name)
+        console.log('[processPlanningUpload] currentPlanningInventory:', currentPlanningInventory.value)
+        console.log('[processPlanningUpload] currentPlanningInventory.value existe:', !!currentPlanningInventory.value)
+        console.log('[processPlanningUpload] currentPlanningInventory.value?.id:', currentPlanningInventory.value?.id)
+        console.log('[processPlanningUpload] typeof currentPlanningInventory.value?.id:', typeof currentPlanningInventory.value?.id)
+
+        // Vérifier si on a un ID ou une référence
+        const inventoryId = currentPlanningInventory.value?.id || currentPlanningInventory.value?.reference
+
+        if (!inventoryId) {
+            console.error('[processPlanningUpload] Ni id ni reference trouvés - RETOUR ANTICIPE')
+            console.error('[processPlanningUpload] Valeur complète:', JSON.stringify(currentPlanningInventory.value, null, 2))
+            return
+        }
+
+        console.log('[processPlanningUpload] Démarrage de l\'upload pour inventory ID/Reference:', inventoryId)
+
+        isUploadingPlanning.value = true
+        planningError.value = null
+        planningErrorDetails.value = null
+        planningSuccess.value = false
+        planningInfoMessage.value = 'Upload du fichier en cours...'
+        planningUploadProgress.value = 0
+
+        try {
+            console.log('[processPlanningUpload] Création du FormData avec fichier:', file.name)
+            const formData = new FormData()
+            formData.append('file', file)
+
+            console.log('[processPlanningUpload] Appel de inventoryStore.importLocationJobsSync')
+            // Simuler la progression
+            const progressInterval = setInterval(() => {
+                planningUploadProgress.value += Math.random() * 20
+                if (planningUploadProgress.value >= 80) {
+                    clearInterval(progressInterval)
                 }
-            })
-            return Array.from(values).sort()
-        },
-        formatValue: (value: any) => {
-            if (value === null || value === undefined) return '(Vide)'
-            if (typeof value === 'boolean') return value ? 'Oui' : 'Non'
-            return String(value)
+            }, 300)
+
+            planningInfoMessage.value = 'Traitement des données de planification...'
+            await inventoryStore.importLocationJobsSync(inventoryId, formData)
+            console.log('[processPlanningUpload] inventoryStore.importLocationJobsSync terminé avec succès')
+
+            clearInterval(progressInterval)
+            planningUploadProgress.value = 100
+
+            planningSuccess.value = true
+            planningSuccessMessage.value = 'Planification ajoutée avec succès'
+
+            setTimeout(() => {
+                closePlanningModal()
+                // Rediriger vers la page de planning
+                if (currentPlanningInventory.value) {
+                    router.push({
+                        name: 'planning-management',
+                        params: { reference: currentPlanningInventory.value.reference }
+                    })
+                }
+            }, 2000)
+
+        } catch (error: any) {
+            console.error('[processPlanningUpload] Erreur capturée:', error)
+            console.error('[processPlanningUpload] Erreur response:', error?.response?.data)
+            planningUploadProgress.value = 0
+            planningErrorDetails.value = error.response?.data || error
+            planningError.value = error?.message || 'Erreur lors de l\'upload'
+        } finally {
+            console.log('[processPlanningUpload] Finally - nettoyage terminé')
+            isUploadingPlanning.value = false
+            planningInfoMessage.value = null
         }
     }
 
-    // 🚀 Handlers simplifiés : reçoivent directement StandardDataTableParams du DataTable
-    const handleStandardParamsChanged = async (params: StandardDataTableParams) => {
-        await inventoryStore.fetchInventories(params)
-    }
-
-    // ===== HANDLERS DATATABLE =====
+    // ===== GESTION DES FICHIERS =====
 
     /**
-     * Handler pour les changements de tri
-     * Accepte StandardDataTableParams quand serverSideSorting est activé
+     * Validation des fichiers Excel
      */
-    const handleSortChanged = async (params: any) => {
-        if (params && typeof params === 'object' && ('start' in params || 'draw' in params)) {
-            await handleStandardParamsChanged(params as StandardDataTableParams)
+    const validateExcelFile = (file: File): boolean => {
+        const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+        if (!isExcel) {
+            alertService.error({ text: 'Seuls les fichiers Excel (.xlsx, .xls) sont acceptés' })
+            return false
         }
+        return true
     }
 
-    /**
-     * Handler pour les changements de filtre
-     * Accepte StandardDataTableParams quand serverSideFiltering est activé
-     */
-    const handleFilterChanged = async (params: StandardDataTableParams | QueryModel | Record<string, any> | any) => {
-        if (params && typeof params === 'object' && ('start' in params || 'draw' in params)) {
-            await handleStandardParamsChanged(params as StandardDataTableParams)
-        }
-    }
+    // ===== HANDLERS D'IMPORT =====
 
-    /**
-     * Handler pour les changements de pagination
-     * Accepte StandardDataTableParams quand serverSidePagination est activé
-     */
-    const handlePaginationChanged = async (params: StandardDataTableParams | QueryModel | Record<string, any> | any) => {
-        if (params && typeof params === 'object' && ('start' in params || 'draw' in params)) {
-            await handleStandardParamsChanged(params as StandardDataTableParams)
-        }
-    }
-
-    /**
-     * Handler pour les changements de recherche globale
-     * Accepte StandardDataTableParams ou string
-     */
-    const handleGlobalSearchChanged = async (params: any) => {
-        if (params && typeof params === 'object') {
-            // Vérifier si c'est un StandardDataTableParams
-            if ('start' in params || 'draw' in params || 'length' in params) {
-                await handleStandardParamsChanged(params as StandardDataTableParams)
-            } else {
-                console.warn('Recherche globale reçue avec un objet de format inattendu', params)
-            }
-        } else if (typeof params === 'string') {
-            // Convertir string en StandardDataTableParams
-            const standardParams: StandardDataTableParams = {
-                start: 0,
-                length: pageSize.value || 10,
-                'search[value]': params || '',
-                draw: 1
-            }
-            await handleStandardParamsChanged(standardParams)
-        } else {
-            console.warn('Recherche globale reçue avec un format inattendu', typeof params, params)
-        }
-    }
-
-    /**
-     * Handler pour les changements de valeur de cellule
-     */
-    const handleCellValueChanged = (event: { data: any; field: string; newValue: any; oldValue: any }) => {
-        // TODO: Implémenter la logique de sauvegarde des modifications
-        // await inventoryStore.updateInventory(event.data.id, { [event.field]: event.newValue })
-    }
-
-    // ===== ÉTATS POUR L'UPLOAD DE FICHIER =====
-
-    /** Fichier sélectionné pour l'import */
-    const selectedFile = ref<File | null>(null)
-
-    /** Référence à l'input file */
-    const fileInput = ref<HTMLInputElement>()
-
-    /** État de drag & drop */
-    const isDragging = ref(false)
-
-    /** Progression de l'upload */
-    const uploadProgress = ref(0)
-
-    // ===== HANDLERS DE FICHIER =====
-
-    /**
-     * Handler pour le changement de fichier
-     */
     const handleFileChange = (event: Event) => {
         const target = event.target as HTMLInputElement
         if (target.files && target.files.length > 0) {
             selectedFile.value = target.files[0]
-            uploadProgress.value = 0
         }
     }
 
-    /**
-     * Handler pour le survol lors du drag & drop
-     */
     const handleDragOver = (event: DragEvent) => {
         event.preventDefault()
         isDragging.value = true
     }
 
-    /**
-     * Handler pour la sortie du drag & drop
-     */
     const handleDragLeave = (event: DragEvent) => {
         event.preventDefault()
         isDragging.value = false
     }
 
-    /**
-     * Handler pour le dépôt de fichier
-     */
     const handleDrop = (event: DragEvent) => {
         event.preventDefault()
         isDragging.value = false
 
         if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
             const file = event.dataTransfer.files[0]
-            // Vérifier le type de fichier
-            if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+            if (validateExcelFile(file)) {
                 selectedFile.value = file
-                uploadProgress.value = 0
-            } else {
-                alertService.error('Seuls les fichiers Excel (.xlsx, .xls) sont acceptés')
             }
         }
     }
 
-    // ===== FONCTIONS UTILITAIRES =====
+    // ===== HANDLERS DE PLANIFICATION =====
 
-    /**
-     * Formater la taille d'un fichier en unités lisibles
-     */
-    const formatFileSize = (bytes: number): string => {
-        if (bytes === 0) return '0 Bytes'
-        const k = 1024
-        const sizes = ['Bytes', 'KB', 'MB', 'GB']
-        const i = Math.floor(Math.log(bytes) / Math.log(k))
-        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+    const handlePlanningFileChange = (event: Event) => {
+        const target = event.target as HTMLInputElement
+        if (target.files && target.files.length > 0) {
+            planningFile.value = target.files[0]
+        }
     }
 
-    /**
-     * Obtenir le type de fichier depuis son nom
-     */
-    const getFileType = (fileName: string): string => {
-        const extension = fileName.split('.').pop()?.toUpperCase()
-        return extension ? `Fichier ${extension}` : 'Fichier inconnu'
+    const handlePlanningDragOver = (event: DragEvent) => {
+        event.preventDefault()
+        isDraggingPlanning.value = true
     }
 
-    /**
-     * Formater une date en français
-     */
-    const formatDate = (date: string | Date): string => {
-        if (!date) return ''
-        const d = new Date(date)
-        return d.toLocaleDateString('fr-FR', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        })
+    const handlePlanningDragLeave = (event: DragEvent) => {
+        event.preventDefault()
+        isDraggingPlanning.value = false
     }
 
-    // ===== WRAPPERS POUR L'IMPORT =====
+    const handlePlanningDrop = (event: DragEvent) => {
+        event.preventDefault()
+        isDraggingPlanning.value = false
 
-    /**
-     * Wrapper pour processImportExcel avec gestion de progression
-     */
-    const processImportExcelWithProgress = async (file: File) => {
-        uploadProgress.value = 0
-
-        // Simuler la progression pendant l'upload
-        const progressInterval = setInterval(() => {
-            if (uploadProgress.value < 90) {
-                uploadProgress.value += 10
+        if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+            const file = event.dataTransfer.files[0]
+            if (validateExcelFile(file)) {
+                planningFile.value = file
             }
-        }, 200)
+        }
+    }
 
+
+
+    // ===== HANDLERS DATATABLE =====
+
+    /**
+     * Handler commun pour les opérations DataTable (pagination, tri, filtrage, recherche)
+     */
+    const handleInventoryOperation = async (queryModel: QueryModel) => {
+        console.log('[useInventoryManagement] handleInventoryOperation called with:', queryModel)
         try {
-            await processImportExcel(file)
-            clearInterval(progressInterval)
-            uploadProgress.value = 100
-            await new Promise(resolve => setTimeout(resolve, 500))
+            console.log('[useInventoryManagement] Calling inventoryStore.fetchInventories...')
+            await inventoryStore.fetchInventories(queryModel)
+            console.log('[useInventoryManagement] inventoryStore.fetchInventories completed')
         } catch (error) {
-            clearInterval(progressInterval)
-            uploadProgress.value = 0
-            throw error
+            console.error('[useInventoryManagement] Error in inventoryStore.fetchInventories:', error)
+            alertService.error({ text: 'Erreur lors du chargement des inventaires' })
+        }
+    }
+
+    // Handlers spécialisés
+    const handlePaginationChanged = (queryModel: QueryModel) => {
+        console.log('[useInventoryManagement] handlePaginationChanged called with:', queryModel)
+        return handleInventoryOperation(queryModel)
+    }
+    const handleSortChanged = (queryModel: QueryModel) => {
+        console.log('[useInventoryManagement] handleSortChanged called with:', queryModel)
+        return handleInventoryOperation(queryModel)
+    }
+    const handleFilterChanged = (queryModel: QueryModel) => {
+        console.log('[useInventoryManagement] handleFilterChanged called with:', queryModel)
+        return handleInventoryOperation(queryModel)
+    }
+    const handleGlobalSearchChanged = (queryModel: QueryModel) => {
+        console.log('[useInventoryManagement] handleGlobalSearchChanged called with:', queryModel)
+        return handleInventoryOperation(queryModel)
+    }
+
+    const handleCellValueChanged = () => {
+        // TODO: Implémenter l'édition en ligne
+    }
+
+    // ===== EXPORT =====
+
+    /**
+     * Export des inventaires en CSV
+     */
+    const handleExportCsv = async () => {
+        try {
+            await inventoryStore.exportInventories({ export: 'csv' })
+            alertService.success({ text: 'Export CSV réussi' })
+        } catch (error: any) {
+            alertService.error({ text: error?.message || 'Erreur export CSV' })
         }
     }
 
     /**
-     * Wrapper pour closeImportModal avec nettoyage
-     * Réinitialise tous les états liés à l'import
+     * Export des inventaires en Excel
      */
-    const closeImportModalWithCleanup = () => {
-        if (isImporting.value) return // Empêcher la fermeture pendant l'import
-
-        selectedFile.value = null
-        uploadProgress.value = 0
-        isDragging.value = false
-        closeImportModal()
+    const handleExportExcel = async () => {
+        try {
+            await inventoryStore.exportInventories({ export: 'excel' })
+            alertService.success({ text: 'Export Excel réussi' })
+        } catch (error: any) {
+            alertService.error({ text: error?.message || 'Erreur export Excel' })
+        }
     }
+
+    // ===== NAVIGATION =====
 
     /**
-     * Handler pour les erreurs de chargement
+     * Redirection vers la page de création d'inventaire
      */
-    const handleLoadError = (error: any) => {
-        alertService.error('Erreur lors du chargement des inventaires')
+    const redirectToAdd = () => {
+        router.push({ name: 'inventory-create' })
     }
+
+    // ===== CHARGEMENT INITIAL =====
+
+    /**
+     * Chargement initial des inventaires
+     */
+    const loadInventories = async () => {
+        try {
+            await inventoryStore.fetchInventories()
+        } catch (error) {
+            alertService.error({ text: 'Erreur lors du chargement des inventaires' })
+        }
+    }
+
+    // ===== RETURN =====
 
     return {
-        // Données réactives de useBackendDataTable (synchronisées avec QueryModel)
+        // ===== DONNÉES =====
         inventories,
-        loading,
-        currentPage,
-        pageSize,
-        pagination: inventoryPaginationComputed,
-        inventoryTotalItems: computed(() => inventoryStore.totalItems || 0),
+        loadInventories,
 
-        // Configuration de la table
+        // ===== CONFIGURATION DATATABLE =====
         columns,
         actions,
 
-        // Méthodes de navigation
+        // ===== NAVIGATION =====
         redirectToAdd,
 
-        // Méthodes de rafraîchissement
-        refresh,
+        // ===== HANDLERS DATATABLE =====
+        handlePaginationChanged,
+        handleSortChanged,
+        handleFilterChanged,
+        handleGlobalSearchChanged,
+        handleCellValueChanged,
+        handleExportCsv,
+        handleExportExcel,
 
-        // 🚀 Configuration des fonctionnalités AG-Grid
-        multiSortConfig,
-        columnPinningConfig,
-        columnResizeConfig,
-        setFiltersConfig,
-
-        // 🚀 Handler simplifié pour StandardDataTableParams
-        handleStandardParamsChanged,
-
-        // Méthodes d'import
-        importStockImageWithModal,
-
-        // Services
-        alertService,
-
-        // États pour la modale d'import Excel
+        // ===== MODALES =====
         showImportModal,
+        showPlanningModal,
+        currentImportInventory,
+        currentPlanningInventory,
+        closeImportModal,
+        closePlanningModal,
+
+        // ===== IMPORT D'IMAGE DE STOCK =====
         isImporting,
         importError,
         importErrorDetails,
         importSuccess,
         importSuccessMessage,
-        currentImportInventory,
-        processImportExcel,
-        closeImportModal,
-
-        // Handlers DataTable
-        handleSortChanged,
-        handleFilterChanged,
-        handlePaginationChanged,
-        handleGlobalSearchChanged,
-        handleCellValueChanged,
-
-        // États pour l'upload de fichier
         selectedFile,
-        fileInput,
-        isDragging,
         uploadProgress,
+        isDragging,
+        processImportExcel,
+        processImportExcelWithProgress,
 
-        // Handlers de fichier
+        // ===== PLANIFICATION =====
+        planningFile,
+        isDraggingPlanning,
+        isUploadingPlanning,
+        planningUploadProgress,
+        planningSuccess,
+        planningSuccessMessage,
+        planningError,
+        planningErrorDetails,
+        planningInfoMessage,
+        processPlanningUpload,
+
+        // ===== HANDLERS DE FICHIERS =====
         handleFileChange,
         handleDragOver,
         handleDragLeave,
         handleDrop,
+        handlePlanningFileChange,
+        handlePlanningDragOver,
+        handlePlanningDragLeave,
+        handlePlanningDrop,
 
-        // Fonctions utilitaires
-        formatFileSize,
-        getFileType,
-        formatDate,
-        getStatusCount,
-
-        // Wrappers pour l'import
-        processImportExcelWithProgress,
-        closeImportModalWithCleanup,
-        handleLoadError,
-
-        // Fonctions utilitaires (dépréciées mais conservées pour compatibilité)
-        handleInventoryFilterChanged,
-
-        // QueryModel
-        queryModel: computed(() => queryModelRef.value),
-        queryOutputMode: computed(() => queryOutputMode.value),
-        convertQueryModelToOutput
+        // ===== SERVICES =====
+        alertService
     }
 }

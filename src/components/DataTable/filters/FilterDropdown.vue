@@ -1,5 +1,5 @@
 <template>
-    <div class="filter-dropdown" v-if="isVisible">
+    <div class="filter-dropdown" :class="{ 'hidden': !isVisible, 'block': isVisible }">
         <!-- Header avec icône et titre -->
         <div class="filter-header">
             <div class="filter-title-section">
@@ -13,49 +13,146 @@
             </button>
         </div>
 
-        <!-- Filtre select avec checkboxes (comportement Excel) - Affiché en premier si c'est un filtre select -->
-        <div v-if="isSelectFilter" class="filter-section">
-            <label class="filter-label">
-                <IconSearch class="w-3 h-3" />
-                Sélectionner les valeurs
-            </label>
-            <div class="filter-input-group">
-                <div class="select-filter-list">
-                    <div v-if="columnOptions.length === 0" class="no-options-message">
-                        <IconInfoCircle class="w-4 h-4" />
-                        <span>Aucune option disponible</span>
+        <!-- Filtre select avec checkboxes style Excel - Affiché en premier si c'est un filtre select -->
+        <div v-if="isSelectFilter" class="filter-section excel-filter-section">
+            <!-- Barre de recherche -->
+            <div class="filter-search-box">
+                <div class="relative">
+                    <IconSearch class="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                        v-model="searchText"
+                        type="text"
+                        class="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        placeholder="Rechercher dans la liste..."
+                        @input="onSearchInput"
+                    />
+                </div>
+            </div>
+
+            <!-- Compteur de sélection -->
+            <div class="flex items-center justify-between px-2 py-2 mb-2 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400">
+                        <div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
+                        <span>{{ filteredOptions.length }} valeur(s)</span>
                     </div>
-                    <div v-else class="options-checkbox-list">
-                        <label
-                            v-for="option in columnOptions"
-                            :key="option.value"
-                            class="option-checkbox-item"
-                        >
-                            <input
-                                type="checkbox"
-                                :value="option.value"
-                                :checked="isValueSelected(option.value)"
-                                @change="toggleSelectValue(option.value)"
-                                class="option-checkbox"
-                            />
-                            <span class="option-label">{{ option.label }}</span>
-                        </label>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">•</span>
+                    <div class="flex items-center gap-1.5 text-xs font-medium text-primary dark:text-primary-light">
+                        <div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
+                        <span>{{ selectedSelectValues.size }} sélectionnée(s)</span>
                     </div>
                 </div>
+            </div>
+
+            <!-- Zone scrollable avec checkboxes -->
+            <div class="relative">
+                <div class="select-filter-list max-h-[250px] overflow-y-auto overflow-x-hidden border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
+                    <!-- Message vide -->
+                    <div v-if="filteredOptions.length === 0" class="flex flex-col items-center justify-center py-8 px-4 text-center">
+                        <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-3">
+                            <IconInfoCircle class="w-6 h-6 text-gray-400 dark:text-gray-500" />
+                        </div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                            {{ searchText ? 'Aucun résultat trouvé' : 'Aucune option disponible' }}
+                        </p>
+                        <p v-if="searchText" class="text-xs text-gray-500 dark:text-gray-500">
+                            Essayez de modifier votre recherche
+                        </p>
+                    </div>
+
+                    <!-- Liste des options -->
+                    <div v-else class="p-2">
+                        <!-- Checkbox "Sélectionner tout" -->
+                        <label
+                            v-if="filteredOptions.length > 0"
+                            class="flex items-center gap-3 px-3 py-2.5 mb-2 rounded-lg cursor-pointer transition-all duration-200 bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 border border-indigo-200 dark:border-indigo-800 hover:from-indigo-100 hover:to-blue-100 dark:hover:from-indigo-900/30 dark:hover:to-blue-900/30 group"
+                        >
+                            <div class="relative flex items-center justify-center">
+                                <input
+                                    type="checkbox"
+                                    :checked="isAllFilteredSelected"
+                                    :indeterminate="isSomeFilteredSelected && !isAllFilteredSelected"
+                                    @change="toggleSelectAllFiltered"
+                                    class="w-4 h-4 rounded border-2 border-gray-300 dark:border-gray-600 text-primary focus:ring-2 focus:ring-primary focus:ring-offset-0 cursor-pointer transition-all duration-200 checked:bg-primary checked:border-primary dark:checked:bg-primary dark:checked:border-primary group-hover:border-primary dark:group-hover:border-primary"
+                                />
+                                <svg v-if="isAllFilteredSelected" class="absolute w-3 h-3 text-white pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <svg v-else-if="isSomeFilteredSelected && !isAllFilteredSelected" class="absolute w-3 h-3 text-primary pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" />
+                                </svg>
+                            </div>
+                            <span class="text-sm font-semibold text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+                                (Sélectionner tout)
+                            </span>
+                        </label>
+
+                        <!-- Liste des options avec checkboxes -->
+                        <div class="space-y-1">
+                            <label
+                                v-for="option in filteredOptions"
+                                :key="option.value"
+                                class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 group"
+                                :class="{
+                                    'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800': isValueSelected(option.value),
+                                    'bg-transparent': !isValueSelected(option.value)
+                                }"
+                            >
+                                <div class="relative flex items-center justify-center flex-shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        :value="option.value"
+                                        :checked="isValueSelected(option.value)"
+                                        @change="toggleSelectValue(option.value)"
+                                        class="w-4 h-4 rounded border-2 border-gray-300 dark:border-gray-600 text-primary focus:ring-2 focus:ring-primary focus:ring-offset-0 cursor-pointer transition-all duration-200 checked:bg-primary checked:border-primary dark:checked:bg-primary dark:checked:border-primary group-hover:border-primary dark:group-hover:border-primary"
+                                    />
+                                    <svg v-if="isValueSelected(option.value)" class="absolute w-3 h-3 text-white pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <span class="text-sm text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white transition-colors flex-1" 
+                                      :class="{
+                                          'font-medium': isValueSelected(option.value),
+                                          'font-normal': !isValueSelected(option.value)
+                                      }">
+                                    {{ option.label }}
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
             </div>
         </div>
 
         <!-- Sélection de l'opérateur avec icônes (masqué pour les filtres select) -->
         <div v-if="!isSelectFilter" class="filter-section">
-            <label class="filter-label">
-                <IconSettings class="w-3 h-3" />
-                Opérateur
+            <label class="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                <IconSettings class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                <span>Opérateur</span>
             </label>
-            <select v-model="selectedOperator" class="filter-select" @change="onOperatorChange">
-                <option v-for="op in availableOperators" :key="op.value" :value="op.value">
-                    {{ op.label }}
-                </option>
-            </select>
+            <div class="relative">
+                <select 
+                    v-model="selectedOperator" 
+                    @change="onOperatorChange"
+                    class="w-full px-4 py-2.5 pr-10 text-sm font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 cursor-pointer appearance-none transition-all duration-200 hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-20 focus:border-primary shadow-sm hover:shadow-md"
+                >
+                    <option 
+                        v-for="op in availableOperators" 
+                        :key="op.value" 
+                        :value="op.value"
+                        class="py-2 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800"
+                    >
+                        {{ op.label }}
+                    </option>
+                </select>
+                <!-- Icône de chevron personnalisée -->
+                <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <svg class="w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </div>
+            </div>
         </div>
 
         <!-- Champs de valeur selon l'opérateur (masqués pour les filtres select) -->
@@ -178,11 +275,23 @@
 
             <!-- Filtre booléen -->
             <div v-else-if="isBooleanFilter" class="filter-input-group">
-                <select v-model="filterValue" class="filter-select" @change="applyFilter">
-                    <option value="">Sélectionner</option>
-                    <option value="true">Vrai</option>
-                    <option value="false">Faux</option>
-                </select>
+                <div class="relative">
+                    <select 
+                        v-model="filterValue" 
+                        @change="applyFilter"
+                        class="w-full px-4 py-2.5 pr-10 text-sm font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 cursor-pointer appearance-none transition-all duration-200 hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-20 focus:border-primary shadow-sm hover:shadow-md"
+                    >
+                        <option value="" class="py-2 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800">Sélectionner</option>
+                        <option value="true" class="py-2 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800">Vrai</option>
+                        <option value="false" class="py-2 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800">Faux</option>
+                    </select>
+                    <!-- Icône de chevron personnalisée -->
+                    <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                        <svg class="w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                </div>
             </div>
 
             <!-- Filtre null/vide -->
@@ -196,10 +305,6 @@
 
         <!-- Actions avec animations -->
         <div class="filter-actions">
-            <!-- Debug temporaire -->
-            <div v-if="isSelectFilter" style="font-size: 10px; color: #666; margin-bottom: 4px;">
-                Sélections: {{ selectedSelectValues.size }}, canApply: {{ canApplyFilter }}
-            </div>
             <button @click="applyFilter" class="apply-btn" :disabled="!canApplyFilter">
                 <IconCheck class="w-4 h-4" />
                 Appliquer
@@ -243,6 +348,7 @@ const filterValue = ref('')
 const filterValue2 = ref('')
 const listValues = ref<string[]>([''])
 const selectedSelectValues = ref<Set<any>>(new Set()) // Pour les filtres select avec checkboxes
+const searchText = ref('') // Recherche dans les options pour filtres select style Excel
 
 // Computed pour les options booléennes
 const booleanOptions = computed(() => [
@@ -399,6 +505,62 @@ const columnOptions = computed(() => {
     
     return []
 })
+
+// Computed pour filtrer les options selon la recherche (style Excel)
+const filteredOptions = computed(() => {
+    if (!searchText.value.trim()) {
+        return columnOptions.value
+    }
+    
+    const searchLower = searchText.value.toLowerCase().trim()
+    return columnOptions.value.filter(option => {
+        const label = String(option.label || option.value || '').toLowerCase()
+        const value = String(option.value || '').toLowerCase()
+        return label.includes(searchLower) || value.includes(searchLower)
+    })
+})
+
+// Computed pour vérifier si toutes les options filtrées sont sélectionnées
+const isAllFilteredSelected = computed(() => {
+    if (filteredOptions.value.length === 0) return false
+    return filteredOptions.value.every(option => isValueSelected(option.value))
+})
+
+// Computed pour vérifier si certaines options filtrées sont sélectionnées (état intermédiaire)
+const isSomeFilteredSelected = computed(() => {
+    if (filteredOptions.value.length === 0) return false
+    return filteredOptions.value.some(option => isValueSelected(option.value))
+})
+
+// Fonction pour sélectionner/désélectionner toutes les options filtrées
+const toggleSelectAllFiltered = () => {
+    const newSet = new Set(selectedSelectValues.value)
+    
+    if (isAllFilteredSelected.value) {
+        // Désélectionner toutes les options filtrées
+        filteredOptions.value.forEach(option => {
+            // Trouver la valeur exacte dans le Set pour la supprimer
+            for (const existingValue of newSet) {
+                if (areValuesEqual(existingValue, option.value)) {
+                    newSet.delete(existingValue)
+                    break
+                }
+            }
+        })
+    } else {
+        // Sélectionner toutes les options filtrées
+        filteredOptions.value.forEach(option => {
+            newSet.add(option.value)
+        })
+    }
+    
+    selectedSelectValues.value = newSet
+}
+
+// Handler pour la recherche
+const onSearchInput = () => {
+    // La recherche est déjà gérée par le computed filteredOptions
+}
 
 // Computed pour déterminer le type de filtre à afficher selon le type de colonne
 const isTextFilter = computed(() => {
@@ -630,9 +792,8 @@ const applyFilter = () => {
 
     // Ajouter les valeurs selon l'opérateur
     if (isSelectFilter.value) {
-        // Pour les filtres select, utiliser l'opérateur 'in' avec les valeurs sélectionnées
+        // Pour les filtres select, utiliser le format array simple selon FORMAT_ACTUEL.md
         if (selectedSelectValues.value.size > 0) {
-            filter.operator = 'in'
             filter.values = Array.from(selectedSelectValues.value)
         } else {
             return // Ne pas appliquer si aucune valeur sélectionnée
@@ -655,6 +816,7 @@ const clearFilter = () => {
     filterValue2.value = ''
     listValues.value = ['']
     selectedSelectValues.value.clear()
+    searchText.value = '' // Réinitialiser aussi la recherche
     selectedOperator.value = 'equals'
     emit('clear')
 }
@@ -682,17 +844,13 @@ watch(() => props.currentFilter, (newFilter) => {
 
 <style scoped>
 .filter-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
+    position: relative;
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 0.375rem;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     z-index: 50;
     padding: 1rem;
-    margin-top: 0.25rem;
     min-width: 280px;
     max-width: 350px;
     width: 100%;
@@ -803,7 +961,7 @@ watch(() => props.currentFilter, (newFilter) => {
     color: #9ca3af;
 }
 
-.filter-select,
+/* Styles pour les inputs (select maintenant géré par Tailwind) */
 .filter-input {
     width: 100%;
     padding: 0.5rem;
@@ -816,21 +974,18 @@ watch(() => props.currentFilter, (newFilter) => {
     box-sizing: border-box;
 }
 
-.dark .filter-select,
 .dark .filter-input {
     background: #1a202c;
     border-color: #4a5568;
     color: #f7fafc;
 }
 
-.filter-select:focus,
 .filter-input:focus {
     outline: none;
     border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.dark .filter-select:focus,
 .dark .filter-input:focus {
     border-color: #60a5fa;
     box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
@@ -995,85 +1150,47 @@ watch(() => props.currentFilter, (newFilter) => {
     background: #4a5568;
 }
 
-/* Styles pour le filtre select avec checkboxes */
-.select-filter-list {
-    max-height: 300px;
-    overflow-y: auto;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.375rem;
-    padding: 0.5rem;
-    background: #f9fafb;
-}
+/* Styles pour le filtre select avec checkboxes - maintenant gérés par Tailwind */
 
-.dark .select-filter-list {
-    background: #1a202c;
-    border-color: #4a5568;
-}
-
-.no-options-message {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 1rem;
-    color: #6b7280;
-    font-size: 0.875rem;
-    text-align: center;
-    justify-content: center;
-}
-
-.dark .no-options-message {
-    color: #9ca3af;
-}
-
-.options-checkbox-list {
+/* Styles spécifiques pour le filtre style Excel */
+.excel-filter-section {
+    max-height: 400px;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
 }
 
-.option-checkbox-item {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem;
-    border-radius: 0.25rem;
-    cursor: pointer;
-    transition: background-color 0.2s;
-    user-select: none;
+.filter-search-box {
+    margin-bottom: 0.75rem;
 }
 
-.option-checkbox-item:hover {
-    background-color: #f3f4f6;
+/* Scrollbar personnalisée pour la liste des options */
+.select-filter-list::-webkit-scrollbar {
+    width: 6px;
 }
 
-.dark .option-checkbox-item:hover {
-    background-color: #374151;
+.select-filter-list::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
 }
 
-.option-checkbox {
-    width: 1rem;
-    height: 1rem;
-    cursor: pointer;
-    accent-color: #3b82f6;
-    flex-shrink: 0;
+.select-filter-list::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
 }
 
-.option-label {
-    font-size: 0.875rem;
-    color: #374151;
-    flex: 1;
+.select-filter-list::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }
 
-.dark .option-label {
-    color: #f7fafc;
+.dark .select-filter-list::-webkit-scrollbar-track {
+    background: #1e293b;
 }
 
-.option-checkbox-item:has(.option-checkbox:checked) {
-    background-color: #eff6ff;
-    font-weight: 500;
+.dark .select-filter-list::-webkit-scrollbar-thumb {
+    background: #475569;
 }
 
-.dark .option-checkbox-item:has(.option-checkbox:checked) {
-    background-color: #1e3a8a;
+.dark .select-filter-list::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
 }
 </style>

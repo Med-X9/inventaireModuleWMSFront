@@ -372,121 +372,253 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
 
     /**
      * Handler pour les changements de filtres
-     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
+     * Reçoit TOUJOURS le format QueryModel standard du DataTable
      *
-     * @param filterModel - Modèle de filtres (format configuré ou ancien format)
+     * @param queryModel - Modèle de requête au format QueryModel standard
      */
-    const handleFilterChanged = async (filterModel: Record<string, { filter: string }> | StandardDataTableParams | QueryModel | Record<string, any>) => {
-        // Si c'est déjà le format standard (venant du DataTable), extraire les informations
-        if ('draw' in filterModel && 'start' in filterModel && 'length' in filterModel) {
-            const standardParams = filterModel as StandardDataTableParams
-            const extracted = extractFromStandardParams(standardParams)
+    const handleFilterChanged = async (queryModel: QueryModel) => {
+        try {
+            // Vérifier que queryModel existe
+            if (!queryModel || typeof queryModel !== 'object') {
+                return
+            }
 
-            currentPage.value = extracted.page
-            pageSize.value = extracted.pageSize
-            searchQuery.value = extracted.searchQuery
-            sortModel.value = extracted.sortModel
-            filters.value = extracted.filters
+            // Mettre à jour la pagination si fournie
+            if (queryModel.page) {
+                currentPage.value = queryModel.page
+            }
+            if (queryModel.pageSize) {
+                pageSize.value = queryModel.pageSize
+            }
+
+            // Mettre à jour les filtres
+            if (queryModel.filters) {
+                // Convertir les filtres du format QueryModel vers DataTableFilters
+                const convertedFilters: DataTableFilters = {}
+                Object.entries(queryModel.filters).forEach(([field, filterValue]) => {
+                    if (Array.isArray(filterValue)) {
+                        // Format array simple
+                        convertedFilters[field] = { value: filterValue, operator: 'in' }
+                    } else if (typeof filterValue === 'object' && filterValue !== null) {
+                        // Format object avec type/operator/value
+                        const filterObj = filterValue as any
+                        if ('value' in filterObj) {
+                            convertedFilters[field] = {
+                                value: filterObj.value,
+                                operator: filterObj.operator || 'contains'
+                            }
+                        } else if ('values' in filterObj) {
+                            convertedFilters[field] = {
+                                value: filterObj.values,
+                                operator: 'in'
+                            }
+                        }
+                    }
+                })
+                filters.value = convertedFilters
+            }
+
+            // Mettre à jour le tri si fourni
+            if (queryModel.sort && Array.isArray(queryModel.sort)) {
+                sortModel.value = queryModel.sort.map(s => ({
+                    colId: (s as any).field || s.colId || '',
+                    sort: ((s as any).direction || s.sort || 'asc') as 'asc' | 'desc'
+                }))
+            }
+
+            // Mettre à jour la recherche globale si fournie
+            if (queryModel.search !== undefined) {
+                searchQuery.value = queryModel.search || ''
+            }
 
             await loadData()
-            return
+        } catch (error) {
+            logger.error('Erreur dans handleFilterChanged', error)
+            throw error
         }
-
-        // Sinon, convertir l'ancien format
-        const filterModelObj = filterModel as Record<string, { filter: string }>
-        const transformedFilters = transformFilters(filterModelObj)
-        filters.value = transformedFilters
-        currentPage.value = 1
-        await loadData()
     }
 
     /**
      * Handler pour les changements de tri
-     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
+     * Reçoit TOUJOURS le format QueryModel standard du DataTable
      *
-     * @param newSortModel - Modèle de tri (format configuré ou ancien format)
+     * @param queryModel - Modèle de requête au format QueryModel standard
      */
-    const handleSortChanged = async (newSortModel: Array<{ field: string; direction: 'asc' | 'desc' }> | StandardDataTableParams | QueryModel | Record<string, any>) => {
-        // Si c'est déjà le format standard (venant du DataTable), extraire les informations
-        if ('draw' in newSortModel && 'start' in newSortModel && 'length' in newSortModel) {
-            const standardParams = newSortModel as StandardDataTableParams
-            const extracted = extractFromStandardParams(standardParams)
+    const handleSortChanged = async (queryModel: QueryModel) => {
+        try {
+            // Vérifier que queryModel existe
+            if (!queryModel || typeof queryModel !== 'object') {
+                return
+            }
 
-            currentPage.value = extracted.page
-            pageSize.value = extracted.pageSize
-            searchQuery.value = extracted.searchQuery
-            sortModel.value = extracted.sortModel
-            filters.value = extracted.filters
+            // Mettre à jour la pagination si fournie
+            if (queryModel.page) {
+                currentPage.value = queryModel.page
+            }
+            if (queryModel.pageSize) {
+                pageSize.value = queryModel.pageSize
+            }
+
+            // Mettre à jour le tri
+            if (queryModel.sort && Array.isArray(queryModel.sort)) {
+                sortModel.value = queryModel.sort.map(s => ({
+                    colId: (s as any).field || s.colId || '',
+                    sort: ((s as any).direction || s.sort || 'asc') as 'asc' | 'desc'
+                }))
+            } else {
+                sortModel.value = []
+            }
+
+            // Mettre à jour les filtres si fournis
+            if (queryModel.filters) {
+                const convertedFilters: DataTableFilters = {}
+                Object.entries(queryModel.filters).forEach(([field, filterValue]) => {
+                    if (Array.isArray(filterValue)) {
+                        convertedFilters[field] = { value: filterValue, operator: 'in' }
+                    } else if (typeof filterValue === 'object' && filterValue !== null) {
+                        const filterObj = filterValue as any
+                        if ('value' in filterObj) {
+                            convertedFilters[field] = {
+                                value: filterObj.value,
+                                operator: filterObj.operator || 'contains'
+                            }
+                        }
+                    }
+                })
+                filters.value = convertedFilters
+            }
+
+            // Mettre à jour la recherche globale si fournie
+            if (queryModel.search !== undefined) {
+                searchQuery.value = queryModel.search || ''
+            }
 
             await loadData()
-            return
+        } catch (error) {
+            logger.error('Erreur dans handleSortChanged', error)
+            throw error
         }
-
-        // Sinon, convertir l'ancien format
-        const sortModelArray = newSortModel as Array<{ field: string; direction: 'asc' | 'desc' }>
-        sortModel.value = sortModelArray.map(sort => ({
-            colId: sort.field,
-            sort: sort.direction
-        }))
-        currentPage.value = 1
-        await loadData()
     }
 
     /**
      * Handler pour les changements de recherche globale
-     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
+     * Reçoit TOUJOURS le format QueryModel standard du DataTable
      *
-     * @param searchValue - Terme de recherche (format configuré ou string)
+     * @param queryModel - Modèle de requête au format QueryModel standard
      */
-    const handleSearchChanged = async (searchValue: string | StandardDataTableParams | QueryModel | Record<string, any>) => {
-        // Si c'est déjà le format standard (venant du DataTable), extraire les informations
-        if (typeof searchValue === 'object' && 'draw' in searchValue && 'start' in searchValue && 'length' in searchValue) {
-            const standardParams = searchValue as StandardDataTableParams
-            const extracted = extractFromStandardParams(standardParams)
+    const handleSearchChanged = async (queryModel: QueryModel) => {
+        try {
+            // Vérifier que queryModel existe
+            if (!queryModel || typeof queryModel !== 'object') {
+                return
+            }
 
-            currentPage.value = extracted.page
-            pageSize.value = extracted.pageSize
-            searchQuery.value = extracted.searchQuery
-            sortModel.value = extracted.sortModel
-            filters.value = extracted.filters
+            // Mettre à jour la pagination si fournie
+            if (queryModel.page) {
+                currentPage.value = queryModel.page
+            }
+            if (queryModel.pageSize) {
+                pageSize.value = queryModel.pageSize
+            }
 
+            // Mettre à jour la recherche globale
+            const searchTerm = queryModel.search || ''
+            searchQuery.value = searchTerm
+
+            // Mettre à jour le tri si fourni
+            if (queryModel.sort && Array.isArray(queryModel.sort)) {
+                sortModel.value = queryModel.sort.map(s => ({
+                    colId: (s as any).field || s.colId || '',
+                    sort: ((s as any).direction || s.sort || 'asc') as 'asc' | 'desc'
+                }))
+            }
+
+            // Mettre à jour les filtres si fournis
+            if (queryModel.filters) {
+                const convertedFilters: DataTableFilters = {}
+                Object.entries(queryModel.filters).forEach(([field, filterValue]) => {
+                    if (Array.isArray(filterValue)) {
+                        convertedFilters[field] = { value: filterValue, operator: 'in' }
+                    } else if (typeof filterValue === 'object' && filterValue !== null) {
+                        const filterObj = filterValue as any
+                        if ('value' in filterObj) {
+                            convertedFilters[field] = {
+                                value: filterObj.value,
+                                operator: filterObj.operator || 'contains'
+                            }
+                        }
+                    }
+                })
+                filters.value = convertedFilters
+            }
+
+            // Réinitialiser à la page 1 lors d'une nouvelle recherche
+            currentPage.value = 1
             await loadData()
-            return
+        } catch (error) {
+            logger.error('Erreur dans handleSearchChanged', error)
+            throw error
         }
-
-        // Sinon, utiliser directement la valeur string
-        searchQuery.value = searchValue as string
-        currentPage.value = 1
-        await loadData()
     }
 
     /**
      * Handler pour les changements de pagination
-     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
+     * Reçoit TOUJOURS le format QueryModel standard du DataTable
      *
-     * @param params - Paramètres de pagination (format configuré ou ancien format)
+     * @param queryModel - Modèle de requête au format QueryModel standard
      */
-    const handlePaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams | QueryModel | Record<string, any>) => {
-        // Si c'est déjà le format standard (venant du DataTable), extraire les informations
-        if ('draw' in params && 'start' in params && 'length' in params) {
-            const standardParams = params as StandardDataTableParams
-            const extracted = extractFromStandardParams(standardParams)
+    const handlePaginationChanged = async (queryModel: QueryModel) => {
+        try {
+            // Vérifier que queryModel existe
+            if (!queryModel || typeof queryModel !== 'object') {
+                return
+            }
 
-            currentPage.value = extracted.page
-            pageSize.value = extracted.pageSize
-            searchQuery.value = extracted.searchQuery
-            sortModel.value = extracted.sortModel
-            filters.value = extracted.filters
+            // Mettre à jour la pagination
+            if (queryModel.page) {
+                currentPage.value = queryModel.page
+            }
+            if (queryModel.pageSize) {
+                pageSize.value = queryModel.pageSize
+            }
+
+            // Mettre à jour le tri si fourni
+            if (queryModel.sort && Array.isArray(queryModel.sort)) {
+                sortModel.value = queryModel.sort.map(s => ({
+                    colId: (s as any).field || s.colId || '',
+                    sort: ((s as any).direction || s.sort || 'asc') as 'asc' | 'desc'
+                }))
+            }
+
+            // Mettre à jour les filtres si fournis
+            if (queryModel.filters) {
+                const convertedFilters: DataTableFilters = {}
+                Object.entries(queryModel.filters).forEach(([field, filterValue]) => {
+                    if (Array.isArray(filterValue)) {
+                        convertedFilters[field] = { value: filterValue, operator: 'in' }
+                    } else if (typeof filterValue === 'object' && filterValue !== null) {
+                        const filterObj = filterValue as any
+                        if ('value' in filterObj) {
+                            convertedFilters[field] = {
+                                value: filterObj.value,
+                                operator: filterObj.operator || 'contains'
+                            }
+                        }
+                    }
+                })
+                filters.value = convertedFilters
+            }
+
+            // Mettre à jour la recherche globale si fournie
+            if (queryModel.search !== undefined) {
+                searchQuery.value = queryModel.search || ''
+            }
 
             await loadData()
-            return
+        } catch (error) {
+            logger.error('Erreur dans handlePaginationChanged', error)
+            throw error
         }
-
-        // Sinon, convertir l'ancien format
-        const paginationParams = params as { page: number; pageSize: number }
-        currentPage.value = paginationParams.page
-        pageSize.value = paginationParams.pageSize
-        await loadData()
     }
 
     /**

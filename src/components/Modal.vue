@@ -8,8 +8,11 @@
             </div>
 
             <div :class="modalClasses" role="dialog" aria-modal="true" aria-labelledby="modal-headline">
-                <button type="button"
-                    class="absolute top-3 right-3 text-text-muted hover:text-text-dark focus:outline-none z-10" @click="close"
+                <button
+                    v-if="!props.hideCloseButton"
+                    type="button"
+                    class="absolute top-3 right-3 text-text-muted hover:text-text-dark focus:outline-none z-10"
+                    @click="close"
                     aria-label="Close modal">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
                         stroke="currentColor">
@@ -41,14 +44,17 @@ import { computed } from 'vue'
  *  - Une prop `modelValue: boolean` pour le v-model.
  *  - Une prop optionnelle `title: string`.
  *  - Une prop optionnelle `size: 'sm' | 'md' | 'lg' | 'xl' | 'fullscreen'` pour la taille.
+ *  - Une prop optionnelle `hideCloseButton: boolean` pour masquer le bouton de fermeture interne.
  *  - Elle émet `update:modelValue` quand on ferme (clic sur overlay).
  */
 const props = withDefaults(defineProps<{
     modelValue: boolean
     title?: string
     size?: 'sm' | 'md' | 'lg' | 'xl' | 'fullscreen'
+    hideCloseButton?: boolean
 }>(), {
-    size: 'md'
+    size: 'md',
+    hideCloseButton: false
 })
 
 const emit = defineEmits<{

@@ -3,55 +3,90 @@ import type { StoreOption, InventoryResult } from '../interfaces/inventoryResult
 import type { AxiosResponse } from 'axios';
 import API from '@/api';
 import { logger } from '@/services/loggerService';
+import { normalizeDataTableResponse, convertUnifiedToStandardDataTable } from '@/utils/dataTableResponseNormalizer';
 import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter';
 
+/**
+ * Service pour la gestion des résultats d'inventaire
+ *
+ * Architecture en couches :
+ * - Vue -> Composable (useInventoryResults) -> Store (resultsStore) -> Service (InventoryResultsService) -> API
+ *
+ * Responsabilités :
+ * - Appels API pour récupérer, modifier et valider les résultats d'inventaire
+ * - Normalisation des données reçues du backend
+ * - Export des données (CSV, Excel)
+ *
+ * @module InventoryResultsService
+ */
 export class InventoryResultsService {
+    /** URL de base pour les endpoints d'inventaire */
     private static baseUrl = API.endpoints.inventory?.base;
+    /** URL de base pour les endpoints d'écart de comptage */
+    private static baseUrl2 = API.endpoints.ecartComptage?.base;
 
     /**
      * Récupérer les résultats d'inventaire pour un inventaire et un magasin donnés
+     *
+     * Architecture : composable -> store -> service
+     * Le service reçoit les paramètres déjà convertis au format FORMAT_ACTUEL.md par le store
+     * et fait uniquement l'appel API
+     *
      * @param inventoryId - ID de l'inventaire
      * @param storeId - ID du magasin (warehouse)
-     * @param params - Paramètres DataTable optionnels (pagination, tri, filtres, recherche)
+     * @param params - Paramètres au format FORMAT_ACTUEL.md (déjà convertis par le store)
      * @returns Objet contenant les résultats et les informations de pagination
      */
     static async getResults(
         inventoryId: number,
         storeId: string | number,
-        params?: StandardDataTableParams | Record<string, any>
-    ): Promise<{ data: InventoryResult[]; recordsFiltered?: number; recordsTotal?: number; draw?: number }> {
+        params?: Record<string, any>
+    ): Promise<{
+        data: InventoryResult[];
+        recordsFiltered?: number;
+        recordsTotal?: number;
+        draw?: number;
+        page?: number;
+        totalPages?: number;
+        pageSize?: number;
+        total?: number;
+    }> {
         try {
-            logger.debug('Récupération des résultats avec paramètres DataTable', {
+            logger.debug('Service: Appel API pour récupérer les résultats', {
                 inventoryId,
                 storeId,
                 params
             });
 
-            // Si params est déjà au format QueryParams (objet avec sortModel, filterModel, etc.)
-            // ou StandardDataTableParams, axios le convertira automatiquement
-            // Le backend doit accepter le format QueryParams (sortModel, filterModel, search, startRow, endRow)
-            const response = await axiosInstance.get(
+            // Le service reçoit les paramètres déjà convertis au format FORMAT_ACTUEL.md par le store
+            // Il fait uniquement l'appel API avec POST et JSON body
+            const response = await axiosInstance.post(
                 `${this.baseUrl}${inventoryId}/warehouses/${storeId}/results/`,
-                { params: params || {} }
+                params || {},
+                {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }
             );
             const payload = response.data;
 
-            const rawResults: Array<Record<string, any>> = Array.isArray(payload)
-                ? payload
-                : Array.isArray(payload?.data)
-                    ? payload.data
-                    : [];
+            // Normaliser la réponse backend vers le format FORMAT_ACTUEL.md
+            // Format attendu : { rows: [...], page: 2, pageSize: 10, total: 28, totalPages: 3 }
 
-            if (!Array.isArray(rawResults)) {
-                logger.warn('Format de réponse inattendu pour les résultats d\'inventaire', payload);
-                return {
-                    data: [],
-                    recordsFiltered: 0,
-                    recordsTotal: 0,
-                    draw: 1
-                };
-            }
+            // Normaliser la réponse backend vers le format unifié
+            // Format attendu : { rows: [...], page: 2, pageSize: 10, total: 28, totalPages: 3 }
+            const unifiedResponse = normalizeDataTableResponse<Record<string, any>>(payload);
 
+            // Convertir vers le format DataTable standard pour compatibilité
+            const normalizedResponse = convertUnifiedToStandardDataTable(unifiedResponse);
+
+            const rawResults = normalizedResponse.data;
+            const recordsFiltered = normalizedResponse.recordsFiltered;
+            const recordsTotal = normalizedResponse.recordsTotal;
+            const draw = normalizedResponse.draw;
+
+            // Optimiser la normalisation avec moins d'itérations
             const normalizedResults = rawResults.map((item, index) => {
                 const jobId = item.jobId ?? item.job_id ?? item.id ?? `${inventoryId}-${storeId}-${index + 1}`;
                 const emplacement = item.emplacement ?? item.location ?? '';
@@ -61,6 +96,7 @@ export class InventoryResultsService {
                     ? null
                     : Number(finalResultRaw);
 
+                // Créer l'objet de base directement (plus rapide)
                 const normalizedItem: Record<string, any> = {
                     id: jobId,
                     jobId,
@@ -74,85 +110,94 @@ export class InventoryResultsService {
                 const countingLabels: Record<string, string> = {};
                 const differenceLabels: Record<string, string> = {};
 
-                Object.entries(item).forEach(([rawKey, value]) => {
-                    // Ne pas ignorer les valeurs null, seulement undefined
-                    // Les valeurs null sont valides pour les écarts (indiquent qu'il n'y a pas d'écart calculable)
-                    if (value === undefined) return;
+                // Optimiser : itérer une seule fois sur les clés
+                const entries = Object.entries(item);
+                for (let i = 0; i < entries.length; i++) {
+                    const [rawKey, value] = entries[i];
 
+                    // Ignorer undefined
+                    if (value === undefined) continue;
+
+                    // Vérifier d'abord les formats standards (plus rapide)
+                    const keyLower = rawKey.toLowerCase();
+
+                    // Comptage : format standard contage_X
+                    if (keyLower.startsWith('contage_')) {
+                        normalizedItem[rawKey] = value;
+                        continue;
+                    }
+
+                    // Écart : format standard ecart_X_Y
+                    if (keyLower.startsWith('ecart_')) {
+                        normalizedItem[rawKey] = value;
+                        differenceLabels[rawKey] = rawKey;
+                        continue;
+                    }
+
+                    // Sinon, normaliser seulement si nécessaire (lent, donc en dernier)
                     const keyNormalized = rawKey
                         .normalize('NFD')
                         .replace(/[\u0300-\u036f]/g, '')
                         .trim()
                         .toLowerCase();
 
-                const countingMatch = keyNormalized.match(/^(\d+)(?:er|eme)?\s*comptage$/i);
+                    const countingMatch = keyNormalized.match(/^(\d+)(?:er|eme)?\s*comptage$/i);
                     if (countingMatch) {
                         const order = countingMatch[1];
                         const fieldKey = `contage_${order}`;
                         normalizedItem[fieldKey] = value;
                         countingLabels[fieldKey] = rawKey;
-                        return;
+                        continue;
                     }
 
-                    // Pattern modifié pour accepter tous les formats d'écart :
-                    // - ecart_1_2 (deux nombres)
-                    // - ecart_1_2_3 (trois nombres)
-                    // - ecart_1_2_3_4 (quatre nombres ou plus)
-                    // Pattern: ecart_ suivi d'au moins un chiffre, puis un ou plusieurs groupes de _chiffres
-                    // Vérifier d'abord si la clé commence déjà par "ecart_" (format standard)
-                    if (rawKey.toLowerCase().startsWith('ecart_')) {
-                        // Utiliser la clé telle quelle si elle est déjà au bon format
-                        // Préserver la valeur même si elle est null (null signifie pas d'écart calculable)
-                        normalizedItem[rawKey] = value;
-                        differenceLabels[rawKey] = rawKey;
-                        logger.debug('Écart normalisé', { rawKey, value, fieldKey: rawKey });
-                        return;
-                    }
-
-                    // Sinon, essayer de matcher avec le pattern normalisé
                     const differenceMatch = keyNormalized.match(/^ecart_((?:\d+_?)+)$/i);
                     if (differenceMatch) {
-                        // Préserver le format exact de la clé si elle est déjà au bon format
-                        // Sinon, normaliser en format standard
                         const numbers = differenceMatch[1].split('_').filter(n => n.length > 0);
                         if (numbers.length >= 2) {
                             const fieldKey = `ecart_${numbers.join('_')}`;
                             normalizedItem[fieldKey] = value;
                             differenceLabels[fieldKey] = rawKey;
-                            return;
+                            continue;
                         }
                     }
 
+                    // Traitement des champs standards (switch optimisé)
                     switch (keyNormalized) {
                         case 'location':
                         case 'emplacement':
-                            normalizedItem.emplacement = value;
+                            if (!normalizedItem.emplacement) normalizedItem.emplacement = value;
                             break;
                         case 'product':
                         case 'article':
-                            normalizedItem.article = value;
-                            normalizedItem.product = value;
+                            if (!normalizedItem.article) {
+                                normalizedItem.article = value;
+                                normalizedItem.product = value;
+                            }
                             break;
                         case 'final_result':
                         case 'resultats':
-                            normalizedItem.final_result = value === null || value === undefined ? null : Number(value);
-                            normalizedItem.resultats = normalizedItem.final_result;
+                            if (normalizedItem.final_result === null) {
+                                normalizedItem.final_result = value === null || value === undefined ? null : Number(value);
+                                normalizedItem.resultats = normalizedItem.final_result;
+                            }
                             break;
                         case 'jobid':
                         case 'job_id':
-                            normalizedItem.jobId = value;
-                            normalizedItem.id = value;
+                            if (!normalizedItem.jobId) {
+                                normalizedItem.jobId = value;
+                                normalizedItem.id = value;
+                            }
                             break;
                         default:
-                            // Pour les champs non reconnus, les copier tels quels
-                            // Cela inclut les champs d'écart qui n'ont pas été normalisés précédemment
+                            // Copier seulement si pas déjà présent
                             if (!(rawKey in normalizedItem)) {
                                 normalizedItem[rawKey] = value;
                             }
                             break;
                     }
-                });
+                }
 
+                // Ajouter les labels seulement si nécessaire
                 if (Object.keys(countingLabels).length > 0) {
                     normalizedItem.__countingLabels = countingLabels;
                 }
@@ -163,21 +208,37 @@ export class InventoryResultsService {
                 return normalizedItem as InventoryResult;
             });
 
-            // Extraire les informations de pagination si elles existent
-            const recordsFiltered = Array.isArray(payload) 
-                ? normalizedResults.length 
-                : (payload?.recordsFiltered ?? payload?.records_filtered ?? normalizedResults.length);
-            const recordsTotal = Array.isArray(payload)
-                ? normalizedResults.length
-                : (payload?.recordsTotal ?? payload?.records_total ?? normalizedResults.length);
-            const draw = Array.isArray(payload) ? 1 : (payload?.draw ?? 1);
+            // Les informations de pagination ont déjà été extraites plus haut
+            // Utiliser les valeurs déjà calculées
+
+            // Extraire page et totalPages de la réponse normalisée
+            // ⚠️ Utiliser UNIQUEMENT les valeurs du backend - aucun calcul
+            // Le backend retourne { rows, page, pageSize, total, totalPages }
+            // unifiedResponse contient ces valeurs directement
+            const page = unifiedResponse.page ?? 1
+            const totalPages = unifiedResponse.totalPages ?? 0 // ⚠️ Utiliser uniquement la valeur du backend (pas de || qui masque 0)
+
+            // Debug: logger les valeurs extraites (seulement en mode développement)
+            if (process.env.NODE_ENV === 'development') {
+                logger.debug('inventoryResultsService: Valeurs extraites', {
+                    page,
+                    totalPages,
+                    pageSize: unifiedResponse.pageSize,
+                    total: unifiedResponse.total
+                })
+            }
 
             return {
                 data: normalizedResults,
                 recordsFiltered,
                 recordsTotal,
-                draw
-            };
+                draw,
+                // Ajouter page et totalPages pour que useBackendDataTable puisse les utiliser
+                page,
+                totalPages,
+                pageSize: unifiedResponse.pageSize,
+                total: unifiedResponse.total
+            } as any; // Type assertion car le type de retour standard ne contient pas ces champs
         } catch (error) {
             logger.error('Erreur lors de la récupération des résultats', error);
             throw error;
@@ -191,7 +252,7 @@ export class InventoryResultsService {
      */
     static async updateValue(id: number | string, data: Partial<InventoryResult>): Promise<AxiosResponse<any>> {
         try {
-            const response = await axiosInstance.put(`${this.baseUrl}${id}/`, data);
+            const response = await axiosInstance.put(`${this.baseUrl2}${id}/final-result/`, data);
             return response;
         } catch (error) {
             logger.error('Erreur lors de la modification du résultat', error);
@@ -203,9 +264,9 @@ export class InventoryResultsService {
      * Valider un ou plusieurs résultats d'inventaire
      * @param ids - IDs des résultats à valider
      */
-    static async validateResults(ids: Array<number | string>): Promise<AxiosResponse<any>> {
+    static async validateResults(ids: number): Promise<AxiosResponse<any>> {
         try {
-            const response = await axiosInstance.post(`${this.baseUrl}validate/`, { result_ids: ids });
+            const response = await axiosInstance.post(`${this.baseUrl2}/${ids}/resolve/`);
             return response;
         } catch (error) {
             logger.error('Erreur lors de la validation des résultats', error);

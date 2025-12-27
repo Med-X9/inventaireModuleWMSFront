@@ -1,12 +1,12 @@
 /**
  * QueryModel - Modèle de requête unifié pour DataTable
  * 
- * Équivalent à sortModel et filterModel d'AG-Grid
+ * Modèle de requête standardisé pour tri et filtrage
  * Encapsule tous les paramètres de requête (tri, filtres, pagination, recherche)
  */
 
 /**
- * Modèle de tri (équivalent sortModel AG-Grid)
+ * Modèle de tri multi-colonnes
  */
 export interface SortModel {
     /** Nom du champ à trier */
@@ -41,7 +41,7 @@ export type FilterOperator =
     | 'regex'            // Expression régulière
 
 /**
- * Modèle de filtre (équivalent filterModel AG-Grid)
+ * Modèle de filtre par colonne
  */
 export interface FilterModel {
     /** Nom du champ à filtrer */
@@ -61,34 +61,73 @@ export interface FilterModel {
 }
 
 /**
- * QueryModel - Modèle de requête complet
+ * QueryModel - Modèle de requête unifié pour DataTable
  * 
- * Encapsule tous les paramètres nécessaires pour une requête DataTable :
- * - Tri (sortModel)
- * - Filtres (filterModel)
- * - Pagination
- * - Recherche globale
+ * Format standard utilisé par le DataTable pour tous les événements
+ * (pagination, tri, filtres, recherche).
+ * 
+ * Le QueryModel est converti vers query params GET pour les appels API.
+ * 
+ * Format :
+ * - page, pageSize directement (pas pagination.page/pageSize)
+ * - search (pas globalSearch, mais globalSearch accepté pour compatibilité)
+ * - sort avec colId et sort : [{ colId: "field", sort: "asc" }]
+ * - filters avec format unifié : { field: { operator, value, values, ... } }
+ * 
+ * @example
+ * ```typescript
+ * const queryModel: QueryModel = {
+ *   page: 2,
+ *   pageSize: 20,
+ *   search: "terme de recherche",
+ *   sort: [{ colId: "name", sort: "asc" }],
+ *   filters: {
+ *     status: { operator: "equals", value: "active" },
+ *     date: { operator: "between", value: "2024-01-01", value2: "2024-12-31" }
+ *   },
+ *   customParams: { accountId: 123 }
+ * }
+ * ```
  */
 export interface QueryModel {
-    /** Modèle de tri (multi-colonnes supporté) */
-    sort?: SortModel[]
+    /** Numéro de page (commence à 1, conforme PAGINATION_FRONTEND.md) */
+    page?: number
     
-    /** Modèle de filtres (par champ) */
-    filters?: Record<string, FilterModel>
+    /** Nombre d'éléments par page (conforme PAGINATION_FRONTEND.md) */
+    pageSize?: number
     
-    /** Pagination */
+    /** 
+     * Modèle de tri (multi-colonnes supporté)
+     * Format: [{ colId: "field", sort: "asc" | "desc" }]
+     */
+    sort?: Array<{ colId: string; sort: 'asc' | 'desc' }>
+    
+    /** 
+     * Modèle de filtres par champ
+     * Format unifié : { field: { operator, value, values, dataType, ... } }
+     */
+    filters?: Record<string, any>
+    
+    /** Terme de recherche globale (conforme PAGINATION_FRONTEND.md) */
+    search?: string
+    
+    /** Paramètres personnalisés additionnels (passés directement dans la requête API) */
+    customParams?: Record<string, any>
+    
+    /** 
+     * @deprecated Utiliser page/pageSize directement
+     * Format de pagination déprécié (supporté pour compatibilité)
+     */
     pagination?: {
-        /** Numéro de page (commence à 1) */
         page: number
-        /** Taille de page */
         pageSize: number
     }
     
-    /** Recherche globale */
+    /** 
+     * @deprecated Utiliser search
+     * Alias de search (supporté pour compatibilité)
+     */
     globalSearch?: string
-    
-    /** Paramètres personnalisés additionnels */
-    customParams?: Record<string, any>
 }
 
 /**

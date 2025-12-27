@@ -2,31 +2,63 @@
  * Composable core pour DataTable (SOLID - Single Responsibility)
  * 
  * Responsabilité unique : Gestion de l'état de base de la table
- * - Colonnes et visibilité
- * - Sélection des lignes
+ * - Colonnes et visibilité uniquement
  * - État de chargement
  * 
- * KISS : Interface simple et claire
- * DRY : Pas de duplication avec les autres composables
+ * Note : La sélection est gérée par `useDataTableSelection` pour éviter la duplication.
+ * 
+ * @module useDataTableCore
+ * 
+ * @example
+ * ```typescript
+ * const core = useDataTableCore({
+ *   columns: myColumns,
+ *   rowSelection: true
+ * })
+ * 
+ * // Utiliser pour gérer les colonnes
+ * core.updateColumns(newColumns)
+ * core.toggleColumnVisibility('fieldName')
+ * 
+ * // Utiliser pour l'état de chargement
+ * core.setLoading(true)
+ * ```
  */
 
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import type { DataTableColumn } from '../types/dataTable'
 
+/**
+ * Options pour useDataTableCore
+ */
 export interface UseDataTableCoreOptions {
+    /** Colonnes de la table */
     columns: DataTableColumn[]
+    /** Activer la sélection de lignes (informational, la sélection est gérée par useDataTableSelection) */
     rowSelection?: boolean
 }
 
 /**
  * Composable core pour la gestion de base d'une DataTable
+ * 
+ * Gère uniquement :
+ * - L'état des colonnes et leur visibilité
+ * - L'état de chargement
+ * 
+ * La sélection est déléguée à `useDataTableSelection` pour éviter la duplication.
+ * 
+ * @param options - Configuration du composable
+ * @returns État et méthodes pour gérer les colonnes et le chargement
  */
 export function useDataTableCore(options: UseDataTableCoreOptions) {
-    const { columns: initialColumns, rowSelection = false } = options
+    const { columns: initialColumns } = options
 
     // ===== COLONNES =====
     const columns = ref<DataTableColumn[]>(initialColumns)
     
+    /**
+     * Colonnes visibles (filtre selon hide et visible)
+     */
     const visibleColumns = computed(() => {
         return columns.value
             .filter(col => {
@@ -37,48 +69,34 @@ export function useDataTableCore(options: UseDataTableCoreOptions) {
             .map(col => col.field)
     })
 
-    // ===== SÉLECTION =====
-    const selectedRows = ref<Set<string>>(new Set())
-    
-    const toggleRowSelection = (rowId: string) => {
-        const newSet = new Set(selectedRows.value)
-        if (newSet.has(rowId)) {
-            newSet.delete(rowId)
-        } else {
-            newSet.add(rowId)
-        }
-        selectedRows.value = newSet
-    }
-
-    const selectAllRows = (rowIds: string[]) => {
-        selectedRows.value = new Set(rowIds)
-    }
-
-    const deselectAllRows = () => {
-        selectedRows.value = new Set()
-    }
-
-    const isRowSelected = (rowId: string) => {
-        return selectedRows.value.has(rowId)
-    }
-
-    const selectAllState = computed(() => {
-        if (selectedRows.value.size === 0) return 'none'
-        // Note: nécessite le nombre total de lignes pour déterminer 'all' vs 'partial'
-        return 'partial'
-    })
-
     // ===== CHARGEMENT =====
     const loading = ref(false)
+    
+    /**
+     * Met à jour l'état de chargement
+     * 
+     * @param value - Nouvel état de chargement
+     */
     const setLoading = (value: boolean) => {
         loading.value = value
     }
 
     // ===== MÉTHODES DE COLONNES =====
+    
+    /**
+     * Met à jour les colonnes
+     * 
+     * @param newColumns - Nouvelles colonnes
+     */
     const updateColumns = (newColumns: DataTableColumn[]) => {
         columns.value = newColumns
     }
 
+    /**
+     * Bascule la visibilité d'une colonne
+     * 
+     * @param field - Nom du champ de la colonne
+     */
     const toggleColumnVisibility = (field: string) => {
         const column = columns.value.find(col => col.field === field)
         if (column) {
@@ -88,19 +106,19 @@ export function useDataTableCore(options: UseDataTableCoreOptions) {
 
     return {
         // État
+        /** Colonnes de la table */
         columns: computed(() => columns.value),
+        /** Colonnes visibles (filtre selon hide et visible) */
         visibleColumns,
-        selectedRows: computed(() => selectedRows.value),
-        selectAllState,
+        /** État de chargement */
         loading: computed(() => loading.value),
 
         // Actions
-        toggleRowSelection,
-        selectAllRows,
-        deselectAllRows,
-        isRowSelected,
+        /** Met à jour l'état de chargement */
         setLoading,
+        /** Met à jour les colonnes */
         updateColumns,
+        /** Bascule la visibilité d'une colonne */
         toggleColumnVisibility
     }
 }

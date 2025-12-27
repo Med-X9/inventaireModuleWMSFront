@@ -1,458 +1,244 @@
 /**
  * Convertisseur QueryModel
- * 
- * Convertit le QueryModel vers différents formats backend :
- * - StandardDataTableParams (DataTables.js)
- * - Format REST API personnalisé
- * - Format Django QuerySet
+ *
+ * Convertit le QueryModel vers le format query params GET pour l'API.
+ * Le DataTable utilise UNIQUEMENT QueryModel comme format standard.
+ *
+ * @module queryModelConverter
  */
 
-import type { QueryModel, SortModel, FilterModel, QueryModelConversionOptions } from '../types/QueryModel'
-import type { StandardDataTableParams } from './dataTableParamsConverter'
+import type { QueryModel } from '../types/QueryModel'
 
 /**
- * Convertit un QueryModel vers StandardDataTableParams
- * 
- * @param queryModel - Modèle de requête
- * @param options - Options de conversion
- * @returns Paramètres au format DataTables.js
- */
-export function convertQueryModelToStandardParams(
-    queryModel: QueryModel,
-    options: QueryModelConversionOptions = {}
-): StandardDataTableParams {
-    const {
-        fieldToColumnIndex,
-        columns = [],
-        draw = 1
-    } = options
-
-    // Construire le mapping champ -> index de colonne
-    const fieldIndexMap: Record<string, number> = fieldToColumnIndex || {}
-    if (columns.length > 0 && !fieldToColumnIndex) {
-        columns.forEach((col, index) => {
-            if (col.field && !fieldIndexMap[col.field]) {
-                fieldIndexMap[col.field] = index
-            }
-        })
-    }
-
-    // Paramètres de base
-    const page = queryModel.pagination?.page || 1
-    const pageSize = queryModel.pagination?.pageSize || 20
-    const start = (page - 1) * pageSize
-
-    const standardParams: StandardDataTableParams = {
-        draw,
-        start,
-        length: pageSize,
-        ...queryModel.customParams
-    }
-
-    // Ajouter la recherche globale
-    if (queryModel.globalSearch) {
-        standardParams['search[value]'] = queryModel.globalSearch
-        standardParams['search[regex]'] = false
-    }
-
-    // Ajouter les paramètres de tri
-    if (queryModel.sort && queryModel.sort.length > 0) {
-        queryModel.sort.forEach((sortItem, index) => {
-            const columnIndex = fieldIndexMap[sortItem.field] ?? 0
-            standardParams[`order[${index}][column]`] = columnIndex
-            standardParams[`order[${index}][dir]`] = sortItem.direction
-        })
-    }
-
-    // Ajouter les paramètres de filtres
-    if (queryModel.filters) {
-        Object.entries(queryModel.filters).forEach(([field, filterModel]) => {
-            // Ignorer les filtres avec des valeurs vides (sauf pour les opérateurs null/not_null)
-            const hasValue = filterModel.value !== undefined && filterModel.value !== null && 
-                            filterModel.value !== '' && String(filterModel.value).trim() !== '' &&
-                            String(filterModel.value) !== 'undefined' && String(filterModel.value) !== 'null'
-            const hasValue2 = filterModel.value2 !== undefined && filterModel.value2 !== null && 
-                             filterModel.value2 !== '' && String(filterModel.value2).trim() !== ''
-            const hasValues = filterModel.values && Array.isArray(filterModel.values) && filterModel.values.length > 0
-            const isNullOperator = filterModel.operator === 'is_null' || filterModel.operator === 'is_not_null'
-            
-            // Ignorer le filtre si aucune valeur valide n'est présente (sauf pour null/not_null)
-            if (!isNullOperator && !hasValue && !hasValue2 && !hasValues) {
-                return
-            }
-
-            const columnIndex = fieldIndexMap[field] ?? 0
-
-            // Informations de la colonne
-            standardParams[`columns[${columnIndex}][data]`] = field
-            standardParams[`columns[${columnIndex}][name]`] = field
-            standardParams[`columns[${columnIndex}][searchable]`] = true
-            standardParams[`columns[${columnIndex}][orderable]`] = true
-
-            // Construire la valeur du filtre selon l'opérateur
-            let filterValue = ''
-            
-            if (filterModel.operator === 'between' && filterModel.value !== undefined && filterModel.value2 !== undefined) {
-                filterValue = `${filterModel.value},${filterModel.value2}`
-            } else if (filterModel.operator === 'in' && filterModel.values) {
-                filterValue = filterModel.values.join(',')
-            } else if (filterModel.operator === 'not_in' && filterModel.values) {
-                filterValue = `!${filterModel.values.join(',')}`
-            } else if (filterModel.value !== undefined) {
-                filterValue = String(filterModel.value)
-            }
-
-            // Ajouter le filtre
-            standardParams[`columns[${columnIndex}][search][value]`] = filterValue
-            standardParams[`columns[${columnIndex}][search][regex]`] = filterModel.operator === 'regex' ? true : false
-            
-            // Ajouter l'opérateur si différent de 'contains' (par défaut)
-            if (filterModel.operator && filterModel.operator !== 'contains') {
-                standardParams[`columns[${columnIndex}][operator]`] = filterModel.operator
-            }
-        })
-    }
-
-    // Ajouter les colonnes sans filtre (pour compléter la configuration)
-    if (columns.length > 0) {
-        columns.forEach((col, index) => {
-            const field = col.field || ''
-            if (field && !queryModel.filters?.[field]) {
-                standardParams[`columns[${index}][data]`] = field
-                standardParams[`columns[${index}][name]`] = field
-                standardParams[`columns[${index}][searchable]`] = col.searchable !== false
-                standardParams[`columns[${index}][orderable]`] = col.orderable !== false
-                standardParams[`columns[${index}][search][value]`] = ''
-                standardParams[`columns[${index}][search][regex]`] = false
-            }
-        })
-    }
-
-    return standardParams
-}
-
-/**
- * Convertit un QueryModel vers un format REST API personnalisé
- * 
- * @param queryModel - Modèle de requête
- * @returns Paramètres au format REST API
- */
-export function convertQueryModelToRestApi(
-    queryModel: QueryModel
-): Record<string, any> {
-    const params: Record<string, any> = {
-        ...queryModel.customParams
-    }
-
-    // Pagination
-    if (queryModel.pagination) {
-        params.page = queryModel.pagination.page
-        params.page_size = queryModel.pagination.pageSize
-    }
-
-    // Recherche globale
-    if (queryModel.globalSearch) {
-        params.search = queryModel.globalSearch
-    }
-
-    // Tri
-    if (queryModel.sort && queryModel.sort.length > 0) {
-        params.ordering = queryModel.sort
-            .map(s => s.direction === 'desc' ? `-${s.field}` : s.field)
-            .join(',')
-    }
-
-    // Filtres
-    if (queryModel.filters) {
-        Object.entries(queryModel.filters).forEach(([field, filterModel]) => {
-            const paramName = `${field}_${filterModel.operator}`
-            
-            if (filterModel.operator === 'between' && filterModel.value !== undefined && filterModel.value2 !== undefined) {
-                params[`${field}_gte`] = filterModel.value
-                params[`${field}_lte`] = filterModel.value2
-            } else if (filterModel.operator === 'in' && filterModel.values) {
-                params[paramName] = filterModel.values
-            } else if (filterModel.operator === 'not_in' && filterModel.values) {
-                params[`${field}_not_in`] = filterModel.values
-            } else if (filterModel.value !== undefined) {
-                params[paramName] = filterModel.value
-            }
-        })
-    }
-
-    return params
-}
-
-/**
- * Convertit un QueryModel vers un format Django QuerySet
- * 
- * @param queryModel - Modèle de requête
- * @returns Paramètres au format Django
- */
-export function convertQueryModelToDjango(
-    queryModel: QueryModel
-): Record<string, any> {
-    const params: Record<string, any> = {
-        ...queryModel.customParams
-    }
-
-    // Pagination
-    if (queryModel.pagination) {
-        params.page = queryModel.pagination.page
-        params.page_size = queryModel.pagination.pageSize
-    }
-
-    // Recherche globale
-    if (queryModel.globalSearch) {
-        params.search = queryModel.globalSearch
-    }
-
-    // Tri
-    if (queryModel.sort && queryModel.sort.length > 0) {
-        params.order_by = queryModel.sort.map(s => ({
-            field: s.field,
-            direction: s.direction
-        }))
-    }
-
-    // Filtres
-    if (queryModel.filters) {
-        params.filters = Object.entries(queryModel.filters).map(([field, filterModel]) => ({
-            field,
-            operator: filterModel.operator,
-            value: filterModel.value,
-            value2: filterModel.value2,
-            values: filterModel.values
-        }))
-    }
-
-    return params
-}
-
-/**
- * Convertit un QueryModel vers le format query params (EXEMPLES_REQUETES_QUERYMODEL)
- * 
- * Format attendu :
- * - sortModel: [{"colId":"reference","sort":"asc"}] (JSON stringifié)
- * - filterModel: {"status":{"filterType":"text","type":"equals","filter":"AFFECTE"}} (JSON stringifié)
- * - search: "test" (texte simple)
- * - startRow: 0, endRow: 20 (pagination)
- * - export: "excel" | "csv" (optionnel)
- * 
- * @param queryModel - Modèle de requête
- * @returns Paramètres au format query params
+ * Convertit un QueryModel vers le format query params GET
+ *
+ * Format de sortie conforme à PAGINATION_FRONTEND.md :
+ * {
+ *   page: 2,
+ *   pageSize: 20,
+ *   search: "terme de recherche",
+ *   sort: [{ colId: "field", sort: "asc" }],
+ *   filters: { field: { ... } },
+ *   ...customParams
+ * }
+ *
+ * Ces paramètres peuvent être utilisés directement dans une URL GET
+ * ou dans le body d'une requête POST/GET.
+ *
+ * @param queryModel - Modèle de requête QueryModel
+ * @returns Paramètres au format query params GET, prêts pour l'API
+ *
+ * @example
+ * ```typescript
+ * const queryModel: QueryModel = {
+ *   page: 2,
+ *   pageSize: 20,
+ *   search: "test",
+ *   sort: [{ colId: "name", sort: "asc" }],
+ *   filters: { status: { operator: "equals", value: "active" } }
+ * }
+ *
+ * const params = convertQueryModelToQueryParams(queryModel)
+ * // Résultat : { page: 2, pageSize: 20, search: "test", sort: [...], filters: {...} }
+ * ```
  */
 export function convertQueryModelToQueryParams(
     queryModel: QueryModel
 ): Record<string, any> {
+    // Commencer avec customParams en premier
+    // Les paramètres spécifiques (page, pageSize, sort, filters, search) auront priorité
     const params: Record<string, any> = {
         ...queryModel.customParams
     }
 
-    // Pagination : convertir page/pageSize en startRow/endRow
-    if (queryModel.pagination) {
-        const page = queryModel.pagination.page || 1
-        const pageSize = queryModel.pagination.pageSize || 20
-        params.startRow = (page - 1) * pageSize
-        params.endRow = page * pageSize
+    // Pagination (format standard QueryModel)
+    params.page = queryModel.page ?? 1
+    params.pageSize = queryModel.pageSize ?? 20
+
+    // Recherche globale (format standard QueryModel)
+    if (queryModel.search !== undefined && queryModel.search !== null && queryModel.search !== '') {
+        params.search = queryModel.search
     }
 
-    // Recherche globale
-    if (queryModel.globalSearch) {
-        params.search = queryModel.globalSearch
-    }
-
-    // Tri : convertir vers format sortModel
+    // Tri (format standard QueryModel) - JSON.stringify pour GET query params
     if (queryModel.sort && queryModel.sort.length > 0) {
-        const sortModel = queryModel.sort.map(s => ({
-            colId: s.field,
-            sort: s.direction
-        }))
-        // Stringifier le tableau JSON pour l'URL
-        params.sortModel = JSON.stringify(sortModel)
+        params.sort = JSON.stringify(queryModel.sort)
     }
 
-    // Filtres : convertir vers format filterModel
-    if (queryModel.filters && Object.keys(queryModel.filters).length > 0) {
-        const filterModel: Record<string, any> = {}
-        
-        Object.entries(queryModel.filters).forEach(([field, filterModelItem]) => {
-            // Ignorer les filtres avec des valeurs vides (sauf pour les opérateurs null/not_null)
-            const hasValue = filterModelItem.value !== undefined && filterModelItem.value !== null && 
-                            filterModelItem.value !== '' && String(filterModelItem.value).trim() !== '' &&
-                            String(filterModelItem.value) !== 'undefined' && String(filterModelItem.value) !== 'null'
-            const hasValue2 = filterModelItem.value2 !== undefined && filterModelItem.value2 !== null && 
-                             filterModelItem.value2 !== '' && String(filterModelItem.value2).trim() !== ''
-            const hasValues = filterModelItem.values && Array.isArray(filterModelItem.values) && filterModelItem.values.length > 0
-            const isNullOperator = filterModelItem.operator === 'is_null' || filterModelItem.operator === 'is_not_null'
-            
-            // Ignorer le filtre si aucune valeur valide n'est présente (sauf pour null/not_null)
-            if (!isNullOperator && !hasValue && !hasValue2 && !hasValues) {
-                return
-            }
-            // Mapper le dataType
-            let filterType: string
-            switch (filterModelItem.dataType) {
-                case 'text':
-                    filterType = 'text'
-                    break
-                case 'number':
-                    filterType = 'number'
-                    break
-                case 'date':
-                case 'datetime':
-                    filterType = 'date'
-                    break
-                default:
-                    filterType = 'text'
-            }
-
-            // Mapper l'opérateur vers le type du format attendu
-            let type: string
-            switch (filterModelItem.operator) {
-                case 'equals':
-                    type = 'equals'
-                    break
-                case 'not_equals':
-                    type = 'notEqual'
-                    break
-                case 'contains':
-                    type = 'contains'
-                    break
-                case 'not_contains':
-                    type = 'notContains'
-                    break
-                case 'starts_with':
-                    type = 'startsWith'
-                    break
-                case 'ends_with':
-                    type = 'endsWith'
-                    break
-                case 'greater_than':
-                    type = 'greaterThan'
-                    break
-                case 'less_than':
-                    type = 'lessThan'
-                    break
-                case 'greater_equal':
-                    type = 'greaterThanOrEqual'
-                    break
-                case 'less_equal':
-                    type = 'lessThanOrEqual'
-                    break
-                case 'between':
-                    type = 'inRange'
-                    break
-                case 'in':
-                    type = 'in'
-                    break
-                case 'not_in':
-                    type = 'notIn'
-                    break
-                default:
-                    type = 'contains'
-            }
-
-            // Construire l'objet filtre selon le format attendu
-            const filterConfig: any = {
-                filterType,
-                type
-            }
-
-            // Ajouter les valeurs selon le type de filtre
-            if (filterType === 'date') {
-                // Pour les dates, utiliser dateFrom et dateTo
-                if (filterModelItem.operator === 'between' && filterModelItem.value !== undefined && filterModelItem.value2 !== undefined) {
-                    filterConfig.dateFrom = filterModelItem.value
-                    filterConfig.dateTo = filterModelItem.value2
-                } else if (filterModelItem.value !== undefined) {
-                    filterConfig.dateFrom = filterModelItem.value
-                    if (filterModelItem.operator === 'less_than' || filterModelItem.operator === 'less_equal') {
-                        filterConfig.dateTo = filterModelItem.value
-                    }
-                }
-            } else if (filterType === 'number') {
-                // Pour les nombres, utiliser filter et filterTo pour inRange
-                if (filterModelItem.operator === 'between' && filterModelItem.value !== undefined && filterModelItem.value2 !== undefined) {
-                    filterConfig.filter = filterModelItem.value
-                    filterConfig.filterTo = filterModelItem.value2
-                } else if (filterModelItem.value !== undefined) {
-                    filterConfig.filter = filterModelItem.value
-                }
-            } else {
-                // Pour le texte, utiliser filter
-                if (filterModelItem.operator === 'in' && filterModelItem.values) {
-                    filterConfig.filter = filterModelItem.values
-                } else if (filterModelItem.value !== undefined) {
-                    filterConfig.filter = filterModelItem.value
-                }
-            }
-
-            filterModel[field] = filterConfig
-        })
-
-        // Stringifier l'objet JSON pour l'URL
-        params.filterModel = JSON.stringify(filterModel)
+    // Filtres (format standard QueryModel) - JSON.stringify pour GET query params
+    // ⚠️ IMPORTANT : Préserver les filtres même s'ils sont un objet vide pour permettre le reset
+    // Mais ne pas inclure si undefined ou null
+    if (queryModel.filters !== undefined && queryModel.filters !== null && typeof queryModel.filters === 'object') {
+        const filterKeys = Object.keys(queryModel.filters)
+        // Inclure les filtres s'ils ont au moins une clé OU s'ils sont explicitement un objet vide (pour reset)
+        // Ne pas inclure si undefined/null pour éviter d'envoyer des paramètres inutiles
+        if (filterKeys.length > 0) {
+            params.filters = JSON.stringify(queryModel.filters)
+        }
+        // Note : Si filters est un objet vide {}, on ne l'inclut pas pour éviter d'envoyer {} à l'API
+        // Mais si filters est défini avec des valeurs, on les inclut toujours
     }
 
     return params
 }
 
 /**
- * Crée un QueryModel depuis les paramètres du DataTable
- * 
- * @param params - Paramètres du DataTable
- * @returns QueryModel
+ * Crée un QueryModel depuis des paramètres simples
+ *
+ * Convertit des paramètres simples vers le format QueryModel standard.
+ * Accepte le tri au format {colId, sort} ou {field, direction} et le convertit.
+ *
+ * @param params - Paramètres au format QueryModel standard
+ * @param params.page - Numéro de page (optionnel)
+ * @param params.pageSize - Taille de page (optionnel)
+ * @param params.sort - Tri au format [{colId, sort}] ou [{field, direction}] (optionnel)
+ * @param params.filters - Filtres au format unifié (optionnel)
+ * @param params.search - Recherche globale (optionnel)
+ * @param params.customParams - Paramètres personnalisés additionnels (optionnel)
+ * @returns QueryModel au format standard
+ *
+ * @example
+ * ```typescript
+ * const queryModel = createQueryModelFromDataTableParams({
+ *   page: 2,
+ *   pageSize: 20,
+ *   search: "test",
+ *   sort: [{ colId: "name", sort: "asc" }],
+ *   filters: { status: { operator: "equals", value: "active" } }
+ * })
+ * ```
  */
 export function createQueryModelFromDataTableParams(params: {
     page?: number
     pageSize?: number
-    sort?: Array<{ field: string; direction: 'asc' | 'desc' }>
+    sort?: Array<{ colId: string; sort: 'asc' | 'desc' } | { field: string; direction: 'asc' | 'desc' }>
     filters?: Record<string, any>
-    globalSearch?: string
+    search?: string
     customParams?: Record<string, any>
 }): QueryModel {
-    const queryModel: QueryModel = {
-        customParams: params.customParams
-    }
+    const queryModel: QueryModel = {}
 
     // Pagination
-    if (params.page !== undefined || params.pageSize !== undefined) {
-        queryModel.pagination = {
-            page: params.page || 1,
-            pageSize: params.pageSize || 20
-        }
+    if (params.page !== undefined) {
+        queryModel.page = params.page
+    }
+    if (params.pageSize !== undefined) {
+        queryModel.pageSize = params.pageSize
     }
 
-    // Tri
+    // Tri : convertir vers format standard [{colId, sort}]
     if (params.sort && params.sort.length > 0) {
-        queryModel.sort = params.sort.map((s, index) => ({
-            field: s.field,
-            direction: s.direction,
-            priority: index + 1
-        }))
+        queryModel.sort = params.sort.map(s => {
+            if ('colId' in s && 'sort' in s) {
+                return { colId: s.colId, sort: s.sort }
+            }
+            if ('field' in s && 'direction' in s) {
+                return { colId: s.field, sort: s.direction }
+            }
+            return s as { colId: string; sort: 'asc' | 'desc' }
+        })
     }
 
     // Filtres
     if (params.filters) {
-        queryModel.filters = {}
-        Object.entries(params.filters).forEach(([field, filterConfig]) => {
-            queryModel.filters![field] = {
-                field,
-                dataType: filterConfig.dataType || 'text',
-                operator: filterConfig.operator || 'contains',
-                value: filterConfig.value,
-                value2: filterConfig.value2,
-                values: filterConfig.values
-            }
-        })
+        queryModel.filters = params.filters
     }
 
     // Recherche globale
-    if (params.globalSearch) {
-        queryModel.globalSearch = params.globalSearch
+    if (params.search) {
+        queryModel.search = params.search
+    }
+
+    // Custom params
+    if (params.customParams) {
+        queryModel.customParams = params.customParams
     }
 
     return queryModel
 }
 
+/**
+ * Fusionne un QueryModel avec des customParams additionnels
+ *
+ * Cette fonction garantit que TOUS les paramètres du QueryModel (filters, sort, search, page, pageSize)
+ * sont préservés lors de la fusion avec les customParams.
+ * Les customParams fournis ont priorité sur ceux existants dans le QueryModel.
+ *
+ * ⚠️ IMPORTANT : Cette fonction préserve explicitement les filtres pour garantir leur transmission à l'API.
+ *
+ * @param queryModel - QueryModel du DataTable (contient filters, sort, search, etc.)
+ * @param customParams - Paramètres personnalisés à ajouter/fusionner (ex: inventory_id, warehouse_id)
+ * @returns QueryModel fusionné avec tous les paramètres préservés
+ *
+ * @example
+ * ```typescript
+ * const queryModelFromDataTable: QueryModel = {
+ *   page: 2,
+ *   pageSize: 20,
+ *   filters: { status: { operator: "equals", value: "active" } },
+ *   sort: [{ colId: "name", sort: "asc" }],
+ *   search: "test"
+ * }
+ *
+ * const customParams = { inventory_id: 123, warehouse_id: 456 }
+ *
+ * const merged = mergeQueryModelWithCustomParams(queryModelFromDataTable, customParams)
+ * // Résultat : {
+ * //   page: 2,
+ * //   pageSize: 20,
+ * //   filters: { status: { operator: "equals", value: "active" } }, // ✅ Préservé
+ * //   sort: [{ colId: "name", sort: "asc" }],
+ * //   search: "test",
+ * //   customParams: { inventory_id: 123, warehouse_id: 456 }
+ * // }
+ * ```
+ */
+export function mergeQueryModelWithCustomParams(
+    queryModel: QueryModel,
+    customParams: Record<string, any>
+): QueryModel {
+    // Fusionner les customParams : préserver ceux du QueryModel et ajouter ceux fournis
+    const mergedCustomParams = {
+        ...queryModel.customParams,
+        ...customParams
+    }
+
+    // ⚠️ CRITIQUE : Convertir les Proxy réactifs Vue en objets plain pour garantir la sérialisation correcte
+    // Cela évite que les filtres soient perdus lors de la transmission entre composants
+    let filtersPlain: Record<string, any> = {}
+    if (queryModel.filters) {
+        try {
+            const filtersStr = JSON.stringify(queryModel.filters)
+            filtersPlain = JSON.parse(filtersStr)
+
+            // ⚠️ IMPORTANT : Vérifier que filtersPlain n'est pas un QueryModel complet
+            // Si filtersPlain contient 'page', 'pageSize', 'filters', etc., c'est un QueryModel imbriqué incorrectement
+            // Dans ce cas, extraire uniquement les filtres réels
+            if (filtersPlain && typeof filtersPlain === 'object') {
+                const filterKeys = Object.keys(filtersPlain)
+                const hasQueryModelKeys = filterKeys.some(key => ['page', 'pageSize', 'filters', 'sort', 'search', 'customParams'].includes(key))
+
+                if (hasQueryModelKeys && 'filters' in filtersPlain && typeof filtersPlain.filters === 'object') {
+                    // C'est un QueryModel imbriqué, extraire uniquement les filtres réels
+                    console.warn('[mergeQueryModelWithCustomParams] QueryModel détecté dans filters, extraction des filtres réels')
+                    filtersPlain = filtersPlain.filters || {}
+                }
+            }
+        } catch (e) {
+            console.error('[mergeQueryModelWithCustomParams] Erreur lors de la conversion des filtres:', e)
+            filtersPlain = {}
+        }
+    }
+
+    const sortPlain = queryModel.sort ? JSON.parse(JSON.stringify(queryModel.sort)) : undefined
+
+    // Construire le QueryModel final en préservant TOUS les paramètres du format standard
+    return {
+        page: queryModel.page,
+        pageSize: queryModel.pageSize,
+        sort: sortPlain,
+        filters: filtersPlain, // ⚠️ CRITIQUE : Utiliser l'objet plain (pas le Proxy réactif)
+        search: queryModel.search,
+        customParams: mergedCustomParams
+    }
+}

@@ -67,10 +67,10 @@
                             <IconFile class="w-3.5 h-3.5 mr-2" />
                             {{ exportLoading.csv ? 'Export...' : 'CSV' }}
                         </button>
-                        <button @click="exportToExcel" :class="['dropdown-item', { 'loading': exportLoading.excel }]"
-                            :disabled="exportLoading.excel">
+                        <button @click="exportToSpreadsheet" :class="['dropdown-item', { 'loading': exportLoading.spreadsheet }]"
+                            :disabled="exportLoading.spreadsheet">
                             <IconFile class="w-3.5 h-3.5 mr-2" />
-                            {{ exportLoading.excel ? 'Export...' : 'Excel' }}
+                            {{ exportLoading.spreadsheet ? 'Export...' : 'Tableur' }}
                         </button>
                         <button @click="exportToPdf" :class="['dropdown-item', { 'loading': exportLoading.pdf }]"
                             :disabled="exportLoading.pdf">
@@ -88,11 +88,11 @@
                             <IconFile class="w-3.5 h-3.5 mr-2" />
                             {{ exportLoading.csvSelection ? 'Export...' : 'CSV (Sélection)' }}
                         </button>
-                        <button @click="exportSelectedToExcel"
-                            :class="['dropdown-item', { 'loading': exportLoading.excelSelection }]"
-                            :disabled="exportLoading.excelSelection">
+                        <button @click="exportSelectedToSpreadsheet"
+                            :class="['dropdown-item', { 'loading': exportLoading.spreadsheetSelection }]"
+                            :disabled="exportLoading.spreadsheetSelection">
                             <IconFile class="w-3.5 h-3.5 mr-2" />
-                            {{ exportLoading.excelSelection ? 'Export...' : 'Excel (Sélection)' }}
+                            {{ exportLoading.spreadsheetSelection ? 'Export...' : 'Tableur (Sélection)' }}
                         </button>
                     </div>
                 </div>
@@ -133,10 +133,10 @@ interface Props {
     selectedRows: Set<string>
     exportLoading: {
         csv: boolean
-        excel: boolean
+        spreadsheet: boolean
         pdf: boolean
         csvSelection: boolean
-        excelSelection: boolean
+        spreadsheetSelection: boolean
     }
     loading?: boolean
     enableColumnPinning?: boolean
@@ -148,10 +148,10 @@ interface Emits {
     (e: 'columns-changed', visibleColumns: string[], columnWidths: Record<string, number>): void
     (e: 'reorder-columns', fromIndex: number, toIndex: number): void
     (e: 'export-csv'): void
-    (e: 'export-excel'): void
+    (e: 'export-spreadsheet'): void
     (e: 'export-pdf'): void
     (e: 'export-selected-csv'): void
-    (e: 'export-selected-excel'): void
+    (e: 'export-selected-spreadsheet'): void
     (e: 'deselect-all'): void
     (e: 'pin-column', field: string, direction: 'left' | 'right' | null): void
     (e: 'sticky-header-changed', enabled: boolean): void
@@ -194,8 +194,8 @@ const exportToCsv = () => {
     showExportDropdown.value = false
 }
 
-const exportToExcel = () => {
-    emit('export-excel')
+const exportToSpreadsheet = () => {
+    emit('export-spreadsheet')
     showExportDropdown.value = false
 }
 
@@ -209,8 +209,8 @@ const exportSelectedToCsv = () => {
     showExportDropdown.value = false
 }
 
-const exportSelectedToExcel = () => {
-    emit('export-selected-excel')
+const exportSelectedToSpreadsheet = () => {
+    emit('export-selected-spreadsheet')
     showExportDropdown.value = false
 }
 

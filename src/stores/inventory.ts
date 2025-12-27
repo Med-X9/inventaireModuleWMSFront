@@ -11,9 +11,8 @@ import {
     processDataTableResponse,
     type DataTableResponse
 } from '@/utils/dataTableUtils';
-import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter';
-import { buildStandardParamsUrl, normalizeToStandardParams } from '@/components/DataTable/utils/dataTableParamsConverter';
 import type { QueryModel } from '@/components/DataTable/types/QueryModel';
+import { convertQueryModelToQueryParams } from '@/components/DataTable/utils/queryModelConverter';
 
 export const useInventoryStore = defineStore('inventory', () => {
     // State
@@ -30,6 +29,13 @@ export const useInventoryStore = defineStore('inventory', () => {
     const totalPages = ref(1);
     const currentPage = ref(1);
     const pageSize = ref(20);
+    // Métadonnées de pagination depuis la dernière réponse
+    const paginationMetadata = ref<{
+        page?: number;
+        totalPages?: number;
+        pageSize?: number;
+        total?: number;
+    } | null>(null);
 
     // Getters
     const getCurrentInventory = computed(() => currentInventory.value);
@@ -86,56 +92,11 @@ export const useInventoryStore = defineStore('inventory', () => {
     };
 
     // ===== ACTIONS =====
-    // 🚀 Accepte QueryModel ou StandardDataTableParams - conversion automatique
-    const fetchInventories = async (
-        params?: QueryModel | StandardDataTableParams
-    ): Promise<DataTableResponse<InventoryTable>> => {
-        loading.value = true;
-        error.value = null;
-        try {
-            // Normaliser les paramètres (détecte et convertit QueryModel si nécessaire)
-            // Note: Les colonnes ne sont pas disponibles ici, mais le DataTable a déjà converti
-            // QueryModel -> StandardDataTableParams avant d'appeler le store
-            const standardParams: StandardDataTableParams = normalizeToStandardParams(
-                params,
-                {
-                    draw: 1,
-                    defaultPage: currentPage.value,
-                    defaultPageSize: pageSize.value
-                }
-            );
 
-            // Construire l'URL avec les paramètres StandardDataTableParams
-            // Utiliser buildStandardParamsUrl pour préserver les crochets dans les noms de paramètres
-            const baseUrl = API.endpoints.inventory?.base;
-            const queryString = buildStandardParamsUrl(standardParams);
-            const url = `${baseUrl}?${queryString}`;
-
-            // Appeler l'API avec les paramètres StandardDataTableParams
-            const responseData = await InventoryService.getAllByUrl(url);
-
-            const inventoryData = responseData.data || [];
-            inventories.value = inventoryData;
-            totalItems.value = responseData.recordsFiltered || inventoryData.length;
-
-            // Retourner le format attendu
-            return {
-                draw: responseData.draw || 1,
-                data: inventoryData,
-                recordsTotal: responseData.recordsTotal || 0,
-                recordsFiltered: responseData.recordsFiltered || inventoryData.length
-            };
-        } catch (err: any) {
-            const errorMessage = err instanceof Error
-                ? err.message
-                : err?.response?.data?.message || 'Erreur lors de la récupération des inventaires';
-            error.value = errorMessage;
-            loading.value = false;
-            throw err;
-        } finally {
-            loading.value = false;
-        }
-    };
+    /**
+     * Récupère la liste des inventaires avec pagination, tri et filtres
+     * @param params - QueryModel contenant les paramètres de pagination, tri, filtres et recherche
+     */
 
     const fetchInventoryById = async (id: number | string) => {
         loading.value = true;
@@ -165,20 +126,104 @@ export const useInventoryStore = defineStore('inventory', () => {
             loading.value = false;
         }
     };
+    /**
+     * Récupère la liste des inventaires avec pagination, tri et filtres
+     * Le store stocke uniquement les données et métadonnées brutes du backend
+     * Le DataTable/useBackendDataTable gère la pagination
+     */
+    const fetchInventories = async (params?: QueryModel): Promise<DataTableResponse<InventoryTable>> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            // Convertir QueryModel en paramètres de requête
+            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
+            const responseData = await InventoryService.getAll(requestParams);
+
+            // Stocker les données brutes
+            inventories.value = responseData.data || [];
+
+            // Stocker les métadonnées de pagination brutes du backend (sans calcul)
+            paginationMetadata.value = {
+                page: responseData.page ?? 1,
+                totalPages: responseData.totalPages ?? 1,
+                pageSize: responseData.pageSize ?? 20,
+                total: responseData.total ?? responseData.recordsFiltered ?? responseData.recordsTotal ?? 0
+            };
+
+            // Retourner le format DataTable minimal (le DataTable gère la pagination)
+            return {
+                draw: responseData.draw || 1,
+                data: inventories.value,
+                recordsTotal: responseData.recordsTotal ?? paginationMetadata.value.total,
+                recordsFiltered: responseData.recordsFiltered ?? paginationMetadata.value.total
+            } as any;
+        } catch (err: any) {
+            handleError(err, 'Erreur lors de la récupération des inventaires');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
 
     const fetchInventoryDetail = async (id: number | string) => {
         loading.value = true;
         error.value = null;
         try {
-            const response: AxiosResponse<InventoryDetailResponse> = await InventoryService.getInventoryDetail(id);
+            // Utiliser les nouveaux endpoints modulaires
+            const [
+                basicResponse,
+                accountResponse,
+                warehousesResponse,
+                countingsResponse,
+                teamResponse,
+                resourcesResponse
+            ] = await Promise.all([
+                InventoryService.getInventoryBasic(id),
+                InventoryService.getInventoryAccount(id),
+                InventoryService.getInventoryWarehouses(id),
+                InventoryService.getInventoryCountings(id),
+                InventoryService.getInventoryTeam(id),
+                InventoryService.getInventoryResources(id)
+            ]);
 
-            // La structure de réponse est { message: "...", data: {...} }
-            if (response.data && response.data.data) {
-                currentInventoryDetail.value = response.data.data;
-                return response.data.data;
-            } else {
-                throw new Error(response.data.message || 'Erreur lors de la récupération des détails');
-            }
+            // Assembler les données dans un objet InventoryDetail
+            const basicData = basicResponse.data.data;
+            const accountData = accountResponse.data.data;
+            const warehousesData = warehousesResponse.data.data;
+            const countingsData = countingsResponse.data.data;
+            const teamData = teamResponse.data.data;
+            const resourcesData = resourcesResponse.data.data;
+
+            const assembledDetail: InventoryDetail = {
+                id: typeof id === 'string' ? parseInt(id) : id,
+                reference: basicData.reference,
+                label: basicData.label,
+                date: basicData.date,
+                status: basicData.status,
+                inventory_type: basicData.inventory_type,
+                en_preparation_status_date: basicData.en_preparation_status_date,
+                en_realisation_status_date: basicData.en_realisation_status_date,
+                termine_status_date: basicData.termine_status_date,
+                cloture_status_date: basicData.cloture_status_date,
+                account_name: accountData.account_name || undefined,
+                account_reference: accountData.account_reference || undefined,
+                magasins: warehousesData.magasins || [],
+                comptages: countingsData.comptages || [],
+                equipe: teamData.equipe.map(membre => ({
+                    reference: membre.reference,
+                    user: membre.user,
+                    nombre_comptage: membre.nombre_comptage
+                })) || [],
+                ressources: resourcesData.ressources.map(ressource => ({
+                    reference: ressource.reference,
+                    ressource_reference: ressource.ressource_reference ?? null,
+                    ressource_nom: ressource.ressource_nom ?? null,
+                    quantity: ressource.quantity
+                })) || []
+            };
+
+            currentInventoryDetail.value = assembledDetail;
+            return assembledDetail;
         } catch (err: any) {
             handleError(err, 'Erreur lors de la récupération des détails de l\'inventaire');
         } finally {
@@ -235,16 +280,8 @@ export const useInventoryStore = defineStore('inventory', () => {
         loading.value = true;
         error.value = null;
         try {
-            const response = await InventoryService.launch(id);
-
-            // Vérifier si c'est une réponse de succès avec des infos
-            if (response.data && response.data.message) {
-                // Si il y a des infos, les afficher
-                if (response.data.infos && response.data.infos.length > 0) {
-                }
-            }
-
-            fetchInventories();
+            await InventoryService.launch(id);
+            await fetchInventories();
         } catch (err: any) {
             handleError(err, 'Erreur lors du lancement de l\'inventaire');
         } finally {
@@ -252,12 +289,16 @@ export const useInventoryStore = defineStore('inventory', () => {
         }
     };
 
+    /**
+     * Actions sur les inventaires (annuler, terminer, clôturer)
+     * Ces fonctions suivent le même pattern : appel API puis rafraîchissement
+     */
     const cancelInventory = async (id: number | string) => {
         loading.value = true;
         error.value = null;
         try {
             await InventoryService.cancel(id);
-            fetchInventories();
+            await fetchInventories();
         } catch (err: any) {
             handleError(err, 'Erreur lors de l\'annulation de l\'inventaire');
         } finally {
@@ -270,7 +311,7 @@ export const useInventoryStore = defineStore('inventory', () => {
         error.value = null;
         try {
             await InventoryService.terminate(id);
-            fetchInventories();
+            await fetchInventories();
         } catch (err: any) {
             handleError(err, 'Erreur lors de la terminaison de l\'inventaire');
         } finally {
@@ -283,7 +324,7 @@ export const useInventoryStore = defineStore('inventory', () => {
         error.value = null;
         try {
             await InventoryService.close(id);
-            fetchInventories();
+            await fetchInventories();
         } catch (err: any) {
             handleError(err, 'Erreur lors de la clôture de l\'inventaire');
         } finally {
@@ -291,33 +332,47 @@ export const useInventoryStore = defineStore('inventory', () => {
         }
     };
 
-    const fetchPlanningManagement = async (id: number, params?: any) => {
+    const fetchPlanningManagement = async (id: number, params?: QueryModel): Promise<DataTableResponse<any>> => {
         loading.value = true;
         error.value = null;
         try {
-            logger.debug('fetchPlanningManagement appelé', { id, params });
-            const response: AxiosResponse<PlanningManagementResponse> = await InventoryService.getPlanningManagement(id, params);
+            // Convertir QueryModel en paramètres de requête
+            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
+            logger.debug('fetchPlanningManagement appelé', { id, params, requestParams });
+
+            const response: AxiosResponse<PlanningManagementResponse> = await InventoryService.getPlanningManagement(id, requestParams);
             const responseData = response.data;
 
             logger.debug('fetchPlanningManagement réponse reçue', {
-                dataCount: responseData.data?.length || 0,
-                warehousesCount: responseData.warehouses_count
+                rowsCount: responseData.rows?.length || 0,
+                total: responseData.total
             });
 
-            // Stocker les données dans le store
-            planningManagementData.value = responseData.data || [];
+            // Stocker les données brutes
+            planningManagementData.value = responseData.rows || [];
 
-            // Adapter le format de réponse pour le DataTable
-            // PlanningManagementResponse a: { status, message, inventory_id, warehouses_count, data: WarehouseStats[] }
-            // On doit retourner: { data: T[], recordsTotal: number, recordsFiltered: number }
-            return {
-                data: responseData.data || [],
-                recordsTotal: responseData.warehouses_count || 0,
-                recordsFiltered: responseData.warehouses_count || 0
+            // Stocker les métadonnées de pagination basées sur la réponse actuelle
+            paginationMetadata.value = {
+                page: responseData.page ?? params?.page ?? 1,
+                totalPages: responseData.totalPages ?? 1,
+                pageSize: responseData.pageSize ?? params?.pageSize ?? 20,
+                total: responseData.total ?? 0
             };
+
+            // Mettre à jour le total des éléments pour la pagination
+            totalItems.value = responseData.total || 0;
+
+            // Retourner le format DataTable complet
+            return {
+                draw: responseData.page ?? params?.page ?? 1,
+                data: planningManagementData.value,
+                recordsTotal: responseData.total ?? 0,
+                recordsFiltered: responseData.total ?? 0
+            } as any;
         } catch (err: any) {
             logger.error('Erreur dans fetchPlanningManagement', err);
             handleError(err, 'Erreur lors de la récupération des statistiques de planning');
+            throw err;
         } finally {
             loading.value = false;
         }
@@ -335,12 +390,81 @@ export const useInventoryStore = defineStore('inventory', () => {
             loading.value = false;
         }
     };
+
+    /**
+     * Importe la planification (location-jobs) depuis un fichier Excel (asynchrone)
+     * @param id - ID de l'inventaire
+     * @param formData - Données du formulaire contenant le fichier Excel
+     * @returns Promise avec la réponse d'import (contient import_task_id pour suivre le statut)
+     */
+    const importLocationJobsSync = async (id: string | number, formData: FormData) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await InventoryService.importLocationJobsSync(id, formData);
+            return response.data;
+        } catch (err: any) {
+            handleError(err, 'Erreur lors de l\'import de la planification');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    /**
+     * Récupère le statut d'un import de planification en cours (par importTaskId)
+     * @param importTaskId - ID de la tâche d'import
+     * @returns Promise avec le statut de l'import
+     */
+    const getImportLocationJobsStatus = async (importTaskId: number) => {
+        try {
+            const response = await InventoryService.getImportLocationJobsStatus(importTaskId);
+            return response.data;
+        } catch (err: any) {
+            handleError(err, 'Erreur lors de la récupération du statut de l\'import');
+            throw err;
+        }
+    };
+
+    /**
+     * Récupère le statut d'un import de planification par inventoryId
+     * @param inventoryId - ID de l'inventaire
+     * @returns Promise avec le statut de l'import
+     */
+    const getImportLocationJobsStatusByInventory = async (inventoryId: number) => {
+        try {
+            const response = await InventoryService.getImportLocationJobsStatusByInventory(inventoryId);
+            return response.data;
+        } catch (err: any) {
+            handleError(err, 'Erreur lors de la récupération du statut de l\'import');
+            throw err;
+        }
+    };
     const clearError = () => {
         error.value = null;
     };
 
     const clearCurrentInventory = () => {
         currentInventory.value = null;
+    };
+
+    /**
+     * Exporter les inventaires en CSV ou Excel
+     * @param params - Paramètres au format FORMAT_ACTUEL.md avec export: 'csv' ou 'excel'
+     * @returns Promise avec la réponse contenant le blob du fichier
+     */
+    const exportInventories = async (params: Record<string, any>): Promise<AxiosResponse<Blob>> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await InventoryService.exportAll(params);
+            return response;
+        } catch (err: any) {
+            handleError(err, 'Erreur lors de l\'export des inventaires');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
     };
 
     return {
@@ -355,6 +479,7 @@ export const useInventoryStore = defineStore('inventory', () => {
         totalPages,
         currentPage,
         pageSize,
+        paginationMetadata,
 
         // Getters
         getCurrentInventory,
@@ -375,6 +500,10 @@ export const useInventoryStore = defineStore('inventory', () => {
         closeInventory,
         fetchPlanningManagement,
         importStockImage,
+        importLocationJobsSync,
+        getImportLocationJobsStatus,
+        getImportLocationJobsStatusByInventory,
+        exportInventories,
         clearError,
         clearCurrentInventory,
         fetchInventoryByReference,

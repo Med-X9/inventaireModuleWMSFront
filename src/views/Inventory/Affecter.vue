@@ -1,31 +1,24 @@
 <template>
     <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 dark:from-slate-900 dark:to-slate-800 p-8">
-        <!-- Header -->
+        <!-- Header et Barre d'actions fusionnées -->
         <div class="bg-white dark:bg-slate-800 rounded-3xl p-8 mb-8 shadow-lg border border-slate-200 dark:border-slate-700">
-            <div class="flex justify-between items-center gap-8">
+            <!-- Section Header -->
+            <div class="flex justify-between items-center gap-8 mb-6">
                 <div class="flex-1">
                     <h1 class="flex items-center gap-4 text-4xl font-extrabold text-slate-900 dark:text-slate-100 m-0 mb-2">
                         <IconCalendar class="w-10 h-10 text-primary" />
                         Gestion des Affectations
                     </h1>
                 </div>
-                <div class="flex gap-4 mb-4">
-                    <button
-                        @click="handleGoToInventoryDetail"
-                        class="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold cursor-pointer transition-all duration-300 whitespace-nowrap bg-gradient-to-r from-primary to-primary-light text-white shadow-lg hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none">
-                        <IconEye class="w-4 h-4 text-white" />
-                    </button>
-                    <button
-                        @click="handleGoToAffectation"
-                        class="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold cursor-pointer transition-all duration-300 whitespace-nowrap bg-gradient-to-r from-primary to-primary-light text-white shadow-lg hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none">
-                        <IconCalendar class="w-4 h-4 text-white" />
-                    </button>
+                <div class="flex justify-end">
+                    <ButtonGroup :buttons="navigationButtons" justify="end" />
                 </div>
             </div>
-        </div>
 
-        <!-- Barre d'actions -->
-        <div class="mb-6 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6">
+            <!-- Séparateur -->
+            <hr class="border-slate-200 dark:border-slate-700 my-6" />
+
+            <!-- Section Barre d'actions -->
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                 <!-- Informations de sélection et statut -->
                 <div class="flex items-center gap-4 flex-wrap">
@@ -34,7 +27,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                         <span class="text-sm font-medium text-slate-700 dark:text-slate-300">
-                            {{ selectedRows.length }} job{{ selectedRows.length > 1 ? 's' : '' }} sélectionné{{ selectedRows.length > 1 ? 's' : '' }}
+                            {{ selectedJobsCount }} job{{ selectedJobsCount > 1 ? 's' : '' }} sélectionné{{ selectedJobsCount > 1 ? 's' : '' }}
                         </span>
                     </div>
                     <div v-if="hasUnsavedChanges" class="flex items-center gap-2">
@@ -52,7 +45,7 @@
                 </div>
 
                 <!-- Boutons d'action -->
-                <div class="flex flex-col sm:flex-row gap-3">
+                <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
                     <!-- Dropdown pour les affectations -->
                     <div class="relative" ref="dropdownRef">
                         <button
@@ -109,113 +102,90 @@
                         </Transition>
                     </div>
 
-                    <!-- Bouton Manuel -->
-                    <button
-                        v-if="showManualButton"
-                        @click="handleManualClick"
-                        class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        <span>Manuel</span>
-                    </button>
-
-                    <!-- Bouton Transférer -->
-                    <button
-                        v-if="showTransferButton"
-                        @click="handleTransferClick"
-                        class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                        </svg>
-                        <span>Transférer</span>
-                    </button>
-
-                    <!-- Bouton Sauvegarder -->
-                    <button
-                        @click="saveAllChanges"
-                        :disabled="!hasUnsavedChanges"
-                        class="flex items-center justify-center gap-2 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2"
-                        :class="hasUnsavedChanges
-                            ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-md hover:shadow-lg focus:ring-green-500'
-                            : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span>Sauvegarder</span>
-                        <span v-if="hasUnsavedChanges" class="bg-white text-green-600 px-2 py-0.5 rounded-full text-xs font-bold">
-                            {{ Array.from(pendingChanges.values()).reduce((total, changes) => total + changes.size, 0) }}
-                        </span>
-                    </button>
-
-                    <!-- Bouton Réinitialiser -->
-                    <button
-                        @click="resetAllChanges"
-                        :disabled="!hasUnsavedChanges"
-                        class="flex items-center justify-center gap-2 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2"
-                        :class="hasUnsavedChanges
-                            ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-md hover:shadow-lg focus:ring-red-500'
-                            : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                        <span>Réinitialiser</span>
-                        <span v-if="hasUnsavedChanges" class="bg-white text-red-600 px-2 py-0.5 rounded-full text-xs font-bold">
-                            {{ Array.from(pendingChanges.values()).reduce((total, changes) => total + changes.size, 0) }}
-                        </span>
-                    </button>
-
-                    <!-- Bouton Pret -->
-                    <button
-                        v-if="showReadyButton"
-                        @click="handleReadyClick"
-                        class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary to-primary-light hover:from-primary-light hover:to-primary-dark text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>Pret</span>
-                    </button>
-
-                    <!-- Bouton Annuler -->
-                    <button
-                        v-if="showResetButton"
-                        @click="handleResetClick"
-                        class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                        <span>Annuler</span>
-                    </button>
+                    <!-- ButtonGroup pour les autres boutons -->
+                    <ButtonGroup :buttons="actionButtons" justify="end" />
                 </div>
             </div>
         </div>
 
         <!-- DataTable -->
         <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 m-0">Liste des jobs</h3>
+                <div class="relative inline-block" ref="statusLegendTooltip">
+                    <button
+                        @mouseenter="showStatusTooltip"
+                        @mouseleave="hideStatusTooltip"
+                        class="w-6 h-6 rounded-full bg-primary/10 hover:bg-primary/20 dark:bg-primary/20 dark:hover:bg-primary/30 flex items-center justify-center transition-colors cursor-help"
+                        type="button"
+                        aria-label="Signification des statuts">
+                        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </button>
+                    <Teleport to="body">
+                        <div
+                            v-if="showStatusLegend"
+                            ref="tooltipElement"
+                            :style="tooltipStyle"
+                            class="fixed z-50 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 p-4 pointer-events-none max-w-sm"
+                            style="min-width: 280px;">
+                            <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Signification des statuts</h4>
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center rounded-md bg-slate-200 px-2 py-1 text-xs font-medium text-slate-900 ring-1 ring-slate-300/20 ring-inset">EN ATTENTE</span>
+                                    <span class="text-xs text-slate-600 dark:text-slate-400">Job en attente de validation</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset">VALIDE</span>
+                                    <span class="text-xs text-slate-600 dark:text-slate-400">Job validé</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center rounded-md bg-teal-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-teal-600/20 ring-inset">AFFECTE</span>
+                                    <span class="text-xs text-slate-600 dark:text-slate-400">Job affecté à une équipe</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center rounded-md bg-purple-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-purple-600/20 ring-inset">PRET</span>
+                                    <span class="text-xs text-slate-600 dark:text-slate-400">Job prêt pour le comptage</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset">TRANSFERT</span>
+                                    <span class="text-xs text-slate-600 dark:text-slate-400">Job en transfert</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset">ENTAME</span>
+                                    <span class="text-xs text-slate-600 dark:text-slate-400">Comptage entamé</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-700/20 ring-inset">TERMINE</span>
+                                    <span class="text-xs text-slate-600 dark:text-slate-400">Comptage terminé</span>
+                                </div>
+                            </div>
+                            <div class="absolute w-2 h-2 bg-white dark:bg-slate-800 border-l border-b border-slate-200 dark:border-slate-700 transform rotate-45 -bottom-1 right-4"></div>
+                        </div>
+                    </Teleport>
+                </div>
+            </div>
+
+            <!-- DataTable des jobs harmonisée avec Planning.vue -->
             <DataTable
-                ref="dataTableRef"
-                :columns="columns"
-                :rowDataProp="displayData"
+                :key="jobsKey"
+                :columns="adaptedStoreJobsColumns"
+                :rowDataProp="jobs"
                 :actions="[]"
-                :pagination="true"
-                :enableFiltering="true"
+                :enableVirtualScrolling="false"
+                :totalPagesProp="jobPaginationMetadata?.totalPages"
+                :totalItemsProp="jobPaginationMetadata?.total"
                 :rowSelection="true"
-                :inlineEditing="true"
-                :serverSidePagination="true"
-                :serverSideFiltering="true"
-                :serverSideSorting="true"
-                :debounceFilter="500"
-                :loading="loading"
-                :pageSizeProp="pageSize"
-                @selection-changed="onSelectionChanged"
-                @row-clicked="onRowClicked"
-                @cell-value-changed="onCellValueChanged"
-                @pagination-changed="handlePaginationChanged"
-                @sort-changed="handleSortChanged"
-                @filter-changed="handleFilterChanged"
-                @global-search-changed="handleGlobalSearchChanged"
+                @selection-changed="onJobSelectionChanged"
+                @pagination-changed="(queryModel) => onJobsTableEvent('pagination', queryModel)"
+                @sort-changed="(queryModel) => onJobsTableEvent('sort', queryModel)"
+                @filter-changed="(queryModel) => onJobsTableEvent('filter', queryModel)"
+                @global-search-changed="(queryModel) => onJobsTableEvent('search', queryModel)"
                 storageKey="affecter_table"
-                :exportTitle="'Affecter_Jobs'" />
+                ref="jobsTableRef">
+            </DataTable>
+
         </div>
 
         <!-- Modals -->
@@ -253,15 +223,15 @@
                                 {{ eligibleJobsForTransfer.length }} éligible(s)
                             </span>
                             <span
-                                v-if="selectedRows.length - eligibleJobsForTransfer.length > 0"
+                                v-if="selectedJobs.length - eligibleJobsForTransfer.length > 0"
                                 class="px-3 py-1 bg-warning-100 dark:bg-warning-900/30 text-warning-800 dark:text-warning-400 text-xs font-medium rounded-full">
-                                {{ selectedRows.length - eligibleJobsForTransfer.length }} exclu(s)
+                                {{ selectedJobs.length - eligibleJobsForTransfer.length }} exclu(s)
                             </span>
                         </div>
                     </div>
                     <!-- Alert pour les jobs exclus -->
                     <div
-                        v-if="selectedRows.length - eligibleJobsForTransfer.length > 0"
+                        v-if="selectedJobs.length - eligibleJobsForTransfer.length > 0"
                         class="p-3 bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-800 rounded-lg">
                         <div class="flex items-start">
                             <svg class="w-5 h-5 text-warning-600 dark:text-warning-400 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -269,10 +239,10 @@
                             </svg>
                             <div class="flex-1">
                                 <p class="text-sm font-medium text-warning-800 dark:text-warning-300">
-                                    {{ selectedRows.length - eligibleJobsForTransfer.length }} job(s) ne sont pas éligibles au transfert
+                                    {{ selectedJobs.length - eligibleJobsForTransfer.length }} job(s) ne sont pas éligibles au transfert
                                 </p>
                                 <p class="text-xs text-warning-700 dark:text-warning-400 mt-1">
-                                    Seuls les jobs en statut TRANSFERT ou PRET, ou les jobs ENTAME avec au moins un assignment TRANSFERT ou PRET peuvent être transférés.
+                                    Seuls les jobs en statut TRANSFERT, PRET ou ENTAME peuvent être transférés.
                                 </p>
                             </div>
                         </div>
@@ -324,54 +294,12 @@
 
                 <!-- Formulaire de sélection du comptage -->
                 <div class="flex-shrink-0 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 mb-4">
-                    <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2">
-                        <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                        </svg>
-                        Sélectionner le(s) comptage(s) à transférer
-                    </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <label class="flex items-center p-3 bg-white dark:bg-slate-800 rounded-lg border-2 transition-all cursor-pointer hover:border-purple-300 dark:hover:border-purple-700"
-                            :class="transferForm.premierComptage ? 'border-purple-500 dark:border-purple-600' : 'border-slate-200 dark:border-slate-700'">
-                            <input
-                                type="checkbox"
-                                v-model="transferForm.premierComptage"
-                                class="w-5 h-5 text-purple-600 bg-slate-100 border-slate-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 focus:ring-2 dark:bg-slate-700 dark:border-slate-600">
-                            <div class="ml-3 flex-1">
-                                <div class="text-sm font-medium text-slate-900 dark:text-white">1er Comptage</div>
-                                <div class="text-xs text-slate-500 dark:text-slate-400">Transfert du premier comptage</div>
-                            </div>
-                        </label>
-                        <label class="flex items-center p-3 bg-white dark:bg-slate-800 rounded-lg border-2 transition-all cursor-pointer hover:border-purple-300 dark:hover:border-purple-700"
-                            :class="transferForm.deuxiemeComptage ? 'border-purple-500 dark:border-purple-600' : 'border-slate-200 dark:border-slate-700'">
-                            <input
-                                type="checkbox"
-                                v-model="transferForm.deuxiemeComptage"
-                                class="w-5 h-5 text-purple-600 bg-slate-100 border-slate-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 focus:ring-2 dark:bg-slate-700 dark:border-slate-600">
-                            <div class="ml-3 flex-1">
-                                <div class="text-sm font-medium text-slate-900 dark:text-white">2e Comptage</div>
-                                <div class="text-xs text-slate-500 dark:text-slate-400">Transfert du deuxième comptage</div>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Boutons d'action -->
-                <div class="flex-shrink-0 flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <button
-                        @click="showTransferModal = false"
-                        class="px-6 py-2.5 text-sm font-medium text-slate-700 bg-white border-2 border-slate-300 rounded-lg hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 dark:hover:bg-slate-700 transition-colors">
-                        Annuler
-                    </button>
-                    <button
-                        @click="handleTransferSubmit({
-                            premierComptage: transferForm.premierComptage,
-                            deuxiemeComptage: transferForm.deuxiemeComptage
-                        })"
-                        :disabled="!transferForm.premierComptage && !transferForm.deuxiemeComptage"
-                        class="px-6 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 disabled:cursor-not-allowed transform transition-all hover:scale-105 shadow-md hover:shadow-lg">
-                        Transférer {{ eligibleJobsForTransfer.length }} Job(s)
-                    </button>
+                    <FormBuilder
+                        v-model="transferForm"
+                        :fields="transferFields"
+                        @submit="handleTransferSubmit"
+                        submitLabel="Sauvegarder"
+                        :columns="1" />
                 </div>
             </div>
         </Modal>
@@ -389,15 +317,15 @@
                                 {{ eligibleJobsForManual.length }} éligible(s)
                             </span>
                             <span
-                                v-if="selectedRows.length - eligibleJobsForManual.length > 0"
+                                v-if="selectedJobs.length - eligibleJobsForManual.length > 0"
                                 class="px-3 py-1 bg-warning-100 dark:bg-warning-900/30 text-warning-800 dark:text-warning-400 text-xs font-medium rounded-full">
-                                {{ selectedRows.length - eligibleJobsForManual.length }} exclu(s)
+                                {{ selectedJobs.length - eligibleJobsForManual.length }} exclu(s)
                             </span>
                         </div>
                     </div>
                     <!-- Alert pour les jobs exclus -->
                     <div
-                        v-if="selectedRows.length - eligibleJobsForManual.length > 0"
+                        v-if="selectedJobs.length - eligibleJobsForManual.length > 0"
                         class="p-3 bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-800 rounded-lg">
                         <div class="flex items-start">
                             <svg class="w-5 h-5 text-warning-600 dark:text-warning-400 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -405,7 +333,7 @@
                             </svg>
                             <div class="flex-1">
                                 <p class="text-sm font-medium text-warning-800 dark:text-warning-300">
-                                    {{ selectedRows.length - eligibleJobsForManual.length }} job(s) ne sont pas éligibles pour le lancement manuel
+                                    {{ selectedJobs.length - eligibleJobsForManual.length }} job(s) ne sont pas éligibles pour le lancement manuel
                                 </p>
                                 <p class="text-xs text-warning-700 dark:text-warning-400 mt-1">
                                     Seuls les jobs en statut PRET, TRANSFERT ou ENTAME peuvent être lancés manuellement.
@@ -459,54 +387,12 @@
 
                 <!-- Formulaire de sélection du comptage -->
                 <div class="flex-shrink-0 bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-lg p-4 mb-4">
-                    <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2">
-                        <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                        </svg>
-                        Sélectionner le(s) comptage(s) à lancer manuellement
-                    </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <label class="flex items-center p-3 bg-white dark:bg-slate-800 rounded-lg border-2 transition-all cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-700"
-                            :class="manualForm.premierComptage ? 'border-indigo-500 dark:border-indigo-600' : 'border-slate-200 dark:border-slate-700'">
-                            <input
-                                type="checkbox"
-                                v-model="manualForm.premierComptage"
-                                class="w-5 h-5 text-indigo-600 bg-slate-100 border-slate-300 rounded focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:ring-2 dark:bg-slate-700 dark:border-slate-600">
-                            <div class="ml-3 flex-1">
-                                <div class="text-sm font-medium text-slate-900 dark:text-white">1er Comptage</div>
-                                <div class="text-xs text-slate-500 dark:text-slate-400">Lancement du premier comptage</div>
-                            </div>
-                        </label>
-                        <label class="flex items-center p-3 bg-white dark:bg-slate-800 rounded-lg border-2 transition-all cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-700"
-                            :class="manualForm.deuxiemeComptage ? 'border-indigo-500 dark:border-indigo-600' : 'border-slate-200 dark:border-slate-700'">
-                            <input
-                                type="checkbox"
-                                v-model="manualForm.deuxiemeComptage"
-                                class="w-5 h-5 text-indigo-600 bg-slate-100 border-slate-300 rounded focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:ring-2 dark:bg-slate-700 dark:border-slate-600">
-                            <div class="ml-3 flex-1">
-                                <div class="text-sm font-medium text-slate-900 dark:text-white">2e Comptage</div>
-                                <div class="text-xs text-slate-500 dark:text-slate-400">Lancement du deuxième comptage</div>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Boutons d'action -->
-                <div class="flex-shrink-0 flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <button
-                        @click="showManualModal = false"
-                        class="px-6 py-2.5 text-sm font-medium text-slate-700 bg-white border-2 border-slate-300 rounded-lg hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 dark:hover:bg-slate-700 transition-colors">
-                        Annuler
-                    </button>
-                    <button
-                        @click="handleManualSubmit({
-                            premierComptage: manualForm.premierComptage,
-                            deuxiemeComptage: manualForm.deuxiemeComptage
-                        })"
-                        :disabled="!manualForm.premierComptage && !manualForm.deuxiemeComptage"
-                        class="px-6 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-lg hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transform transition-all hover:scale-105 shadow-md hover:shadow-lg">
-                        Lancer {{ eligibleJobsForManual.length }} Job(s)
-                    </button>
+                    <FormBuilder
+                        v-model="manualForm"
+                        :fields="manualFields"
+                        @submit="handleManualSubmit"
+                        submitLabel="Lancer"
+                        :columns="1" />
                 </div>
             </div>
         </Modal>
@@ -527,6 +413,9 @@
  * @component Affecter
  */
 
+// ===== IMPORTS VUE =====
+import { ref, nextTick, Teleport } from 'vue'
+
 // ===== IMPORTS ROUTER =====
 import { useRoute } from 'vue-router'
 
@@ -534,6 +423,7 @@ import { useRoute } from 'vue-router'
 import DataTable from '@/components/DataTable/DataTable.vue'
 import Modal from '@/components/Modal.vue'
 import FormBuilder from '@/components/Form/FormBuilder.vue'
+import ButtonGroup from '@/components/Form/ButtonGroup.vue'
 
 // ===== IMPORTS COMPOSABLES =====
 import { useAffecter } from '@/composables/useAffecter'
@@ -555,20 +445,84 @@ const affecter = useAffecter({
     warehouseReference: route.params.warehouse as string
 })
 
+// ===== TOOLTIP STATUTS =====
+const showStatusLegend = ref(false)
+const statusLegendTooltip = ref<HTMLElement | null>(null)
+const tooltipElement = ref<HTMLElement | null>(null)
+const tooltipStyle = ref<Record<string, string>>({})
+let tooltipTimeoutId: number | null = null
+
+const showStatusTooltip = async () => {
+    if (tooltipTimeoutId) clearTimeout(tooltipTimeoutId)
+    tooltipTimeoutId = window.setTimeout(async () => {
+        showStatusLegend.value = true
+        await nextTick()
+        positionStatusTooltip()
+    }, 300)
+}
+
+const hideStatusTooltip = () => {
+    if (tooltipTimeoutId) {
+        clearTimeout(tooltipTimeoutId)
+        tooltipTimeoutId = null
+    }
+    showStatusLegend.value = false
+}
+
+const positionStatusTooltip = () => {
+    if (!statusLegendTooltip.value || !tooltipElement.value) return
+
+    const containerRect = statusLegendTooltip.value.getBoundingClientRect()
+    const tooltipRect = tooltipElement.value.getBoundingClientRect()
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+
+    // Positionner le tooltip en bas à droite du bouton
+    let top = containerRect.bottom + 8
+    let left = containerRect.right - tooltipRect.width
+
+    // Ajuster si le tooltip dépasse de l'écran
+    if (left < 8) left = 8
+    if (left + tooltipRect.width > viewportWidth - 8) {
+        left = viewportWidth - tooltipRect.width - 8
+    }
+    if (top + tooltipRect.height > viewportHeight - 8) {
+        top = containerRect.top - tooltipRect.height - 8
+    }
+
+    tooltipStyle.value = {
+        top: `${top}px`,
+        left: `${left}px`
+    }
+}
+
+// ===== HANDLERS DATATABLE =====
+// Handlers harmonisés avec usePlanning.ts - plus besoin de wrapper
+
 // ===== DESTRUCTURATION =====
 const {
-    displayData,
-    selectedRows,
+    // Données harmonisées avec usePlanning.ts
+    jobs,
+    selectedJobs,
+    selectedJobsCount,
+    hasSelectedJobs,
     pendingChanges,
     hasUnsavedChanges,
-    dataTableRef,
+
+    // Références harmonisées avec usePlanning.ts
+    jobsTableRef,
+    jobsKey,
     dropdownRef,
+
+    // État des modales
     showDropdown,
     showTeamModal,
     showResourceModal,
     showTransferModal,
     showManualModal,
     modalTitle,
+
+    // Formulaires
     teamForm,
     teamFields,
     resourceForm,
@@ -576,51 +530,96 @@ const {
     transferForm,
     transferFields,
     manualForm,
+    manualFields,
+
+    // Dropdown
     dropdownItems,
     saveAllChanges,
     resetAllChanges,
+    resetAllSelections,
+    resetDataTableSelections,
     onCellValueChanged,
-    onSelectionChanged,
+    onJobSelectionChanged,
     onRowClicked,
     toggleDropdown,
     focusFirstItem,
     closeDropdown,
     focusNextItem,
     focusPrevItem,
+    setDropdownItemRef,
+
+    // Handlers d'actions
     handleValiderClick,
     handleResourceSubmit,
     handleTeamSubmit,
     handleTransferSubmit,
     handleManualSubmit,
     handleReadyClick,
+    handleReadyAll,
     handleResetClick,
     handleGoToInventoryDetail,
     handleGoToAffectation,
+    handleGoToResults,
+    handleGoToJobTracking,
+    handleGoToImportTracking,
     handleTransferClick,
     handleManualClick,
-    currentPage,
-    pageSize,
-    totalPages,
-    totalItems,
+    handleTransferAll,
+    handleAffectAll,
+
+    // Pagination et métadonnées harmonisées avec usePlanning.ts
+    jobPaginationMetadata,
+
+    // États de chargement
+    jobsLoading,
     loading,
-    handlePaginationChanged,
-    handleSortChanged,
-    handleFilterChanged,
-    handleGlobalSearchChanged,
-    loadSessionsIfNeeded,
+
+    // Paramètres personnalisés DataTable
+    jobsCustomParams,
+
+    // Handlers DataTable harmonisés avec usePlanning.ts
+    onJobsTableEvent,
+    onJobPaginationChanged,
+    onJobSortChanged,
+    onJobFilterChanged,
+    onJobSearchChanged,
+
+    // Gestion des IDs
+    initializeIdsFromReferences,
+    refreshIdsFromReferences,
+    inventoryId,
+    warehouseId,
     inventoryReference,
     warehouseReference,
+
+    // Computed
     eligibleJobsForTransfer,
     eligibleJobsForManual,
-    columns,
     sessionOptions,
     resourceOptions,
     showTransferButton,
     showManualButton,
     showReadyButton,
     showResetButton,
+    actionButtons,
+    navigationButtons,
+    jobsColumns,
+    adaptedStoreJobsColumns,
+    jobsActions,
+
+    // Utilitaires
+    loadSessionsIfNeeded,
     dateValueParser,
     dateValueSetter,
+    getTransformedLocations,
+
+    // Export handlers
+    handleExportCsv,
+    handleExportExcel,
+
+    // Méthodes de chargement
+    loadJobs,
+    refreshJobs
 } = affecter
 </script>
 

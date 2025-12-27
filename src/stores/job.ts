@@ -19,13 +19,9 @@ import type {
     JobManualAssignmentsRequest,
     JobReadyResponse
 } from '@/models/Job';
-import {
-    processDataTableResponse,
-    type DataTableResponse
-} from '@/utils/dataTableUtils';
-import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter';
-import { buildStandardParamsUrl, normalizeToStandardParams } from '@/components/DataTable/utils/dataTableParamsConverter';
+import type { DataTableResponse } from '@/utils/dataTableUtils';
 import type { QueryModel } from '@/components/DataTable/types/QueryModel';
+import { convertQueryModelToQueryParams } from '@/components/DataTable/utils/queryModelConverter';
 import API from '@/api';
 
 export const useJobStore = defineStore('job', () => {
@@ -38,6 +34,13 @@ export const useJobStore = defineStore('job', () => {
     const totalCount = ref(0);
     const currentPage = ref(1);
     const pageSize = ref(50);
+    // Métadonnées de pagination depuis la dernière réponse
+    const paginationMetadata = ref<{
+        page?: number;
+        totalPages?: number;
+        pageSize?: number;
+        total?: number;
+    } | null>(null);
 
     // Getters
     const getCurrentJob = computed(() => currentJob.value);
@@ -79,56 +82,56 @@ export const useJobStore = defineStore('job', () => {
 
     // ===== ACTIONS =====
     // ⚠️ DÉPRÉCIÉ : Utiliser fetchJobs() à la place - cette méthode est conservée pour compatibilité
-    const fetchJobsDataTable = async (inventoryId: number, warehouseId: number, params?: QueryModel | StandardDataTableParams) => {
-        // Déléguer à fetchJobs qui utilise le nouveau modèle
+    const fetchJobsDataTable = async (inventoryId: number, warehouseId: number, params?: QueryModel) => {
         return await fetchJobs(inventoryId, warehouseId, params);
     };
 
-    // 🚀 Accepte QueryModel ou StandardDataTableParams - conversion automatique
+    /**
+     * Récupère la liste des jobs avec pagination, tri et filtres
+     * Le store stocke uniquement les données et métadonnées brutes du backend
+     * Le DataTable/useBackendDataTable gère la pagination
+     */
     const fetchJobs = async (
-        inventoryId: number, 
-        warehouseId: number, 
-        params?: QueryModel | StandardDataTableParams
+        inventoryId: number,
+        warehouseId: number,
+        params?: QueryModel
     ): Promise<DataTableResponse<JobTable>> => {
         loading.value = true;
         error.value = null;
         try {
-            // Normaliser les paramètres (détecte et convertit QueryModel si nécessaire)
-            const standardParams: StandardDataTableParams = normalizeToStandardParams(
-                params,
-                {
-                    draw: 1,
-                    defaultPage: currentPage.value,
-                    defaultPageSize: pageSize.value
-                }
-            );
+            // Convertir QueryModel en paramètres de requête
+            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
 
-            // Ajouter les paramètres spécifiques au job
-            const paramsWithJobData: StandardDataTableParams = {
-                ...standardParams,
+            const requestBody = {
                 inventory_id: inventoryId,
-                warehouse_id: warehouseId
+                warehouse_id: warehouseId,
+                ...requestParams
+            } as any; // Type any pour permettre l'accès aux propriétés dynamiques
+
+            const responseData = await JobService.getAll(inventoryId, warehouseId, requestBody);
+
+
+            // Stocker les données brutes
+            jobs.value = responseData.data || [];
+
+            // Stocker les métadonnées de pagination brutes du backend (sans calcul)
+            paginationMetadata.value = {
+                page: responseData.page ?? 1,
+                totalPages: responseData.totalPages ?? 1,
+                pageSize: responseData.pageSize ?? 20,
+                total: responseData.total ?? responseData.recordsFiltered ?? responseData.recordsTotal ?? 0
             };
 
-            // Construire l'URL avec les paramètres StandardDataTableParams
-            const baseUrl = `${API.endpoints.inventory?.base}${inventoryId}/warehouse/${warehouseId}/jobs/`;
-            const queryString = buildStandardParamsUrl(paramsWithJobData);
-            const url = `${baseUrl}?${queryString}`;
+            // Mettre à jour totalCount pour compatibilité
+            totalCount.value = paginationMetadata.value.total ?? 0;
 
-            // Appeler l'API avec les paramètres StandardDataTableParams
-            const responseData = await JobService.getAllByUrl(url);
-
-            const jobData = responseData.data || [];
-            jobs.value = jobData;
-            totalCount.value = responseData.recordsFiltered || jobData.length;
-
-            // Retourner le format attendu
+            // Retourner le format DataTable minimal (le DataTable gère la pagination)
             return {
                 draw: responseData.draw || 1,
-                data: jobData,
-                recordsTotal: responseData.recordsTotal || 0,
-                recordsFiltered: responseData.recordsFiltered || jobData.length
-            };
+                data: jobs.value,
+                recordsTotal: responseData.recordsTotal ?? paginationMetadata.value.total,
+                recordsFiltered: responseData.recordsFiltered ?? paginationMetadata.value.total
+            } as any;
         } catch (err: any) {
             await handleError(err, 'Erreur lors de la récupération des jobs');
             throw err;
@@ -137,53 +140,67 @@ export const useJobStore = defineStore('job', () => {
         }
     };
 
-    // 🚀 Accepte QueryModel ou StandardDataTableParams - conversion automatique
+    /**
+     * Récupère la liste des jobs validés avec pagination, tri et filtres
+     * Le store stocke uniquement les données et métadonnées brutes du backend
+     * Le DataTable/useBackendDataTable gère la pagination
+     */
     const fetchJobsValidated = async (
-        inventoryId: number, 
-        warehouseId: number, 
-        params?: QueryModel | StandardDataTableParams
+        inventoryId: number,
+        warehouseId: number,
+        params?: QueryModel
     ): Promise<DataTableResponse<JobResult>> => {
         loading.value = true;
         error.value = null;
         try {
-            // Normaliser les paramètres (détecte et convertit QueryModel si nécessaire)
-            const standardParams: StandardDataTableParams = normalizeToStandardParams(
-                params,
-                {
-                    draw: 1,
-                    defaultPage: currentPage.value,
-                    defaultPageSize: pageSize.value
-                }
-            );
+            // Validation des IDs
+            if (!inventoryId || !warehouseId || inventoryId <= 0 || warehouseId <= 0) {
+                throw new Error(`IDs invalides pour fetchJobsValidated: inventoryId=${inventoryId}, warehouseId=${warehouseId}`);
+            }
 
-            // Ajouter les paramètres spécifiques au job
-            const paramsWithJobData: StandardDataTableParams = {
-                ...standardParams,
+            // Convertir QueryModel en paramètres de requête
+            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
+
+            const requestBody = {
                 inventory_id: inventoryId,
-                warehouse_id: warehouseId
+                warehouse_id: warehouseId,
+                ...requestParams
+            } as any; // Type any pour permettre l'accès aux propriétés dynamiques
+
+            const responseData = await JobService.getAllValidated(inventoryId, warehouseId, requestBody);
+
+            console.log('[jobStore] fetchJobsValidated - API response:', {
+                requestedPageSize: requestBody.pageSize || requestBody.page_size,
+                actualDataLength: responseData.data?.length || 0,
+                total: responseData.total,
+                page: responseData.page,
+                pageSize: responseData.pageSize
+            });
+
+            // Stocker les données brutes
+            jobsValidated.value = responseData.data || [];
+
+            // Synchroniser avec la propriété principale du store pour useBackendDataTable
+            jobs.value = (responseData.data || []) as any;
+
+            // Stocker les métadonnées de pagination brutes du backend (sans calcul)
+            paginationMetadata.value = {
+                page: responseData.page ?? 1,
+                totalPages: responseData.totalPages ?? 1,
+                pageSize: responseData.pageSize ?? 20,
+                total: responseData.total ?? responseData.recordsFiltered ?? responseData.recordsTotal ?? 0
             };
 
-            // Construire l'URL avec les paramètres StandardDataTableParams
-            const baseUrl = `${API.endpoints.job?.base}valid/warehouse/${warehouseId}/inventory/${inventoryId}/`;
-            const queryString = buildStandardParamsUrl(paramsWithJobData);
-            const url = `${baseUrl}?${queryString}`;
+            // Mettre à jour totalCount pour compatibilité
+            totalCount.value = paginationMetadata.value.total ?? 0;
 
-            // Appeler l'API avec les paramètres StandardDataTableParams
-            const responseData = await JobService.getAllValidatedByUrl(url);
-
-            const jobData = responseData.data || [];
-            jobsValidated.value = jobData;
-
-            // Utiliser recordsFiltered pour la pagination
-            totalCount.value = responseData.recordsFiltered || jobData.length;
-
-            // Retourner le format attendu
+            // Retourner le format DataTable minimal (le DataTable gère la pagination)
             return {
                 draw: responseData.draw || 1,
-                data: jobData,
-                recordsTotal: responseData.recordsTotal || 0,
-                recordsFiltered: responseData.recordsFiltered || jobData.length
-            };
+                data: jobsValidated.value,
+                recordsTotal: responseData.recordsTotal ?? paginationMetadata.value.total,
+                recordsFiltered: responseData.recordsFiltered ?? paginationMetadata.value.total
+            } as any;
         } catch (err: any) {
             await handleError(err, 'Erreur lors de la récupération des jobs validés');
             throw err;
@@ -408,6 +425,14 @@ export const useJobStore = defineStore('job', () => {
         return await JobService.jobReady(job_ids);
     };
 
+    const setReady = async (inventoryId: number, warehouseId: number): Promise<JobReadyResponse> => {
+        return await JobService.setReady(inventoryId, warehouseId);
+    };
+
+    const transferAll = async (inventoryId: number, warehouseId: number): Promise<JobReadyResponse> => {
+        return await JobService.transferAll(inventoryId, warehouseId);
+    };
+
     const jobReset = async (job_ids: number[]): Promise<JobReadyResponse> => {
         return await JobService.jobReset(job_ids);
     };
@@ -428,7 +453,7 @@ export const useJobStore = defineStore('job', () => {
         error.value = null;
         try {
             const response = await JobService.launchCounting(data);
-            
+
             // Vérifier si la réponse indique un échec (success: false)
             if (response && response.success === false) {
                 const errorMessage = response.message || 'Erreur lors du lancement du comptage';
@@ -446,15 +471,136 @@ export const useJobStore = defineStore('job', () => {
                 errorData.userMessage = errorMessage;
                 throw errorData;
             }
-            
+
             return response;
         } catch (err: any) {
-            const errorMessage = err.response?.data?.message || 
+            const errorMessage = err.response?.data?.message ||
                                 err.userMessage ||
-                                err.message || 
+                                err.message ||
                                 'Erreur lors du lancement du comptage';
             error.value = errorMessage;
             err.userMessage = errorMessage;
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    /**
+     * Lancer plusieurs comptages pour plusieurs jobs avec une session
+     */
+    const launchMultipleCountings = async (data: {
+        jobs: number[];
+        session_id: number;
+    }): Promise<any> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await JobService.launchMultipleCountings(data);
+
+            // Vérifier si la réponse indique un échec (success: false)
+            if (response && response.success === false) {
+                const errorMessage = response.message || 'Erreur lors du lancement des comptages';
+                error.value = errorMessage;
+                const errorData: any = {
+                    response: {
+                        data: {
+                            message: errorMessage,
+                            success: false
+                        }
+                    }
+                };
+                errorData.userMessage = errorMessage;
+                throw errorData;
+            }
+
+            return response;
+        } catch (err: any) {
+            const errorMessage = err.response?.data?.message ||
+                                err.userMessage ||
+                                err.message ||
+                                'Erreur lors du lancement des comptages';
+            error.value = errorMessage;
+            err.userMessage = errorMessage;
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    /**
+     * Récupérer les jobs avec discrepancies
+     * GET /web/api/inventory/<inventory_id>/warehouse/<warehouse_id>/jobs/discrepancies/
+     */
+    const fetchJobsDiscrepancies = async (
+        inventoryId: number,
+        warehouseId: number,
+        params?: { page?: number; page_size?: number; [key: string]: any; }
+    ): Promise<any> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await JobService.getJobsDiscrepancies(inventoryId, warehouseId, params);
+            return response;
+        } catch (err: any) {
+            await handleError(err, 'Erreur lors de la récupération des jobs avec discrepancies');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    /**
+     * Récupérer les assignments d'une session
+     * GET /web/api/inventory/session/<int:session_id>/assignments/
+     */
+    const getSessionAssignments = async (sessionId: number): Promise<{
+        success: boolean;
+        message: string;
+        data: {
+            session_id: number;
+            session_username: string;
+            jobs: Array<{
+                id: number;
+                reference: string;
+                status: string;
+                warehouse_reference: string;
+                warehouse_name: string;
+                inventory_reference: string;
+                inventory_label: string;
+            }>;
+            total_jobs: number;
+        };
+    }> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await JobService.getSessionAssignments(sessionId);
+            return response;
+        } catch (err: any) {
+            await handleError(err, 'Erreur lors de la récupération des assignments de la session');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    /**
+     * Générer un PDF pour un job/assignment
+     * POST /jobs/<int:job_id>/assignments/<int:assignment_id>/pdf/
+     */
+    const generateJobPDF = async (
+        jobId: number,
+        assignmentId: number,
+        equipeId?: number
+    ): Promise<Blob> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const blob = await JobService.generateJobPDF(jobId, assignmentId, equipeId);
+            return blob;
+        } catch (err: any) {
+            await handleError(err, 'Erreur lors de la génération du PDF');
             throw err;
         } finally {
             loading.value = false;
@@ -479,6 +625,29 @@ export const useJobStore = defineStore('job', () => {
         pageSize.value = 50;
     };
 
+    /**
+     * Affectation automatique des jobs depuis les location-jobs
+     * @param inventoryId - ID de l'inventaire
+     * @returns Promise avec la réponse d'affectation automatique
+     */
+    const autoAssignJobsFromLocationJobs = async (inventoryId: number): Promise<{
+        success: boolean;
+        message: string;
+        errors?: string[];
+    }> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await JobService.autoAssignJobsFromLocationJobs(inventoryId);
+            return response.data;
+        } catch (err: any) {
+            await handleError(err, 'Erreur lors de l\'affectation automatique des jobs');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
     return {
         // State
         jobs,
@@ -489,6 +658,7 @@ export const useJobStore = defineStore('job', () => {
         totalCount,
         currentPage,
         pageSize,
+        paginationMetadata,
 
         // Getters
         getCurrentJob,
@@ -521,8 +691,15 @@ export const useJobStore = defineStore('job', () => {
         clearCurrentJob,
         resetState,
         jobReady,
+        setReady,
+        transferAll,
         jobReset,
         jobTransfer,
         launchCounting,
+        launchMultipleCountings,
+        fetchJobsDiscrepancies,
+        getSessionAssignments,
+        generateJobPDF,
+        autoAssignJobsFromLocationJobs,
     };
 });

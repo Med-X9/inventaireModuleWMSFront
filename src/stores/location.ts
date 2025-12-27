@@ -1,14 +1,10 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { LocationService, type LocationDataTableParams } from '@/services/LocationService';
+import { LocationService } from '@/services/LocationService';
 import { alertService } from '@/services/alertService';
-import {
-    processDataTableResponse,
-    type DataTableResponse
-} from '@/utils/dataTableUtils';
-import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter';
-import { normalizeToStandardParams } from '@/components/DataTable/utils/dataTableParamsConverter';
+import type { DataTableResponse } from '@/utils/dataTableUtils';
 import type { QueryModel } from '@/components/DataTable/types/QueryModel';
+import { convertQueryModelToQueryParams } from '@/components/DataTable/utils/queryModelConverter';
 import type {
     Location,
     CreateLocationRequest,
@@ -26,6 +22,13 @@ export const useLocationStore = defineStore('location', () => {
     const totalPages = ref(1);
     const currentPage = ref(1);
     const pageSize = ref(20);
+    // Métadonnées de pagination depuis la dernière réponse
+    const paginationMetadata = ref<{
+        page?: number;
+        totalPages?: number;
+        pageSize?: number;
+        total?: number;
+    } | null>(null);
 
     // États spécifiques
     const searchLoading = ref(false);
@@ -105,27 +108,6 @@ export const useLocationStore = defineStore('location', () => {
 
     // ===== FONCTIONS UTILITAIRES =====
 
-    /**
-     * Met à jour la pagination à partir des paramètres standard et retourne les infos de pagination
-     */
-    const updatePaginationFromParams = (
-        standardParams: StandardDataTableParams,
-        recordsFiltered: number,
-        defaultLength: number = pageSize.value
-    ): { pageLength: number; computedPage: number } => {
-        const pageLength = standardParams.length || defaultLength;
-        pageSize.value = pageLength;
-
-        const computedPage = standardParams.start !== undefined && pageLength > 0
-            ? Math.floor((standardParams.start || 0) / pageLength) + 1
-            : standardParams.draw || currentPage.value;
-
-        currentPage.value = Math.max(1, computedPage || 1);
-        totalCount.value = recordsFiltered;
-        totalPages.value = Math.max(1, Math.ceil(recordsFiltered / pageLength));
-
-        return { pageLength, computedPage };
-    };
 
     /**
      * Gère les erreurs de manière uniforme
@@ -139,66 +121,59 @@ export const useLocationStore = defineStore('location', () => {
 
     // ===== ACTIONS =====
 
-    // 🚀 Accepte QueryModel ou StandardDataTableParams ou LocationDataTableParams - conversion automatique
+    /**
+     * Récupère les locations non assignées
+     * Le store stocke uniquement les données et métadonnées brutes du backend
+     * Le DataTable/useBackendDataTable gère la pagination
+     */
     const fetchUnassignedLocations = async (
         account_id: number,
         inventory_id: number,
         warehouse_id: number,
-        params?: QueryModel | StandardDataTableParams | LocationDataTableParams
+        params?: QueryModel
     ): Promise<DataTableResponse<Location> | void> => {
         loading.value = true;
         error.value = null;
 
         try {
-            // Normaliser les paramètres (détecte et convertit QueryModel si nécessaire)
-            const standardParams: StandardDataTableParams = normalizeToStandardParams(
-                params,
-                {
-                    draw: 1,
-                    defaultPage: currentPage.value,
-                    defaultPageSize: pageSize.value
-                }
-            );
-
-            // Ajouter les paramètres spécifiques aux locations
-            const paramsWithLocationData: LocationDataTableParams = {
-                ...standardParams,
+            // Convertir QueryModel en paramètres de requête
+            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
+            const requestBody = {
                 account_id,
                 inventory_id,
-                warehouse_id
+                warehouse_id,
+                ...requestParams
             };
 
-            const response = await LocationService.getUnassigned(account_id, inventory_id, warehouse_id, paramsWithLocationData);
-            const payload = response.data as (LocationResponse & DataTableResponse<Location>) | LocationResponse | DataTableResponse<Location>;
+            const response = await LocationService.getUnassigned(account_id, inventory_id, warehouse_id, requestBody);
+            const payload = response.data as any;
 
-            const results = Array.isArray((payload as DataTableResponse<Location>).data)
-                ? (payload as DataTableResponse<Location>).data as Location[]
-                : (payload as LocationResponse).results || [];
+            // Extraire les données
+            const results = Array.isArray(payload?.data)
+                ? payload.data as Location[]
+                : payload?.results || [];
 
-            const recordsTotal = (payload as DataTableResponse<Location>).recordsTotal
-                ?? (payload as LocationResponse).count
-                ?? results.length;
-
-            const recordsFiltered = (payload as DataTableResponse<Location>).recordsFiltered
-                ?? recordsTotal;
-
+            // Stocker les données brutes
             locations.value = results;
 
-            // Mettre à jour la pagination
-            const { pageLength } = updatePaginationFromParams(standardParams, recordsFiltered);
+            // Stocker les métadonnées de pagination brutes du backend (sans calcul)
+            paginationMetadata.value = {
+                page: payload?.page ?? 1,
+                totalPages: payload?.totalPages ?? 1,
+                pageSize: payload?.pageSize ?? 20,
+                total: payload?.total ?? payload?.recordsFiltered ?? payload?.recordsTotal ?? payload?.count ?? 0
+            };
 
-            return processDataTableResponse(
-                {
-                    draw: standardParams.draw || (payload as DataTableResponse<Location>).draw || 1,
-                    recordsTotal,
-                    recordsFiltered,
-                    data: results
-                },
-                currentPage,
-                totalPages,
-                totalCount,
-                pageLength
-            );
+            // Mettre à jour totalCount pour compatibilité
+            totalCount.value = paginationMetadata.value.total;
+
+            // Retourner le format DataTable minimal (le DataTable gère la pagination)
+            return {
+                draw: payload?.draw || 1,
+                data: results,
+                recordsTotal: payload?.recordsTotal ?? payload?.count ?? paginationMetadata.value.total,
+                recordsFiltered: payload?.recordsFiltered ?? paginationMetadata.value.total
+            } as any;
         } catch (err) {
             await handleError(err, 'Erreur lors du chargement des locations non assignées');
         } finally {
@@ -206,21 +181,7 @@ export const useLocationStore = defineStore('location', () => {
         }
     };
 
-    // Récupérer une location par ID
-    const fetchLocationById = async (id: number | string) => {
-        loading.value = true;
-        error.value = null;
 
-        try {
-            const response = await LocationService.getById(id);
-            currentLocation.value = response.data;
-            return response.data;
-        } catch (err) {
-            await handleError(err, 'Erreur lors de la récupération de la location');
-        } finally {
-            loading.value = false;
-        }
-    };
 
     // Récupérer une location par référence
     const fetchLocationByReference = async (reference: string) => {
@@ -315,28 +276,20 @@ export const useLocationStore = defineStore('location', () => {
     };
 
     // Rechercher des locations
-    const searchLocations = async (query: string, params?: QueryModel | StandardDataTableParams | LocationDataTableParams) => {
+    /**
+     * Recherche de locations
+     * Le store stocke uniquement les données brutes
+     */
+    const searchLocations = async (query: string, params?: QueryModel) => {
         searchLoading.value = true;
         error.value = null;
 
         try {
-            // Normaliser les paramètres si fournis
-            const standardParams = params ? normalizeToStandardParams(params, {
-                draw: 1,
-                defaultPage: currentPage.value,
-                defaultPageSize: pageSize.value
-            }) : undefined;
-
-            const response = await LocationService.search(query, standardParams as LocationDataTableParams);
+            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
+            const response = await LocationService.search(query, requestParams);
             const data = response.data;
 
             locations.value = data.results || [];
-            if (standardParams && data.count !== undefined) {
-                updatePaginationFromParams(standardParams, data.count || 0);
-            } else {
-                totalCount.value = data.count || 0;
-            }
-
             return data;
         } catch (err) {
             await handleError(err, 'Erreur lors de la recherche de locations');
@@ -346,31 +299,23 @@ export const useLocationStore = defineStore('location', () => {
     };
 
     // Récupérer les locations par sous-zone
+    /**
+     * Récupère les locations par sous-zone
+     * Le store stocke uniquement les données brutes
+     */
     const fetchLocationsBySousZone = async (
         sousZoneId: number,
-        params?: QueryModel | StandardDataTableParams | LocationDataTableParams
+        params?: QueryModel
     ) => {
         loading.value = true;
         error.value = null;
 
         try {
-            // Normaliser les paramètres si fournis
-            const standardParams = params ? normalizeToStandardParams(params, {
-                draw: 1,
-                defaultPage: currentPage.value,
-                defaultPageSize: pageSize.value
-            }) : undefined;
-
-            const response = await LocationService.getBySousZone(sousZoneId, standardParams as LocationDataTableParams);
+            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
+            const response = await LocationService.getBySousZone(sousZoneId, requestParams);
             const data = response.data;
 
             locations.value = data.results || [];
-            if (standardParams && data.count !== undefined) {
-                updatePaginationFromParams(standardParams, data.count || 0);
-            } else {
-                totalCount.value = data.count || 0;
-            }
-
             return data;
         } catch (err) {
             await handleError(err, 'Erreur lors de la récupération des locations par sous-zone');
@@ -380,31 +325,23 @@ export const useLocationStore = defineStore('location', () => {
     };
 
     // Récupérer les locations par zone
+    /**
+     * Récupère les locations par zone
+     * Le store stocke uniquement les données brutes
+     */
     const fetchLocationsByZone = async (
         zoneId: number,
-        params?: QueryModel | StandardDataTableParams | LocationDataTableParams
+        params?: QueryModel
     ) => {
         loading.value = true;
         error.value = null;
 
         try {
-            // Normaliser les paramètres si fournis
-            const standardParams = params ? normalizeToStandardParams(params, {
-                draw: 1,
-                defaultPage: currentPage.value,
-                defaultPageSize: pageSize.value
-            }) : undefined;
-
-            const response = await LocationService.getByZone(zoneId, standardParams as LocationDataTableParams);
+            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
+            const response = await LocationService.getByZone(zoneId, requestParams);
             const data = response.data;
 
             locations.value = data.results || [];
-            if (standardParams && data.count !== undefined) {
-                updatePaginationFromParams(standardParams, data.count || 0);
-            } else {
-                totalCount.value = data.count || 0;
-            }
-
             return data;
         } catch (err) {
             await handleError(err, 'Erreur lors de la récupération des locations par zone');
@@ -414,47 +351,25 @@ export const useLocationStore = defineStore('location', () => {
     };
 
     // Récupérer les locations par entrepôt
-    // 🚀 Accepte QueryModel ou StandardDataTableParams ou LocationDataTableParams - conversion automatique
+    // Accepte QueryModel ou LocationDataTableParams - conversion automatique
+    /**
+     * Récupère les locations par entrepôt
+     * Le store stocke uniquement les données brutes
+     */
     const fetchLocationsByWarehouse = async (
         warehouseId: number,
-        params?: QueryModel | StandardDataTableParams | LocationDataTableParams
+        params?: QueryModel
     ): Promise<DataTableResponse<Location> | LocationResponse | void> => {
         loading.value = true;
         error.value = null;
 
         try {
-            // Normaliser les paramètres (détecte et convertit QueryModel si nécessaire)
-            const standardParams: StandardDataTableParams = normalizeToStandardParams(
-                params,
-                {
-                    draw: 1,
-                    defaultPage: currentPage.value,
-                    defaultPageSize: pageSize.value
-                }
-            );
-
-            // Le service accepte LocationDataTableParams qui est compatible avec StandardDataTableParams
-            const response = await LocationService.getByWarehouse(warehouseId, standardParams as LocationDataTableParams);
+            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
+            const response = await LocationService.getByWarehouse(warehouseId, requestParams);
             const data = response.data;
 
             locations.value = data.results || [];
-
-            // Mettre à jour la pagination
-            const recordsFiltered = data.count || 0;
-            const { pageLength } = updatePaginationFromParams(standardParams, recordsFiltered);
-
-            return processDataTableResponse(
-                {
-                    draw: standardParams.draw || 1,
-                    recordsTotal: data.count || 0,
-                    recordsFiltered: data.count || 0,
-                    data: data.results || []
-                } as DataTableResponse<Location>,
-                currentPage,
-                totalPages,
-                totalCount,
-                pageLength
-            );
+            return data;
         } catch (err) {
             await handleError(err, 'Erreur lors de la récupération des locations par entrepôt');
         } finally {
@@ -489,6 +404,32 @@ export const useLocationStore = defineStore('location', () => {
         }
     };
 
+    // Mettre à jour le statut de plusieurs locations en lot
+    const bulkUpdateStatus = async (locationIds: number[]) => {
+        if (!locationIds || locationIds.length === 0) {
+            throw new Error('Aucun ID de location fourni');
+        }
+
+        loading.value = true;
+        error.value = null;
+
+        try {
+            await LocationService.bulkUpdateStatus(locationIds);
+
+            // Rafraîchir les données après la mise à jour du statut
+            // Les locations désactivées seront automatiquement filtrées lors du prochain fetch
+            await alertService.success({
+                text: `${locationIds.length} location(s) désactivée(s) avec succès`
+            });
+
+            return { success: true, updatedCount: locationIds.length };
+        } catch (err: any) {
+            await handleError(err, 'Erreur lors de la mise à jour du statut des locations');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
 
     // Sélectionner une location
     const selectLocation = (location: Location) => {
@@ -520,6 +461,7 @@ export const useLocationStore = defineStore('location', () => {
         totalCount,
         currentPage,
         pageSize,
+        paginationMetadata,
         searchLoading,
         createLoading,
         updateLoading,
@@ -544,7 +486,6 @@ export const useLocationStore = defineStore('location', () => {
 
         // Actions
         fetchUnassignedLocations,
-        fetchLocationById,
         fetchLocationByReference,
         createLocation,
         updateLocation,
@@ -554,6 +495,7 @@ export const useLocationStore = defineStore('location', () => {
         fetchLocationsByZone,
         fetchLocationsByWarehouse,
         bulkImportLocations,
+        bulkUpdateStatus,
         selectLocation,
         resetStore,
         clearError

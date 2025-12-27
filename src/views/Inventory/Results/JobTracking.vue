@@ -1,8 +1,10 @@
 <template>
     <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 dark:from-slate-900 dark:to-slate-800 p-4 sm:p-6 lg:p-8">
-        <!-- En-tête moderne avec gradient -->
+        <!-- Carte unifiée : Titre + sélection magasin -->
         <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 mb-6 shadow-xl border border-slate-200 dark:border-slate-700">
-            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            <!-- Titre + select magasin (même structure qu'InventoryResults.vue) -->
+            <div class="flex flex-col gap-6 mb-4">
+                <div class="flex justify-between items-start flex-wrap gap-6">
                 <div class="flex-1">
                     <div class="flex items-center gap-4">
                         <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-lg">
@@ -13,69 +15,25 @@
                         <div>
                             <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white mb-1">
                                 Suivi des jobs
+                                    <span v-if="inventoryReference" class="text-2xl font-semibold text-primary ml-3">
+                                        {{ inventoryReference }}
+                                    </span>
                             </h1>
                             <p class="text-base text-slate-600 dark:text-slate-400">
                                 Visualisez l'avancement des comptages pour chaque emplacement
                             </p>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex items-center gap-4">
-                    <button
-                        @click="handlePrintJobs"
-                        :disabled="storeLoading"
-                        class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                        Imprimer job
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Carte de filtres -->
-        <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 mb-6 shadow-xl border border-slate-200 dark:border-slate-700">
-            <div class="border-b-2 border-slate-200 dark:border-slate-700 pb-4 mb-6">
-                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <h2 class="flex items-center gap-3 text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
-                        <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                        </svg>
-                        Filtres de sélection
-                    </h2>
-                    <!-- Informations intégrées -->
-                    <div class="flex flex-wrap items-center gap-4 lg:gap-6">
-                        <!-- Référence inventaire -->
-                        <div class="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl border border-blue-200 dark:border-blue-800">
-                            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <div>
-                                <div class="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase">Référence</div>
-                                <div class="text-sm font-bold text-blue-900 dark:text-blue-100">{{ inventoryReference || 'N/A' }}</div>
-                            </div>
-                        </div>
-
-                        <!-- Entrepôt sélectionné -->
-                        <div v-if="selectedWarehouse" class="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl border border-green-200 dark:border-green-800">
-                            <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
-                            <div>
-                                <div class="text-xs font-semibold text-green-600 dark:text-green-400 uppercase">Entrepôt</div>
-                                <div class="text-sm font-bold text-green-900 dark:text-green-100 truncate max-w-[150px]">
+                                <p v-if="selectedWarehouse" class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                    Entrepôt :
+                                    <span class="font-semibold text-slate-700 dark:text-slate-200">
                                     {{ selectedWarehouse.warehouse_name || selectedWarehouse.reference || `Entrepôt ${selectedWarehouse.id}` }}
-                                </div>
+                                    </span>
+                                </p>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div class="flex flex-col gap-2">
-                    <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                    <!-- Sélection du magasin -->
+                    <div class="w-full md:w-80 lg:w-96">
+                        <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-2">
                         <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                         </svg>
@@ -88,48 +46,52 @@
                         :searchable="false"
                         placeholder="Sélectionner un magasin"
                         :disabled="storeLoading || !storeOptions || (storeOptions && storeOptions.length === 0)"
-                        class="modern-select w-full"
+                            class="w-full"
                     />
+                    </div>
                 </div>
 
-                <div class="flex flex-col gap-2">
-                    <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-                        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                        </svg>
-                        Comptage
-                    </label>
-                    <SelectField
-                        v-model="selectedCountingOrder"
-                        :options="countingOptions || []"
-                        :clearable="false"
-                        :searchable="false"
-                        placeholder="Sélectionner un comptage"
-                        :disabled="storeLoading || !countingOptions || countingOptions.length === 0"
-                        class="modern-select w-full"
-                    />
+                <!-- Boutons d'action (Résultats + Imprimer) alignés à droite -->
+                <div class="flex justify-end">
+                    <ButtonGroup :buttons="actionButtons" justify="end" />
                 </div>
             </div>
         </div>
 
         <!-- DataTable avec container moderne -->
-        <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div v-if="selectedStore" class="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             <DataTable
-                :columns="displayColumns"
+                :columns="columns"
                 :rowDataProp="rows"
                 :loading="storeLoading"
                 :actions="[]"
                 :pagination="false"
                 :rowSelection="true"
-                :enableGlobalSearch="false"
-                :enableFiltering="false"
+                :enableGlobalSearch="true"
+                :enableFiltering="true"
                 :enableAdvancedEditing="false"
                 :enableGrouping="false"
                 :enablePivot="false"
+                :serverSideFiltering="true"
+                :serverSideSorting="true"
                 storageKey="job_tracking_table"
                 emptyMessage="Aucune donnée disponible pour ces critères"
                 @selection-changed="onSelectionChanged"
+                @sort-changed="onSortChanged"
+                @filter-changed="onFilterChanged"
+                @global-search-changed="onGlobalSearchChanged"
             />
+        </div>
+
+        <!-- Message si aucun magasin sélectionné -->
+        <div v-else class="bg-white dark:bg-slate-800 rounded-3xl p-16 text-center shadow-xl border border-slate-200 dark:border-slate-700">
+            <div class="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-xl">
+                <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-slate-900 dark:text-slate-100 m-0 mb-2">Sélectionnez un magasin</h3>
+            <p class="text-base text-slate-600 dark:text-slate-400 m-0">Veuillez sélectionner un magasin pour afficher le suivi des jobs</p>
         </div>
     </div>
 </template>
@@ -150,7 +112,7 @@
 import { computed, onMounted, watch } from 'vue'
 
 // ===== IMPORTS ROUTER =====
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 // ===== IMPORTS PINIA =====
 import { storeToRefs } from 'pinia'
@@ -158,6 +120,7 @@ import { storeToRefs } from 'pinia'
 // ===== IMPORTS COMPOSANTS =====
 import DataTable from '@/components/DataTable/DataTable.vue'
 import SelectField from '@/components/Form/SelectField.vue'
+import ButtonGroup, { type ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
 
 // ===== IMPORTS COMPOSABLES =====
 import { useJobTracking } from '@/composables/useJobTracking'
@@ -168,8 +131,13 @@ import { useWarehouseStore } from '@/stores/warehouse'
 // ===== IMPORTS TYPES =====
 import type { DataTableColumn } from '@/types/dataTable'
 
+// ===== IMPORTS ICÔNES =====
+import IconListCheck from '@/components/icon/icon-list-check.vue'
+import IconPrinter from '@/components/icon/icon-printer.vue'
+
 // ===== ROUTE =====
 const route = useRoute()
+const router = useRouter()
 const referenceParam = computed(() => route.params.reference as string)
 
 // ===== STORES =====
@@ -186,8 +154,6 @@ const {
     loading,
     storeOptions,
     selectedStore,
-    countingOptions,
-    selectedCountingOrder,
     rows,
     columns,
     selectedRows,
@@ -197,7 +163,10 @@ const {
     reinitialize,
     printJobs,
     onSelectionChanged,
-    resetSelection
+    resetSelection,
+    onSortChanged,
+    onFilterChanged,
+    onGlobalSearchChanged
 } = useJobTracking({ inventoryReference: referenceParam.value })
 
 // ===== COMPUTED =====
@@ -217,17 +186,44 @@ const selectedWarehouse = computed(() => {
     return warehouses.value.find(warehouse => String(warehouse.id) === String(selectedStore.value)) || null
 })
 
-/**
- * Colonnes formatées pour le DataTable
- */
-const displayColumns = computed<DataTableColumn[]>(() => columns.value as DataTableColumn[])
+// Style commun pour les boutons d'action (fond blanc + bordure primary)
+const ACTION_BUTTON_CLASS =
+    'bg-white text-primary border border-primary hover:bg-primary hover:text-white ' +
+    'dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary ' +
+    'dark:hover:text-white'
 
-/**
- * Handler pour le bouton d'impression
- */
-const handlePrintJobs = async () => {
-    await printJobs()
-}
+// ===== BOUTONS D'ACTION (pour le ButtonGroup) =====
+const actionButtons = computed<ButtonGroupButton[]>(() => {
+    const buttons: ButtonGroupButton[] = []
+
+    buttons.push({
+        id: 'results',
+        label: 'Résultats',
+        icon: IconListCheck,
+        variant: 'default',
+        class: ACTION_BUTTON_CLASS,
+        disabled: !inventoryReference.value,
+        visible: !!inventoryReference.value,
+        onClick: () => {
+            if (inventoryReference.value) {
+                void router.push({ name: 'inventory-results', params: { reference: inventoryReference.value } })
+            }
+        }
+    })
+
+    buttons.push({
+        id: 'print-jobs',
+        label: 'Imprimer jobs',
+        icon: IconPrinter,
+        variant: 'default',
+        class: ACTION_BUTTON_CLASS,
+        disabled: storeLoading.value,
+        visible: true,
+        onClick: () => { void printJobs() }
+    })
+
+    return buttons
+})
 
 // ===== LIFECYCLE =====
 
@@ -249,6 +245,29 @@ watch(referenceParam, async newReference => {
 
     await reinitialize(newReference)
 })
+
+/**
+ * Watcher pour déboguer les données
+ */
+watch(rows, (newRows) => {
+    console.log('🔍 JobTracking - rows changed:', {
+        rowsLength: newRows?.length || 0,
+        firstRow: newRows?.[0],
+        allRows: newRows,
+        isArray: Array.isArray(newRows),
+        type: typeof newRows
+    })
+}, { immediate: true, deep: true })
+
+/**
+ * Watcher pour vérifier que les colonnes sont bien créées
+ */
+watch(columns, (newColumns) => {
+    console.log('🔍 JobTracking - columns changed:', {
+        columnsLength: newColumns?.length || 0,
+        columnFields: newColumns?.map((c: any) => c.field) || []
+    })
+}, { immediate: true })
 </script>
 
 <style scoped>

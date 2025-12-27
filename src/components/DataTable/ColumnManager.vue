@@ -4,38 +4,66 @@
         Permet de configurer la visibilité, l'ordre et la largeur des colonnes
         Supporte le drag & drop pour réorganiser les colonnes
     -->
-    <div class="column-manager">
+    <div class="column-manager" :class="{ 'minimized': props.minimized }">
         <!-- Header avec titre et actions -->
         <div class="manager-header">
             <h3 class="manager-title">Gestion des colonnes</h3>
             <div class="header-actions">
+                <button @click="toggleMinimized" class="btn-minimize" :title="props.minimized ? 'Agrandir' : 'Réduire'">
+                    {{ props.minimized ? '⤢' : '⤡' }}
+                </button>
                 <button @click="resetColumns" class="btn-secondary">Réinitialiser</button>
                 <button @click="$emit('close')" class="btn-close">×</button>
             </div>
         </div>
 
         <!-- Options globales -->
-        <div v-if="enableColumnPinning" class="global-options">
-            <label class="option-label">
-                <input type="checkbox" :checked="stickyHeader" @change="toggleStickyHeader" />
-                <span>Fixer le header (sticky)</span>
-            </label>
+        <div class="global-options">
+            <!-- Contrôle du nombre de colonnes visibles par défaut -->
+            <div class="option-group">
+                <label class="option-label">
+                    <span>Nombre de colonnes visibles :</span>
+                    <input
+                        type="number"
+                        :value="defaultVisibleColumnsCount"
+                        @input="handleDefaultVisibleColumnsChange"
+                        :min="4"
+                        :max="totalAvailableColumns"
+                        class="number-input"
+                    />
+                    <span class="option-hint">(Min: 4, Max: {{ totalAvailableColumns }})</span>
+                </label>
+                <div class="option-description">
+                    Les colonnes restantes seront disponibles via le bouton "plus" (responsive)
+                </div>
+            </div>
+
+            <!-- Option sticky header si pinning activé -->
+            <div v-if="enableColumnPinning" class="option-group">
+                <label class="option-label">
+                    <input type="checkbox" :checked="stickyHeader" @change="toggleStickyHeader" />
+                    <span>Fixer le header (sticky)</span>
+                </label>
+            </div>
         </div>
 
         <!-- Liste des colonnes visibles avec drag & drop -->
         <div class="columns-list" ref="columnsList">
             <div
                 v-for="(column, index) in visibleColumnsData"
-                :key="column?.field || index"
-                :draggable="column?.draggable !== false"
+                :key="`column-${column?.field || index}`"
+                :draggable="column?.draggable !== false && column?.field !== '__rowNumber__'"
                 @dragstart="onDragStart($event, index)"
-                @dragover="onDragOver($event, index)"
-                @dragenter="onDragEnter($event, index)"
+                @dragover.prevent="onDragOver($event, index)"
+                @dragenter.prevent="onDragEnter($event, index)"
                 @dragleave="onDragLeave($event)"
-                @drop="onDrop($event, index)"
+                @drop.prevent="onDrop($event, index)"
                 @dragend="onDragEnd"
                 class="column-item"
-                :class="{ 'dragging': draggedIndex === index }"
+                :class="{
+                    'dragging': draggedIndex === index,
+                    'not-draggable': column?.field === '__rowNumber__' || column?.draggable === false
+                }"
             >
                 <!-- Handle de drag avec icône -->
                 <div class="drag-handle" v-if="column?.draggable !== false">
@@ -144,6 +172,8 @@ const props = defineProps<{
     enableColumnPinning?: boolean
     columnPinning?: any
     stickyHeader?: boolean
+    defaultVisibleColumnsCount?: number
+    minimized?: boolean
 }>()
 
 /**
@@ -161,6 +191,8 @@ const emit = defineEmits<{
     'close': []
     'pin-column': [field: string, direction: 'left' | 'right' | null]
     'sticky-header-changed': [enabled: boolean]
+    'default-visible-columns-changed': [count: number]
+    'toggle-minimized': []
 }>()
 
 // ===== ÉTAT LOCAL =====
@@ -178,13 +210,40 @@ const columnsList = ref<HTMLElement | null>(null)
 // ===== COMPUTED PROPERTIES =====
 
 /**
+ * Nombre total de colonnes disponibles (exclut hide: true et __rowNumber__)
+ */
+const totalAvailableColumns = computed(() => {
+    return props.columns.filter(col =>
+        col?.field &&
+        col.hide !== true &&
+        col.field !== '__rowNumber__'
+    ).length
+})
+
+/**
+ * Nombre de colonnes visibles par défaut (avec valeur par défaut de 6)
+ */
+const defaultVisibleColumnsCount = computed(() => {
+    return props.defaultVisibleColumnsCount ?? 6
+})
+
+/**
  * Colonnes visibles avec leurs données complètes
  * Affiche toutes les colonnes disponibles (pas seulement les visibles)
+ * Exclut __rowNumber__ car elle est gérée automatiquement et toujours visible
+ * Exclut UNIQUEMENT les colonnes avec hide: true (toujours masquées)
+ * Les colonnes avec visible: false peuvent être affichées via ColumnManager
  */
 const visibleColumnsData = computed(() => {
     // Afficher toutes les colonnes disponibles (pas seulement les visibles)
-    // Mais exclure les colonnes marquées comme masquées par défaut (hide: true)
-    const allColumns = props.columns.filter(col => col?.field && col.hide !== true)
+    // Mais exclure UNIQUEMENT les colonnes marquées comme toujours masquées (hide: true)
+    // visible: false est autorisé car l'utilisateur peut l'afficher via ColumnManager
+    // ET exclure __rowNumber__ car elle est toujours visible et gérée automatiquement
+    const allColumns = props.columns.filter(col =>
+        col?.field &&
+        col.hide !== true &&
+        col.field !== '__rowNumber__'
+    )
 
     // Trier les colonnes : d'abord les visibles, puis les masquées
     const visibleCols = allColumns.filter(col => props.visibleColumns.includes(col.field))
@@ -194,11 +253,18 @@ const visibleColumnsData = computed(() => {
 })
 
 /**
- * Colonnes masquées (non visibles mais pas masquées par défaut)
- * Exclut les colonnes marquées comme masquées par défaut (hide: true)
+ * Colonnes masquées (non visibles mais pas toujours masquées)
+ * Exclut les colonnes marquées comme toujours masquées (hide: true)
+ * Inclut les colonnes avec visible: false (peuvent être affichées)
+ * Exclut __rowNumber__ car elle est toujours visible et gérée automatiquement
  */
 const hiddenColumns = computed(() =>
-    props.columns.filter(col => col?.field && !props.visibleColumns.includes(col.field) && col.hide !== true)
+    props.columns.filter(col =>
+        col?.field &&
+        !props.visibleColumns.includes(col.field) &&
+        col.hide !== true &&
+        col.field !== '__rowNumber__'
+    )
 )
 
 // ===== MÉTHODES UTILITAIRES =====
@@ -237,15 +303,30 @@ const isColumnVisible = (field: string) => {
  * Bascule la visibilité d'une colonne
  * Empêche de masquer la dernière colonne visible
  * Empêche de masquer __rowNumber__
+ * Empêche UNIQUEMENT de réactiver les colonnes avec hide: true (toujours masquées)
+ * Les colonnes avec visible: false peuvent être affichées/masquées
  *
  * @param field - Champ de la colonne
  */
 const toggleColumnVisibility = (field: string) => {
     if (!field) return
-    
+
     // Empêcher de masquer __rowNumber__
     if (field === '__rowNumber__') {
         return
+    }
+
+    // Trouver la définition de la colonne
+    const columnDef = props.columns.find(col => col.field === field)
+    if (columnDef) {
+
+        // Empêcher UNIQUEMENT de réactiver les colonnes avec hide: true (toujours masquées)
+        // visible: false est autorisé car l'utilisateur peut l'afficher via ColumnManager
+        if (columnDef.hide === true) {
+            console.warn(`🚫 [ColumnManager] Impossible de réactiver la colonne ${field} car elle a hide: true (toujours masquée)`)
+            logger.warn(`Impossible de réactiver la colonne ${field} car elle a hide: true (toujours masquée)`)
+            return
+        }
     }
 
     const newVisibleColumns = [...props.visibleColumns]
@@ -255,6 +336,7 @@ const toggleColumnVisibility = (field: string) => {
         // Empêcher de masquer la dernière colonne visible
         const visibleCount = newVisibleColumns.length
         if (visibleCount <= 1) {
+            console.warn('🚫 [ColumnManager] Impossible de masquer la dernière colonne visible')
             logger.warn('Impossible de masquer la dernière colonne visible')
             return
         }
@@ -268,13 +350,28 @@ const toggleColumnVisibility = (field: string) => {
 
 /**
  * Affiche une colonne masquée
+ * Empêche UNIQUEMENT de réactiver les colonnes avec hide: true (toujours masquées)
+ * Les colonnes avec visible: false peuvent être affichées
  *
  * @param field - Champ de la colonne à afficher
  */
 const showColumn = (field: string) => {
     if (!field) return
 
+    // Trouver la définition de la colonne
+    const columnDef = props.columns.find(col => col.field === field)
+    if (columnDef) {
+        // Empêcher UNIQUEMENT de réactiver les colonnes avec hide: true (toujours masquées)
+        // visible: false est autorisé car l'utilisateur peut l'afficher via ColumnManager
+        if (columnDef.hide === true) {
+            logger.warn(`Impossible de réactiver la colonne ${field} car elle a hide: true (toujours masquée)`)
+            return
+        }
+    }
+
+    // Ajouter la colonne à la liste des colonnes visibles
     const newVisibleColumns = [...props.visibleColumns, field]
+
     emit('columns-changed', newVisibleColumns, props.columnWidths)
 }
 
@@ -282,17 +379,35 @@ const showColumn = (field: string) => {
 /**
  * Réinitialise toutes les colonnes à leur état par défaut
  * Affiche toutes les colonnes avec leurs largeurs par défaut
+ * Exclut __rowNumber__ car elle est toujours visible et gérée automatiquement
+ * Exclut UNIQUEMENT les colonnes avec hide: true (toujours masquées)
+ * Les colonnes avec visible: false sont incluses (peuvent être affichées)
  */
+
+/**
+ * Bascule l'état réduit/agrandi du modal
+ */
+const toggleMinimized = () => {
+    emit('toggle-minimized')
+}
+
 const resetColumns = () => {
-    // Récupérer toutes les colonnes qui ne sont pas masquées par défaut
+    // Récupérer toutes les colonnes qui ne sont pas toujours masquées
+    // Exclure __rowNumber__ car elle est toujours visible et gérée automatiquement
+    // Exclure UNIQUEMENT les colonnes avec hide: true (toujours masquées)
+    // visible: false est autorisé car l'utilisateur peut l'afficher via ColumnManager
     const allFields = props.columns
-        .filter(col => col.field && col.hide !== true)
+        .filter(col =>
+            col.field &&
+            col.hide !== true &&
+            col.field !== '__rowNumber__'
+        )
         .map(col => col.field!)
 
     const defaultWidths: Record<string, number> = {}
 
     props.columns.forEach(column => {
-        if (column.field) {
+        if (column.field && column.field !== '__rowNumber__' && column.hide !== true) {
             defaultWidths[column.field] = column.width || 150
         }
     })
@@ -331,7 +446,6 @@ const onDragStart = (event: DragEvent, index: number) => {
  * @param index - Index de la colonne cible
  */
 const onDragOver = (event: DragEvent, index: number) => {
-    event.preventDefault()
     if (event.dataTransfer) {
         event.dataTransfer.dropEffect = 'move'
     }
@@ -390,24 +504,22 @@ const onDrop = (event: DragEvent, index: number) => {
         // Empêcher de déplacer __rowNumber__
         const draggedCol = visibleColumnsData.value[draggedIndex.value]
         const targetCol = visibleColumnsData.value[index]
-        
-        if (draggedCol?.field === '__rowNumber__' || targetCol?.field === '__rowNumber__') {
+
+        if (!draggedCol || !targetCol) {
+            return
+        }
+
+        if (draggedCol.field === '__rowNumber__' || targetCol.field === '__rowNumber__') {
             return // Ne pas permettre de déplacer __rowNumber__
         }
-        
-        // Calculer les index réels dans la liste des colonnes visibles uniquement
-        const visibleCols = visibleColumnsData.value.filter(col => 
-            props.visibleColumns.includes(col?.field || '')
-        )
-        
-        if (draggedCol && targetCol) {
-            const fromIndexInVisible = props.visibleColumns.indexOf(draggedCol.field || '')
-            const toIndexInVisible = props.visibleColumns.indexOf(targetCol.field || '')
-            
-            if (fromIndexInVisible !== -1 && toIndexInVisible !== -1) {
-                // Émettre l'événement de réordonnancement avec les index des colonnes visibles
-                emit('reorder-columns', fromIndexInVisible, toIndexInVisible)
-            }
+
+        // Trouver les index dans la liste des colonnes visibles (props.visibleColumns)
+        const fromIndexInVisible = props.visibleColumns.indexOf(draggedCol.field || '')
+        const toIndexInVisible = props.visibleColumns.indexOf(targetCol.field || '')
+
+        if (fromIndexInVisible !== -1 && toIndexInVisible !== -1 && fromIndexInVisible !== toIndexInVisible) {
+            // Émettre l'événement de réordonnancement avec les index des colonnes visibles
+            emit('reorder-columns', fromIndexInVisible, toIndexInVisible)
         }
     }
 }
@@ -445,15 +557,15 @@ const getColumnPinDirection = (field: string): string => {
  */
 const handlePinChange = (field: string, event: Event) => {
     if (!field || !props.enableColumnPinning) return
-    
+
     // Empêcher de modifier le pinning de __rowNumber__
     if (field === '__rowNumber__') {
         return
     }
-    
+
     const target = event.target as HTMLSelectElement
     const direction = target.value as 'left' | 'right' | null
-    
+
     emit('pin-column', field, direction || null)
 }
 
@@ -463,6 +575,23 @@ const handlePinChange = (field: string, event: Event) => {
 const toggleStickyHeader = (event: Event) => {
     const target = event.target as HTMLInputElement
     emit('sticky-header-changed', target.checked)
+}
+
+/**
+ * Gère le changement du nombre de colonnes visibles par défaut
+ */
+const handleDefaultVisibleColumnsChange = (event: Event) => {
+    const target = event.target as HTMLInputElement
+    const value = parseInt(target.value, 10)
+
+    if (isNaN(value)) return
+
+    // Valider les limites
+    const min = 4
+    const max = totalAvailableColumns.value
+    const clampedValue = Math.max(min, Math.min(max, value))
+
+    emit('default-visible-columns-changed', clampedValue)
 }
 </script>
 
@@ -479,11 +608,25 @@ const toggleStickyHeader = (event: Event) => {
     width: 100%;
     min-width: 360px;
     max-width: 480px;
-    max-height: 85vh;
+    max-height: 95vh; /* Augmenté de 85vh à 95vh */
     display: flex;
     flex-direction: column;
     overflow: hidden;
     margin: auto;
+}
+
+.column-manager.minimized {
+    max-height: 60px;
+}
+
+.column-manager.minimized .manager-header {
+    border-bottom: none;
+}
+
+.column-manager.minimized .global-options,
+.column-manager.minimized .columns-list,
+.column-manager.minimized .hidden-section {
+    display: none;
 }
 
 .dark .column-manager {
@@ -525,6 +668,7 @@ const toggleStickyHeader = (event: Event) => {
 
 .btn-secondary,
 .btn-primary,
+.btn-minimize,
 .btn-close {
     padding: 0.5rem 0.875rem;
     border: 1.5px solid #d1d5db;
@@ -553,6 +697,14 @@ const toggleStickyHeader = (event: Event) => {
     background: #2563eb;
 }
 
+.btn-minimize {
+    padding: 0.25rem 0.5rem;
+    font-size: 1.25rem;
+    line-height: 1;
+    min-width: 2rem;
+    text-align: center;
+}
+
 .btn-close {
     padding: 0.25rem 0.5rem;
     font-size: 1.25rem;
@@ -562,7 +714,7 @@ const toggleStickyHeader = (event: Event) => {
 /* Liste des colonnes */
 .columns-list {
     padding: 0.75rem;
-    max-height: 400px;
+    max-height: 600px; /* Augmenté de 400px à 600px */
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: thin;
@@ -748,6 +900,15 @@ input:checked + .toggle-slider:before {
     padding: 0.75rem;
     border-bottom: 1px solid #e5e7eb;
     background: #f9fafb;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.option-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
 }
 
 .option-label {
@@ -757,10 +918,39 @@ input:checked + .toggle-slider:before {
     font-size: 0.875rem;
     color: #374151;
     cursor: pointer;
+    flex-wrap: wrap;
 }
 
 .option-label input[type="checkbox"] {
     cursor: pointer;
+}
+
+.option-label .number-input {
+    width: 60px;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+.option-label .number-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(254, 205, 28, 0.15);
+}
+
+.option-hint {
+    font-size: 0.75rem;
+    color: #6b7280;
+    font-style: italic;
+}
+
+.option-description {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-left: 0;
+    padding-left: 0;
 }
 
 /* Contrôle de pinning */
@@ -825,7 +1015,7 @@ input:checked + .toggle-slider:before {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    max-height: 200px;
+    max-height: 400px; /* Augmenté de 200px à 400px */
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: thin;

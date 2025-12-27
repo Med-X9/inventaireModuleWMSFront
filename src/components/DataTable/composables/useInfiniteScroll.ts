@@ -1,5 +1,5 @@
 /**
- * Composable pour gérer le scroll infini (style AG-Grid)
+ * Composable pour gérer le scroll infini
  * Charge les données progressivement lors du scroll
  */
 

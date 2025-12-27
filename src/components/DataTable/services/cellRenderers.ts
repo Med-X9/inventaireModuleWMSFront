@@ -1,30 +1,90 @@
 /**
  * Service de cell renderers pour DataTable
- * Permet de personnaliser l'affichage des cellules de manière modulaire
+ * 
+ * Permet de personnaliser l'affichage des cellules de manière modulaire.
+ * Gère l'enregistrement et la détection automatique des renderers basés sur le type de colonne.
+ * 
+ * @module cellRenderers
+ * 
+ * @example
+ * ```typescript
+ * // Utilisation dans une colonne
+ * const column: DataTableColumn = {
+ *   field: 'status',
+ *   rendererType: 'badge',
+ *   badgeStyles: {
+ *     'active': { value: 'Actif', class: 'bg-green-500' },
+ *     'inactive': { value: 'Inactif', class: 'bg-red-500' }
+ *   }
+ * }
+ * 
+ * // Le service détecte automatiquement le renderer approprié
+ * const renderer = cellRenderersService.getRenderer(column)
+ * ```
  */
 
+/**
+ * Configuration d'un renderer de cellule
+ */
 export interface CellRendererConfig {
+    /** Type du renderer (ex: 'badge', 'date', 'boolean') */
     type: string
+    /** Fonction de rendu qui retourne du HTML */
     renderer: (value: any, column: any, row: any, rowIndex?: number) => string
+    /** Priorité du renderer (plus élevé = prioritaire) */
     priority?: number
 }
 
+/**
+ * Style pour un badge
+ */
 export interface BadgeStyle {
+    /** Valeur affichée */
     value: string
+    /** Classes CSS à appliquer */
     class: string
+    /** Icône optionnelle */
     icon?: string
 }
 
+/**
+ * Configuration pour les données imbriquées
+ */
 export interface NestedDataConfig {
+    /** Clé de la donnée imbriquée */
     key: string
+    /** Clé à afficher (optionnel) */
     displayKey?: string
+    /** Suffixe pour le compteur (ex: "items") */
     countSuffix?: string
+    /** Permet l'expansion/réduction */
     expandable?: boolean
+    /** Icône en état réduit */
     iconCollapsed?: string
+    /** Icône en état étendu */
     iconExpanded?: string
+    /** Afficher le compteur d'éléments */
+    showCount?: boolean
+    /** Titre de la table imbriquée */
+    title?: string
+    /** Colonnes de la table imbriquée */
+    columns?: Array<{
+        field: string
+        headerName: string
+        sortable?: boolean
+        filterable?: boolean
+        width?: number
+    }>
 }
 
+/**
+ * Service pour gérer les renderers de cellules
+ * 
+ * Permet d'enregistrer et de récupérer des renderers personnalisés.
+ * Détecte automatiquement le renderer approprié basé sur le type de colonne.
+ */
 export class CellRenderersService {
+    /** Map des renderers enregistrés */
     private renderers: Map<string, CellRendererConfig> = new Map()
 
     constructor() {
@@ -33,6 +93,8 @@ export class CellRenderersService {
 
     /**
      * Enregistre un nouveau renderer
+     * 
+     * @param config - Configuration du renderer
      */
     registerRenderer(config: CellRendererConfig): void {
         this.renderers.set(config.type, config)
@@ -40,6 +102,14 @@ export class CellRenderersService {
 
     /**
      * Récupère le renderer approprié pour une colonne
+     * 
+     * Priorité :
+     * 1. Renderer personnalisé (cellRenderer)
+     * 2. Renderer par type (rendererType)
+     * 3. Détection automatique basée sur le type de données
+     * 
+     * @param column - Colonne pour laquelle récupérer le renderer
+     * @returns Fonction de rendu ou null si aucun renderer trouvé
      */
     getRenderer(column: any): ((value: any, column: any, row: any, rowIndex?: number) => string) | null {
         // Vérifier si la colonne a un renderer personnalisé

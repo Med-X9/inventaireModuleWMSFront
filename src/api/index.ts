@@ -17,6 +17,9 @@ const API = {
         inventory: {
             base: '/web/api/inventory/'
         },
+        ecartComptage: {
+            base: '/web/api/ecarts-comptage/'
+        },
         warehouse: {
             base: '/masterdata/api/warehouses/'
         },

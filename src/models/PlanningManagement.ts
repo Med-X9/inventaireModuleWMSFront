@@ -13,9 +13,11 @@ export interface WarehouseStats {
 export interface PlanningManagementResponse {
     status: 'success' | 'error';
     message: string;
-    inventory_id: number;
-    warehouses_count: number;
-    data: WarehouseStats[];
+    rows: WarehouseStats[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
 }
 
 // Interface pour les filtres de recherche

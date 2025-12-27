@@ -1,45 +1,54 @@
 /**
- * Composable usePlanningManagement - Gestion du planning des magasins
+ * Composable pour la gestion du planning des magasins
  *
- * Ce composable gère :
- * - Le chargement et l'affichage des magasins associés à un inventaire
- * - La pagination, le tri et le filtrage côté serveur pour les magasins
- * - La conversion automatique des paramètres vers le format standard DataTable
- * - La navigation vers les pages de planning et d'affectation
+ * Fournit :
+ * - Configuration des colonnes DataTable pour les magasins
+ * - Actions disponibles sur les magasins
+ * - Gestion des modales et de la navigation
+ * - Handlers pour les opérations DataTable côté serveur
  *
  * @module usePlanningManagement
  */
 
-// ===== IMPORTS VUE =====
+// ===== IMPORTS =====
+
 import { ref, computed, onMounted, nextTick } from 'vue'
-
-// ===== IMPORTS ROUTER =====
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
-
-// ===== IMPORTS SERVICES =====
-import { logger } from '@/services/loggerService'
 import { alertService } from '@/services/alertService'
-
-// ===== IMPORTS STORES =====
+import { InventoryService } from '@/services/InventoryService'
 import { useInventoryStore } from '@/stores/inventory'
 import { useAppStore } from '@/stores'
-
-// ===== IMPORTS COMPOSABLES =====
-import { useBackendDataTable } from '@/components/DataTable/composables/useBackendDataTable'
-
-// ===== IMPORTS UTILS =====
-import { type StandardDataTableParams, convertToStandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
+import { useWarehouseStore } from '@/stores/warehouse'
 import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
-import { convertQueryModelToQueryParams, convertQueryModelToRestApi, createQueryModelFromDataTableParams } from '@/components/DataTable/utils/queryModelConverter'
+import { convertQueryModelToQueryParams } from '@/components/DataTable/utils/queryModelConverter'
 import type { QueryModel } from '@/components/DataTable/types/QueryModel'
-import type { LocationDataTableParams } from '@/services/LocationService'
-
-// ===== IMPORTS TYPES =====
 import type { Store, PlanningAction, ViewModeType } from '@/interfaces/planningManagement'
 
-// ===== IMPORTS COMPOSANTS =====
+// ===== IMPORTS ICÔNES =====
 import IconUser from '@/components/icon/icon-user.vue'
 import IconCalendar from '@/components/icon/icon-calendar.vue'
+import IconBarChart from '@/components/icon/icon-bar-chart.vue'
+
+// ===== CONSTANTES =====
+
+/**
+ * Largeurs de colonnes optimisées pour le planning
+ */
+const PLANNING_COLUMN_WIDTHS = {
+    store_name: 200,
+    teams_count: 100,
+    jobs_count: 100,
+    reference: 150
+} as const
+
+/**
+ * Modes d'affichage disponibles
+ */
+const VIEW_MODE_OPTIONS = [
+    { value: 'table' as const, label: 'Tableau', icon: 'IconListCheck' },
+    { value: 'grid' as const, label: 'Grille', icon: 'IconLayoutGrid' }
+]
 
 // ===== INTERFACES =====
 
@@ -63,131 +72,77 @@ interface AdaptedGridAction {
     variant?: 'primary' | 'secondary'
 }
 
-// ===== COMPOSABLE PRINCIPAL =====
+// ===== COMPOSABLE =====
 
 /**
  * Composable pour la gestion du planning des magasins
  *
- * @returns Objet contenant l'état, les méthodes et les handlers pour le planning management
+ * @param inventoryReference - Référence de l'inventaire
+ * @returns Configuration et handlers pour la gestion du planning
  */
-export function usePlanningManagement() {
+export function usePlanningManagement(inventoryRef?: string) {
     // ===== ROUTER & STORES =====
     const router = useRouter()
     const appStore = useAppStore()
     const inventoryStore = useInventoryStore()
+    const warehouseStore = useWarehouseStore()
+    const { planningManagementData } = storeToRefs(inventoryStore)
 
-    // ===== ÉTAT RÉACTIF =====
+    // ===== ÉTATS RÉACTIFS =====
 
-    /** Statut de l'inventaire */
+    // États de l'inventaire
     const inventoryStatus = ref<string>('EN REALISATION')
-
-    /** Référence de l'inventaire */
-    const inventoryReference = ref<string>('')
-
-    /** ID de l'inventaire */
+    const inventoryReference = ref<string>(inventoryRef || '')
     const inventoryId = ref<number | null>(null)
-
-    /** État de chargement de l'inventaire */
     const inventoryLoading = ref(false)
-
-    /** Erreur lors du chargement de l'inventaire */
     const inventoryError = ref<string | null>(null)
 
-    /** Magasin sélectionné */
+    // États de l'interface
     const selectedStore = ref<Store | null>(null)
+    const isInitialized = ref(false)
+    const dataTableError = ref<string | null>(null)
+    const isLoadingData = ref(false) // Protection contre les appels répétés
 
-    /** Mode d'affichage (table ou grid) depuis Pinia */
+    // Mode d'affichage depuis Pinia
     const viewMode = computed<ViewModeType>({
         get: () => appStore.viewMode,
         set: (mode: ViewModeType) => appStore.setViewMode(mode)
     })
 
-    /** Indicateur d'initialisation */
-    const isInitialized = ref(false)
-
-    // ===== INITIALISATION DES DATATABLES =====
+    // ===== ÉTATS LOCAUX POUR LA PAGINATION =====
 
     /**
-     * DataTable pour le planning management
-     * Utilise useBackendDataTable pour l'intégration avec le store Pinia
+     * État de chargement des données
      */
-    const {
-        data: planningData,
-        loading,
-        currentPage,
-        pageSize,
-        searchQuery,
-        sortModel,
-        filters,
-        setPage,
-        setPageSize,
-        setSearch,
-        setSortModel,
-        setFilters,
-        resetFilters,
-        refresh: _refreshPlanningDataTable,
-        pagination
-    } = useBackendDataTable<Store>('', {
-        piniaStore: inventoryStore,
-        storeId: 'inventory',
-        autoLoad: false,
-        pageSize: 20
-    })
+    const loading = ref(false)
+
+    /**
+     * État de pagination actuel
+     */
+    const currentPage = ref(1)
+    const pageSize = ref(20)
 
     // ===== QUERYMODEL =====
-    
+
     /**
-     * Mode de sortie pour les paramètres de requête (défaut: 'queryParams')
+     * Mode de sortie pour les paramètres de requête
      */
     const queryOutputMode = ref<'queryModel' | 'dataTable' | 'restApi' | 'queryParams'>('queryParams')
-
-    /**
-     * Colonnes pour QueryModel
-     */
-    const columnsRef = computed(() => adaptedColumns.value)
-
-    /**
-     * QueryModel pour gérer les requêtes avec mode de sortie configurable
-     */
-    const {
-        queryModel: queryModelRef,
-        toStandardParams,
-        updatePagination: updateQueryPagination,
-        updateSort: updateQuerySort,
-        updateFilter: updateQueryFilter,
-        updateGlobalSearch: updateQueryGlobalSearch
-    } = useQueryModel({
-        columns: columnsRef,
-        enabled: true
-    })
-
-    /**
-     * Convertit le QueryModel selon le mode configuré
-     */
-    const convertQueryModelToOutput = (queryModelData: QueryModel) => {
-        switch (queryOutputMode.value) {
-            case 'queryModel':
-                return queryModelData
-            case 'restApi':
-                return convertQueryModelToRestApi(queryModelData)
-            case 'queryParams':
-                return convertQueryModelToQueryParams(queryModelData)
-            case 'dataTable':
-            default:
-                return toStandardParams.value
-        }
-    }
 
     // ===== COMPUTED PROPERTIES =====
 
     /**
-     * Pagination calculée pour le planning management
-     * Utilise le totalItems du store pour calculer les informations de pagination
+     * Cache des IDs de warehouse pour optimisation
      */
-    const planningPaginationComputed = computed(() => {
+    const warehouseIdMap = ref<Map<string, number>>(new Map())
+
+    /**
+     * Pagination calculée pour le planning management
+     */
+    const pagination = computed(() => {
         const totalCount = inventoryStore.totalItems || 0
-        const pageSizeValue = pageSize.value || 20
-        const currentPageValue = currentPage.value || 1
+        const pageSizeValue = pageSize.value
+        const currentPageValue = currentPage.value
 
         return {
             current_page: currentPageValue,
@@ -200,69 +155,108 @@ export function usePlanningManagement() {
     })
 
     /**
-     * Convertit les données du planning en Stores
-     * Récupère les données depuis le store Pinia (comme mappedLocations dans usePlanning.ts)
+     * Données des magasins depuis le store (avec storeToRefs pour la réactivité)
      */
     const stores = computed(() => {
-        // Récupérer les données directement depuis le store Pinia
-        // Même pattern que mappedLocations dans usePlanning.ts qui utilise locationStore.locations
-        const storeData = inventoryStore.planningManagementData || []
+        const storeData = planningManagementData.value || []
         const data = Array.isArray(storeData) ? storeData : []
 
         return data.map((item: any): Store => {
-            // L'API retourne: warehouse_reference, warehouse_name, jobs_count, teams_count
-            // Mapping vers le format Store attendu
+            const warehouseId = item.warehouse_id ?? item.id ?? 0
+            const reference = item.warehouse_reference || item.reference || ''
+
+            // Utiliser l'ID mappé s'il existe
+            const finalId = warehouseIdMap.value.get(reference) || warehouseId
+
             return {
-                id: item.warehouse_id || item.id || 0,
+                id: finalId,
                 store_name: item.warehouse_name || item.store_name || 'N/A',
                 teams_count: item.teams_count || 0,
                 jobs_count: item.jobs_count || 0,
-                reference: item.warehouse_reference || item.reference || ''
+                reference: reference
             }
         })
     })
 
+    // ===== CONFIGURATION DES COLONNES =====
+
     /**
-     * Colonnes pour le DataTable
+     * Colonnes pour le DataTable du planning
      */
     const adaptedColumns = computed(() => [
         {
             field: 'store_name',
             headerName: 'Nom du magasin',
             sortable: true,
-            width: 200,
-            editable: false
+            dataType: 'text' as const,
+            width: PLANNING_COLUMN_WIDTHS.store_name,
+            editable: false,
+            visible: true,
+            icon: 'icon-store'
         },
         {
             field: 'teams_count',
             headerName: 'Équipes',
             sortable: true,
-            width: 100,
-            editable: false
+            dataType: 'number' as const,
+            width: PLANNING_COLUMN_WIDTHS.teams_count,
+            editable: false,
+            visible: true,
+            align: 'center' as const,
+            icon: 'icon-users'
         },
         {
             field: 'jobs_count',
             headerName: 'Jobs',
             sortable: true,
-            width: 100,
-            editable: false
+            dataType: 'number' as const,
+            width: PLANNING_COLUMN_WIDTHS.jobs_count,
+            editable: false,
+            visible: true,
+            align: 'center' as const,
+            icon: 'icon-briefcase'
         },
         {
             field: 'reference',
             headerName: 'Référence',
             sortable: true,
-            width: 150,
-            editable: false
+            dataType: 'text' as const,
+            width: PLANNING_COLUMN_WIDTHS.reference,
+            editable: false,
+            visible: true,
+            icon: 'icon-hash'
         }
     ])
 
-    /**
-     * Actions pour le planning
-     */
-    const actions = computed<PlanningAction[]>(() => {
-        const baseActions: PlanningAction[] = []
+    // ===== QUERYMODEL =====
 
-        baseActions.push({
+    /**
+     * QueryModel pour gérer les requêtes
+     */
+    const {
+        queryModel: queryModelRef,
+        updatePagination: updateQueryPagination,
+        updateSort: updateQuerySort,
+        updateFilter: updateQueryFilter,
+        updateGlobalSearch: updateQueryGlobalSearch
+    } = useQueryModel({
+        columns: adaptedColumns.value
+    })
+
+    /**
+     * Convertit le QueryModel selon le mode configuré
+     */
+    const convertQueryModelToOutput = (queryModelData: QueryModel) => {
+        return convertQueryModelToQueryParams(queryModelData)
+    }
+
+    // ===== ACTIONS SUR LES MAGASINS =====
+
+    /**
+     * Actions disponibles dans le planning pour chaque magasin
+     */
+    const actions = computed<PlanningAction[]>(() => [
+        {
             label: 'Planifier',
             icon: IconCalendar,
             handler: (store: Store) => {
@@ -270,13 +264,12 @@ export function usePlanningManagement() {
                     name: 'inventory-planning',
                     params: {
                         reference: inventoryReference.value || '',
-                        warehouse: (store.reference as string) || ''
+                        warehouse: store.reference || ''
                     }
                 })
             }
-        })
-
-        baseActions.push({
+        },
+        {
             label: inventoryStatus.value === 'EN REALISATION' ? 'Transférer' : 'Affecter',
             icon: IconUser,
             handler: (store: Store) => {
@@ -284,14 +277,22 @@ export function usePlanningManagement() {
                     name: 'inventory-affecter',
                     params: {
                         reference: inventoryReference.value || '',
-                        warehouse: (store.reference as string) || ''
+                        warehouse: store.reference || ''
                     }
                 })
             }
-        })
-
-        return baseActions
-    })
+        },
+        // Monitoring seulement si l'inventaire est disponible
+        ...(inventoryId.value ? [{
+            label: 'Monitoring',
+            icon: IconBarChart,
+            handler: (store: Store) => {
+                if (store.id && store.id > 0) {
+                    goToMonitoring(inventoryId.value!, store.id)
+                }
+            }
+        }] : [])
+    ])
 
     /**
      * Actions adaptées pour DataTable
@@ -317,12 +318,10 @@ export function usePlanningManagement() {
         }))
     )
 
-    // ===== MÉTHODES D'INITIALISATION =====
+    // ===== CHARGEMENT DES DONNÉES =====
 
     /**
      * Récupère l'ID de l'inventaire par sa référence
-     *
-     * @param reference - Référence de l'inventaire
      */
     const fetchInventoryIdByReference = async (reference: string): Promise<void> => {
         inventoryLoading.value = true
@@ -336,75 +335,83 @@ export function usePlanningManagement() {
                 inventoryError.value = `Aucun inventaire trouvé avec la référence: ${reference}`
             }
         } catch (error) {
-            logger.error('Erreur lors de la récupération de l\'inventaire', error)
             inventoryError.value = 'Erreur lors de la récupération de l\'inventaire'
         } finally {
             inventoryLoading.value = false
         }
     }
 
-    // ===== MÉTHODES DE CHARGEMENT DES DONNÉES =====
+    /**
+     * Charger les données du planning management
+     */
+    const loadPlanningData = async (queryModel?: QueryModel) => {
+        if (!inventoryId.value) return
+
+        // Éviter les appels simultanés
+        if (isLoadingData.value) return
+
+        loading.value = true
+        try {
+            // Créer un QueryModel par défaut si non fourni
+            const finalQueryModel: QueryModel = queryModel || {
+                page: 1,
+                pageSize: 20,
+                sort: [],
+                filters: {},
+                search: '',
+                customParams: {}
+            }
+
+            await inventoryStore.fetchPlanningManagement(inventoryId.value, finalQueryModel)
+
+            // Mettre à jour l'état local de pagination si on reçoit un QueryModel
+            if (queryModel) {
+                currentPage.value = queryModel.page || 1
+                pageSize.value = queryModel.pageSize || 20
+            }
+
+            await nextTick()
+        } catch (error) {
+            await alertService.error({ text: 'Erreur lors du chargement des données du planning' })
+        } finally {
+            loading.value = false
+        }
+    }
 
     /**
-     * Charger les données du planning management pour l'inventaire actuel
-     *
-     * @param params - Paramètres DataTable standard (pagination, tri, filtres)
+     * Chargement initial des données de planning
      */
-    const loadPlanningData = async (params?: LocationDataTableParams) => {
-        if (!inventoryId.value) {
-            logger.warn('Impossible de charger les données du planning, ID inventaire manquant')
+    const loadStores = async () => {
+        // Éviter les appels simultanés
+        if (isLoadingData.value) {
+            console.log('[loadStores] EXIT - already loading data')
             return
         }
 
         try {
-            // Utiliser les paramètres fournis ou construire à partir des valeurs actuelles
-            const finalParams: LocationDataTableParams = params || {
-                draw: currentPage.value || 1,
-                start: ((currentPage.value || 1) - 1) * pageSize.value,
-                length: pageSize.value
-            }
-
-            // S'assurer que length est bien défini
-            if (!finalParams.length) {
-                finalParams.length = pageSize.value
-            }
-
-            logger.debug('Chargement des données du planning management avec paramètres DataTable:', {
-                inventoryId: inventoryId.value,
-                pageSize: pageSize.value,
-                params: finalParams
-            })
-
-            // Appeler directement l'action du store avec l'ID de l'inventaire
-            await inventoryStore.fetchPlanningManagement(inventoryId.value, finalParams)
-            await nextTick()
-
-            logger.debug('Données du planning management mises à jour dans le store', {
-                count: (inventoryStore as any).planningManagementData?.length || 0
-            })
+            dataTableError.value = null // Reset error state
+            await loadPlanningData()
         } catch (error) {
-            logger.error('Erreur lors du chargement des données du planning', error)
-            await alertService.error({ text: 'Erreur lors du chargement des données du planning' })
+            dataTableError.value = 'Erreur lors du chargement des données de planning'
+            loading.value = false // S'assurer que loading est remis à false
+            await alertService.error({ text: dataTableError.value })
         }
     }
 
     /**
-     * Rafraîchir les données du planning
-     *
-     * @param params - Paramètres DataTable optionnels
+     * Réessayer le chargement des données après une erreur
      */
-    const refreshPlanningData = async (params?: LocationDataTableParams) => {
-        await loadPlanningData(params)
+    const retryLoadStores = async () => {
+        await loadStores()
     }
 
     /**
-     * Réinitialiser la DataTable du planning (tri, filtres, recherche)
+     * Réinitialiser la DataTable du planning
      */
     const resetPlanningDataTable = async () => {
-        setSortModel([])
-        resetFilters()
-        setSearch('')
-        await refreshPlanningData()
+        currentPage.value = 1
+        pageSize.value = 20
+        await loadPlanningData()
     }
 
 
@@ -440,160 +447,88 @@ export function usePlanningManagement() {
     // ===== HANDLERS DATATABLE =====
 
     /**
-     * Handler pour le changement de pagination
-     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
-     *
-     * @param params - Paramètres de pagination (format configuré ou ancien format)
+     * Handler commun pour les opérations DataTable
      */
-    const handlePaginationChanged = async (params: { page: number; pageSize: number } | StandardDataTableParams | QueryModel | Record<string, any>) => {
-        try {
-            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-            if ('draw' in params && 'start' in params && 'length' in params) {
-                const standardParams = params as StandardDataTableParams
-                const page = Math.floor((standardParams.start || 0) / (standardParams.length || 25)) + 1
-                setPageSize(standardParams.length || 25)
-                setPage(page)
-                await loadPlanningData(standardParams as LocationDataTableParams)
-                return
-            }
+    const handlePlanningOperation = async (queryModel: QueryModel) => {
+        // Éviter les appels répétés si une erreur est déjà présente
+        if (dataTableError.value) {
+            console.warn('[usePlanningManagement] Skipping DataTable operation due to existing error:', dataTableError.value)
+            return
+        }
 
-            // Sinon, convertir l'ancien format
-            const paginationParams = params as { page: number; pageSize: number }
-            setPageSize(paginationParams.pageSize)
-            setPage(paginationParams.page)
-            await loadPlanningData()
+        // Éviter les appels répétés si un chargement est déjà en cours
+        if (isLoadingData.value) {
+            console.warn('[usePlanningManagement] Skipping DataTable operation - already loading')
+            return
+        }
+
+        try {
+            dataTableError.value = null // Reset error state
+            isLoadingData.value = true
+            await loadPlanningData(queryModel)
         } catch (error) {
-            logger.error('Erreur dans handlePaginationChanged', error)
-            await alertService.error({ text: 'Erreur lors du changement de pagination' })
+            console.error('[usePlanningManagement] DataTable operation failed:', error)
+            dataTableError.value = 'Erreur lors du chargement des données du planning'
+            alertService.error({ text: dataTableError.value })
+            // Ne pas relancer - laisser l'utilisateur gérer l'erreur
+        } finally {
+            isLoadingData.value = false
         }
     }
 
-    /**
-     * Handler pour les changements de tri
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
-     *
-     * @param sortModel - Modèle de tri (format standard ou ancien format)
-     */
-    const handleSortChanged = async (sortModel: Array<{ field: string; direction: 'asc' | 'desc' }> | StandardDataTableParams | QueryModel | Record<string, any>) => {
-        try {
-            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-            if ('draw' in sortModel && 'start' in sortModel && 'length' in sortModel) {
-                await loadPlanningData(sortModel as LocationDataTableParams)
-                return
-            }
+    // Handlers spécialisés
+    const handlePaginationChanged = (queryModel: QueryModel) => handlePlanningOperation(queryModel)
+    const handleSortChanged = (queryModel: QueryModel) => handlePlanningOperation(queryModel)
+    const handleFilterChanged = (queryModel: QueryModel) => handlePlanningOperation(queryModel)
+    const handleGlobalSearchChanged = (queryModel: QueryModel) => handlePlanningOperation(queryModel)
 
-            // Sinon, convertir l'ancien format
-            const sortModelArray = sortModel as Array<{ field: string; direction: 'asc' | 'desc' }>
-            setSortModel(sortModelArray)
-            await loadPlanningData()
-        } catch (error) {
-            logger.error('Erreur dans handleSortChanged', error)
-            await alertService.error({ text: 'Erreur lors du changement de tri' })
-        }
-    }
-
-    /**
-     * Handler pour les changements de filtres
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
-     *
-     * @param filterModel - Modèle de filtres (format standard ou ancien format)
-     */
-    const handleFilterChanged = async (filterModel: Record<string, any> | StandardDataTableParams | QueryModel | Record<string, any>) => {
-        try {
-            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-            if ('draw' in filterModel && 'start' in filterModel && 'length' in filterModel) {
-                await loadPlanningData(filterModel as LocationDataTableParams)
-                return
-            }
-
-            // Sinon, utiliser directement l'ancien format
-            const filterModelObj = filterModel as Record<string, any>
-            setFilters(filterModelObj)
-            await loadPlanningData()
-        } catch (error) {
-            logger.error('Erreur dans handleFilterChanged', error)
-            await alertService.error({ text: 'Erreur lors du changement de filtre' })
-        }
-    }
-
-    /**
-     * Handler pour les changements de recherche globale
-     * Accepte soit le format standard DataTable (venant du composant), soit l'ancien format
-     *
-     * @param searchTerm - Terme de recherche (format standard ou string)
-     */
-    const handleGlobalSearchChanged = async (searchTerm: string | StandardDataTableParams) => {
-        try {
-            // Si c'est déjà le format standard (venant du DataTable), utiliser directement
-            if (typeof searchTerm === 'object' && 'draw' in searchTerm && 'start' in searchTerm && 'length' in searchTerm) {
-                await loadPlanningData(searchTerm as LocationDataTableParams)
-                return
-            }
-
-            // Sinon, utiliser directement la valeur string
-            setSearch(searchTerm as string)
-            await loadPlanningData()
-        } catch (error) {
-            logger.error('Erreur dans handleGlobalSearchChanged', error)
-            await alertService.error({ text: 'Erreur lors de la recherche' })
-        }
-    }
 
     // ===== HANDLERS GRIDVIEW =====
 
     /**
      * Handler pour le clic sur un item dans GridView
-     *
-     * @param item - Item cliqué
      */
     const adaptedHandleItemClick = (item: any): void => {
-        // Cette fonction est conservée pour la compatibilité avec GridView
-        // La gestion réelle des clics est maintenant dans les actions
+        // Gestion via les actions
     }
 
     /**
      * Handler pour le clic sur les actions dans GridView
-     *
-     * @param item - Item concerné
-     * @param e - Événement de clic
      */
     const adaptedHandleActionsClick = (item: any, e: MouseEvent): void => {
-        // Cette fonction est conservée pour la compatibilité avec GridView
-        // La gestion réelle des actions est maintenant dans les actions
+        // Gestion via les actions
     }
 
     // ===== NAVIGATION =====
 
     /**
-     * Navigue vers la page de détail de l'inventaire
-     *
-     * @param reference - Référence de l'inventaire
+     * Navigation vers la page de détail de l'inventaire
      */
     const goToInventoryDetail = (reference: string): void => {
         router.push({ name: 'inventory-detail', params: { reference } })
     }
 
     /**
-     * Navigue vers la page d'affectation
-     *
-     * @param reference - Référence de l'inventaire
+     * Navigation vers la page d'affectation
      */
     const goToAffectation = (reference: string): void => {
-        router.push({
-            name: 'inventory-affecter',
-            params: { reference }
-        })
+        router.push({ name: 'inventory-affecter', params: { reference } })
     }
 
     /**
-     * Navigue vers la page de suivi des jobs
-     *
-     * @param reference - Référence de l'inventaire
+     * Navigation vers la page de suivi des jobs
      */
     const goToJobTracking = (reference: string): void => {
+        router.push({ name: 'inventory-job-tracking', params: { reference } })
+    }
+
+    /**
+     * Navigation vers la page de monitoring
+     */
+    const goToMonitoring = (inventoryId: number, warehouseId: number): void => {
         router.push({
-            name: 'inventory-job-tracking',
-            params: { reference }
+            name: 'inventory-monitoring',
+            params: { inventoryId: String(inventoryId), warehouseId: String(warehouseId) }
         })
     }
 
@@ -603,53 +538,108 @@ export function usePlanningManagement() {
 
     /**
      * Initialiser le composable
-     * Résout l'ID de l'inventaire et charge les données initiales
      */
     const initialize = async () => {
-        if (isInitialized.value) {
-            logger.debug('Planning management déjà initialisé')
-            return
-        }
+        if (isInitialized.value) return
 
         try {
-            logger.debug('Initialisation du planning management', { inventoryReference: inventoryReference.value })
-
-            // Si l'inventoryId n'est pas encore résolu, le résoudre
             if (!inventoryId.value && inventoryReference.value) {
-                logger.debug('Résolution de l\'ID de l\'inventaire', { reference: inventoryReference.value })
                 await fetchInventoryIdByReference(inventoryReference.value)
-                logger.debug('ID de l\'inventaire résolu', { inventoryId: inventoryId.value })
+
             }
 
-            // Charger les données initiales si l'ID est disponible
             if (inventoryId.value) {
-                logger.debug('Chargement des données du planning management', { inventoryId: inventoryId.value })
                 await loadPlanningData()
-            } else {
-                logger.warn('Impossible de charger les données, inventoryId manquant', {
-                    inventoryReference: inventoryReference.value,
-                    inventoryId: inventoryId.value
-                })
+                loading.value = false
             }
 
             isInitialized.value = true
-            logger.debug('Initialisation du planning management terminée avec succès', {
-                inventoryId: inventoryId.value,
-                storesCount: stores.value.length
-            })
         } catch (error) {
-            logger.error('Erreur lors de l\'initialisation du planning management', error)
-            await alertService.error({ text: 'Erreur lors de l\'initialisation du planning management' })
+            // S'assurer que loading est remis à false en cas d'erreur
+            loading.value = false
+            dataTableError.value = 'Erreur lors de l\'initialisation du planning management'
+            await alertService.error({ text: dataTableError.value })
+        }
+    }
+
+    // ===== EXPORT =====
+
+    /**
+     * Export des données en CSV
+     */
+    const handleExportCsv = async () => {
+        try {
+            if (!inventoryId.value) {
+                await alertService.error({ text: 'ID d\'inventaire non disponible' })
+                return
+            }
+
+            const currentQueryModel = queryModelRef.value
+            const exportParams = convertQueryModelToQueryParams(currentQueryModel)
+            exportParams.export = 'csv'
+
+            const response = await InventoryService.exportAll(exportParams)
+            const blob = response.data as Blob
+
+            const url = window.URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.setAttribute('download', `planning_management_${new Date().toISOString().split('T')[0]}.csv`)
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+            window.URL.revokeObjectURL(url)
+
+            alertService.success({ text: 'Export CSV réussi' })
+        } catch (error: any) {
+            alertService.error({ text: error?.message || 'Erreur lors de l\'export CSV' })
+        }
+    }
+
+    /**
+     * Export des données en Excel
+     */
+    const handleExportExcel = async () => {
+        try {
+            if (!inventoryId.value) {
+                await alertService.error({ text: 'ID d\'inventaire non disponible' })
+                return
+            }
+
+            const currentQueryModel = queryModelRef.value
+            const exportParams = convertQueryModelToQueryParams(currentQueryModel)
+            exportParams.export = 'excel'
+
+            const response = await InventoryService.exportAll(exportParams)
+            const blob = response.data as Blob
+
+            const url = window.URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.setAttribute('download', `planning_management_${new Date().toISOString().split('T')[0]}.xlsx`)
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+            window.URL.revokeObjectURL(url)
+
+            alertService.success({ text: 'Export Excel réussi' })
+        } catch (error: any) {
+            alertService.error({ text: error?.message || 'Erreur lors de l\'export Excel' })
         }
     }
 
     // ===== RETURN =====
 
     return {
-        // État
+        // ===== DONNÉES =====
         stores,
+        loadStores,
+
+        // ===== ÉTATS =====
         selectedStore,
         loading,
+        isLoadingData,
+        dataTableError,
         inventoryStatus,
         inventoryReference,
         inventoryId,
@@ -657,44 +647,53 @@ export function usePlanningManagement() {
         inventoryError,
         isInitialized,
 
-        // Colonnes et actions
-        actions,
+        // ===== CONFIGURATION DATATABLE =====
         adaptedColumns,
+        actions,
         adaptedActions,
         adaptedGridActions,
-        adaptedHandleItemClick,
-        adaptedHandleActionsClick,
 
-        // Méthodes
+        // ===== NAVIGATION =====
+        goToInventoryDetail,
+        goToAffectation,
+        goToJobTracking,
+        goToMonitoring,
+
+        // ===== MÉTHODES =====
         selectStore,
         setInventoryStatus,
         setInventoryReference,
         fetchInventoryIdByReference,
-        goToInventoryDetail,
-        goToAffectation,
-        goToJobTracking,
         initialize,
         loadPlanningData,
-        refreshPlanningData,
+        retryLoadStores,
         resetPlanningDataTable,
 
-        // Handlers DataTable
+        // ===== HANDLERS DATATABLE =====
         handlePaginationChanged,
         handleSortChanged,
         handleFilterChanged,
         handleGlobalSearchChanged,
 
-        // Pagination et données depuis useBackendDataTable
+        // ===== HANDLERS GRIDVIEW =====
+        adaptedHandleItemClick,
+        adaptedHandleActionsClick,
+
+        // ===== PAGINATION =====
         currentPage,
         pageSize,
-        pagination: planningPaginationComputed,
+        pagination,
         planningTotalItems: computed(() => inventoryStore.totalItems || 0),
-        totalPages: computed(() => planningPaginationComputed.value.total_pages || 1),
-        totalItems: computed(() => planningPaginationComputed.value.total || 0),
+        totalPages: computed(() => pagination.value.total_pages || 1),
+        totalItems: computed(() => pagination.value.total || 0),
 
-        // QueryModel
+        // ===== QUERYMODEL =====
         queryModel: computed(() => queryModelRef.value),
         queryOutputMode: computed(() => queryOutputMode.value),
-        convertQueryModelToOutput
+        convertQueryModelToOutput,
+
+        // ===== EXPORT =====
+        handleExportCsv,
+        handleExportExcel
     }
 }

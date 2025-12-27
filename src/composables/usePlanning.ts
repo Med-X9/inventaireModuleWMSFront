@@ -5,22 +5,29 @@
  * - Les jobs d'inventaire (création, validation, suppression)
  * - Les locations disponibles (affichage, sélection, filtrage)
  * - La pagination et le tri côté serveur pour les deux DataTables
- * - La conversion automatique des paramètres vers le format standard DataTable
+ * - Utilise UNIQUEMENT QueryModel comme format de communication avec le DataTable
+ *
+ * Format de communication :
+ * - Tous les handlers reçoivent et émettent des QueryModel
+ * - Le QueryModel est converti vers query params GET pour les appels API
+ * - Conforme à PAGINATION_FRONTEND.md
  *
  * @module usePlanning
  */
 
 // ===== IMPORTS VUE =====
-import { ref, computed, markRaw, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, markRaw, onMounted, nextTick, watch, shallowRef, reactive } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import type { Router } from 'vue-router'
 
 // ===== IMPORTS COMPOSABLES =====
-import { useBackendDataTable } from '@/components/DataTable/composables/useBackendDataTable'
 
 // ===== IMPORTS SERVICES =====
-import { logger } from '@/services/loggerService'
 import { alertService } from '@/services/alertService'
+import { LocationService } from '@/services/LocationService'
+
+// ===== IMPORTS PINIA =====
 
 // ===== IMPORTS STORES =====
 import { useJobStore } from '@/stores/job'
@@ -29,27 +36,24 @@ import { useInventoryStore } from '@/stores/inventory'
 import { useWarehouseStore } from '@/stores/warehouse'
 
 // ===== IMPORTS UTILS =====
-import { convertToStandardDataTableParams, type StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
 import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
-import { convertQueryModelToQueryParams, convertQueryModelToRestApi, createQueryModelFromDataTableParams } from '@/components/DataTable/utils/queryModelConverter'
+import { convertQueryModelToQueryParams, mergeQueryModelWithCustomParams } from '@/components/DataTable/utils/queryModelConverter'
 import type { QueryModel } from '@/components/DataTable/types/QueryModel'
-import {
-    extractFiltersFromStandardParams,
-    isStandardDataTableParams,
-    extractPageFromStandardParams,
-    extractPageSizeFromStandardParams,
-    extractSortFromStandardParams
-} from './utils/dataTableHelpers'
 
 // ===== IMPORTS TYPES =====
 import type { DataTableColumn, ColumnDataType, ActionConfig } from '@/types/dataTable'
 import type { Job, JobTable } from '@/models/Job'
 import type { Location } from '@/models/Location'
-import type { LocationDataTableParams } from '@/services/LocationService'
+import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
 
 // ===== IMPORTS COMPOSANTS =====
 import IconCheck from '@/components/icon/icon-check.vue'
 import IconTrash from '@/components/icon/icon-trash.vue'
+import IconXCircle from '@/components/icon/icon-x-circle.vue'
+import IconEye from '@/components/icon/icon-eye.vue'
+import IconUser from '@/components/icon/icon-user.vue'
+import IconArrowLeft from '@/components/icon/icon-arrow-left.vue'
+import IconPlus from '@/components/icon/icon-plus.vue'
 
 // ===== INTERFACES =====
 
@@ -80,6 +84,14 @@ export function usePlanning(options?: PlanningOptions) {
     const inventoryStore = useInventoryStore()
     const warehouseStore = useWarehouseStore()
 
+// Utiliser storeToRefs pour accéder aux données de manière réactive
+const { jobs } = storeToRefs(jobStore)
+const { locations } = storeToRefs(locationStore)
+
+// Accès aux métadonnées de pagination des stores
+const jobPaginationMetadata = computed(() => jobStore.paginationMetadata)
+const locationPaginationMetadata = computed(() => locationStore.paginationMetadata)
+
     // ===== ÉTAT LOCAL =====
 
     /** Référence de l'inventaire (depuis les options ou la route) */
@@ -100,6 +112,21 @@ export function usePlanning(options?: PlanningOptions) {
     /** Indicateur d'initialisation */
     const isInitialized = ref(false)
 
+    /** Indicateur d'initialisation en cours pour éviter les appels multiples */
+    const isInitializing = ref(false)
+
+
+    /** Système de monitoring des performances (optionnel) */
+    const performanceDebug = ref(false) // Activer en mode développement si nécessaire
+
+    const logPerformance = (operation: string, startTime: number) => {
+        // Performance logging disabled
+    }
+
+    /** États de chargement locaux pour afficher le skeleton immédiatement */
+    const jobsLoadingLocal = ref(false)
+    const locationsLoadingLocal = ref(false)
+
     // ===== SÉLECTIONS =====
 
     /** IDs des locations disponibles sélectionnées */
@@ -108,262 +135,169 @@ export function usePlanning(options?: PlanningOptions) {
     /** IDs des jobs sélectionnés */
     const selectedJobs = ref<string[]>([])
 
-    // ===== INITIALISATION DES DATATABLES =====
+    // ===== ÉTATS LOCAUX =====
+
+    /** États de chargement */
+    const jobsLoading = ref(false)
+    const locationsLoading = ref(false)
+    const loading = ref(false)
+
+    /** États d'erreur */
+    const jobsError = ref<string | null>(null)
+    const locationsError = ref<string | null>(null)
+
+    /** État de chargement de l'interface */
+    const isDataLoaded = ref(false)
+
+    // ===== ÉTATS POUR LES TOOLTIPS =====
+
+    /** États des tooltips */
+    const showStatusLegend = ref(false)
+    const statusLegendTooltip = ref<HTMLElement | null>(null)
+    const tooltipElement = ref<HTMLElement | null>(null)
+    const tooltipStyle = ref<Record<string, string>>({})
+    let tooltipTimeoutId: number | null = null
+
+    // ===== ÉTATS POUR LES MODALS =====
+
+    /** États des modals */
+    const showAddToJobModal = ref(false)
+    const selectedJobForModal = ref<string | number | null>(null)
 
     /**
-     * DataTable pour les jobs
-     * Utilise useBackendDataTable pour l'intégration avec le store Pinia
+     * Afficher le tooltip des statuts
      */
-    const {
-        data: jobs,
-        loading: jobsLoading,
-        currentPage: jobsCurrentPage,
-        pageSize: jobsPageSize,
-        searchQuery: jobsSearchQuery,
-        sortModel: jobsSortModel,
-        filters: jobsFilters,
-        setPage: setJobsPage,
-        setPageSize: setJobsPageSize,
-        setSearch: setJobsSearch,
-        setSortModel: setJobsSortModel,
-        setFilters: setJobsFilters,
-        resetFilters: resetJobsFilters,
-        refresh: _refreshJobsDataTable,
-        pagination: jobsPagination
-    } = useBackendDataTable<Job>('', {
-        piniaStore: jobStore,
-        storeId: 'job',
-        autoLoad: false,
-        pageSize: 20
-    })
-
-    // ===== QUERYMODEL POUR JOBS =====
-    
-    /**
-     * Mode de sortie pour les paramètres de requête (défaut: 'queryParams')
-     */
-    const jobsQueryOutputMode = ref<'queryModel' | 'dataTable' | 'restApi' | 'queryParams'>('queryParams')
-
-    /**
-     * Colonnes pour QueryModel Jobs
-     */
-    const jobsColumnsRef = computed(() => jobsColumns.value)
-
-    /**
-     * QueryModel pour gérer les requêtes Jobs avec mode de sortie configurable
-     */
-    const {
-        queryModel: jobsQueryModelRef,
-        toStandardParams: jobsToStandardParams,
-        updatePagination: updateJobsQueryPagination,
-        updateSort: updateJobsQuerySort,
-        updateFilter: updateJobsQueryFilter,
-        updateGlobalSearch: updateJobsQueryGlobalSearch
-    } = useQueryModel({
-        columns: jobsColumnsRef,
-        enabled: true
-    })
-
-    /**
-     * Convertit le QueryModel Jobs selon le mode configuré
-     */
-    const convertJobsQueryModelToOutput = (queryModelData: QueryModel) => {
-        switch (jobsQueryOutputMode.value) {
-            case 'queryModel':
-                return queryModelData
-            case 'restApi':
-                return convertQueryModelToRestApi(queryModelData)
-            case 'queryParams':
-                return convertQueryModelToQueryParams(queryModelData)
-            case 'dataTable':
-            default:
-                return jobsToStandardParams.value
-        }
+    const showStatusTooltip = async () => {
+        if (tooltipTimeoutId) clearTimeout(tooltipTimeoutId)
+        tooltipTimeoutId = window.setTimeout(async () => {
+            showStatusLegend.value = true
+            await nextTick()
+            positionStatusTooltip()
+        }, 300)
     }
 
     /**
-     * DataTable pour les locations disponibles
-     * Utilise useBackendDataTable pour l'intégration avec le store Pinia
+     * Masquer le tooltip des statuts
      */
-    const {
-        data: locations,
-        loading: locationsLoading,
-        currentPage: locationsCurrentPage,
-        pageSize: locationsPageSize,
-        searchQuery: locationsSearchQuery,
-        sortModel: locationsSortModel,
-        filters: locationsFilters,
-        setPage: setLocationsPage,
-        setPageSize: setLocationsPageSize,
-        setSearch: setLocationsSearch,
-        setSortModel: setLocationsSortModel,
-        setFilters: setLocationsFilters,
-        resetFilters: resetLocationsFilters,
-        refresh: _refreshLocationsDataTable,
-        pagination: locationsPagination,
-        getFromPinia: getLocationFromPinia
-    } = useBackendDataTable<Location>('', {
-        piniaStore: locationStore,
-        storeId: 'location',
-        autoLoad: false,
-        pageSize: 20
-    })
-
-    // ===== COMPUTED PROPERTIES =====
-
-    /** État de chargement global (jobs ou locations) */
-    const loading = computed(() => jobsLoading.value || locationsLoading.value)
-
-    /**
-     * Dédupliquer les locations d'un job
-     * Transforme les locations pour aplatir les propriétés imbriquées (zone, sous_zone)
-     * et supprime les doublons basés sur l'ID ou la référence
-     *
-     * @param job - Job contenant les locations à traiter
-     * @returns Tableau de locations uniques avec propriétés aplaties
-     */
-    const dedupeJobLocations = (job: Job | JobTable) => {
-        const rawLocations = ((job as any).locations ?? (job as any).emplacements ?? []) as Array<Record<string, any>>
-        const uniqueLocations = new Map<string | number | symbol, Record<string, any>>()
-
-        rawLocations.forEach((loc, index) => {
-            // Identifier la location par son ID, location_id, location_reference ou reference
-            const key =
-                loc.id ??
-                loc.location_id ??
-                loc.location_reference ??
-                loc.reference ??
-                Symbol(`job-location-${index}`)
-
-            // Ne garder que la première occurrence
-            if (!uniqueLocations.has(key)) {
-                uniqueLocations.set(key, {
-                    ...loc,
-                    zone_name: loc.zone?.zone_name || loc.zone_name || 'N/A',
-                    sous_zone_name: loc.sous_zone?.sous_zone_name || loc.sous_zone_name || 'N/A'
-                })
-            }
-        })
-
-        return Array.from(uniqueLocations.values())
+    const hideStatusTooltip = () => {
+        if (tooltipTimeoutId) {
+            clearTimeout(tooltipTimeoutId)
+            tooltipTimeoutId = null
+        }
+        showStatusLegend.value = false
     }
 
     /**
-     * Jobs transformés avec locations dédupliquées
-     * Chaque job a ses locations traitées pour supprimer les doublons
+     * Positionner le tooltip des statuts
      */
-    const transformedJobs = computed(() => {
-        return jobs.value.map(job => ({
-            ...job,
-            locations: dedupeJobLocations(job)
-        }))
-    })
+    const positionStatusTooltip = () => {
+        if (!statusLegendTooltip.value || !tooltipElement.value) return
 
-    /**
-     * Locations mappées avec propriétés aplaties
-     * Aplatit les propriétés imbriquées (zone, sous_zone) pour faciliter l'affichage dans la DataTable
-     */
-    const mappedLocations = computed(() => {
-        const locationsData = locationStore.locations || []
-        return locationsData.map(loc => ({
-            ...loc,
-            location_reference: (loc as any).location_reference ?? (loc as any).reference ?? loc.reference ?? '',
-            zone_name: loc.zone?.zone_name || (loc as any).zone_name || 'N/A',
-            sous_zone_name: loc.sous_zone?.sous_zone_name || (loc as any).sous_zone_name || 'N/A'
-        }))
-    })
+        const containerRect = statusLegendTooltip.value.getBoundingClientRect()
+        const tooltipRect = tooltipElement.value.getBoundingClientRect()
+        const viewportWidth = window.innerWidth
+        const viewportHeight = window.innerHeight
 
-    /**
-     * Locations disponibles (non utilisées dans les jobs)
-     * Filtre les locations pour exclure celles déjà assignées à un job
-     */
-    const availableLocations = computed(() => {
-        const usedLocationIds = new Set<number | string>()
+        // Positionner le tooltip en bas à droite du bouton
+        let top = containerRect.bottom + 8
+        let left = containerRect.right - tooltipRect.width
 
-        // Collecter tous les IDs de locations utilisées dans les jobs
-        transformedJobs.value.forEach(job => {
-            job.locations?.forEach(loc => {
-                const key = loc.id ?? loc.location_id ?? (loc as any).location_reference ?? loc.reference
-                if (key !== undefined && key !== null) {
-                    usedLocationIds.add(key)
-                }
-            })
-        })
-
-        // Retourner uniquement les locations non utilisées
-        return mappedLocations.value.filter(loc => {
-            const key = loc.id ?? (loc as any).location_id ?? (loc as any).location_reference ?? loc.reference
-            return key === undefined || key === null ? true : !usedLocationIds.has(key)
-        })
-    })
-
-    /**
-     * Indicateur de sélection de locations
-     */
-    const hasSelectedLocations = computed(() => selectedAvailableLocations.value.length > 0)
-
-    /**
-     * Indicateur de sélection de jobs
-     */
-    const hasSelectedJobs = computed(() => selectedJobs.value.length > 0)
-
-    /**
-     * Pagination calculée pour les jobs
-     * Utilise le totalCount du store pour calculer les informations de pagination
-     */
-    const jobsPaginationComputed = computed(() => {
-        const totalCount = jobStore.totalCount || 0
-        const pageSize = jobsPageSize.value || 20
-        const currentPage = jobsCurrentPage.value || 1
-
-        return {
-            current_page: currentPage,
-            total_pages: Math.max(1, Math.ceil(totalCount / pageSize)),
-            has_next: currentPage < Math.ceil(totalCount / pageSize),
-            has_previous: currentPage > 1,
-            page_size: pageSize,
-            total: totalCount
+        // Ajuster si le tooltip dépasse de l'écran
+        if (left < 8) left = 8
+        if (left + tooltipRect.width > viewportWidth - 8) {
+            left = viewportWidth - tooltipRect.width - 8
         }
-    })
+        if (top + tooltipRect.height > viewportHeight - 8) {
+            top = containerRect.top - tooltipRect.height - 8
+        }
+
+        tooltipStyle.value = {
+            top: `${top}px`,
+            left: `${left}px`
+        }
+    }
+
+    // ===== BOUTONS D'ACTIONS =====
 
     /**
-     * Pagination calculée pour les locations
-     * Utilise le totalCount du store pour calculer les informations de pagination
+     * Boutons de navigation (Header)
      */
-    const locationsPaginationComputed = computed(() => {
-        const totalCount = locationStore.totalCount || 0
-        const pageSize = locationsPageSize.value || 20
-        const currentPage = locationsCurrentPage.value || 1
-
-        return {
-            current_page: currentPage,
-            total_pages: Math.max(1, Math.ceil(totalCount / pageSize)),
-            has_next: currentPage < Math.ceil(totalCount / pageSize),
-            has_previous: currentPage > 1,
-            page_size: pageSize,
-            total: totalCount
+    const navigationButtons = computed<ButtonGroupButton[]>(() => [
+        {
+            id: 'detail',
+            label: 'Détail',
+            icon: markRaw(IconEye),
+            onClick: () => { handleGoToInventoryDetail() },
+            class: 'text-primary bg-white dark:bg-gray-800 border-2 border-primary hover:bg-primary hover:text-white disabled:hover:bg-white disabled:hover:text-primary'
+        },
+        {
+            id: 'affecter',
+            label: 'Affecter',
+            icon: markRaw(IconUser),
+            onClick: () => { handleGoToAffectation() },
+            class: 'text-primary bg-white dark:bg-gray-800 border-2 border-l-0 border-primary hover:bg-primary hover:text-white disabled:hover:bg-white disabled:hover:text-primary'
         }
-    })
+    ])
 
-    // ===== COLONNES DATATABLE =====
+    /**
+     * Boutons d'actions pour les jobs créés
+     */
+    const jobsActionButtons = computed<ButtonGroupButton[]>(() => [
+        {
+            id: 'validate',
+            label: `Valider (${selectedJobsCount.value})`,
+            icon: markRaw(IconCheck),
+            onClick: async () => { await bulkValidateJobs() },
+            disabled: selectedJobsCount.value === 0,
+            class: 'text-primary bg-white dark:bg-gray-800 border-2 border-primary hover:bg-primary hover:text-white disabled:hover:bg-white disabled:hover:text-primary'
+        },
+        {
+            id: 'return',
+            label: `Retourner (${selectedJobsCount.value})`,
+            icon: markRaw(IconArrowLeft),
+            onClick: async () => { await bulkResetJobs() },
+            disabled: selectedJobsCount.value === 0,
+            class: 'text-primary bg-white dark:bg-gray-800 border-2 border-l-0 border-primary hover:bg-primary hover:text-white disabled:hover:bg-white disabled:hover:text-primary'
+        }
+    ])
+
+    /**
+     * Boutons d'actions pour les emplacements disponibles
+     */
+    const locationsActionButtons = computed<ButtonGroupButton[]>(() => [
+        {
+            id: 'create-job',
+            label: `Créer Job (${selectedAvailableLocations.value.length})`,
+            icon: markRaw(IconPlus),
+            onClick: async () => { await createJobFromSelectedLocations() },
+            disabled: selectedAvailableLocations.value.length === 0,
+            class: 'text-primary bg-white dark:bg-gray-800 border-2 border-primary hover:bg-primary hover:text-white disabled:hover:bg-white disabled:hover:text-primary'
+        },
+        {
+            id: 'add-to-job',
+            label: `Ajouter (${selectedAvailableLocations.value.length})`,
+            icon: markRaw(IconPlus),
+            onClick: () => { openAddToJobModal() },
+            disabled: selectedAvailableLocations.value.length === 0,
+            visible: hasAvailableJobs.value,
+            class: 'text-primary bg-white dark:bg-gray-800 border-2 border-l-0 border-primary hover:bg-primary hover:text-white disabled:hover:bg-white disabled:hover:text-primary'
+        },
+        {
+            id: 'deactivate',
+            label: `Désactiver (${selectedAvailableLocations.value.length})`,
+            icon: markRaw(IconXCircle),
+            onClick: async () => { await bulkDeactivateLocations() },
+            disabled: selectedAvailableLocations.value.length === 0,
+            class: 'text-red-600 bg-white dark:bg-gray-800 border-2 border-red-600 hover:bg-red-600 hover:text-white disabled:hover:bg-white disabled:hover:text-red-600'
+        }
+    ])
+
+    // ===== COLONNES DES DATATABLES =====
 
     /**
      * Configuration des colonnes pour la DataTable des jobs
      */
     const jobsColumns = computed<DataTableColumn[]>(() => [
-        {
-            headerName: 'ID',
-            field: 'id',
-            sortable: true,
-            dataType: 'number' as ColumnDataType,
-            filterable: true,
-            width: 80,
-            editable: false,
-            visible: false,
-            draggable: true,
-            autoSize: true,
-            description: 'Identifiant unique du job'
-        },
         {
             headerName: 'Référence',
             field: 'reference',
@@ -394,7 +328,7 @@ export function usePlanning(options?: PlanningOptions) {
             badgeStyles: [
                 {
                     value: 'EN ATTENTE',
-                    class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
+                    class: 'inline-flex items-center rounded-md bg-slate-200 px-2 py-1 text-xs font-medium text-slate-900 ring-1 ring-slate-300/20 ring-inset'
                 },
                 {
                     value: 'VALIDE',
@@ -402,19 +336,19 @@ export function usePlanning(options?: PlanningOptions) {
                 },
                 {
                     value: 'AFFECTE',
-                    class: 'inline-flex items-center rounded-md bg-orange-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-orange-600/20 ring-inset'
+                    class: 'inline-flex items-center rounded-md bg-teal-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-teal-600/20 ring-inset'
                 },
                 {
                     value: 'PRET',
-                    class: 'inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-800 ring-1 ring-purple-600/20 ring-inset'
+                    class: 'inline-flex items-center rounded-md bg-purple-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-purple-600/20 ring-inset'
                 },
                 {
-                    value: 'TRANSFERET',
-                    class: 'inline-flex items-center rounded-md bg-orange-50 px-2 py-1 text-xs font-medium text-orange-800 ring-1 ring-orange-600/20 ring-inset'
+                    value: 'TRANSFERT',
+                    class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
                 },
                 {
                     value: 'TERMINE',
-                    class: 'inline-flex items-center rounded-md bg-green-900 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-600/20 ring-inset'
+                    class: 'inline-flex items-center rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-700/20 ring-inset'
                 },
                 {
                     value: 'ENTAME',
@@ -565,7 +499,449 @@ export function usePlanning(options?: PlanningOptions) {
         }
     ])
 
-    // ===== ACTIONS POUR LES JOBS =====
+    // ===== QUERYMODEL POUR JOBS =====
+
+    /**
+     * QueryModel pour gérer les requêtes Jobs
+     * Le DataTable utilise UNIQUEMENT QueryModel comme format standard
+     */
+    const {
+        queryModel: jobsQueryModelRef,
+        updatePagination: updateJobsQueryPagination,
+        updateSort: updateJobsQuerySort,
+        updateFilter: updateJobsQueryFilter,
+        updateGlobalSearch: updateJobsQueryGlobalSearch
+    } = useQueryModel({
+        columns: jobsColumns.value as any
+    })
+
+    // Fonction helper pour convertir QueryModel en query params
+    const jobsToQueryParams = computed(() => {
+        return (queryModel: QueryModel) => convertQueryModelToQueryParams(queryModel)
+    })
+
+    // ===== COMPUTED PROPERTIES =====
+
+    // ===== CONFIGURATIONS DATATABLE =====
+
+    // Configuration DataTable pour les jobs - Mode server-side par défaut
+    // Suivant le pattern de useInventoryManagement.ts
+
+    // Configuration DataTable pour les locations - Mode server-side par défaut
+    // Suivant le pattern de useInventoryManagement.ts
+
+    /**
+     * Pagination automatique intelligente pour les jobs
+     */
+    const jobsPaginationConfig = computed(() => {
+        const dataLength = jobs.value?.length || 0
+
+        return {
+            shouldEnablePagination: dataLength >= 50,
+            shouldEnableVirtualScrolling: dataLength >= 100,
+            optimalPageSize: dataLength >= 1000 ? 100 : dataLength >= 500 ? 50 : 25,
+            dataLength
+        }
+    })
+
+    /**
+     * Pagination automatique intelligente pour les locations
+     */
+    const locationsPaginationConfig = computed(() => {
+        const dataLength = locations.value?.length || 0
+
+        return {
+            shouldEnablePagination: dataLength >= 50,
+            shouldEnableVirtualScrolling: dataLength >= 100,
+            optimalPageSize: dataLength >= 1000 ? 100 : dataLength >= 500 ? 50 : 25,
+            dataLength
+        }
+    })
+
+    // === GESTION DES ERREURS ET ÉTATS AVANCÉS ===
+
+
+    /**
+     * Cache pour les locations dédupliquées par job
+     * Clé: job.id, Valeur: locations dédupliquées
+     */
+    const jobLocationsCache = new Map<number | string, any[]>()
+
+    /**
+     * Dédupliquer les locations d'un job (optimisé)
+     * Transforme les locations pour aplatir les propriétés imbriquées (zone, sous_zone)
+     * et supprime les doublons basés sur l'ID ou la référence
+     *
+     * @param job - Job contenant les locations à traiter
+     * @returns Tableau de locations uniques avec propriétés aplaties
+     */
+    const dedupeJobLocations = (job: Job | JobTable) => {
+        // Vérifier le cache d'abord
+        const jobId = job.id
+        if (jobId && jobLocationsCache.has(jobId)) {
+            return jobLocationsCache.get(jobId)!
+        }
+
+        const rawLocations = ((job as any).locations ?? (job as any).emplacements ?? []) as Array<Record<string, any>>
+
+        // Si pas de locations, retourner un tableau vide
+        if (!rawLocations || rawLocations.length === 0) {
+            const emptyResult: any[] = []
+            if (jobId) jobLocationsCache.set(jobId, emptyResult)
+            return emptyResult
+        }
+
+        const uniqueLocations = new Map<string | number, Record<string, any>>()
+        let fallbackIndex = 0
+
+        for (let i = 0; i < rawLocations.length; i++) {
+            const loc = rawLocations[i]
+
+            // Identifier la location par son ID (optimisé pour éviter Symbol)
+            const key = loc.id ?? loc.location_id ?? loc.location_reference ?? loc.reference
+
+            // Si pas de clé valide, utiliser un index (plus rapide que Symbol)
+            const finalKey = key ?? `__fallback_${fallbackIndex++}`
+
+            // Ne garder que la première occurrence
+            if (!uniqueLocations.has(finalKey)) {
+                // Optimisation : ne copier que les propriétés nécessaires
+                uniqueLocations.set(finalKey, {
+                    id: loc.id,
+                    location_id: loc.location_id,
+                    location_reference: loc.location_reference ?? loc.reference,
+                    reference: loc.reference,
+                    zone_name: loc.zone?.zone_name || loc.zone_name || 'N/A',
+                    sous_zone_name: loc.sous_zone?.sous_zone_name || loc.sous_zone_name || 'N/A',
+                    // Garder d'autres propriétés si nécessaires
+                    zone: loc.zone,
+                    sous_zone: loc.sous_zone
+                })
+            }
+        }
+
+        const result = Array.from(uniqueLocations.values())
+
+        // Mettre en cache le résultat
+        if (jobId) jobLocationsCache.set(jobId, result)
+
+        return result
+    }
+
+    /**
+     * Nettoyer le cache des locations de jobs
+     */
+    const clearJobLocationsCache = () => {
+        jobLocationsCache.clear()
+    }
+
+    /**
+     * Jobs transformés avec locations dédupliquées (optimisé avec shallowRef)
+     * Chaque job a ses locations traitées pour supprimer les doublons
+     */
+    const transformedJobs = shallowRef<(Job & { locations: any[] })[]>([])
+
+    /**
+     * Cache pour les jobs transformés complets
+     * Clé: job.id, Valeur: job transformé
+     */
+    const transformedJobsCache = new Map<number | string, any>()
+
+    /**
+     * Hash des IDs de jobs pour détecter les changements
+     */
+    let lastJobsHash = ''
+    let lastJobsLength = 0
+
+    /**
+     * Met à jour les jobs transformés de manière optimisée
+     */
+    const updateTransformedJobs = () => {
+        const startTime = performance.now()
+
+        // Vérification ultra-rapide : si même longueur et déjà transformé, probablement identique
+        if (jobs.value.length === lastJobsLength &&
+            transformedJobs.value.length === jobs.value.length &&
+            jobs.value.length > 0) {
+            // Vérification rapide du premier et dernier ID
+            const firstMatch = jobs.value[0]?.id === transformedJobs.value[0]?.id
+            const lastMatch = jobs.value[jobs.value.length - 1]?.id === transformedJobs.value[transformedJobs.value.length - 1]?.id
+
+            if (firstMatch && lastMatch) {
+                logPerformance('updateTransformedJobs (skipped - quick check)', startTime)
+                return
+            }
+        }
+
+        // Si longueur différente, c'est sûr qu'il y a eu un changement
+        if (jobs.value.length !== lastJobsLength) {
+            lastJobsLength = jobs.value.length
+            lastJobsHash = '' // Invalider le hash
+        }
+
+        // Créer un hash seulement si nécessaire
+        const currentJobsHash = jobs.value.map(j => j.id).join(',')
+
+        // Si les jobs n'ont pas changé, éviter la transformation
+        if (currentJobsHash === lastJobsHash) {
+            logPerformance('updateTransformedJobs (skipped - hash match)', startTime)
+            return
+        }
+
+        lastJobsHash = currentJobsHash
+
+        // Nettoyer le cache seulement si vraiment nécessaire (> 3x la taille actuelle)
+        if (transformedJobsCache.size > jobs.value.length * 3) {
+            const jobIds = new Set(jobs.value.map(j => Number(j.id)))
+            // Nettoyer seulement les jobs qui ne sont plus dans la liste
+            for (const [cachedId] of transformedJobsCache) {
+                if (!jobIds.has(Number(cachedId))) {
+                    transformedJobsCache.delete(cachedId)
+                    jobLocationsCache.delete(cachedId)
+                }
+            }
+        }
+
+        // Transformation optimisée avec pré-allocation
+        const result: any[] = new Array(jobs.value.length)
+
+        for (let i = 0; i < jobs.value.length; i++) {
+            const job = jobs.value[i]
+            const jobId = job.id
+
+            // Vérifier si le job est déjà en cache
+            if (jobId && transformedJobsCache.has(jobId)) {
+                result[i] = transformedJobsCache.get(jobId)!
+                continue
+            }
+
+            // Transformation optimisée : ne copier que les propriétés essentielles
+            const transformed = {
+                id: job.id,
+                reference: job.reference,
+                status: job.status,
+                created_at: job.created_at,
+                updated_at: (job as any).updated_at,
+                inventory_id: (job as any).inventory_id,
+                warehouse_id: (job as any).warehouse_id,
+                locations: dedupeJobLocations(job),
+                // Ajouter d'autres propriétés nécessaires
+                ...(job as any) // Fallback pour les propriétés non listées
+            }
+
+            // Mettre en cache
+            if (jobId) {
+                transformedJobsCache.set(jobId, transformed)
+            }
+
+            result[i] = transformed
+        }
+
+        transformedJobs.value = result
+
+        logPerformance('updateTransformedJobs', startTime)
+    }
+
+    /**
+     * Invalider le cache d'un job spécifique
+     */
+    const invalidateJobCache = (jobId: number | string) => {
+        transformedJobsCache.delete(jobId)
+        jobLocationsCache.delete(jobId)
+    }
+
+    /**
+     * Nettoyer tous les caches de jobs
+     */
+    const clearAllJobCaches = () => {
+        transformedJobsCache.clear()
+        clearJobLocationsCache()
+    }
+
+    /**
+     * Locations mappées avec propriétés aplaties (optimisé avec shallowRef)
+     * Aplatit les propriétés imbriquées (zone, sous_zone) pour faciliter l'affichage dans la DataTable
+     */
+    const mappedLocations = shallowRef<any[]>([])
+
+    /**
+     * Hash des locations pour détecter les changements
+     */
+    let lastLocationsHash = ''
+    let lastLocationsLength = 0
+
+    /**
+     * Met à jour les locations mappées de manière optimisée
+     */
+    const updateMappedLocations = () => {
+        const startTime = performance.now()
+        const locationsData = locationStore.locations || []
+
+        // Vérification ultra-rapide de la longueur
+        if (locationsData.length === lastLocationsLength &&
+            mappedLocations.value.length === locationsData.length &&
+            locationsData.length > 0) {
+            // Vérification rapide du premier et dernier ID
+            const firstMatch = locationsData[0]?.id === mappedLocations.value[0]?.id
+            const lastMatch = locationsData[locationsData.length - 1]?.id === mappedLocations.value[mappedLocations.value.length - 1]?.id
+
+            if (firstMatch && lastMatch) {
+                logPerformance('updateMappedLocations (skipped - quick check)', startTime)
+                return
+            }
+        }
+
+        // Si longueur différente, c'est sûr qu'il y a eu un changement
+        if (locationsData.length !== lastLocationsLength) {
+            lastLocationsLength = locationsData.length
+            lastLocationsHash = ''
+        }
+
+        // Créer un hash seulement si vraiment nécessaire (pour validation finale)
+        if (lastLocationsHash) {
+            const currentHash = locationsData.length > 0 ?
+                `${locationsData[0].id}-${locationsData[locationsData.length - 1].id}-${locationsData.length}` :
+                '0-0-0'
+
+            if (currentHash === lastLocationsHash) {
+                logPerformance('updateMappedLocations (skipped - hash match)', startTime)
+                return
+            }
+            lastLocationsHash = currentHash
+        } else {
+            lastLocationsHash = locationsData.length > 0 ?
+                `${locationsData[0].id}-${locationsData[locationsData.length - 1].id}-${locationsData.length}` :
+                '0-0-0'
+        }
+
+        // Transformation optimisée avec for loop (plus rapide que map)
+        const mapped: any[] = new Array(locationsData.length)
+        for (let i = 0; i < locationsData.length; i++) {
+            const loc = locationsData[i]
+            mapped[i] = {
+                ...loc,
+                location_reference: (loc as any).location_reference ?? (loc as any).reference ?? loc.reference ?? '',
+                zone_name: loc.zone?.zone_name || (loc as any).zone_name || 'N/A',
+                sous_zone_name: loc.sous_zone?.sous_zone_name || (loc as any).sous_zone_name || 'N/A'
+            }
+        }
+
+        mappedLocations.value = mapped
+        logPerformance('updateMappedLocations', startTime)
+    }
+
+    /**
+     * Locations disponibles (non utilisées dans les jobs) - optimisé avec shallowRef
+     * Filtre les locations pour exclure celles déjà assignées à un job
+     */
+    const availableLocations = shallowRef<any[]>([])
+
+    /**
+     * Cache des IDs de locations utilisées
+     */
+    let cachedUsedLocationIds = new Set<number | string>()
+    let lastUsedLocationsHash = ''
+
+    /**
+     * Met à jour les locations disponibles de manière optimisée
+     */
+    const updateAvailableLocations = () => {
+        const startTime = performance.now()
+
+        // Vérification ultra-rapide : si rien n'a changé dans les tailles
+        const totalMapped = mappedLocations.value.length
+        const totalAvailable = availableLocations.value.length
+        const totalUsed = cachedUsedLocationIds.size
+
+        // Si les tailles correspondent, probablement pas de changement
+        if (totalMapped === (totalAvailable + totalUsed) && totalAvailable > 0) {
+            logPerformance('updateAvailableLocations (skipped - size match)', startTime)
+            return
+        }
+
+        // Créer un hash léger seulement si nécessaire
+        const currentHash = `${transformedJobs.value.length}:${mappedLocations.value.length}:${transformedJobs.value.reduce((sum, j) => sum + (j.locations?.length || 0), 0)}`
+
+        // Si le hash correspond, pas de changement
+        if (currentHash === lastUsedLocationsHash) {
+            logPerformance('updateAvailableLocations (skipped - hash match)', startTime)
+            return
+        }
+
+        lastUsedLocationsHash = currentHash
+        const usedLocationIds = new Set<number | string>()
+
+        // Collecter tous les IDs de locations utilisées dans les jobs (optimisé)
+        for (let i = 0; i < transformedJobs.value.length; i++) {
+            const job = transformedJobs.value[i]
+            const jobLocations = job.locations
+
+            if (jobLocations && jobLocations.length > 0) {
+                for (let j = 0; j < jobLocations.length; j++) {
+                    const loc = jobLocations[j]
+                    const key = loc.id ?? loc.location_id ?? loc.location_reference ?? loc.reference
+                    if (key !== undefined && key !== null) {
+                        usedLocationIds.add(key)
+                    }
+                }
+            }
+        }
+
+        cachedUsedLocationIds = usedLocationIds
+
+        // Filtrer les locations non utilisées (optimisé avec for loop)
+        const available: any[] = []
+        for (let i = 0; i < mappedLocations.value.length; i++) {
+            const loc = mappedLocations.value[i]
+            const key = loc.id ?? loc.location_id ?? loc.location_reference ?? loc.reference
+
+            if (key === undefined || key === null || !usedLocationIds.has(key)) {
+                available.push(loc)
+            }
+        }
+
+        availableLocations.value = available
+        logPerformance('updateAvailableLocations', startTime)
+    }
+
+    /**
+     * Met à jour toutes les données transformées en une seule fois (optimisé)
+     * Utilise requestAnimationFrame pour ne pas bloquer le thread principal
+     */
+    let updateScheduled = false
+    const updateAllTransformedData = () => {
+        if (updateScheduled) return
+
+        updateScheduled = true
+        requestAnimationFrame(() => {
+            updateTransformedJobs()
+            updateMappedLocations()
+            updateAvailableLocations()
+            updateScheduled = false
+        })
+    }
+
+    /**
+     * Version synchrone pour les cas où on a besoin des données immédiatement
+     */
+    const updateAllTransformedDataSync = () => {
+        updateTransformedJobs()
+        updateMappedLocations()
+        updateAvailableLocations()
+    }
+
+    /**
+     * Indicateur de sélection de locations
+     */
+    const hasSelectedLocations = computed(() => selectedAvailableLocations.value.length > 0)
+
+    /**
+     * Indicateur de sélection de jobs
+     */
+    const hasSelectedJobs = computed(() => selectedJobs.value.length > 0)
+
+
+    // ===== ACTIONS DES DATATABLES =====
 
     /**
      * Configuration des actions disponibles pour chaque job dans la DataTable
@@ -585,11 +961,13 @@ export function usePlanning(options?: PlanningOptions) {
                     if (result.isConfirmed) {
                         await jobStore.validateJob([job.id])
                         await alertService.success({ text: 'Job validé avec succès' })
+                        // Invalider le cache pour ce job car son statut a changé
+                        invalidateJobCache(Number(job.id))
                         resetAllSelections()
-                        await refreshJobs()
+                        // Rafraîchir les données complètes (jobs + locations)
+                        await refreshData()
                     }
                 } catch (error) {
-                    logger.error('Erreur lors de la validation du job', error)
                     await alertService.error({ text: 'Erreur lors de la validation du job' })
                 }
             },
@@ -609,17 +987,51 @@ export function usePlanning(options?: PlanningOptions) {
                     if (result.isConfirmed) {
                         await jobStore.deleteJob([job.id])
                         await alertService.success({ text: 'Job supprimé avec succès' })
+                        // Invalider le cache pour ce job
+                        invalidateJobCache(Number(job.id))
                         resetAllSelections()
                         await refreshData()
                     }
                 } catch (error) {
-                    logger.error('Erreur lors de la suppression du job', error)
                     await alertService.error({ text: 'Erreur lors de la suppression du job' })
                 }
             },
             show: () => true
         }
     ]
+
+    /**
+     * Configuration des actions disponibles pour chaque location dans la DataTable
+     */
+    const locationsActions: ActionConfig<Location>[] = [
+        {
+            label: 'Désactiver',
+            icon: markRaw(IconXCircle),
+            color: 'danger',
+            onClick: async (location: Location) => {
+                try {
+                    const result = await alertService.confirm({
+                        title: 'Confirmer la désactivation',
+                        text: `Voulez-vous vraiment désactiver la location "${location.reference}" ?`
+                    })
+
+                    if (result.isConfirmed) {
+                        await bulkDeactivateLocations([location.id])
+                        await alertService.success({ text: 'Location désactivée avec succès' })
+                        resetAllSelections()
+                        // Rafraîchir les données complètes (jobs + locations)
+                        await refreshData()
+                    }
+                } catch (error) {
+                    await alertService.error({ text: 'Erreur lors de la désactivation de la location' })
+                }
+            },
+            show: () => true
+        }
+    ]
+
+    // Colonnes définies plus haut dans le fichier
+
 
     // ===== MÉTHODES DE RÉSOLUTION DES IDS =====
 
@@ -630,45 +1042,23 @@ export function usePlanning(options?: PlanningOptions) {
      */
     const resolveContextIds = async () => {
         try {
-            logger.debug('Résolution des IDs de contexte...', { inventoryReference, warehouseReference })
-
             // Résoudre l'inventaire et récupérer l'account_id
             if (inventoryReference) {
                 const inventory = await inventoryStore.fetchInventoryByReference(inventoryReference)
                 inventoryId.value = inventory?.id ?? null
                 accountId.value = inventory?.account_id ?? null
-                logger.debug('IDs inventaire et compte résolus', {
-                    inventoryId: inventoryId.value,
-                    accountId: accountId.value,
-                    inventory: inventory ? { id: inventory.id, account_id: inventory.account_id } : null
-                })
             }
 
             // Résoudre l'entrepôt
             if (warehouseReference) {
                 warehouseId.value = await warehouseStore.fetchWarehouseByReference(warehouseReference)
-                logger.debug('ID entrepôt résolu', { warehouseId: warehouseId.value })
             }
 
             // Validation des IDs requis
             if (!inventoryId.value || !warehouseId.value) {
                 throw new Error(`IDs de contexte manquants - inventaire: ${inventoryId.value}, entrepôt: ${warehouseId.value}`)
             }
-
-            if (!accountId.value) {
-                logger.warn('ID de compte non résolu, le chargement des locations peut échouer', {
-                    inventoryId: inventoryId.value,
-                    inventoryReference
-                })
-            }
-
-            logger.debug('Résolution des IDs terminée avec succès', {
-                inventoryId: inventoryId.value,
-                accountId: accountId.value,
-                warehouseId: warehouseId.value
-            })
         } catch (error) {
-            logger.error('Erreur lors de la résolution des IDs de contexte', error)
             throw error
         }
     }
@@ -677,144 +1067,78 @@ export function usePlanning(options?: PlanningOptions) {
 
     /**
      * Charger les jobs pour l'inventaire et l'entrepôt actuels
-     *
-     * @param params - Paramètres DataTable standard (pagination, tri, filtres)
+     * En mode client-side : charge toutes les données sans pagination
      */
-    const loadJobs = async (params?: StandardDataTableParams | LocationDataTableParams) => {
+    const loadJobs = async (params?: QueryModel) => {
         if (!inventoryId.value || !warehouseId.value) {
-            logger.warn('Impossible de charger les jobs, IDs manquants')
             return
         }
 
+        jobsLoading.value = true
         try {
-            // Utiliser les paramètres fournis ou construire à partir des valeurs actuelles
-            let finalParams: StandardDataTableParams
-            if (params && 'start' in params && 'length' in params) {
-                // C'est déjà StandardDataTableParams
-                finalParams = params as StandardDataTableParams
-            } else {
-                // Construire depuis les valeurs actuelles
-                finalParams = {
-                    draw: jobsCurrentPage.value || 1,
-                    start: ((jobsCurrentPage.value || 1) - 1) * jobsPageSize.value,
-                    length: jobsPageSize.value
-                }
+            // Mode server-side : utiliser les paramètres par défaut ou ceux passés
+            const finalParams: QueryModel = params || {
+                page: 1,
+                pageSize: 20, // Taille de page normale comme dans useInventoryManagement.ts
+                sort: [],
+                filters: {},
+                search: '',
+                customParams: jobsCustomParams.value
             }
-
-            // S'assurer que length et start sont bien définis
-            if (!finalParams.length) {
-                finalParams.length = jobsPageSize.value
-            }
-            if (finalParams.start === undefined) {
-                finalParams.start = ((jobsCurrentPage.value || 1) - 1) * jobsPageSize.value
-            }
-
-            logger.debug('Chargement des jobs avec paramètres DataTable:', {
-                inventoryId: inventoryId.value,
-                warehouseId: warehouseId.value,
-                pageSize: jobsPageSize.value,
-                params: finalParams
-            })
 
             await jobStore.fetchJobs(inventoryId.value, warehouseId.value, finalParams)
             await nextTick()
 
-            logger.debug('Jobs mis à jour dans le store', {
-                count: jobStore.jobs.length,
-                sample: jobStore.jobs.slice(0, 2).map(j => ({ id: j.id, ref: j.reference }))
-            })
+            // Mettre à jour les données transformées
+            updateTransformedJobs()
+            updateAvailableLocations()
+            jobsKey.value++
         } catch (error) {
-            logger.error('Erreur lors du chargement des jobs', error)
-            await alertService.error({ text: 'Erreur lors du chargement des jobs' })
+            jobsError.value = 'Erreur lors du chargement des jobs'
+            await alertService.error({ text: jobsError.value })
+        } finally {
+            jobsLoading.value = false
         }
     }
 
     /**
      * Charger les locations disponibles pour l'entrepôt actuel
-     *
-     * @param params - Paramètres DataTable standard (pagination, tri, filtres)
+     * En mode client-side : charge toutes les données sans pagination
      */
-    const loadLocations = async (params?: StandardDataTableParams | LocationDataTableParams) => {
+    const loadLocations = async (params?: QueryModel) => {
         if (!accountId.value || !inventoryId.value || !warehouseId.value) {
-            logger.warn('Impossible de charger les locations, IDs manquants', {
-                accountId: accountId.value,
-                inventoryId: inventoryId.value,
-                warehouseId: warehouseId.value
-            })
             return
         }
 
+        locationsLoading.value = true
         try {
-            // Utiliser les paramètres fournis ou construire à partir des valeurs actuelles
-            const finalParams: LocationDataTableParams = params || {
-                draw: locationsCurrentPage.value || 1,
-                start: ((locationsCurrentPage.value || 1) - 1) * locationsPageSize.value,
-                length: locationsPageSize.value
+            // Mode server-side : utiliser les paramètres par défaut ou ceux passés
+            const finalParams: QueryModel = params || {
+                page: 1,
+                pageSize: 20, // Taille de page normale comme dans useInventoryManagement.ts
+                sort: [],
+                filters: {},
+                search: '',
+                customParams: locationsCustomParams.value
             }
 
-            // S'assurer que length est bien défini
-            if (!finalParams.length) {
-                finalParams.length = locationsPageSize.value
-            }
-
-            logger.debug('Chargement des locations avec paramètres DataTable:', {
-                accountId: accountId.value,
-                inventoryId: inventoryId.value,
-                warehouseId: warehouseId.value,
-                pageSize: locationsPageSize.value,
-                params: finalParams
-            })
-
-            await locationStore.fetchUnassignedLocations(accountId.value, inventoryId.value, warehouseId.value, finalParams)
+            await locationStore.fetchUnassignedLocations(
+                accountId.value,
+                inventoryId.value,
+                warehouseId.value,
+                finalParams
+            )
             await nextTick()
 
-            logger.debug('Locations mises à jour dans le store', {
-                count: locationStore.locations.length,
-                sample: locationStore.locations.slice(0, 2).map(l => ({ id: l.id, ref: l.reference }))
-            })
+            updateMappedLocations()
+            updateAvailableLocations()
+            selectFieldKey.value++
         } catch (error) {
-            logger.error('Erreur lors du chargement des locations', error)
-            await alertService.error({ text: 'Erreur lors du chargement des locations' })
+            locationsError.value = 'Erreur lors du chargement des locations'
+            await alertService.error({ text: locationsError.value })
+        } finally {
+            locationsLoading.value = false
         }
-    }
-
-    /**
-     * Rafraîchir les jobs
-     *
-     * @param params - Paramètres DataTable optionnels
-     */
-    const refreshJobs = async (params?: LocationDataTableParams) => {
-        await loadJobs(params)
-    }
-
-    /**
-     * Rafraîchir les locations
-     *
-     * @param params - Paramètres DataTable optionnels
-     */
-    const refreshLocations = async (params?: LocationDataTableParams) => {
-        await loadLocations(params)
-    }
-
-    /**
-     * Réinitialiser la DataTable des jobs (tri, filtres, recherche)
-     */
-    const resetJobsDataTable = async () => {
-        setJobsSortModel([])
-        resetJobsFilters()
-        setJobsSearch('')
-        await refreshJobs()
-    }
-
-    /**
-     * Réinitialiser la DataTable des locations (tri, filtres, recherche, page)
-     */
-    const resetLocationsDataTable = async () => {
-        setLocationsSortModel([])
-        resetLocationsFilters()
-        setLocationsSearch('')
-        setLocationsPage(1)
-        await refreshLocations()
     }
 
     /**
@@ -822,8 +1146,8 @@ export function usePlanning(options?: PlanningOptions) {
      */
     const refreshData = async () => {
         await Promise.all([
-            resetJobsDataTable(),
-            resetLocationsDataTable()
+            loadJobs(),
+            loadLocations()
         ])
     }
 
@@ -857,12 +1181,12 @@ export function usePlanning(options?: PlanningOptions) {
 
                 await alertService.success({ text: 'Job créé avec succès' })
                 resetAllSelections()
+                // Rafraîchir complètement (nouveau job créé, pas besoin d'invalider le cache)
                 await refreshData()
                 return true
             }
             return false
         } catch (error) {
-            logger.error('Erreur lors de la création du job', error)
             await alertService.error({ text: 'Erreur lors de la création du job' })
             return false
         }
@@ -887,13 +1211,46 @@ export function usePlanning(options?: PlanningOptions) {
                 const jobIds = selectedJobs.value.map(id => parseInt(id))
                 await jobStore.validateJob(jobIds)
 
+                // Invalider le cache pour tous les jobs validés
+                jobIds.forEach(jobId => invalidateJobCache(Number(jobId)))
+
                 await alertService.success({ text: `${jobIds.length} job(s) validé(s) avec succès` })
                 resetAllSelections()
                 await refreshData()
             }
         } catch (error) {
-            logger.error('Erreur lors de la validation des jobs', error)
             await alertService.error({ text: 'Erreur lors de la validation des jobs' })
+        }
+    }
+
+    /**
+     * Remettre à zéro les jobs sélectionnés en masse (retour à l'état initial)
+     */
+    const bulkResetJobs = async () => {
+        if (!hasSelectedJobs.value) {
+            await alertService.warning({ text: 'Veuillez sélectionner au moins un job' })
+            return
+        }
+
+        try {
+            const result = await alertService.confirm({
+                title: 'Remettre à zéro les jobs',
+                text: `Remettre à zéro ${selectedJobs.value.length} job(s) ? Cette action les ramènera à leur état initial.`
+            })
+
+            if (result.isConfirmed) {
+                const jobIds = selectedJobs.value.map(id => parseInt(id))
+                await jobStore.jobReset(jobIds)
+
+                // Invalider le cache pour tous les jobs remis à zéro
+                jobIds.forEach(jobId => invalidateJobCache(Number(jobId)))
+
+                await alertService.success({ text: `${jobIds.length} job(s) remis à zéro avec succès` })
+                resetAllSelections()
+                await refreshData()
+            }
+        } catch (error) {
+            await alertService.error({ text: 'Erreur lors de la remise à zéro des jobs' })
         }
     }
 
@@ -916,256 +1273,123 @@ export function usePlanning(options?: PlanningOptions) {
                 const jobIds = selectedJobs.value.map(id => parseInt(id))
                 await jobStore.deleteJob(jobIds)
 
+                // Invalider le cache pour tous les jobs supprimés
+                jobIds.forEach(jobId => invalidateJobCache(Number(jobId)))
+
                 await alertService.success({ text: `${jobIds.length} job(s) supprimé(s) avec succès` })
                 resetAllSelections()
                 await refreshData()
             }
         } catch (error) {
-            logger.error('Erreur lors de la suppression des jobs', error)
             await alertService.error({ text: 'Erreur lors de la suppression des jobs' })
         }
     }
 
+    /**
+     * Désactiver les locations sélectionnées en masse
+     */
+    const bulkDeactivateLocations = async (locationIds?: number[]) => {
+        const idsToDeactivate = locationIds || selectedAvailableLocations.value.map(id => parseInt(id))
+
+        if (idsToDeactivate.length === 0) {
+            await alertService.warning({ text: 'Veuillez sélectionner au moins une location' })
+            return
+        }
+
+        try {
+            // Appeler la désactivation via le store des locations
+            await locationStore.bulkUpdateStatus(idsToDeactivate)
+
+            if (!locationIds) {
+                // Si c'est appelé depuis la sélection, réinitialiser
+                resetAllSelections()
+            }
+
+            // Rafraîchir les données complètes (jobs + locations)
+            await refreshData()
+        } catch (error) {
+            await alertService.error({ text: 'Erreur lors de la désactivation des locations' })
+        }
+    }
+
     // ===== HANDLERS DATATABLE =====
-    // Tous les handlers acceptent StandardDataTableParams directement depuis le DataTable
 
     /**
-     * Handler pour les changements de pagination des jobs
-     * Accepte QueryModel, StandardDataTableParams, RestApi, queryParams ou l'ancien format
-     *
-     * @param params - Paramètres de pagination (format configuré ou ancien format)
+     * Handlers DataTable - Désactivés car mode client-side
+     * La DataTable gère elle-même la pagination/tri/filtrage côté client
      */
-    const onJobPaginationChanged = async (params: StandardDataTableParams | { page: number; pageSize: number; start?: number; end?: number } | QueryModel | Record<string, any>) => {
+    // ===== HANDLERS DATATABLE =====
+
+    // Cache des derniers appels pour éviter les appels répétés
+    let lastJobsQueryModel: QueryModel | null = null
+    let lastLocationsQueryModel: QueryModel | null = null
+
+    /**
+     * Handler unifié pour toutes les opérations de la DataTable Jobs
+     * Utilise la ref pour identifier l'instance et éviter les conflits
+     * Évite les appels API répétés avec le même QueryModel
+     */
+    const onJobsTableEvent = async (eventType: string, queryModel: QueryModel) => {
+        // Vérifier que les IDs requis sont disponibles avant de lancer l'API
+        if (!inventoryId.value || !warehouseId.value) {
+            console.warn('[usePlanning] Jobs API not called: missing inventoryId or warehouseId')
+            return
+        }
+
+        // Vérifier si le QueryModel a changé depuis le dernier appel
+        const queryModelStr = JSON.stringify(queryModel)
+        const lastQueryModelStr = lastJobsQueryModel ? JSON.stringify(lastJobsQueryModel) : null
+
+        if (queryModelStr === lastQueryModelStr) {
+            return
+        }
+
         try {
-            // Convertir si nécessaire
-            let standardParams: StandardDataTableParams
-            // Vérifier si c'est déjà StandardDataTableParams (a start et length)
-            if ('start' in params && 'length' in params && typeof params.start === 'number' && typeof params.length === 'number') {
-                // Déjà au format StandardDataTableParams
-                standardParams = params as StandardDataTableParams
-            } else {
-                // Convertir depuis { page, pageSize }
-                const simpleParams = params as { page: number; pageSize: number }
-                // Convertir jobsSortModel de { field, direction } vers { colId, sort } pour convertToStandardDataTableParams
-                const convertedSort = (jobsSortModel.value || []).map(s => ({
-                    colId: s.field,
-                    sort: s.direction
-                }))
-
-                // Créer un QueryModel depuis les paramètres actuels
-                const queryModelData = createQueryModelFromDataTableParams({
-                    page: simpleParams.page,
-                    pageSize: simpleParams.pageSize,
-                    sort: convertedSort.map(s => ({ field: s.colId, direction: s.sort })),
-                    filters: jobsFilters.value ? Object.fromEntries(
-                        Object.entries(jobsFilters.value).map(([field, filterConfig]) => [
-                            field,
-                            {
-                                field,
-                                dataType: 'text' as const,
-                                operator: 'contains' as any,
-                                value: filterConfig.filter || filterConfig.value
-                            }
-                        ])
-                    ) : undefined,
-                    globalSearch: jobsSearchQuery.value || undefined,
-                    customParams: jobsCustomParams.value || {}
-                })
-
-                // Convertir selon le mode configuré
-                if (jobsQueryOutputMode.value === 'dataTable') {
-                standardParams = convertToStandardDataTableParams(
-                    {
-                        page: simpleParams.page,
-                        pageSize: simpleParams.pageSize,
-                        filters: jobsFilters.value || {},
-                        sort: convertedSort,
-                        globalSearch: jobsSearchQuery.value || undefined
-                    },
-                    {
-                        columns: jobsColumns.value,
-                        draw: 1,
-                        customParams: jobsCustomParams.value || {}
-                    }
-                )
-                } else {
-                    standardParams = convertJobsQueryModelToOutput(queryModelData) as StandardDataTableParams
-                }
+            // Vérifier que c'est bien la table jobs qui fait l'appel
+            if (jobsTableRef.value && typeof jobsTableRef.value === 'object') {
+                await jobStore.fetchJobs(inventoryId.value, warehouseId.value, queryModel)
+                lastJobsQueryModel = { ...queryModel } // Copier pour éviter les références
             }
-
-            const pageSize = extractPageSizeFromStandardParams(standardParams, jobsPageSize.value)
-            const page = extractPageFromStandardParams(standardParams, pageSize)
-
-            setJobsPageSize(pageSize)
-            setJobsPage(page)
-            await loadJobs(standardParams)
         } catch (error) {
-            logger.error('Erreur dans onJobPaginationChanged', error)
-            await alertService.error({ text: 'Erreur lors du changement de pagination' })
+            console.error('[usePlanning] Error in jobStore.fetchJobs:', error)
+            await alertService.error({ text: 'Erreur lors du chargement des jobs' })
         }
     }
 
     /**
-     * Handler pour les changements de tri des jobs
-     * Accepte StandardDataTableParams ou un modèle de tri simple
-     *
-     * @param params - Paramètres de tri au format standard
+     * Handler unifié pour toutes les opérations de la DataTable Locations
+     * Utilise la ref pour identifier l'instance et éviter les conflits
+     * Évite les appels API répétés avec le même QueryModel
      */
-    const onJobSortChanged = async (params: StandardDataTableParams | any) => {
-        try {
-            let standardParams: StandardDataTableParams
-            let sortModel: Array<{ field: string; direction: 'asc' | 'desc' }>
+    const onLocationsTableEvent = async (eventType: string, queryModel: QueryModel) => {
+        // Vérifier que les IDs requis sont disponibles avant de lancer l'API
+        if (!accountId.value || !inventoryId.value || !warehouseId.value) {
+            console.warn('[usePlanning] Locations API not called: missing accountId, inventoryId or warehouseId')
+            return
+        }
 
-            // Si c'est déjà StandardDataTableParams
-            if (isStandardDataTableParams(params)) {
-                standardParams = params
-                // Extraire le sortModel au format { field, direction } pour useBackendDataTable
-                sortModel = extractSortFromStandardParams(params, jobsColumns.value)
-            } else {
-                // Sinon, construire StandardDataTableParams depuis les paramètres actuels
-                standardParams = convertToStandardDataTableParams(
-                    {
-                        page: jobsCurrentPage.value || 1,
-                        pageSize: jobsPageSize.value || 20,
-                        filters: jobsFilters.value || {},
-                        sort: params.sortModel || [],
-                        globalSearch: jobsSearchQuery.value || undefined
-                    },
-                    {
-                        columns: jobsColumns.value,
-                        draw: 1,
-                        customParams: jobsCustomParams.value || {}
-                    }
+        // Vérifier si le QueryModel a changé depuis le dernier appel
+        const queryModelStr = JSON.stringify(queryModel)
+        const lastQueryModelStr = lastLocationsQueryModel ? JSON.stringify(lastLocationsQueryModel) : null
+
+        if (queryModelStr === lastQueryModelStr) {
+            return
+        }
+
+        try {
+            // Vérifier que c'est bien la table locations qui fait l'appel
+            if (availableLocationsTableRef.value && typeof availableLocationsTableRef.value === 'object') {
+                await locationStore.fetchUnassignedLocations(
+                    accountId.value,
+                    inventoryId.value,
+                    warehouseId.value,
+                    queryModel
                 )
-                // Si params.sortModel est au format { colId, sort }, convertir en { field, direction }
-                if (params.sortModel && Array.isArray(params.sortModel) && params.sortModel.length > 0) {
-                    sortModel = params.sortModel.map((s: any) => ({
-                        field: s.colId || s.field || '',
-                        direction: s.sort || s.direction || 'asc'
-                    })).filter((s: any) => s.field)
-                } else {
-                    sortModel = []
-                }
+                lastLocationsQueryModel = { ...queryModel } // Copier pour éviter les références
             }
-
-            setJobsSortModel(sortModel)
-            await loadJobs(standardParams)
         } catch (error) {
-            logger.error('Erreur dans onJobSortChanged', error)
-            await alertService.error({ text: 'Erreur lors du changement de tri' })
-        }
-    }
-
-    /**
-     * Handler pour les changements de filtre des jobs
-     * Simplifié - accepte uniquement StandardDataTableParams
-     *
-     * @param filterModel - Paramètres de filtre au format standard
-     */
-    const onJobFilterChanged = async (filterModel: StandardDataTableParams) => {
-        try {
-            // Extraire les filtres depuis les paramètres standard
-            const extractedFilters = extractFiltersFromStandardParams(filterModel, jobsColumns.value)
-
-            // Synchroniser avec useBackendDataTable pour que le bouton de compteur s'affiche
-            setJobsFilters(extractedFilters)
-
-            // Charger les données avec les nouveaux filtres
-            await loadJobs(filterModel)
-        } catch (error) {
-            logger.error('Erreur dans onJobFilterChanged', error)
-            await alertService.error({ text: 'Erreur lors du changement de filtre' })
-        }
-    }
-
-    /**
-     * Handler pour les changements de pagination des locations
-     * Accepte StandardDataTableParams (émis par DataTable quand serverSidePagination est activé)
-     *
-     * @param params - Paramètres de pagination au format StandardDataTableParams
-     */
-    const onLocationPaginationChanged = async (params: StandardDataTableParams | { page: number; pageSize: number; start?: number; end?: number }) => {
-        try {
-            // Convertir si nécessaire
-            let standardParams: StandardDataTableParams
-            // Vérifier si c'est déjà StandardDataTableParams (a start et length)
-            if ('start' in params && 'length' in params && typeof params.start === 'number' && typeof params.length === 'number') {
-                // Déjà au format StandardDataTableParams
-                standardParams = params as StandardDataTableParams
-            } else {
-                // Convertir depuis { page, pageSize }
-                const simpleParams = params as { page: number; pageSize: number }
-                // Convertir locationsSortModel de { field, direction } vers { colId, sort } pour convertToStandardDataTableParams
-                const convertedSort = (locationsSortModel.value || []).map(s => ({
-                    colId: s.field,
-                    sort: s.direction
-                }))
-
-                standardParams = convertToStandardDataTableParams(
-                    {
-                        page: simpleParams.page,
-                        pageSize: simpleParams.pageSize,
-                        filters: locationsFilters.value || {},
-                        sort: convertedSort,
-                        globalSearch: locationsSearchQuery.value || undefined
-                    },
-                    {
-                        columns: locationsColumns.value,
-                        draw: 1,
-                        customParams: locationsCustomParams.value || {}
-                    }
-                )
-            }
-
-            const pageSize = extractPageSizeFromStandardParams(standardParams, locationsPageSize.value)
-            const page = extractPageFromStandardParams(standardParams, pageSize)
-
-            setLocationsPageSize(pageSize)
-            setLocationsPage(page)
-            await loadLocations(standardParams)
-        } catch (error) {
-            logger.error('Erreur dans onLocationPaginationChanged', error)
-            await alertService.error({ text: 'Erreur lors du changement de pagination' })
-        }
-    }
-
-    /**
-     * Handler pour les changements de tri des locations
-     * Simplifié - accepte uniquement StandardDataTableParams
-     *
-     * @param params - Paramètres de tri au format standard
-     */
-    const onLocationSortChanged = async (params: StandardDataTableParams) => {
-        try {
-            // Extraire le sortModel au format { field, direction } pour useBackendDataTable
-            const sortModel = extractSortFromStandardParams(params, locationsColumns.value)
-            setLocationsSortModel(sortModel)
-            await loadLocations(params)
-        } catch (error) {
-            logger.error('Erreur dans onLocationSortChanged', error)
-            await alertService.error({ text: 'Erreur lors du changement de tri' })
-        }
-    }
-
-    /**
-     * Handler pour les changements de filtre des locations
-     * Simplifié - accepte uniquement StandardDataTableParams
-     *
-     * @param filterModel - Paramètres de filtre au format standard
-     */
-    const onLocationFilterChanged = async (filterModel: StandardDataTableParams) => {
-        try {
-            // Extraire les filtres depuis les paramètres standard
-            const extractedFilters = extractFiltersFromStandardParams(filterModel, locationsColumns.value)
-
-            // Synchroniser avec useBackendDataTable pour que le bouton de compteur s'affiche
-            setLocationsFilters(extractedFilters)
-
-            // Charger les données avec les nouveaux filtres
-            await loadLocations(filterModel as LocationDataTableParams)
-        } catch (error) {
-            logger.error('Erreur dans onLocationFilterChanged', error)
-            await alertService.error({ text: 'Erreur lors du changement de filtre' })
+            console.error('[usePlanning] Error in locationStore.fetchUnassignedLocations:', error)
+            await alertService.error({ text: 'Erreur lors du chargement des locations' })
         }
     }
 
@@ -1228,14 +1452,19 @@ export function usePlanning(options?: PlanningOptions) {
 
     /**
      * Initialiser le composable
-     * Résout les IDs de contexte et charge les données initiales
+     * Résout les IDs de contexte uniquement, sans charger les données
+     *
+     * Les données seront chargées par le DataTable lors de la restauration des paramètres sauvegardés
+     * ou avec des paramètres par défaut si aucun paramètre n'est sauvegardé.
+     *
+     * Cela permet au DataTable de restaurer les filtres, tri, recherche et taille de page sauvegardés
+     * et de charger les données avec ces paramètres au lieu de les écraser avec des valeurs par défaut.
      */
     const initialize = async () => {
-        if (isInitialized.value) return
+        if (isInitialized.value || isInitializing.value) return
 
+        isInitializing.value = true
         try {
-            logger.debug('Initialisation du planning', { inventoryReference, warehouseReference })
-
             // Vérifier les références
             if (!inventoryReference || !warehouseReference) {
                 throw new Error('Références d\'inventaire ou d\'entrepôt manquantes')
@@ -1244,40 +1473,44 @@ export function usePlanning(options?: PlanningOptions) {
             // Résoudre les IDs
             await resolveContextIds()
 
-            // Vérifier que tous les IDs sont résolus avant de charger les données
+            // Vérifier que tous les IDs sont résolus
             if (!inventoryId.value || !warehouseId.value) {
                 throw new Error(`IDs de contexte manquants après résolution - inventaire: ${inventoryId.value}, entrepôt: ${warehouseId.value}`)
             }
 
-            if (!accountId.value) {
-                logger.warn('ID de compte non résolu, le chargement des locations peut échouer', {
-                    inventoryId: inventoryId.value,
-                    accountId: accountId.value
-                })
-            }
-
-            // Charger les données initiales
-            logger.debug('Chargement des données initiales (jobs et locations)', {
-                inventoryId: inventoryId.value,
-                warehouseId: warehouseId.value,
-                accountId: accountId.value
-            })
-            await refreshData()
+            // NE PAS charger les données ici - elles seront chargées depuis la vue
+            // pour éviter les appels multiples et les conflits avec les DataTables
 
             isInitialized.value = true
-            logger.debug('Initialisation du planning terminée avec succès', {
-                inventoryId: inventoryId.value,
-                warehouseId: warehouseId.value,
-                accountId: accountId.value,
-                jobsCount: transformedJobs.value.length,
-                locationsCount: mappedLocations.value.length
-            })
         } catch (error) {
-            logger.error('Erreur lors de l\'initialisation du planning', error)
             await alertService.error({ text: 'Erreur lors de l\'initialisation du planning' })
+        } finally {
+            isInitializing.value = false
         }
     }
 
+    // ===== FONCTIONS UTILITAIRES =====
+
+    /**
+     * Formater le type d'un fichier
+     */
+    const getFileType = (fileName: string): string => {
+        const extension = fileName.split('.').pop()?.toUpperCase()
+        return extension ? `Fichier ${extension}` : 'Fichier inconnu'
+    }
+
+    /**
+     * Formater une date en français
+     */
+    const formatDate = (date: string | Date): string => {
+        if (!date) return ''
+        const d = new Date(date)
+        return d.toLocaleDateString('fr-FR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        })
+    }
 
     // ===== ÉTAT EXPANSION JOBS =====
 
@@ -1297,24 +1530,6 @@ export function usePlanning(options?: PlanningOptions) {
         isSubmitting: false
     }))
 
-    /**
-     * État de pagination pour compatibilité
-     */
-    const paginationState = computed(() => ({
-        currentPage: jobsCurrentPage.value,
-        pageSize: jobsPageSize.value,
-        sortBy: '',
-        sortOrder: 'asc' as 'asc' | 'desc'
-    }))
-
-    /**
-     * État des filtres pour compatibilité
-     */
-    const filterState = computed(() => ({
-        sortModel: jobsSortModel.value || [],
-        filterModel: {},
-        locationSearchQuery: locationsSearchQuery.value || ''
-    }))
 
     /**
      * Indicateur de disponibilité de jobs
@@ -1335,53 +1550,39 @@ export function usePlanning(options?: PlanningOptions) {
     const adaptedStoreJobsColumns = jobsColumns
     const adaptedAvailableLocationColumns = locationsColumns
 
+    // ===== GESTION DES MODALS =====
+
+    /**
+     * Ouvrir la modal d'ajout d'emplacements à un job
+     */
+    const openAddToJobModal = () => {
+        if (planningState.value.selectedAvailable.length === 0) {
+            return
+        }
+        selectedJobForModal.value = null
+        showAddToJobModal.value = true
+    }
+
+    /**
+     * Fermer la modal d'ajout d'emplacements à un job
+     */
+    const closeAddToJobModal = () => {
+        showAddToJobModal.value = false
+        selectedJobForModal.value = null
+    }
+
+    /**
+     * Confirmer l'ajout des emplacements au job sélectionné
+     */
+    const confirmAddToJob = async () => {
+        if (!selectedJobForModal.value) {
+            return
+        }
+        await onSelectJobForLocation(selectedJobForModal.value)
+        closeAddToJobModal()
+    }
+
     // ===== MÉTHODES POUR COMPATIBILITÉ =====
-
-    /**
-     * Appliquer des filtres aux jobs (pour compatibilité)
-     * Désormais, le DataTable appelle directement onJobFilterChanged avec StandardDataTableParams
-     */
-    const applyJobFilters = async (filterModel: StandardDataTableParams) => {
-        await onJobFilterChanged(filterModel)
-    }
-
-    /**
-     * Appliquer des filtres aux locations (pour compatibilité)
-     * Désormais, le DataTable appelle directement onLocationFilterChanged avec StandardDataTableParams
-     */
-    const applyLocationFilters = async (filterModel: StandardDataTableParams) => {
-        await onLocationFilterChanged(filterModel)
-    }
-
-    /**
-     * Handler pour la recherche globale des jobs
-     * Le DataTable gère maintenant la recherche globale via global-search-changed qui émet StandardDataTableParams
-     *
-     * @param searchParams - Paramètres de recherche au format standard
-     */
-    const onJobSearchChanged = async (searchParams: StandardDataTableParams) => {
-        try {
-            await loadJobs(searchParams)
-        } catch (error) {
-            logger.error('Erreur dans onJobSearchChanged', error)
-            await alertService.error({ text: 'Erreur lors de la recherche' })
-        }
-    }
-
-    /**
-     * Handler pour la recherche globale des locations
-     * Le DataTable gère maintenant la recherche globale via global-search-changed qui émet StandardDataTableParams
-     *
-     * @param searchParams - Paramètres de recherche au format standard
-     */
-    const onLocationSearchChanged = async (searchParams: StandardDataTableParams) => {
-        try {
-            await loadLocations(searchParams as LocationDataTableParams)
-        } catch (error) {
-            logger.error('Erreur dans onLocationSearchChanged', error)
-            await alertService.error({ text: 'Erreur lors de la recherche' })
-        }
-    }
 
     /**
      * Mettre à jour la sélection
@@ -1419,15 +1620,6 @@ export function usePlanning(options?: PlanningOptions) {
         selectedJobs.value = []
     }
 
-    /**
-     * Mettre à jour la pagination
-     *
-     * @param newState - Nouvel état de pagination
-     */
-    const updatePagination = (newState: Partial<{ currentPage: number; pageSize: number; sortBy: string; sortOrder: 'asc' | 'desc' }>) => {
-        if (newState.currentPage) setJobsPage(newState.currentPage)
-        if (newState.pageSize) setJobsPageSize(newState.pageSize)
-    }
 
     /**
      * Mettre à jour les filtres
@@ -1464,12 +1656,14 @@ export function usePlanning(options?: PlanningOptions) {
                 const locationIds = selectedAvailableLocations.value.map(id => parseInt(id))
                 await jobStore.addLocationToJob(jobId, locationIds)
 
+                // Invalider le cache pour ce job car ses locations ont changé
+                invalidateJobCache(Number(jobId))
+
                 await alertService.success({ text: 'Emplacements ajoutés avec succès' })
                 resetAllSelections()
                 await refreshData()
             }
         } catch (error) {
-            logger.error('Erreur lors de l\'ajout d\'emplacements au job', error)
             await alertService.error({ text: 'Erreur lors de l\'ajout d\'emplacements au job' })
         }
     }
@@ -1492,7 +1686,7 @@ export function usePlanning(options?: PlanningOptions) {
      * Wrapper pour le rafraîchissement des locations
      */
     const onRefreshLocations = async () => {
-        await resetLocationsDataTable()
+        await loadLocations()
     }
 
     /**
@@ -1502,40 +1696,6 @@ export function usePlanning(options?: PlanningOptions) {
         await refreshData()
     }
 
-    /**
-     * Handler pour les filtres de la table imbriquée
-     *
-     * @param filterModel - Modèle de filtres (StandardDataTableParams)
-     */
-    const onNestedTableFilterChanged = async (filterModel: StandardDataTableParams | Record<string, { filter: string }>) => {
-        // Si c'est StandardDataTableParams, appeler directement
-        if (isStandardDataTableParams(filterModel)) {
-            await onJobFilterChanged(filterModel)
-        } else {
-            // Sinon, convertir via onJobFilterChanged qui gère les deux formats
-            await onJobFilterChanged(filterModel as any)
-        }
-    }
-
-    // ===== HANDLERS DATATABLE SIMPLIFIÉS =====
-
-    /**
-     * Handler pour les changements de filtres des jobs
-     * Le filterState du DataTable est déjà mis à jour dans handleFilterChanged du DataTable
-     * Ici, on appelle simplement le handler du composable pour traiter les filtres côté serveur
-     */
-    const handleJobFilterChanged = async (filterModel: StandardDataTableParams | any) => {
-        await onJobFilterChanged(filterModel as StandardDataTableParams)
-    }
-
-    /**
-     * Handler pour les changements de filtres des locations
-     * Le filterState du DataTable est déjà mis à jour dans handleFilterChanged du DataTable
-     * Ici, on appelle simplement le handler du composable pour traiter les filtres côté serveur
-     */
-    const handleLocationFilterChanged = async (filterModel: StandardDataTableParams | any) => {
-        await onLocationFilterChanged(filterModel as StandardDataTableParams)
-    }
 
     // ===== MÉTHODES UTILITAIRES =====
 
@@ -1565,7 +1725,6 @@ export function usePlanning(options?: PlanningOptions) {
             // TODO: Implémenter la logique de suppression d'emplacement
             await refreshData()
         } catch (error) {
-            logger.error('Erreur lors de la suppression de l\'emplacement', error)
             await alertService.error({ text: 'Erreur lors de la suppression de l\'emplacement' })
         }
     }
@@ -1612,11 +1771,14 @@ export function usePlanning(options?: PlanningOptions) {
 
     // ===== WATCHERS =====
 
+
+
     /**
      * Flags pour éviter les boucles infinies lors de la réinitialisation des sélections
      */
     let isResettingSelections = false
     let isInitialMount = true
+
 
     /**
      * Watcher pour surveiller les changements de sélection
@@ -1670,157 +1832,151 @@ export function usePlanning(options?: PlanningOptions) {
         })
     }
 
-    // Initialiser au montage
-    onMounted(() => {
+    /**
+     * Initialisation complète avec chargement des données
+     */
+    const initializeWithData = async () => {
+        // Initialiser le composable (résout les IDs)
+        await initialize()
+
+        // Charger les données maintenant que les IDs sont disponibles
+        await loadJobs()
+        await loadLocations()
+
+        // Initialiser les données transformées de manière synchrone
+        updateAllTransformedDataSync()
+
+        // Marquer les données comme chargées
+        isDataLoaded.value = true
+
         selectedAvailableLocations.value = []
         selectedJobs.value = []
+    }
+
+    // Initialiser au montage
+    onMounted(async () => {
+        // Attendre un tick pour laisser les composants se monter
+        await nextTick()
+
+        // Initialisation complète avec données
+        await initializeWithData()
+
         setupJobExpansion()
-        void initialize()
     })
+
+    // ===== EXPORT HANDLERS =====
+
+    // ===== FONCTIONS D'EXPORT SIMPLIFIÉES =====
+
+    const handleLocationExportCsv = async () => {
+        try {
+            await alertService.success({ text: 'Export CSV - Fonctionnalité à implémenter' })
+        } catch (error: any) {
+            alertService.error({ text: 'Erreur lors de l\'export CSV' })
+        }
+    }
+
+    const handleLocationExportExcel = async () => {
+        try {
+            await alertService.success({ text: 'Export Excel - Fonctionnalité à implémenter' })
+        } catch (error: any) {
+            alertService.error({ text: 'Erreur lors de l\'export Excel' })
+        }
+    }
 
     // ===== RETURN =====
 
     return {
-        // État
-        inventoryId: computed(() => inventoryId.value),
-        accountId: computed(() => accountId.value),
-        warehouseId: computed(() => warehouseId.value),
-        inventoryReference,
-        warehouseReference,
-        isInitialized,
-        loading,
+        // Données
+        jobs,
+        locations,
+        loadJobs,
+        loadLocations,
 
-        // États pour compatibilité
-        planningState,
-        paginationState,
-        filterState,
-
-        // Données Jobs
-        jobs: transformedJobs,
+        // États
         jobsLoading,
-        jobsCurrentPage,
-        jobsPageSize,
-
-        // QueryModel Jobs
-        jobsQueryModel: computed(() => jobsQueryModelRef.value),
-        jobsQueryOutputMode: computed(() => jobsQueryOutputMode.value),
-        convertJobsQueryModelToOutput,
-
-        // QueryModel Locations (non implémenté pour l'instant)
-        locationsQueryModel: computed(() => null),
-        locationsQueryOutputMode: computed(() => 'queryParams' as const),
-        convertLocationsQueryModelToOutput: () => ({}),
-        jobsSearchQuery,
-        jobsSortModel,
-        jobsFilters, // Exposer les filtres pour synchronisation avec DataTable
-        jobsPagination: jobsPaginationComputed,
-        jobsTotalItems: computed(() => jobStore.totalCount || 0),
-        jobsColumns,
-        jobsActions,
-
-        // Données Locations
-        locations: mappedLocations,
-        availableLocations,
         locationsLoading,
-        locationsCurrentPage,
-        locationsPageSize,
-        locationsSearchQuery,
-        locationsSortModel,
-        locationsFilters, // Exposer les filtres pour synchronisation avec DataTable
-        locationsPagination: locationsPaginationComputed,
-        locationsTotalItems: computed(() => locationStore.totalCount || 0),
-        locationsColumns,
+        jobsError,
+        locationsError,
 
-        // Sélections
+        // Colonnes
+        adaptedStoreJobsColumns,
+        adaptedAvailableLocationColumns,
+
+        // Actions
+        jobsActions,
+        locationsActions,
+
+        // Handlers DataTable (isolés par instance)
+        onJobsTableEvent,
+        onLocationsTableEvent,
+        onAvailableSelectionChanged,
+        onJobSelectionChanged,
+
+
+        // Sélections et actions
         selectedAvailableLocations,
         selectedJobs,
         hasSelectedLocations,
         hasSelectedJobs,
-
-        // Computed additionnels
-        hasAvailableJobs,
+        selectedJobsCount,
         jobSelectOptions,
 
-        // Colonnes adaptées
-        adaptedStoreJobsColumns,
-        adaptedAvailableLocationColumns,
-
-        // Méthodes DataTable Jobs
-        setJobsPage,
-        setJobsPageSize,
-        setJobsSearch,
-        setJobsSortModel,
-        setJobsFilters,
-        resetJobsFilters,
-        refreshJobs,
-
-        // Méthodes DataTable Locations
-        setLocationsPage,
-        setLocationsPageSize,
-        setLocationsSearch,
-        setLocationsSortModel,
-        setLocationsFilters,
-        resetLocationsFilters,
-        refreshLocations,
-
-        // Actions
+        // Actions principales
         createJobFromSelectedLocations,
         bulkValidateJobs,
+        bulkResetJobs,
         bulkDeleteJobs,
-        refreshData,
-        initialize,
-        resetJobsDataTable,
-        resetLocationsDataTable,
-
-        // Actions pour compatibilité
-        applyJobFilters,
-        applyLocationFilters,
-        updateSelection,
-        clearSelection,
-        resetAllSelections,
-        updatePagination,
-        updateFilters,
-
-        // Handlers DataTable
-        onJobPaginationChanged,
-        onJobSortChanged,
-        onJobFilterChanged,
-        onLocationPaginationChanged,
-        onLocationSortChanged,
-        onLocationFilterChanged,
-        onAvailableSelectionChanged,
-        onJobSelectionChanged,
+        bulkDeactivateLocations,
         onSelectJobForLocation,
-        onBulkValidate,
-        onReturnSelectedJobs,
-        onRefreshLocations,
-        onRefreshData,
-        onNestedTableFilterChanged,
 
-        // Handlers simplifiés pour la vue
-        handleJobFilterChanged,
-        handleLocationFilterChanged,
+        // Navigation
+        handleGoToInventoryDetail,
+        handleGoToAffectation,
 
-        // Computed pour la vue
-        selectedJobsCount,
-        jobsCustomParams,
-        locationsCustomParams,
 
-        // Références DataTable
+        // État du planning
+        planningState,
+
+        // Interface et états UI
+        isDataLoaded,
+
+        // Tooltips
+        showStatusLegend,
+        statusLegendTooltip,
+        tooltipElement,
+        tooltipStyle,
+        showStatusTooltip,
+        hideStatusTooltip,
+        positionStatusTooltip,
+
+        // Boutons d'actions
+        navigationButtons,
+        jobsActionButtons,
+        locationsActionButtons,
+
+        // Gestion des modals
+        showAddToJobModal,
+        selectedJobForModal,
+        openAddToJobModal,
+        closeAddToJobModal,
+        confirmAddToJob,
+
+        // Initialisation
+        initializeWithData,
+
+        // Fonctions utilitaires
+        getFileType,
+        formatDate,
+
+        // Références
         availableLocationsTableRef,
         jobsTableRef,
         availableLocationsKey,
         jobsKey,
-        selectFieldKey,
 
-        // Méthodes utilitaires
-        resetDataTableSelections,
-        removeLocationFromNestedTable,
-        createSingleJob,
-        onBulkValidateHandler,
-
-        // Navigation
-        handleGoToInventoryDetail,
-        handleGoToAffectation
+        // Métadonnées de pagination
+        jobPaginationMetadata,
+        locationPaginationMetadata
     }
 }

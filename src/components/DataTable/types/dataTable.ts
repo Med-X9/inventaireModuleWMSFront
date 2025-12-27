@@ -90,6 +90,39 @@ export interface FilterConfig {
         pattern?: string
         required?: boolean
     }
+    /** Champ de la colonne (pour les groupes de filtres) */
+    field?: string
+}
+
+/**
+ * Type de logique pour combiner les filtres dans un groupe
+ */
+export type FilterLogic = 'AND' | 'OR'
+
+/**
+ * Groupe de filtres avec logique de combinaison
+ */
+export interface FilterGroup {
+    /** ID unique du groupe */
+    id: string
+    /** Logique de combinaison (AND ou OR) */
+    logic: FilterLogic
+    /** Filtres individuels dans ce groupe */
+    filters: Array<FilterConfig & { id: string }>
+    /** Sous-groupes (pour imbrication) */
+    groups?: FilterGroup[]
+}
+
+/**
+ * Configuration complète des filtres avec groupes
+ */
+export interface AdvancedFilterConfig {
+    /** Logique principale pour combiner les groupes */
+    rootLogic: FilterLogic
+    /** Groupes de filtres */
+    groups: FilterGroup[]
+    /** Filtres individuels au niveau racine */
+    filters?: Array<FilterConfig & { id: string }>
 }
 
 /**
@@ -132,6 +165,19 @@ export interface DataTableColumn<T = Record<string, unknown>> {
     flex?: number
     /** Position de la colonne (pour le drag & drop) */
     position?: number
+    /** Permettre le retour à la ligne dans cette colonne (évite scroll horizontal) */
+    allowWrap?: boolean
+    /** Priorité d'affichage (colonnes avec priorité élevée restent visibles) - Plus élevé = plus important */
+    priority?: number
+    /** Largeur minimale relative (en pourcentage de l'espace disponible) */
+    minWidthPercent?: number
+    /** Breakpoints responsive : colonne visible à partir de cette largeur (ex: 'sm', 'md', 'lg', 'xl') */
+    responsive?: {
+        /** Masquer la colonne en dessous de ce breakpoint */
+        hideBelow?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl'
+        /** Afficher la colonne uniquement au-dessus de ce breakpoint */
+        showAbove?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl'
+    }
     /** Configuration des détails */
     detailConfig?: DetailConfig
     /** Formateur personnalisé */
@@ -178,6 +224,20 @@ export interface DataTableColumn<T = Record<string, unknown>> {
         pattern?: string
         custom?: (value: any) => boolean | string
     }
+    /** Configuration d'agrégation pour le footer (sum, avg, min, max, count) */
+    aggregation?: {
+        type: 'sum' | 'avg' | 'min' | 'max' | 'count' | 'custom'
+        label?: string
+        formatter?: (value: any) => string
+        customAggregator?: (values: any[]) => any
+    }
+    /** Configuration de colonne calculée */
+    calculated?: {
+        type: 'formula' | 'sum' | 'difference' | 'product' | 'ratio' | 'custom'
+        formula?: string
+        sourceFields?: string[]
+        customFunction?: (row: any, sourceValues: Record<string, any>) => any
+    }
     /** Actions spécifiques à la colonne */
     columnActions?: Array<{
         label: string
@@ -203,6 +263,15 @@ export interface DataTableColumn<T = Record<string, unknown>> {
         expandable?: boolean
         iconCollapsed?: string
         iconExpanded?: string
+        showCount?: boolean
+        title?: string
+        columns?: Array<{
+            field: string
+            headerName: string
+            sortable?: boolean
+            filterable?: boolean
+            width?: number
+        }>
     }
 }
 
@@ -256,7 +325,10 @@ export interface DataTableProps<T = Record<string, unknown>> {
     maxRowsForDynamicHeight?: number
     /** Affiche les détails */
     showDetails?: boolean
-    /** Callback de pagination */
+    /**
+     * @deprecated Utiliser l'événement @pagination-changed qui émet un QueryModel
+     * Callback de pagination (déprécié)
+     */
     onPaginationChanged?: (params: { page: number, pageSize: number }) => void
     /** Active la recherche globale */
     enableGlobalSearch?: boolean
@@ -274,9 +346,31 @@ export interface DataTableProps<T = Record<string, unknown>> {
     iconMap?: Record<string, any>
     /** État de chargement pour afficher le skeleton */
     loading?: boolean
+    /** État forbidden (permissions insuffisantes) */
+    forbidden?: boolean
 
-    /** Mode de sortie pour les paramètres de requête (queryModel, dataTable, restApi, queryParams) */
-    queryOutputMode?: 'queryModel' | 'dataTable' | 'restApi' | 'queryParams'
+    /** Active le click sur les lignes (désactivé par défaut) */
+    enableRowClick?: boolean
+
+    /** Configuration de l'empty state personnalisé */
+    emptyStateConfig?: {
+        title?: string
+        description?: string
+        icon?: any
+        actions?: Array<{ label: string; onClick: () => void; primary?: boolean; icon?: any }>
+    }
+
+    /** Configuration de l'état forbidden (permissions) */
+    forbiddenStateConfig?: {
+        title?: string
+        description?: string
+        icon?: any
+        actions?: Array<{ label: string; onClick: () => void; primary?: boolean; icon?: any }>
+    }
+
+    /** ⚠️ DÉPRÉCIÉ : Le DataTable utilise maintenant uniquement QueryModel selon FRONTEND_QUERYMODEL_GUIDE.md */
+    /** @deprecated Utiliser uniquement QueryModel - ce paramètre est ignoré */
+    queryOutputMode?: 'queryModel'
 
     // === FONCTIONNALITÉS AVANCÉES ===
 
@@ -341,7 +435,7 @@ export interface DataTableProps<T = Record<string, unknown>> {
     /** Paramètres personnalisés à ajouter aux paramètres DataTable standard */
     customDataTableParams?: Record<string, any>
 
-    // === FONCTIONNALITÉS AG-GRID ===
+    // === FONCTIONNALITÉS AVANCÉES ===
 
     /** Active le tri multi-colonnes */
     enableMultiSort?: boolean
@@ -366,6 +460,9 @@ export interface DataTableProps<T = Record<string, unknown>> {
         maxWidth?: number
     }
 
+    /** Nombre de colonnes visibles par défaut (min: 4, max: total des colonnes, défaut: 6) */
+    defaultVisibleColumnsCount?: number
+
     /** Active le scroll infini */
     enableInfiniteScroll?: boolean
     /** Configuration du scroll infini */
@@ -382,6 +479,11 @@ export interface DataTableProps<T = Record<string, unknown>> {
         extractUniqueValues?: (field: string, data: any[]) => any[]
         formatValue?: (value: any) => string
     }
+
+    /** Désactiver le scroll horizontal (colonnes s'adaptent automatiquement) */
+    disableHorizontalScroll?: boolean
+    /** Mode compact pour réduire les largeurs de colonnes */
+    compactMode?: boolean
 
     // === GESTION AUTOMATIQUE ===
 

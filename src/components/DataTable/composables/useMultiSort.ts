@@ -1,5 +1,5 @@
 /**
- * Composable pour gérer le tri multi-colonnes (style AG-Grid)
+ * Composable pour gérer le tri multi-colonnes
  * Permet de trier par plusieurs colonnes simultanément
  */
 

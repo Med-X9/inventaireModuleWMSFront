@@ -1,4 +1,5 @@
 import axiosInstance from '@/utils/axiosConfig';
+import type { AxiosResponse } from 'axios';
 import type {
     Job,
     CreateJobRequest,
@@ -19,6 +20,8 @@ import type {
     JobValidatedDataTableResponse
 } from '@/models/Job';
 import API from '@/api';
+import { normalizeDataTableResponse, convertUnifiedToStandardDataTable } from '@/utils/dataTableResponseNormalizer';
+import type { UnifiedDataTableResponse } from '@/utils/dataTableResponseNormalizer';
 
 export class JobService {
     private static baseUrlInventory = API.endpoints.inventory?.base
@@ -26,31 +29,138 @@ export class JobService {
     private static baseUrlWarehouse = API.endpoints.warehouse?.base;
 
     // Récupérer tous les jobs avec pagination, tri et filtres (format DataTable)
-    static async getAllByUrl(url: string): Promise<JobDataTableResponse> {
-        const response = await axiosInstance.get<JobDataTableResponse>(url);
-        return response.data;
+    static async getAllByUrl(url: string): Promise<JobDataTableResponse & { page: number; totalPages: number; pageSize: number; total: number }> {
+        const response = await axiosInstance.get<UnifiedDataTableResponse<JobTable>>(url);
+        const unifiedResponse = normalizeDataTableResponse<JobTable>(response.data);
+        const standardResponse = convertUnifiedToStandardDataTable(unifiedResponse);
+        return {
+            ...standardResponse,
+            page: unifiedResponse.page,
+            totalPages: unifiedResponse.totalPages,
+            pageSize: unifiedResponse.pageSize,
+            total: unifiedResponse.total
+        } as JobDataTableResponse & { page: number; totalPages: number; pageSize: number; total: number };
     }
 
-    // Récupérer tous les jobs avec pagination, tri et filtres (format REST API - pour compatibilité)
-    static async getAll(inventoryId: number, warehouseId: number, params?: { page?: number; page_size?: number; ordering?: string; [key: string]: any; }): Promise<JobResponse> {
-        const response = await axiosInstance.get<JobResponse>(`${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/`, { params });
-        return response.data;
+    // Récupérer tous les jobs avec pagination, tri et filtres (format FORMAT_ACTUEL.md)
+    // Le service reçoit les paramètres déjà convertis au format FORMAT_ACTUEL.md par le store
+    static async getAll(inventoryId: number, warehouseId: number, params?: Record<string, any>): Promise<JobDataTableResponse & { page: number; totalPages: number; pageSize: number; total: number }> {
+        const response = await axiosInstance.get<UnifiedDataTableResponse<JobTable>>(
+            `${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/`,
+            {
+                params: params || {}
+            }
+        );
+        const unifiedResponse = normalizeDataTableResponse<JobTable>(response.data);
+        const standardResponse = convertUnifiedToStandardDataTable(unifiedResponse);
+        return {
+            ...standardResponse,
+            page: unifiedResponse.page,
+            totalPages: unifiedResponse.totalPages,
+            pageSize: unifiedResponse.pageSize,
+            total: unifiedResponse.total
+        } as JobDataTableResponse & { page: number; totalPages: number; pageSize: number; total: number };
     }
 
-    static async getAllValidatedByUrl(url: string): Promise<JobValidatedDataTableResponse> {
-        const response = await axiosInstance.get<JobValidatedDataTableResponse>(url);
-        return response.data;
+    static async getAllValidatedByUrl(url: string): Promise<JobValidatedDataTableResponse & { page: number; totalPages: number; pageSize: number; total: number }> {
+        const response = await axiosInstance.get<UnifiedDataTableResponse<any>>(url);
+        const unifiedResponse = normalizeDataTableResponse<any>(response.data);
+        const standardResponse = convertUnifiedToStandardDataTable(unifiedResponse);
+        return {
+            ...standardResponse,
+            page: unifiedResponse.page,
+            totalPages: unifiedResponse.totalPages,
+            pageSize: unifiedResponse.pageSize,
+            total: unifiedResponse.total
+        } as JobValidatedDataTableResponse & { page: number; totalPages: number; pageSize: number; total: number };
     }
 
-    static async getAllValidated(inventoryId: number, warehouseId: number, params?: { page?: number; page_size?: number; ordering?: string; [key: string]: any; }): Promise<JobPaginatedResponse> {
-        const response = await axiosInstance.get<JobPaginatedResponse>(`${this.baseUrlJob}valid/warehouse/${warehouseId}/inventory/${inventoryId}/`, { params });
-        return response.data;
+    // Récupérer tous les jobs validés avec pagination, tri et filtres (format FORMAT_ACTUEL.md)
+    // Le service reçoit les paramètres déjà convertis au format FORMAT_ACTUEL.md par le store
+    static async getAllValidated(inventoryId: number, warehouseId: number, params?: Record<string, any>): Promise<JobValidatedDataTableResponse & { page: number; totalPages: number; pageSize: number; total: number }> {
+        // ⚠️ Validation : vérifier que les IDs sont valides (non null, non undefined, > 0)
+        if (!inventoryId || !warehouseId || inventoryId <= 0 || warehouseId <= 0) {
+            throw new Error(`IDs invalides pour getAllValidated: inventoryId=${inventoryId}, warehouseId=${warehouseId}`);
+        }
+
+        const response = await axiosInstance.get<UnifiedDataTableResponse<any>>(
+            `${this.baseUrlJob}valid/warehouse/${warehouseId}/inventory/${inventoryId}/`,
+            {
+                params: params || {}
+            }
+        );
+        const unifiedResponse = normalizeDataTableResponse<any>(response.data);
+        const standardResponse = convertUnifiedToStandardDataTable(unifiedResponse);
+        return {
+            ...standardResponse,
+            page: unifiedResponse.page,
+            totalPages: unifiedResponse.totalPages,
+            pageSize: unifiedResponse.pageSize,
+            total: unifiedResponse.total
+        } as JobValidatedDataTableResponse & { page: number; totalPages: number; pageSize: number; total: number };
     }
 
     // Récupérer les jobs avec discrepancies (nouvel endpoint)
     static async getJobsDiscrepancies(inventoryId: number, warehouseId: number, params?: { page?: number; page_size?: number; [key: string]: any; }): Promise<any> {
         const response = await axiosInstance.get(`${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/discrepancies/`, { params });
         return response.data;
+    }
+
+    /**
+     * Récupérer les jobs avec écarts groupés par ordre de comptage
+     * GET /web/api/inventory/<inventory_id>/warehouse/<warehouse_id>/jobs/discrepancies-by-counting/
+     *
+     * Réponse attendue:
+     * {
+     *   success: true,
+     *   message: "...",
+     *   data: [
+     *     {
+     *       counting_order: 3,
+     *       jobs: [{ job_id, job_reference }, ...]
+     *     },
+     *     ...
+     *   ]
+     * }
+     */
+    static async getJobsDiscrepanciesByCounting(
+        inventoryId: number,
+        warehouseId: number
+    ): Promise<Array<{ counting_order: number; jobs: Array<{ job_id: number; job_reference: string }> } | { next_counting_order: number; jobs: Array<{ job_id: number; job_reference: string; current_max_counting?: number; has_unresolved_discrepancies?: boolean; discrepancies_locations_count?: number }> }>> {
+        const response = await axiosInstance.get<{
+            success: boolean
+            message: string
+            data: any
+            errors?: string[]
+        }>(
+            `${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/discrepancies-by-counting/`
+        );
+
+        // Vérifier le format de réponse
+        if (response.data.success && response.data.data) {
+            // Nouveau format : objet unique avec next_counting_order
+            if (response.data.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data)) {
+                return [response.data.data]
+            }
+            // Ancien format : tableau d'objets avec counting_order
+            if (Array.isArray(response.data.data)) {
+                return response.data.data
+            }
+        }
+
+        // Si la réponse n'a pas le format attendu, vérifier directement response.data
+        if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+            // Nouveau format directement dans response.data
+            return [response.data]
+        }
+
+        // Si c'est un tableau, retourner tel quel
+        if (Array.isArray(response.data)) {
+            return response.data
+        }
+
+        // En cas d'erreur ou format inattendu, retourner un tableau vide
+        return []
     }
 
     // Récupérer un job par ID
@@ -89,6 +199,18 @@ export class JobService {
 
     static async jobReady(job_ids: number[]): Promise<JobReadyResponse> {
         const response = await axiosInstance.post<JobReadyResponse>(`${this.baseUrlJob}ready/`, { job_ids:  job_ids  });
+        return response.data;
+    }
+
+    static async setReady(inventoryId: number, warehouseId: number): Promise<JobReadyResponse> {
+        const response = await axiosInstance.post<JobReadyResponse>(
+            `${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/set-ready/`);
+        return response.data;
+    }
+
+    static async transferAll(inventoryId: number, warehouseId: number): Promise<JobReadyResponse> {
+        const response = await axiosInstance.post<JobReadyResponse>(
+            `${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/transfer-all/`);
         return response.data;
     }
 
@@ -182,10 +304,22 @@ export class JobService {
         return this.updateStatus(id, 'EN ATTENTE');
     }
 
-    // Lancer un comptage
+    // Lancer un comptage (ancien format - un job à la fois)
     static async launchCounting(data: {
         job_id: number;
         location_id: number;
+        session_id: number;
+    }): Promise<any> {
+        const response = await axiosInstance.post(
+            `${this.baseUrlJob}launch-counting/`,
+            data
+        );
+        return response.data;
+    }
+
+    // Lancer plusieurs comptages (nouveau format - plusieurs jobs)
+    static async launchMultipleCountings(data: {
+        jobs: number[];
         session_id: number;
     }): Promise<any> {
         const response = await axiosInstance.post(
@@ -244,6 +378,52 @@ export class JobService {
             }
         );
         return response.data;
+    }
+
+    /**
+     * Exporte les jobs validés en CSV ou Excel
+     * @param inventoryId - ID de l'inventaire
+     * @param warehouseId - ID de l'entrepôt
+     * @param params - Paramètres au format FORMAT_ACTUEL.md avec export: 'csv' ou 'excel'
+     * @returns Promise avec la réponse contenant le blob du fichier
+     */
+    static async exportValidated(
+        inventoryId: number,
+        warehouseId: number,
+        params?: Record<string, any>
+    ): Promise<AxiosResponse<Blob>> {
+        try {
+            const response = await axiosInstance.get(
+                `${this.baseUrlJob}valid/warehouse/${warehouseId}/inventory/${inventoryId}/`,
+                {
+                    params: params || {},
+                    responseType: 'blob'
+                }
+            );
+            return response;
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    /**
+     * Affectation automatique des jobs depuis les location-jobs
+     * @param inventoryId - ID de l'inventaire
+     * @returns Promise avec la réponse d'affectation automatique
+     */
+    static async autoAssignJobsFromLocationJobs(inventoryId: number): Promise<AxiosResponse<{
+        success: boolean;
+        message: string;
+        errors?: string[];
+    }>> {
+        try {
+            const response = await axiosInstance.post(
+                `${this.baseUrlInventory}${inventoryId}/auto-assign-jobs-from-location-jobs/`
+            );
+            return response;
+        } catch (error) {
+            throw error;
+        }
     }
 }
 

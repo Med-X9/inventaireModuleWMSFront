@@ -1,431 +1,209 @@
-import { ref, computed, reactive, watch, nextTick } from 'vue'
-import { logger } from '@/services/loggerService'
+/**
+ * Composable pour gérer l'édition inline du DataTable
+ *
+ * Implémentation simple pour l'édition de cellules individuelles
+ *
+ * @module useDataTableEditing
+ */
 
-export interface EditingField {
-    field: string
-    type: 'text' | 'number' | 'date' | 'select' | 'textarea' | 'boolean' | 'email' | 'url'
-    required?: boolean
-    validator?: (value: any) => boolean | string
-    options?: Array<{ label: string; value: any; disabled?: boolean }>
-    placeholder?: string
-    min?: number
-    max?: number
-    pattern?: string
-    step?: number
-    rows?: number
-    cols?: number
-}
+import { ref, computed } from 'vue'
+import type { DataTableColumn } from '../types/dataTable'
 
-export interface EditingConfig {
-    fields: EditingField[]
-    validation?: Record<string, any>
-    saveMode?: 'immediate' | 'batch'
-    autoSave?: boolean
-    autoSaveDelay?: number
-    confirmBeforeSave?: boolean
-    allowCancel?: boolean
-    showValidationErrors?: boolean
-    highlightChanges?: boolean
-}
-
-export interface EditingState {
-    isEditing: boolean
-    editingRow: any | null
-    editingField: string | null
-    originalValue: any
-    currentValue: any
-    validationErrors: Record<string, string>
-    isSaving: boolean
-    hasChanges: boolean
-    pendingChanges: Array<{
-        row: any
-        field: string
-        oldValue: any
-        newValue: any
-        timestamp: number
-    }>
-    batchMode: boolean
-    selectedRows: Set<string>
-}
-
-export interface EditingEvents {
-    onSave?: (changes: Array<{ row: any; field: string; oldValue: any; newValue: any }>) => Promise<void>
-    onCancel?: () => void
-    onValidationError?: (errors: Record<string, string>) => void
-    onBeforeEdit?: (row: any, field: string) => boolean
-    onAfterEdit?: (row: any, field: string, newValue: any) => void
+/**
+ * Configuration pour useDataTableEditing
+ */
+export interface UseDataTableEditingConfig {
+  /** Colonnes éditables */
+  columns: DataTableColumn[]
+  /** Données de la table */
+  rowData: any[]
+  /** Callback lors de la sauvegarde */
+  onSave?: (row: any, field: string, value: any) => Promise<void>
+  /** Callback lors de l'annulation */
+  onCancel?: (row: any, field: string) => void
 }
 
 /**
- * Composable pour l'édition avancée des données
- * Supporte l'édition inline, la validation en temps réel, et le mode batch
+ * État d'édition d'une cellule
  */
-export function useDataTableEditing(
-    data: any[],
-    fields: EditingField[],
-    events?: EditingEvents
-) {
-    const state = reactive<EditingState>({
-        isEditing: false,
-        editingRow: null,
-        editingField: null,
-        originalValue: null,
-        currentValue: null,
-        validationErrors: {},
-        isSaving: false,
-        hasChanges: false,
-        pendingChanges: [],
-        batchMode: false,
-        selectedRows: new Set()
-    })
-
-    // Configuration par défaut
-    const config = reactive<EditingConfig>({
-        fields,
-        saveMode: 'immediate',
-        autoSave: false,
-        autoSaveDelay: 2000,
-        confirmBeforeSave: true,
-        allowCancel: true,
-        showValidationErrors: true,
-        highlightChanges: true
-    })
-
-    // Auto-save timer
-    let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
-
-    /**
-     * Valide une valeur selon les règles du champ
-     */
-    const validateField = (field: string, value: any): string | null => {
-        const fieldConfig = fields.find(f => f.field === field)
-        if (!fieldConfig) return null
-
-        // Validation required
-        if (fieldConfig.required && (value === null || value === undefined || value === '')) {
-            return 'Ce champ est requis'
-        }
-
-        // Validation min/max pour les nombres
-        if (fieldConfig.type === 'number') {
-            const numValue = Number(value)
-            if (fieldConfig.min !== undefined && numValue < fieldConfig.min) {
-                return `La valeur minimale est ${fieldConfig.min}`
-            }
-            if (fieldConfig.max !== undefined && numValue > fieldConfig.max) {
-                return `La valeur maximale est ${fieldConfig.max}`
-            }
-        }
-
-        // Validation pattern
-        if (fieldConfig.pattern && typeof value === 'string') {
-            const regex = new RegExp(fieldConfig.pattern)
-            if (!regex.test(value)) {
-                return 'Format invalide'
-            }
-        }
-
-        // Validation personnalisée
-        if (fieldConfig.validator) {
-            const result = fieldConfig.validator(value)
-            if (typeof result === 'string') {
-                return result
-            } else if (!result) {
-                return 'Valeur invalide'
-            }
-        }
-
-        return null
-    }
-
-    /**
-     * Démarre l'édition d'une cellule
-     */
-    const startEditing = (row: any, field: string) => {
-        // Vérifier si l'édition est autorisée
-        if (events?.onBeforeEdit && !events.onBeforeEdit(row, field)) {
-            return false
-        }
-
-        state.isEditing = true
-        state.editingRow = row
-        state.editingField = field
-        state.originalValue = row[field]
-        state.currentValue = row[field]
-        state.validationErrors = {}
-
-        logger.debug('Édition démarrée', { row, field, value: row[field] })
-        return true
-    }
-
-    /**
-     * Arrête l'édition
-     */
-    const stopEditing = async (save = true) => {
-        if (!state.isEditing) return
-
-        if (save) {
-            await saveChanges()
-        } else {
-            // Restaurer la valeur originale
-            if (state.editingRow && state.editingField) {
-                state.editingRow[state.editingField] = state.originalValue
-            }
-        }
-
-        // Réinitialiser l'état
-        state.isEditing = false
-        state.editingRow = null
-        state.editingField = null
-        state.originalValue = null
-        state.currentValue = null
-        state.validationErrors = {}
-
-        logger.debug('Édition arrêtée', { save })
-    }
-
-    /**
-     * Met à jour la valeur en cours d'édition
-     */
-    const updateEditingValue = (value: any) => {
-        if (!state.isEditing) return
-
-        state.currentValue = value
-        state.hasChanges = value !== state.originalValue
-
-        // Validation en temps réel
-        if (state.editingField) {
-            const error = validateField(state.editingField, value)
-            if (error) {
-                state.validationErrors[state.editingField] = error
-            } else {
-                delete state.validationErrors[state.editingField]
-            }
-        }
-
-        // Auto-save si configuré
-        if (config.autoSave && state.hasChanges) {
-            scheduleAutoSave()
-        }
-    }
-
-    /**
-     * Sauvegarde les changements
-     */
-    const saveChanges = async () => {
-        if (!state.isEditing || !state.editingRow || !state.editingField) return
-
-        // Validation finale
-        const error = validateField(state.editingField, state.currentValue)
-        if (error) {
-            state.validationErrors[state.editingField] = error
-            events?.onValidationError?.(state.validationErrors)
-            return false
-        }
-
-        // Vérifier s'il y a des changements
-        if (!state.hasChanges) {
-            logger.debug('Aucun changement à sauvegarder')
-            return true
-        }
-
-        state.isSaving = true
-
-        try {
-            // Mettre à jour la valeur
-            const oldValue = state.editingRow[state.editingField]
-            state.editingRow[state.editingField] = state.currentValue
-
-            // Ajouter aux changements en attente
-            state.pendingChanges.push({
-                row: state.editingRow,
-                field: state.editingField,
-                oldValue,
-                newValue: state.currentValue,
-                timestamp: Date.now()
-            })
-
-            // Appeler l'événement de sauvegarde
-            if (events?.onSave) {
-                await events.onSave([{
-                    row: state.editingRow,
-                    field: state.editingField,
-                    oldValue,
-                    newValue: state.currentValue
-                }])
-            }
-
-            // Appeler l'événement après édition
-            events?.onAfterEdit?.(state.editingRow, state.editingField, state.currentValue)
-
-            state.hasChanges = false
-            logger.success('Changements sauvegardés', {
-                field: state.editingField,
-                oldValue,
-                newValue: state.currentValue
-            })
-
-            return true
-        } catch (error) {
-            // Restaurer la valeur en cas d'erreur
-            state.editingRow[state.editingField] = state.originalValue
-            logger.error('Erreur lors de la sauvegarde', error)
-            return false
-        } finally {
-            state.isSaving = false
-        }
-    }
-
-    /**
-     * Active le mode batch
-     */
-    const enableBatchMode = () => {
-        state.batchMode = true
-        state.selectedRows.clear()
-        logger.info('Mode batch activé')
-    }
-
-    /**
-     * Désactive le mode batch
-     */
-    const disableBatchMode = () => {
-        state.batchMode = false
-        state.selectedRows.clear()
-        state.pendingChanges = []
-        logger.info('Mode batch désactivé')
-    }
-
-    /**
-     * Sélectionne/désélectionne une ligne pour le mode batch
-     */
-    const toggleRowSelection = (rowId: string) => {
-        if (state.selectedRows.has(rowId)) {
-            state.selectedRows.delete(rowId)
-        } else {
-            state.selectedRows.add(rowId)
-        }
-    }
-
-    /**
-     * Sauvegarde tous les changements en attente
-     */
-    const saveAllPendingChanges = async () => {
-        if (state.pendingChanges.length === 0) {
-            logger.info('Aucun changement en attente')
-            return
-        }
-
-        state.isSaving = true
-
-        try {
-            if (events?.onSave) {
-                await events.onSave(state.pendingChanges)
-            }
-
-            state.pendingChanges = []
-            logger.success('Tous les changements sauvegardés', {
-                count: state.pendingChanges.length
-            })
-        } catch (error) {
-            logger.error('Erreur lors de la sauvegarde batch', error)
-        } finally {
-            state.isSaving = false
-        }
-    }
-
-    /**
-     * Annule tous les changements en attente
-     */
-    const discardAllPendingChanges = () => {
-        // Restaurer toutes les valeurs originales
-        state.pendingChanges.forEach(change => {
-            change.row[change.field] = change.oldValue
-        })
-
-        state.pendingChanges = []
-        state.selectedRows.clear()
-        state.batchMode = false
-
-        logger.info('Tous les changements annulés')
-    }
-
-    /**
-     * Programme l'auto-save
-     */
-    const scheduleAutoSave = () => {
-        if (autoSaveTimer) {
-            clearTimeout(autoSaveTimer)
-        }
-
-        autoSaveTimer = setTimeout(() => {
-            if (state.hasChanges && state.isEditing) {
-                saveChanges()
-            }
-        }, config.autoSaveDelay)
-    }
-
-    /**
-     * Vérifie si une ligne a des changements
-     */
-    const hasRowChanges = (row: any) => {
-        return state.pendingChanges.some(change => change.row === row)
-    }
-
-    /**
-     * Obtient les changements d'une ligne
-     */
-    const getRowChanges = (row: any) => {
-        return state.pendingChanges.filter(change => change.row === row)
-    }
-
-    // Computed
-    const canSave = computed(() => {
-        return state.isEditing && state.hasChanges && Object.keys(state.validationErrors).length === 0
-    })
-
-    const hasPendingChanges = computed(() => {
-        return state.pendingChanges.length > 0
-    })
-
-    const selectedRowsCount = computed(() => {
-        return state.selectedRows.size
-    })
-
-    // Nettoyage
-    const cleanup = () => {
-        if (autoSaveTimer) {
-            clearTimeout(autoSaveTimer)
-        }
-    }
-
-    return {
-        // État réactif
-        state: computed(() => state),
-        config: computed(() => config),
-
-        // Computed
-        canSave,
-        hasPendingChanges,
-        selectedRowsCount,
-
-        // Méthodes d'édition
-        startEditing,
-        stopEditing,
-        updateEditingValue,
-        saveChanges,
-
-        // Mode batch
-        enableBatchMode,
-        disableBatchMode,
-        toggleRowSelection,
-        saveAllPendingChanges,
-        discardAllPendingChanges,
-
-        // Utilitaires
-        validateField,
-        hasRowChanges,
-        getRowChanges,
-        cleanup
-    }
+export interface EditingCell {
+  rowId: string | number
+  field: string
+  value: any
+  originalValue: any
 }
 
+/**
+ * Composable pour l'édition inline
+ */
+export function useDataTableEditing(config: UseDataTableEditingConfig) {
+  const { columns, rowData, onSave, onCancel } = config
+
+  // État des cellules en cours d'édition
+  const editingCells = ref<Map<string, EditingCell>>(new Map())
+
+  // Cellule actuellement en focus
+  const focusedCell = ref<string | null>(null)
+
+  /**
+   * Génère une clé unique pour une cellule
+   */
+  const getCellKey = (rowId: string | number, field: string): string => {
+    return `${rowId}-${field}`
+  }
+
+  /**
+   * Vérifie si une cellule est en cours d'édition
+   */
+  const isEditing = (rowId: string | number, field: string): boolean => {
+    const key = getCellKey(rowId, field)
+    return editingCells.value.has(key)
+  }
+
+  /**
+   * Démarre l'édition d'une cellule
+   */
+  const startEditing = (rowId: string | number, field: string, initialValue?: any) => {
+    const row = rowData.find(r => r.id === rowId || r.reference === rowId)
+    if (!row) return
+
+    const originalValue = initialValue !== undefined ? initialValue : row[field]
+    const key = getCellKey(rowId, field)
+
+    editingCells.value.set(key, {
+      rowId,
+      field,
+      value: originalValue,
+      originalValue
+    })
+
+    focusedCell.value = key
+  }
+
+  /**
+   * Met à jour la valeur d'une cellule en cours d'édition
+   */
+  const updateEditingValue = (rowId: string | number, field: string, value: any) => {
+    const key = getCellKey(rowId, field)
+    const cell = editingCells.value.get(key)
+    if (cell) {
+      cell.value = value
+    }
+  }
+
+  /**
+   * Sauvegarde les changements d'une cellule
+   */
+  const saveEditing = async (rowId: string | number, field: string) => {
+    const key = getCellKey(rowId, field)
+    const cell = editingCells.value.get(key)
+    if (!cell) return
+
+    try {
+      // Appeler le callback de sauvegarde si fourni
+      if (onSave) {
+        await onSave(
+          rowData.find(r => r.id === rowId || r.reference === rowId),
+          field,
+          cell.value
+        )
+      }
+
+      // Mettre à jour les données locales
+      const row = rowData.find(r => r.id === rowId || r.reference === rowId)
+      if (row) {
+        row[field] = cell.value
+      }
+
+      // Supprimer de l'état d'édition
+      editingCells.value.delete(key)
+      focusedCell.value = null
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde:', error)
+      // En cas d'erreur, restaurer la valeur originale
+      cancelEditing(rowId, field)
+    }
+  }
+
+  /**
+   * Annule l'édition d'une cellule
+   */
+  const cancelEditing = (rowId: string | number, field: string) => {
+    const key = getCellKey(rowId, field)
+    const cell = editingCells.value.get(key)
+
+    if (cell && onCancel) {
+      onCancel(
+        rowData.find(r => r.id === rowId || r.reference === rowId),
+        field
+      )
+    }
+
+    editingCells.value.delete(key)
+    if (focusedCell.value === key) {
+      focusedCell.value = null
+    }
+  }
+
+  /**
+   * Obtient la valeur actuelle d'une cellule (éditée ou originale)
+   */
+  const getCellValue = (rowId: string | number, field: string): any => {
+    const key = getCellKey(rowId, field)
+    const cell = editingCells.value.get(key)
+
+    if (cell) {
+      return cell.value
+    }
+
+    const row = rowData.find(r => r.id === rowId || r.reference === rowId)
+    return row ? row[field] : undefined
+  }
+
+  /**
+   * Vérifie si une colonne est éditable
+   */
+  const isColumnEditable = (field: string): boolean => {
+    const column = columns.find(col => col.field === field)
+    return column?.editable === true
+  }
+
+  /**
+   * Gère les événements clavier pour l'édition
+   */
+  const handleKeyDown = (event: KeyboardEvent, rowId: string | number, field: string) => {
+    if (!isEditing(rowId, field)) return
+
+    switch (event.key) {
+      case 'Enter':
+        event.preventDefault()
+        saveEditing(rowId, field)
+        break
+      case 'Escape':
+        event.preventDefault()
+        cancelEditing(rowId, field)
+        break
+      case 'Tab':
+        event.preventDefault()
+        saveEditing(rowId, field)
+        // TODO: Navigation vers la cellule suivante
+        break
+    }
+  }
+
+  return {
+    // État
+    editingCells: computed(() => editingCells.value),
+    focusedCell: computed(() => focusedCell.value),
+
+    // Méthodes
+    isEditing,
+    isColumnEditable,
+    startEditing,
+    updateEditingValue,
+    saveEditing,
+    cancelEditing,
+    getCellValue,
+    handleKeyDown
+  }
+}

@@ -11,6 +11,8 @@ import type {
 import type { DataTableResponse } from '@/utils/dataTableUtils';
 import API from '@/api';
 import { logger } from '@/services/loggerService';
+import { normalizeDataTableResponse, convertUnifiedToStandardDataTable } from '@/utils/dataTableResponseNormalizer';
+import type { UnifiedDataTableResponse } from '@/utils/dataTableResponseNormalizer';
 
 // Extension pour LocationResponse pour supporter DataTable
 export interface DataTableLocationResponse extends LocationResponse {}
@@ -37,52 +39,46 @@ export class LocationService {
      * @param params - Paramètres de requête optionnels (supporte DataTable et filtres)
      * @returns Promise avec la réponse paginée de locations
      */
-    static async getAll(params?: LocationDataTableParams): Promise<AxiosResponse<LocationResponse>> {
-        try {
-            return await axiosInstance.get<LocationResponse>(API.endpoints.location?.base, {
-                params: params
-            });
-        } catch (error) {
-            logger.error('Erreur lors de la récupération des locations', error);
-            throw error;
-        }
-    }
 
     /**
-     * Récupérer les locations via une URL complète (pour DataTable)
-     * @param url - URL complète de la requête
-     * @returns Promise avec la réponse paginée de locations
-     */
-    static async getAllByUrl(url: string): Promise<AxiosResponse<LocationResponse>> {
-        try {
-            return await axiosInstance.get<LocationResponse>(url);
-        } catch (error) {
-            logger.error('Erreur lors de la récupération des locations', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Récupérer les locations non assignées pour un entrepôt et un inventaire
+     * Récupérer les locations non assignées pour un entrepôt et un inventaire (format FORMAT_ACTUEL.md)
+     * Le service reçoit les paramètres déjà convertis au format FORMAT_ACTUEL.md par le store
      * @param account_id - ID du compte
      * @param inventory_id - ID de l'inventaire
      * @param warehouse_id - ID de l'entrepôt
-     * @param params - Paramètres de requête optionnels (supporte DataTable et filtres)
+     * @param params - Paramètres au format FORMAT_ACTUEL.md (déjà convertis par le store)
      * @returns Promise avec la réponse paginée de locations non assignées
      */
     static async getUnassigned(
         account_id: number,
         inventory_id: number,
         warehouse_id: number,
-        params?: LocationDataTableParams
-    ): Promise<AxiosResponse<LocationResponse | DataTableResponse<Location>>> {
+        params?: Record<string, any>
+    ): Promise<AxiosResponse<(LocationResponse | DataTableResponse<Location>) & { page: number; totalPages: number; pageSize: number; total: number }>> {
         try {
             const url = `${API.endpoints.warehouse?.base}${account_id}/warehouse/${warehouse_id}/inventory/${inventory_id}/locations/unassigned/`;
-            logger.debug('LocationService.getUnassigned - URL et params:', { url, params });
 
-            return await axiosInstance.get<LocationResponse | DataTableResponse<Location>>(url, {
-                params: params
-            });
+            const response = await axiosInstance.post<UnifiedDataTableResponse<Location>>(
+                url,
+                params || {},
+                {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            const unifiedResponse = normalizeDataTableResponse<Location>(response.data);
+            const standardResponse = convertUnifiedToStandardDataTable(unifiedResponse);
+            return {
+                ...response,
+                data: {
+                    ...standardResponse,
+                    page: unifiedResponse.page,
+                    totalPages: unifiedResponse.totalPages,
+                    pageSize: unifiedResponse.pageSize,
+                    total: unifiedResponse.total
+                } as any
+            } as AxiosResponse<(LocationResponse | DataTableResponse<Location>) & { page: number; totalPages: number; pageSize: number; total: number }>;
         } catch (error) {
             logger.error('Erreur lors de la récupération des locations non assignées', error);
             throw error;
@@ -90,14 +86,6 @@ export class LocationService {
     }
 
     // Récupérer une location par ID
-    static async getById(id: number | string): Promise<AxiosResponse<Location>> {
-        try {
-            return await axiosInstance.get<Location>(`${API.endpoints.location?.base}${id}/`);
-        } catch (error) {
-            logger.error('Erreur lors de la récupération de la location', error);
-            throw error;
-        }
-    }
 
     // Récupérer une location par référence
     static async getByReference(reference: string): Promise<AxiosResponse<Location>> {
@@ -228,6 +216,26 @@ export class LocationService {
             });
         } catch (error) {
             logger.error('Erreur lors de l\'import en lot des locations', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Mettre à jour le statut de plusieurs locations en lot
+     * @param locationIds - Liste des IDs des locations à désactiver
+     * @returns Promise avec la réponse de l'API
+     */
+    static async bulkUpdateStatus(locationIds: number[]): Promise<AxiosResponse<{
+        success: boolean;
+        message: string;
+        updated_count?: number;
+    }>> {
+        try {
+            return await axiosInstance.post(`${API.endpoints.location?.base}bulk-deactivate/`, {
+                location_ids: locationIds
+            });
+        } catch (error) {
+            logger.error('Erreur lors de la mise à jour du statut des locations', error);
             throw error;
         }
     }

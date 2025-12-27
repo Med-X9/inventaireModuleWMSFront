@@ -62,7 +62,7 @@
                 <!--  END TOP NAVBAR  -->
 
                 <!--  BEGIN CONTENT AREA  -->
-                <div class="p-6 animation">
+                <div class="animation">
                     <router-view></router-view>
                 </div>
                 <!--  END CONTENT AREA  -->

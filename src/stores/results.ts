@@ -4,7 +4,8 @@ import { InventoryResultsService } from '@/services/inventoryResultsService';
 import type { InventoryResult, StoreOption } from '@/interfaces/inventoryResults';
 import type { AxiosResponse } from 'axios';
 import { logger } from '@/services/loggerService';
-import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter';
+import type { QueryModel } from '@/components/DataTable/types/QueryModel';
+import { convertQueryModelToQueryParams } from '@/components/DataTable/utils/queryModelConverter';
 
 export const useResultsStore = defineStore('results', () => {
     // State
@@ -16,6 +17,13 @@ export const useResultsStore = defineStore('results', () => {
     const error = ref<string | null>(null);
     const currentInventoryId = ref<number | null>(null);
     const totalCount = ref(0);
+    // Métadonnées de pagination depuis la dernière réponse
+    const paginationMetadata = ref<{
+        page?: number;
+        totalPages?: number;
+        pageSize?: number;
+        total?: number;
+    } | null>(null);
 
     // Getters
     const getResults = computed(() => results.value);
@@ -29,30 +37,58 @@ export const useResultsStore = defineStore('results', () => {
     // Actions
 
     /**
-     * Récupérer les résultats pour un inventaire et un magasin
-     * @param inventoryId - ID de l'inventaire
-     * @param storeId - ID du magasin (warehouse)
-     * @param params - Paramètres DataTable optionnels (pagination, tri, filtres, recherche)
+     * Action wrapper pour la gestion automatique du DataTable
+     * Accepte un QueryModel avec customParams (inventory_id, store_id)
+     * et appelle fetchResults automatiquement
+     * 
+     * @param queryModel - QueryModel contenant les paramètres DataTable et customParams
+     * @returns Réponse avec les résultats et la pagination
+     */
+    const fetchResultsAuto = async (queryModel: QueryModel) => {
+        // Extraire inventory_id et store_id des customParams
+        const customParams = (queryModel as any)?.customParams || {}
+        const inventoryId = customParams.inventory_id || currentInventoryId.value
+        const storeId = customParams.store_id || selectedStore.value
+
+        if (!inventoryId || !storeId) {
+            throw new Error('inventory_id et store_id sont requis dans customParams')
+        }
+
+        // Appeler fetchResults avec les paramètres extraits
+        return await fetchResults(inventoryId, storeId, queryModel)
+    }
+
+    /**
+     * Récupère les résultats pour un inventaire et un magasin
+     * Le store stocke uniquement les données et métadonnées brutes du backend
+     * Le DataTable/useBackendDataTable gère la pagination
      */
     const fetchResults = async (
-        inventoryId: number, 
-        storeId: string | number, 
-        params?: StandardDataTableParams | Record<string, any>
+        inventoryId: number,
+        storeId: string | number,
+        params?: QueryModel
     ) => {
         loading.value = true;
         error.value = null;
         try {
-            logger.debug('Store: Récupération des résultats', { inventoryId, storeId, params });
-            const response = await InventoryResultsService.getResults(inventoryId, storeId, params);
+            // Convertir QueryModel en paramètres de requête
+            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
+            const response = await InventoryResultsService.getResults(inventoryId, storeId, requestParams);
 
-            results.value = response.data;
-            totalCount.value = response.recordsFiltered || response.data.length;
+            // Stocker les données brutes
+            results.value = response.data || [];
             currentInventoryId.value = inventoryId;
-            logger.debug('Store: Résultats chargés', { 
-                count: response.data.length, 
-                totalCount: totalCount.value 
-            });
-            return response.data;
+
+            // Stocker les métadonnées de pagination brutes du backend (sans calcul)
+            paginationMetadata.value = {
+                page: response.page ?? 1,
+                totalPages: response.totalPages ?? 1,
+                pageSize: response.pageSize ?? 20,
+                total: response.total ?? response.recordsFiltered ?? response.recordsTotal ?? 0
+            };
+
+            // Retourner la réponse complète
+            return response;
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erreur lors de la récupération des résultats';
             logger.error('Store: Erreur lors de la récupération des résultats', err);
@@ -87,14 +123,13 @@ export const useResultsStore = defineStore('results', () => {
     /**
      * Valider un ou plusieurs résultats
      */
-    const validateResults = async (ids: Array<number | string>): Promise<AxiosResponse<any>> => {
+    const validateResults = async (ids: number): Promise<AxiosResponse<any>> => {
         loading.value = true;
         error.value = null;
         try {
             const response = await InventoryResultsService.validateResults(ids);
             // Retirer les résultats validés de la liste
-            const normalizedIds = ids.map(id => String(id));
-            results.value = results.value.filter(r => !normalizedIds.includes(String(r.id)));
+            results.value = results.value.filter(r => r.id !== ids);
             selectedResults.value = [];
             return response;
         } catch (err: any) {
@@ -190,6 +225,7 @@ export const useResultsStore = defineStore('results', () => {
         error,
         currentInventoryId,
         totalCount,
+        paginationMetadata,
 
         // Getters
         getResults,
@@ -202,6 +238,7 @@ export const useResultsStore = defineStore('results', () => {
 
         // Actions
         fetchResults,
+        fetchResultsAuto,
         updateValue,
         validateResults,
         fetchStores,

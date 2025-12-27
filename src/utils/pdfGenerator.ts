@@ -35,18 +35,20 @@ export const generatePDF = async (data: InventoryData, filename: string) => {
     const doc = new jsPDF({ unit: 'pt' });
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
-    let cursorY = 40;
+    let cursorY = 50;
 
-    // Couleurs professionnelles
+    // Palette de couleurs professionnelle et moderne - monochrome avec accent subtil
     const colors = {
-        primary: [254, 205, 28] as [number, number, number], // Jaune doré #FECD1C
-        secondary: [52, 73, 94] as [number, number, number], // Gris foncé
-        accent: [230, 126, 34] as [number, number, number], // Orange
-        success: [46, 204, 113] as [number, number, number], // Vert
-        warning: [241, 196, 15] as [number, number, number], // Jaune
-        danger: [231, 76, 60] as [number, number, number], // Rouge
-        lightGray: [236, 240, 241] as [number, number, number], // Gris clair
-        white: [255, 255, 255] as [number, number, number]
+        text: [30, 30, 30] as [number, number, number], // Noir foncé pour le texte principal
+        textSecondary: [100, 100, 100] as [number, number, number], // Gris moyen pour texte secondaire
+        textLight: [150, 150, 150] as [number, number, number], // Gris clair pour texte tertiaire
+        accent: [60, 60, 60] as [number, number, number], // Gris foncé pour accents
+        background: [250, 250, 250] as [number, number, number], // Gris très clair pour fonds
+        border: [220, 220, 220] as [number, number, number], // Gris clair pour bordures
+        white: [255, 255, 255] as [number, number, number],
+        // Pour les statuts, utiliser des nuances de gris
+        statusDefault: [180, 180, 180] as [number, number, number],
+        statusActive: [100, 100, 100] as [number, number, number]
     };
 
     // Fonction pour ajouter le logo
@@ -70,33 +72,33 @@ export const generatePDF = async (data: InventoryData, filename: string) => {
         }
     };
 
-    // Fonction pour ajouter pied de page professionnel
+    // Fonction pour ajouter pied de page professionnel et minimaliste
     const addFooter = () => {
         const page = doc.getCurrentPageInfo().pageNumber;
         const totalPages = doc.getNumberOfPages();
-        const currentDate = new Date().toLocaleDateString('fr-FR');
+        const currentDate = new Date().toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
 
-        // Ligne de séparation
-        doc.setDrawColor(colors.lightGray[0], colors.lightGray[1], colors.lightGray[2]);
-        doc.setLineWidth(1);
-        doc.line(40, pageHeight - 50, pageWidth - 40, pageHeight - 50);
+        // Ligne de séparation fine
+        doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+        doc.setLineWidth(0.5);
+        doc.line(50, pageHeight - 40, pageWidth - 50, pageHeight - 40);
 
         // Informations de pied de page
         doc.setFontSize(8);
-        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
 
-        // Date de génération
-        doc.text(`Généré le ${currentDate}`, 40, pageHeight - 35);
+        // Date de génération à gauche
+        doc.text(`Généré le ${currentDate}`, 50, pageHeight - 25);
 
-        // Numéro de page
-        const footerText = `Page ${page} sur ${totalPages}`;
+        // Numéro de page à droite
+        const footerText = `${page} / ${totalPages}`;
         const textWidth = doc.getTextWidth(footerText);
-        doc.text(footerText, pageWidth - textWidth - 40, pageHeight - 35);
-
-        // Nom de l'application
-        const appName = 'Système de Gestion d\'Inventaire';
-        const appNameWidth = doc.getTextWidth(appName);
-        doc.text(appName, (pageWidth - appNameWidth) / 2, pageHeight - 35);
+        doc.text(footerText, pageWidth - textWidth - 50, pageHeight - 25);
     };
 
     // Vérification saut de page
@@ -107,136 +109,136 @@ export const generatePDF = async (data: InventoryData, filename: string) => {
         }
     };
 
-    // Fonction pour dessiner une section avec fond coloré
+    // Fonction pour dessiner une section avec style moderne et minimaliste
     const drawSectionHeader = (title: string, y: number) => {
-        // Fond blanc pour l'en-tête de section
-        doc.setFillColor(255, 255, 255);
-        doc.rect(40, y - 15, pageWidth - 80, 25, 'F');
+        // Fond très léger
+        doc.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        doc.rect(50, y - 18, pageWidth - 100, 28, 'F');
 
-        // Bordure jaune
-        doc.setDrawColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+        // Ligne d'accent fine en haut
+        doc.setDrawColor(colors.accent[0], colors.accent[1], colors.accent[2]);
         doc.setLineWidth(2);
-        doc.line(40, y - 15, pageWidth - 40, y - 15);
+        doc.line(50, y - 18, pageWidth - 50, y - 18);
 
-        // Titre en noir
-        doc.setFontSize(14);
+        // Titre en gras
+        doc.setFontSize(13);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0, 0, 0);
-        doc.text(title, 50, y);
+        doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+        doc.text(title.toUpperCase(), 60, y + 2);
 
-        return y + 20;
+        // Petite ligne de séparation sous le titre
+        doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+        doc.setLineWidth(0.5);
+        doc.line(60, y + 8, pageWidth - 60, y + 8);
+
+        return y + 25;
     };
 
-    // Fonction pour créer une carte d'information
+    // Fonction pour créer une carte d'information moderne et épurée
     const createInfoCard = (title: string, value: string, x: number, y: number, width: number) => {
-        // Fond de la carte
+        // Fond blanc avec bordure subtile
         doc.setFillColor(colors.white[0], colors.white[1], colors.white[2]);
-        doc.setDrawColor(colors.lightGray[0], colors.lightGray[1], colors.lightGray[2]);
+        doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
         doc.setLineWidth(0.5);
-        doc.roundedRect(x, y, width, 40, 3, 3, 'FD');
+        doc.roundedRect(x, y, width, 50, 4, 4, 'FD');
 
-        // Titre
+        // Titre en petit et gris
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
+        doc.text(title.toUpperCase(), x + 12, y + 14);
+
+        // Valeur en grand et foncé
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+        doc.text(value, x + 12, y + 35);
+    };
+
+    // Fonction pour créer un badge de statut moderne et sobre
+    const createStatusBadge = (status: string, x: number, y: number) => {
+        // Badge avec fond gris et bordure
+        doc.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+        doc.setLineWidth(1);
+        doc.roundedRect(x, y, 100, 22, 3, 3, 'FD');
+
+        // Texte du badge en gras
         doc.setFontSize(9);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-        doc.text(title, x + 10, y + 12);
-
-        // Valeur
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-        doc.text(value, x + 10, y + 28);
+        doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+        doc.text(status, x + 50, y + 14, { align: 'center' });
     };
 
-    // Fonction pour créer un badge de statut
-    const createStatusBadge = (status: string, x: number, y: number) => {
-        const statusColors = {
-            'EN PREPARATION': colors.warning,
-            'EN REALISATION': colors.accent,
-            'TERMINEE': colors.success,
-            'CLOTUREE': colors.danger,
-        };
-
-        const color = statusColors[status.toLowerCase()] || colors.secondary;
-
-        // Fond du badge
-        doc.setFillColor(color[0], color[1], color[2]);
-        doc.setDrawColor(color[0], color[1], color[2]);
-        doc.roundedRect(x, y, 80, 20, 10, 10, 'F');
-
-        // Texte du badge
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(colors.white[0], colors.white[1], colors.white[2]);
-        doc.text(status, x + 40, y + 12, { align: 'center' });
-    };
-
-    // --- EN-TÊTE PROFESSIONNEL ---
+    // --- EN-TÊTE MODERNE ET PROFESSIONNEL ---
     await addLogo();
 
-    // Titre principal
-    doc.setFontSize(24);
+    // Titre principal en grand et gras
+    doc.setFontSize(28);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-    doc.text('Rapport d\'Inventaire', pageWidth / 2, 50, { align: 'center' });
+    doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+    doc.text('Rapport d\'Inventaire', pageWidth / 2, 70, { align: 'center' });
 
-    // Sous-titre
-    doc.setFontSize(16);
+    // Sous-titre (label de l'inventaire)
+    doc.setFontSize(14);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-    doc.text(data.inventory.label, pageWidth / 2, 75, { align: 'center' });
+    doc.setTextColor(colors.textSecondary[0], colors.textSecondary[1], colors.textSecondary[2]);
+    doc.text(data.inventory.label, pageWidth / 2, 95, { align: 'center' });
 
-    cursorY = 100;
+    cursorY = 120;
 
-    // Ligne de séparation décorative
-    doc.setDrawColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-    doc.setLineWidth(3);
-    doc.line(40, cursorY, pageWidth - 40, cursorY);
-    cursorY += 30;
+    // Ligne de séparation fine et moderne
+    doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+    doc.setLineWidth(1);
+    doc.line(50, cursorY, pageWidth - 50, cursorY);
+    cursorY += 35;
 
     // --- SECTION GÉNÉRALE ---
-    checkPage(120);
+    checkPage(140);
     cursorY = drawSectionHeader('Informations Générales', cursorY);
 
     // Cartes d'information
-    const cardWidth = (pageWidth - 120) / 2;
-    createInfoCard('Référence', data.inventory.reference, 50, cursorY, cardWidth);
-    createInfoCard('Date d\'inventaire', new Date(data.inventory.inventory_date).toLocaleDateString('fr-FR'), 50 + cardWidth + 20, cursorY, cardWidth);
-    cursorY += 60;
+    const cardWidth = (pageWidth - 140) / 2;
+    createInfoCard('Référence', data.inventory.reference, 60, cursorY, cardWidth);
+    createInfoCard('Date d\'inventaire', new Date(data.inventory.inventory_date).toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
+    }), 60 + cardWidth + 20, cursorY, cardWidth);
+    cursorY += 70;
 
     // Statut avec badge
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-    doc.text('Statut:', 50, cursorY);
-    createStatusBadge(data.inventory.statut, 120, cursorY - 15);
-    cursorY += 40;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(colors.textSecondary[0], colors.textSecondary[1], colors.textSecondary[2]);
+    doc.text('Statut:', 60, cursorY);
+    createStatusBadge(data.inventory.statut, 120, cursorY - 16);
+    cursorY += 45;
 
     // --- PARAMÈTRES DE COMPTAGE ---
     if (data.inventory.contages?.length) {
-        checkPage(60 + data.inventory.contages.length * 30);
+        checkPage(60 + data.inventory.contages.length * 80);
         cursorY = drawSectionHeader('Paramètres de Comptage', cursorY);
 
         data.inventory.contages.forEach((contage, index) => {
-            // Carte pour chaque comptage
+            // Carte moderne pour chaque comptage
             doc.setFillColor(colors.white[0], colors.white[1], colors.white[2]);
-            doc.setDrawColor(colors.lightGray[0], colors.lightGray[1], colors.lightGray[2]);
+            doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
             doc.setLineWidth(0.5);
-            doc.roundedRect(50, cursorY, pageWidth - 100, 50, 5, 5, 'FD');
+            doc.roundedRect(60, cursorY, pageWidth - 120, 70, 4, 4, 'FD');
 
-            // Numéro du comptage
-            doc.setFontSize(12);
+            // Numéro du comptage en gras
+            doc.setFontSize(11);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-            doc.text(`Comptage ${index + 1}`, 60, cursorY + 15);
+            doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+            doc.text(`${index + 1}${index === 0 ? 'er' : 'ème'} Comptage`, 75, cursorY + 18);
 
             // Mode de comptage - gérer la nouvelle structure
-            doc.setFontSize(10);
+            doc.setFontSize(9);
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-
+            doc.setTextColor(colors.textSecondary[0], colors.textSecondary[1], colors.textSecondary[2]);
             const countMode = contage.count_mode || contage.mode || 'Non défini';
-            doc.text(`Mode: ${countMode}`, 60, cursorY + 30);
+            doc.text(`Mode: ${countMode}`, 75, cursorY + 35);
 
             // Options - gérer la nouvelle structure avec champs_actifs
             const extras: string[] = [];
@@ -252,12 +254,15 @@ export const generatePDF = async (data: InventoryData, filename: string) => {
             }
 
             if (extras.length) {
-                doc.text(`Options: ${extras.join(', ')}`, 60, cursorY + 45);
+                doc.setFontSize(8);
+                doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
+                const optionsText = extras.join(' • ');
+                doc.text(`Options: ${optionsText}`, 75, cursorY + 50);
             }
 
-            cursorY += 70;
+            cursorY += 90;
         });
-        cursorY += 20;
+        cursorY += 25;
     }
 
     // --- MAGASINS ---
@@ -266,32 +271,40 @@ export const generatePDF = async (data: InventoryData, filename: string) => {
 
     if (data.magasins?.length) {
         data.magasins.forEach((mag, index) => {
-            // Icône magasin
-            doc.setFillColor(colors.success[0], colors.success[1], colors.success[2]);
-            doc.circle(60, cursorY + 8, 4, 'F');
+            // Point de liste simple
+            doc.setFillColor(colors.text[0], colors.text[1], colors.text[2]);
+            doc.circle(70, cursorY + 10, 2, 'F');
 
-            // Nom du magasin
+            // Nom du magasin en gras
             doc.setFontSize(11);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-            doc.text(mag.nom, 75, cursorY + 12);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+            doc.text(mag.nom, 85, cursorY + 14);
 
             // Date du magasin (plus petit, en dessous)
-            doc.setFontSize(9);
-            doc.setFont('helvetica', 'italic');
-            doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-            doc.text(`Date: ${new Date(mag.date).toLocaleDateString('fr-FR')}`, 75, cursorY + 25);
-
-            cursorY += 35;
+            if (mag.date) {
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
+                doc.text(new Date(mag.date).toLocaleDateString('fr-FR', {
+                    day: '2-digit',
+                    month: 'long',
+                    year: 'numeric'
+                }), 85, cursorY + 28);
+                cursorY += 35;
+            } else {
+                cursorY += 20;
+            }
         });
     } else {
         // Message quand aucun magasin n'est associé
-        doc.setFontSize(11);
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'italic');
-        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-        doc.text('Aucun magasin associé', 60, cursorY + 12);
+        doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
+        doc.text('Aucun magasin associé', 70, cursorY + 14);
+        cursorY += 25;
     }
-    cursorY += 40; // Marge supplémentaire après les magasins
+    cursorY += 30;
 
     // --- ÉQUIPES ASSIGNÉES ---
     checkPage(60);
@@ -299,82 +312,103 @@ export const generatePDF = async (data: InventoryData, filename: string) => {
 
     if (data.inventory.teams?.length) {
         data.inventory.teams.forEach((team, index) => {
-            // Avatar équipe
-            doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-            doc.circle(60, cursorY + 8, 6, 'F');
+            // Cercle simple pour avatar
+            doc.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+            doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+            doc.setLineWidth(1);
+            doc.circle(70, cursorY + 10, 5, 'FD');
 
             // Initiale de l'équipe
-            doc.setFontSize(10);
+            doc.setFontSize(9);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(colors.white[0], colors.white[1], colors.white[2]);
-            const initiale = team && team.user && team.user.username ? team.user.username.charAt(0).toUpperCase() : '?';
-            doc.text(initiale, 60, cursorY + 12, { align: 'center' });
+            doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+            const userName = team.user || (team as any).userObject?.username || '';
+            const initiale = userName ? userName.charAt(0).toUpperCase() : '?';
+            doc.text(initiale, 70, cursorY + 13, { align: 'center' });
 
             // Nom de l'équipe
             doc.setFontSize(11);
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-            const nomEquipe = team && team.user && team.user.username ? team.user.username : 'Équipe sans nom';
-            doc.text(nomEquipe, 75, cursorY + 12);
+            doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+            const nomEquipe = userName || 'Utilisateur inconnu';
+            doc.text(nomEquipe, 85, cursorY + 14);
 
-            cursorY += 25;
+            // Nombre de comptages si disponible
+            if (team.nombre_comptage !== undefined) {
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
+                doc.text(`${team.nombre_comptage} comptage(s)`, 85, cursorY + 28);
+                cursorY += 35;
+            } else {
+                cursorY += 25;
+            }
         });
     } else {
         // Message quand aucune équipe n'est assignée
-        doc.setFontSize(11);
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'italic');
-        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-        doc.text('Aucune équipe assignée', 60, cursorY + 12);
+        doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
+        doc.text('Aucune équipe assignée', 70, cursorY + 14);
+        cursorY += 25;
     }
-    cursorY += 40; // Marge supplémentaire après les équipes
+    cursorY += 30;
 
     // --- RESSOURCES ---
-            checkPage(100);
+    checkPage(100);
     cursorY = drawSectionHeader('Ressources', cursorY);
 
     if (data.resources?.length) {
-        // Tableau des ressources avec style professionnel
+        // Tableau des ressources avec style moderne et sobre
         const head = [['Nom', 'Référence', 'Quantité']];
         const body = data.resources.map(resource => [
             resource.ressource_nom || '-',
-            resource.reference || '-',
+            resource.reference || resource.ressource_reference || '-',
             resource.quantity ? `${resource.quantity}` : '-'
         ]);
 
-            const options: UserOptions = {
-                startY: cursorY,
-                head,
-                body,
-                styles: {
-                    fontSize: 9,
-                    cellPadding: 5,
-                    lineColor: [colors.lightGray[0], colors.lightGray[1], colors.lightGray[2]],
-                    lineWidth: 0.5
-                },
-                theme: 'grid',
-                headStyles: {
-                    fillColor: [colors.primary[0], colors.primary[1], colors.primary[2]],
-                    textColor: [colors.white[0], colors.white[1], colors.white[2]],
-                    halign: 'center',
-                    fontStyle: 'bold'
-                },
-                alternateRowStyles: {
-                    fillColor: [248, 249, 250]
-                }
-            };
+        const options: UserOptions = {
+            startY: cursorY,
+            head,
+            body,
+            styles: {
+                fontSize: 9,
+                cellPadding: 8,
+                lineColor: [colors.border[0], colors.border[1], colors.border[2]],
+                lineWidth: 0.5,
+                textColor: [colors.text[0], colors.text[1], colors.text[2]]
+            },
+            theme: 'striped',
+            headStyles: {
+                fillColor: [colors.accent[0], colors.accent[1], colors.accent[2]],
+                textColor: [colors.white[0], colors.white[1], colors.white[2]],
+                halign: 'left',
+                fontStyle: 'bold',
+                fontSize: 9
+            },
+            alternateRowStyles: {
+                fillColor: [colors.background[0], colors.background[1], colors.background[2]]
+            },
+            columnStyles: {
+                0: { halign: 'left' },
+                1: { halign: 'left' },
+                2: { halign: 'center' }
+            }
+        };
 
-            autoTable(doc as any, options as any);
-            const last = (doc as any).lastAutoTable;
-            cursorY = last?.finalY ? last.finalY + 20 : cursorY + 40;
+        autoTable(doc as any, options as any);
+        const last = (doc as any).lastAutoTable;
+        cursorY = last?.finalY ? last.finalY + 20 : cursorY + 40;
     } else {
         // Message quand aucune ressource n'est assignée
-        doc.setFontSize(11);
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'italic');
-        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-        doc.text('Aucune ressource assignée', 60, cursorY + 12);
+        doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
+        doc.text('Aucune ressource assignée', 70, cursorY + 14);
+        cursorY += 30;
     }
 
-            cursorY += 40;
+    cursorY += 30;
 
     // Ajout des pieds de page sur chaque page
     const totalPg = doc.getNumberOfPages();

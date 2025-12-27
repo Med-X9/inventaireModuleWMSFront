@@ -2,8 +2,11 @@
 <template>
     <div class="pagination">
         <div class="pagination-info">
-            <span>
-                {{ start }} - {{ end }} sur {{ total }} enregistrements
+            <span v-if="total > 0">
+                {{ start }} - {{ end }} sur {{ total }} enregistrement{{ total > 1 ? 's' : '' }}
+            </span>
+            <span v-else class="no-data-text">
+                Aucun enregistrement
             </span>
         </div>
         <div class="pagination-controls">
@@ -20,7 +23,7 @@
             <div class="custom-select-wrapper" ref="selectWrapperRef" @click="toggleDropdown" v-click-outside="closeDropdown">
                 <div class="custom-select-trigger" :class="{ 'is-open': isOpen, 'is-focused': isFocused }">
                     <Transition name="value-change" mode="out-in">
-                        <span :key="pageSize" class="select-value">{{ pageSize }}</span>
+                        <span :key="displayPageSize" class="select-value">{{ displayPageSize }}</span>
                     </Transition>
                     <svg class="select-arrow" :class="{ 'is-open': isOpen }" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M3.5 5.25L7 8.75L10.5 5.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -33,11 +36,11 @@
                                 v-for="option in pageSizeOptions" 
                                 :key="option"
                                 class="select-option"
-                                :class="{ 'is-selected': option === pageSize }"
+                                :class="{ 'is-selected': option === displayPageSize }"
                                 @click="selectOption(option)"
                             >
                                 <span>{{ option }}</span>
-                                <svg v-if="option === pageSize" class="check-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <svg v-if="option === displayPageSize" class="check-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M13.3333 4L6 11.3333L2.66667 8" stroke="var(--color-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                 </svg>
                             </div>
@@ -70,6 +73,19 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+
+// Valeur réactive pour forcer la mise à jour de l'affichage
+const currentPageSize = ref(props.pageSize)
+
+// Valeur affichée - computed pour forcer la réactivité
+const displayPageSize = computed(() => {
+    return currentPageSize.value
+})
+
+// Synchroniser avec la prop
+watch(() => props.pageSize, (newSize) => {
+    currentPageSize.value = newSize
+}, { immediate: true })
 
 // Options de taille de page
 const pageSizeOptions = [10, 20, 50, 100, 200, 500]
@@ -130,8 +146,15 @@ const closeDropdown = () => {
 }
 
 const selectOption = (value: number) => {
-    if (value !== props.pageSize) {
+    console.log('[Pagination] selectOption:', { selectedValue: value, displayPageSize: displayPageSize.value })
+    if (value !== displayPageSize.value) {
+        console.log('[Pagination] EMITTING page-size-changed:', value)
         emit('page-size-changed', value)
+        // Forcer la mise à jour immédiate de currentPageSize
+        currentPageSize.value = value
+        console.log('[Pagination] FORCED currentPageSize to:', currentPageSize.value)
+    } else {
+        console.log('[Pagination] NO EMIT: value same as current')
     }
     closeDropdown()
 }
@@ -159,16 +182,30 @@ onMounted(() => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.25rem 0.5rem;
+    padding: 0.75rem 1rem;
     background-color: #ffffff;
-    border-top: 1px solid #e9ecef;
+    border-bottom: 1px solid #e9ecef;
     position: relative;
     z-index: 1;
+    gap: 1rem;
 }
 
 .dark .pagination {
     background-color: #1a202c;
     border-color: #4a5568;
+}
+
+.pagination-info {
+    display: flex;
+    align-items: center;
+    font-size: 0.875rem;
+    color: #374151;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.dark .pagination-info {
+    color: #f7fafc;
 }
 
 .pagination-controls {
@@ -476,5 +513,39 @@ onMounted(() => {
 .value-change-leave-to {
     opacity: 0;
     transform: translateY(5px) scale(0.9);
+}
+
+.no-data-text {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.dark .no-data-text {
+    color: #6b7280;
+}
+
+/* Responsive pour mobile */
+@media (max-width: 768px) {
+    .pagination {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.75rem;
+    }
+
+    .pagination-controls {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .pagination-info {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .page-size-selector {
+        width: 100%;
+        justify-content: center;
+    }
 }
 </style>

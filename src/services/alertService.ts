@@ -10,7 +10,7 @@ const Toast = Swal.mixin({
     toast: true,
     position: 'top-end',
     showConfirmButton: false,
-    timer: 3000,
+    timer: 1500,
     timerProgressBar: true,
 
     customClass: {
@@ -81,7 +81,7 @@ export const alertService: AlertService = {
             icon: 'success',
             title: opts.title || 'Succès',
             text: opts.text,
-            timer: opts.timer ?? 3000,
+            timer: opts.timer ?? 1500,
             background: getCssVar('--color-success'),
             iconColor: 'white',
         });
@@ -92,7 +92,7 @@ export const alertService: AlertService = {
             icon: 'error',
             title: opts.title || 'Erreur',
             text: opts.text,
-            timer: opts.timer ?? 3000,
+            timer: opts.timer ?? 1500,
             background: getCssVar('--color-danger'),
             iconColor: 'white',
         });
@@ -103,7 +103,7 @@ export const alertService: AlertService = {
             icon: 'warning',
             title: opts.title || 'Attention',
             text: opts.text,
-            timer: opts.timer ?? 3000,
+            timer: opts.timer ?? 1500,
             background: getCssVar('--color-warning'),
             iconColor: 'white',
         });
@@ -114,7 +114,7 @@ export const alertService: AlertService = {
             icon: 'info',
             title: opts.title || 'Info',
             text: opts.text,
-            timer: opts.timer ?? 3000,
+            timer: opts.timer ?? 1500,
             background: getCssVar('--color-info'),
             iconColor: 'white',
         });

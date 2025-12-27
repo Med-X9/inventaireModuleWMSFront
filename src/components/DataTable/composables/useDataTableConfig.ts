@@ -24,6 +24,8 @@ export interface DataTableConfig {
     filters?: Record<string, any>
     /** Tri actif (optionnel) */
     sort?: { field: string; direction: 'asc' | 'desc' }[]
+    /** Recherche globale (optionnel) */
+    search?: string
 }
 
 /**
@@ -46,7 +48,8 @@ export function useDataTableConfig(
         stickyHeader: defaultConfig.stickyHeader ?? false,
         pageSize: defaultConfig.pageSize || 20,
         filters: defaultConfig.filters || {},
-        sort: defaultConfig.sort || []
+        sort: defaultConfig.sort || [],
+        search: defaultConfig.search || undefined
     }
 
     // Charger la configuration depuis localStorage
@@ -64,6 +67,7 @@ export function useDataTableConfig(
     const pageSize = ref<number>(storedConfig.value.pageSize || 20)
     const filters = ref<Record<string, any>>(storedConfig.value.filters || {})
     const sort = ref<{ field: string; direction: 'asc' | 'desc' }[]>(storedConfig.value.sort || [])
+    const search = ref<string | undefined>(storedConfig.value.search || undefined)
 
     /**
      * Sauvegarde la configuration complète
@@ -77,7 +81,8 @@ export function useDataTableConfig(
             stickyHeader: stickyHeader.value,
             pageSize: pageSize.value,
             filters: filters.value,
-            sort: sort.value
+            sort: sort.value,
+            search: search.value
         }
         storedConfig.value = config
     }
@@ -95,6 +100,7 @@ export function useDataTableConfig(
         pageSize.value = config.pageSize || 20
         filters.value = config.filters || {}
         sort.value = config.sort || []
+        search.value = config.search || undefined
     }
 
     /**
@@ -109,6 +115,7 @@ export function useDataTableConfig(
         pageSize.value = defaultConfigValue.pageSize || 20
         filters.value = defaultConfigValue.filters || {}
         sort.value = defaultConfigValue.sort || []
+        search.value = defaultConfigValue.search || undefined
         saveConfig()
     }
 
@@ -172,7 +179,9 @@ export function useDataTableConfig(
      * Met à jour les filtres
      */
     const updateFilters = (newFilters: Record<string, any>) => {
-        filters.value = { ...newFilters }
+        // Créer une copie profonde pour s'assurer que la réactivité fonctionne
+        const filtersCopy = JSON.parse(JSON.stringify(newFilters || {}))
+        filters.value = filtersCopy
         saveConfig()
     }
 
@@ -184,8 +193,16 @@ export function useDataTableConfig(
         saveConfig()
     }
 
+    /**
+     * Met à jour la recherche globale
+     */
+    const updateSearch = (newSearch: string | undefined) => {
+        search.value = newSearch
+        saveConfig()
+    }
+
     // Sauvegarder automatiquement lors des changements
-    watch([visibleColumns, columnOrder, columnWidths, pinnedColumns, stickyHeader, pageSize], () => {
+    watch([visibleColumns, columnOrder, columnWidths, pinnedColumns, stickyHeader, pageSize, filters, sort, search], () => {
         saveConfig()
     }, { deep: true })
 
@@ -199,6 +216,7 @@ export function useDataTableConfig(
         pageSize,
         filters,
         sort,
+        search,
 
         // Configuration complète (computed)
         config: computed(() => ({
@@ -209,7 +227,8 @@ export function useDataTableConfig(
             stickyHeader: stickyHeader.value,
             pageSize: pageSize.value,
             filters: filters.value,
-            sort: sort.value
+            sort: sort.value,
+            search: search.value
         })),
 
         // Méthodes
@@ -224,7 +243,8 @@ export function useDataTableConfig(
         updateStickyHeader,
         updatePageSize,
         updateFilters,
-        updateSort
+        updateSort,
+        updateSearch
     }
 }
 

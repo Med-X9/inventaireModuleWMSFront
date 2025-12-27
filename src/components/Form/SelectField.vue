@@ -1,33 +1,52 @@
 <template>
-    <div>
-        <v-select :key="`v-select-${fieldId}-${JSON.stringify(selected)}`" :id="fieldId" :model-value="selected"
-            :options="formattedOptions" :multiple="multiple" :searchable="searchable" :clearable="clearable"
-            :placeholder="placeholder" :disabled="disabled" :loading="loading" label="label"
-            :reduce="(option: any) => option.value" :class="[
+    <div class="flex flex-col">
+        <VSelect
+            :key="`v-select-${fieldId}-${JSON.stringify(selected)}-${JSON.stringify(formattedOptions)}`"
+            :id="fieldId"
+            :model-value="selected"
+            :options="formattedOptions"
+            :multiple="multiple"
+            :searchable="searchable"
+            :clearable="clearable"
+            :placeholder="placeholder"
+            :disabled="disabled"
+            :loading="loading"
+            label="label"
+            :reduce="(option: any) => option.value"
+            :class="[
                 'form-input',
                 'px-4',
-                'py-3',
+                'py-2.5',
                 'bg-white',
                 'border',
                 'border-gray-200',
                 'rounded-lg',
                 'transition-all',
                 'duration-200',
+                'outline-none',
+                'text-sm',
+                'vs-custom',
                 'focus:border-primary',
                 'focus:ring-2',
-                'focus:ring-primary',
-                'focus:ring-opacity-10',
-                'outline-none',
-                compact ? 'vs-compact' : '',
+                'focus:ring-primary/20',
+                'hover:border-gray-300',
+                disabled ? 'bg-gray-100 cursor-not-allowed text-gray-400' : 'cursor-pointer',
+                error ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : '',
                 multiple ? 'vs-multi' : 'vs-single',
                 searchable ? 'vs-search-enhanced' : '',
-                error ? 'vs-error' : '',
-                'dark'
-            ]" :filter="customFilter" @update:model-value="handleModelValueUpdate" @search="$emit('search', $event)"
-            @open="handleOpen" @close="handleClose">
+            ]"
+            :filter="customFilter"
+            :aria-invalid="error ? 'true' : 'false'"
+            :aria-required="required ? 'true' : 'false'"
+            :aria-busy="loading ? 'true' : 'false'"
+            @update:model-value="handleModelValueUpdate"
+            @search="$emit('search', $event)"
+            @open="handleOpen"
+            @close="handleClose"
+        >
 
             <!-- Custom option template with tooltip support -->
-            <template #option="{ option }">
+            <template #option="{ option }: { option: any }">
                 <div v-if="option" class="vs-option-with-tooltip relative w-full">
                     <div class="vs-option-content flex items-center justify-between w-full">
                         <span>{{ option.label }}</span>
@@ -49,12 +68,12 @@
             </template>
 
             <!-- Template pour afficher les valeurs sélectionnées -->
-            <template #selected-option="{ option }">
+            <template #selected-option="{ option }: { option: any }">
                 <span v-if="option">{{ option.label }}</span>
             </template>
 
             <!-- Template pour afficher la valeur sélectionnée dans les selects simples -->
-            <template #value="{ option }">
+            <template #value="{ option }: { option: any }">
                 <span v-if="option">
                     {{ typeof option === 'object' ? option.label : option }}
                 </span>
@@ -68,11 +87,11 @@
             </template>
 
             <!-- Custom search input template for enhanced search -->
-            <template v-if="enhancedSearch" #search="{ attributes, events }">
+            <template v-if="enhancedSearch" #search="{ attributes, events }: { attributes: any; events: any }">
                 <input v-bind="attributes" v-on="events" class="vs-search-input"
                     :placeholder="searchPlaceholder || 'Rechercher...'" />
             </template>
-        </v-select>
+        </VSelect>
 
         <!-- Error message -->
         <p v-if="error && errorMessage" class="text-sm text-red-500 mt-1">
@@ -87,12 +106,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, nextTick, watch } from 'vue';
+import { computed, ref } from 'vue';
 import vSelect from 'vue-select';
-import Tooltip from '@/components/Tooltip.vue';
 import 'vue-select/dist/vue-select.css';
 import '@/assets/css/select2.css';
 import type { SelectOption, FieldConfig } from '@/interfaces/form';
+
+const VSelect = vSelect as any;
 
 // Props pour compatibilité avec FormBuilder
 const props = withDefaults(defineProps<{
@@ -166,21 +186,6 @@ const formattedOptions = computed((): SelectOption[] => {
     return options;
 });
 
-// Watcher pour forcer la mise à jour quand les options changent
-watch(() => props.field?.options, () => {
-    // Forcer un recalcul
-    nextTick(() => {
-        // Recalcul automatique
-    });
-}, { deep: true });
-
-// Watcher pour les options directes
-watch(() => props.options, () => {
-    nextTick(() => {
-        // Recalcul automatique
-    });
-}, { deep: true });
-
 // Utiliser la prop value si fournie (FormBuilder), sinon utiliser selected ou modelValue
 const selected = computed(() => {
     if (props.value !== undefined) {
@@ -205,12 +210,6 @@ const clearable = computed(() => {
 const placeholder = computed(() => {
     return props.field?.props?.placeholder || props.placeholder || '';
 });
-
-// Fonction pour obtenir le label à partir d'une value
-const getLabelFromValue = (value: string | number): string => {
-    const option = formattedOptions.value.find(opt => opt.value === value);
-    return option ? option.label : String(value);
-};
 
 // Gestion des événements de tooltip
 const handleMouseEnter = (event: MouseEvent, option: SelectOption) => {

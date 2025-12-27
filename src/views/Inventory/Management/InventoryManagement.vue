@@ -1,10 +1,10 @@
 <template>
-    <div class="min-h-screen bg-app p-8">
-        <!-- Header avec titre et navigation -->
-        <div class="bg-card rounded-[20px] p-8 mb-8 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-border">
+    <div class="min-h-screen bg-app dark:bg-[#0e1726] p-8">
+        <!-- En-tête -->
+        <div class="bg-card dark:bg-[#1b2e4b] rounded-[20px] p-8 mb-8 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] border border-border dark:border-gray-700">
             <div class="flex justify-between items-center gap-8">
                 <div class="flex-1">
-                    <h1 class="flex items-center gap-4 text-[2.5rem] font-extrabold text-text-dark m-0 mb-2">
+                    <h1 class="flex items-center gap-4 text-[2.5rem] font-extrabold text-text-dark dark:text-white-light m-0 mb-2">
                         <IconBox class="w-10 h-10 text-primary" />
                         Gestion des inventaires
                     </h1>
@@ -19,435 +19,238 @@
             </div>
         </div>
 
-        <!-- Statistiques -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div class="bg-card rounded-[20px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex items-center gap-4">
-                <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl text-white bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg">
-                    <i class="icon-preparation"></i>
-                </div>
-                <div class="flex-1">
-                    <div class="text-3xl font-bold text-text-dark leading-none">{{ getStatusCount('EN PREPARATION') }}</div>
-                    <div class="text-sm text-text-muted mt-1">En préparation</div>
-                </div>
-            </div>
-            <div class="bg-card rounded-[20px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex items-center gap-4">
-                <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl text-white bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg">
-                    <i class="icon-realisation"></i>
-                </div>
-                <div class="flex-1">
-                    <div class="text-3xl font-bold text-text-dark leading-none">{{ getStatusCount('EN REALISATION') }}</div>
-                    <div class="text-sm text-text-muted mt-1">En réalisation</div>
-                </div>
-            </div>
-            <div class="bg-card rounded-[20px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex items-center gap-4">
-                <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl text-white bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg">
-                    <i class="icon-termine"></i>
-                </div>
-                <div class="flex-1">
-                    <div class="text-3xl font-bold text-text-dark leading-none">{{ getStatusCount('TERMINE') }}</div>
-                    <div class="text-sm text-text-muted mt-1">Terminés</div>
-                </div>
-            </div>
-            <div class="bg-card rounded-[20px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex items-center gap-4">
-                <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl text-white bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg">
-                    <i class="icon-cloture"></i>
-                </div>
-                <div class="flex-1">
-                    <div class="text-3xl font-bold text-text-dark leading-none">{{ getStatusCount('CLOTURE') }}</div>
-                    <div class="text-sm text-text-muted mt-1">Clôturés</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- DataTable -->
-        <div class="bg-card rounded-[20px] p-8 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-border overflow-hidden md:p-4">
+        <!-- Table des inventaires -->
+        <div v-if="isDataLoaded" class="bg-card dark:bg-[#1b2e4b] rounded-[20px] p-8 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] border border-border dark:border-gray-700 overflow-hidden md:p-4">
             <DataTable
-                :columns="columns as DataTableColumnAny[]"
+                :columns="columns"
+                :actions="actions"
                 :rowDataProp="inventories"
-                :actions="actions as ActionConfigAny[]"
+                :serverSidePagination="false"
                 :pagination="true"
-                :rowSelection="false"
-                :enableFiltering="true"
-                :showColumnSelector="true"
-                :enableGlobalSearch="true"
-                :actionsHeaderName="'Actions'"
-                :exportTitle="'Export des inventaires'"
-                :storageKey="'inventory_management_table'"
-                :pageSizeProp="pageSize"
-                :totalItemsProp="pagination.total"
-                :loading="loading"
-                :inlineEditing="false"
-                :serverSidePagination="true"
-                :serverSideFiltering="true"
-                :serverSideSorting="true"
-                :debounceFilter="500"
-                :enableMultiSort="true"
-                :multiSortConfig="multiSortConfig"
-                :enableColumnPinning="true"
-                :columnPinningConfig="columnPinningConfig"
-                :enableColumnResize="true"
-                :columnResizeConfig="columnResizeConfig"
-                :enableSetFilters="true"
-                :setFiltersConfig="setFiltersConfig"
+                storageKey="inventory-management"
+                @filter-changed="handleFilterChanged"
                 @pagination-changed="handlePaginationChanged"
                 @sort-changed="handleSortChanged"
-                @filter-changed="handleFilterChanged"
                 @global-search-changed="handleGlobalSearchChanged"
-                @cell-value-changed="handleCellValueChanged" />
+            />
         </div>
 
-        <!-- Modal d'import -->
-        <Modal
-            v-if="showImportModal"
-            v-model="showImportModal"
-            title=""
-            size="fullscreen">
-            <div class="flex flex-col h-screen max-h-screen overflow-hidden bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800">
-                <!-- Header du modal -->
-                <div class="relative bg-gradient-to-r from-primary to-primary-dark p-4 shadow-md z-10 flex-shrink-0">
-                    <div class="absolute inset-0 opacity-10"
-                        style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
-                    <div class="relative z-10 flex items-center justify-between gap-8">
-                        <div class="flex items-start gap-6 flex-1">
-                            <div class="w-12 h-12 rounded-xl bg-white/25 backdrop-blur-md border-2 border-white/30 flex items-center justify-center text-white flex-shrink-0 shadow-lg">
-                                <IconBox class="w-6 h-6" />
-                            </div>
-                            <div class="flex-1">
-                                <h1 class="text-xl font-bold text-white m-0 mb-2 text-shadow-sm">Import de stock image</h1>
-                                <div v-if="currentImportInventory" class="flex items-center gap-3 mb-2 flex-wrap">
-                                    <p class="text-[0.9375rem] font-semibold text-white/95 m-0">{{ currentImportInventory.label }}</p>
-                                    <span class="inline-flex items-center px-3.5 py-1.5 bg-white/20 backdrop-blur-md border border-white/30 rounded-full text-sm font-semibold text-white uppercase tracking-wide">
-                                        {{ currentImportInventory.status }}
-                                    </span>
-                                </div>
-                                <div v-if="currentImportInventory" class="flex items-center gap-4 flex-wrap text-sm">
-                                    <span class="inline-flex items-center gap-2 text-white/90 font-medium">
-                                        <IconCalendar class="w-4 h-4 opacity-80" />
-                                        {{ formatDate(currentImportInventory.date) }}
-                                    </span>
-                                    <span v-if="currentImportInventory.reference" class="inline-flex items-center gap-2 text-white/90 font-medium">
-                                        <span class="opacity-80">#</span>
-                                        {{ currentImportInventory.reference }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        <button
-                            @click="closeImportModalWithCleanup"
-                            class="w-10 h-10 rounded-lg bg-white/20 backdrop-blur-md border border-white/30 text-white flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-white/30 hover:scale-105 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                            :disabled="isImporting">
-                            <IconX class="w-5 h-5" />
-                        </button>
-                    </div>
-                </div>
+        <!-- État de chargement -->
+        <div v-else class="bg-card dark:bg-[#1b2e4b] rounded-[20px] p-8 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] border border-border dark:border-gray-700 overflow-hidden md:p-4 flex items-center justify-center min-h-[400px]">
+            <div class="flex flex-col items-center gap-4">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                <p class="text-text-dark dark:text-white-light">Chargement des inventaires...</p>
+            </div>
+        </div>
 
-                <!-- Contenu principal -->
-                <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 p-6 flex-1 overflow-hidden min-h-0 max-h-[calc(100vh-150px)]">
-                    <!-- Colonne principale -->
-                    <div class="flex flex-col gap-3 min-h-0 overflow-hidden">
-                        <!-- Zone d'upload -->
-                        <div
-                            class="h-[280px] border-3 border-dashed rounded-2xl bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 transition-all duration-400 relative overflow-hidden shadow-md flex-shrink-0"
-                            :class="{
-                                'border-primary bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-900/20 dark:to-primary-800/20 scale-[1.01] shadow-2xl shadow-primary-500/30 border-4': isDragging,
-                                'border-green-500 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 shadow-lg shadow-green-500/20': selectedFile && !isDragging,
-                                'border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20': isImporting
-                            }"
-                            @dragover.prevent="handleDragOver"
-                            @dragleave.prevent="handleDragLeave"
-                            @drop.prevent="handleDrop">
-                            <div class="p-8 flex flex-col items-center justify-center h-full relative">
-                                <div class="relative mb-4">
-                                    <div class="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white transition-all duration-400 shadow-xl"
-                                        :class="{ 'scale-110 rotate-12': isDragging }">
-                                        <IconUpload class="w-8 h-8 text-white" />
-                                    </div>
-                                    <div v-if="isImporting" class="absolute -top-2.5 -left-2.5 w-[calc(100%+20px)] h-[calc(100%+20px)]">
-                                        <svg class="w-full h-full progress-ring" viewBox="0 0 120 120" style="transform: rotate(-90deg);">
-                                            <circle class="progress-ring-circle" cx="60" cy="60" r="54" fill="none" stroke="var(--color-info)" stroke-width="4" stroke-dasharray="339.292" stroke-dashoffset="339.292" style="animation: progress-ring 2s linear infinite;" />
-                                        </svg>
-                                    </div>
-                                </div>
+        <!--
+        Modal d'import d'image de stock
+        Note: Cette modal complexe (200+ lignes) pourrait être extraite dans un composant séparé
+        pour améliorer la lisibilité et la maintenabilité du fichier principal
+        -->
+        <div v-if="showImportModal" class="fixed inset-0 z-50 overflow-y-auto">
+            <div class="flex items-stretch justify-center px-0 h-full text-center sm:block sm:p-0">
+                <div class="fixed inset-0 bg-text-dark opacity-75" @click="closeImportModalWithCleanup"></div>
+                <div class="relative w-full h-full">
+                    <InventoryFullscreenModal
+                        title="Import de stock image"
+                        :inventory="currentImportInventory"
+                        :close-disabled="isImporting"
+                        :format-date="formatDate"
+                        @close="closeImportModalWithCleanup"
+                    >
+                        <template #main>
+                            <FileInputUpload
+                                :is-dragging="isDragging"
+                                :is-uploading="isImporting"
+                                :selected-file="selectedFile"
+                                :upload-progress="uploadProgress"
+                                uploading-label="Import en cours..."
+                                empty-title="Glissez-déposez votre fichier ici"
+                                empty-description="ou"
+                                browse-button-label="Parcourir les fichiers"
+                                accept-description="Formats acceptés : .xlsx, .xls"
+                                :file-type-label="selectedFile ? getFileType(selectedFile.name) : ''"
+                                @browse-click="() => (fileInput as any)?.click()"
+                                @dragover="handleDragOver"
+                                @dragleave="handleDragLeave"
+                                @drop="handleDrop"
+                                @clear-file="() => (selectedFile = null)"
+                            />
 
-                                <div v-if="!selectedFile && !isImporting" class="text-center flex flex-col items-center gap-3">
-                                    <h4 class="text-xl font-bold text-slate-900 dark:text-slate-100 m-0">Glissez-déposez votre fichier ici</h4>
-                                    <p class="text-base text-slate-600 dark:text-slate-400 m-0">ou</p>
-                                    <button
-                                        @click="() => (fileInput as any)?.click()"
-                                        class="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-medium text-sm bg-gradient-to-r from-primary to-primary-light text-white hover:from-primary-dark hover:to-primary transition-all duration-200">
-                                        <IconFolder class="w-4 h-4 text-white" />
-                                        Parcourir les fichiers
-                                    </button>
-                                    <p class="text-sm text-slate-500 dark:text-slate-500 mt-4 m-0">
-                                        Formats acceptés : .xlsx, .xls (Taille max : 10 MB)
-                                    </p>
-                                </div>
-
-                                <div v-if="selectedFile && !isImporting" class="flex items-center gap-4 bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border-2 border-green-500 rounded-xl p-4 w-full max-w-2xl shadow-lg animate-[slideInFile_0.3s_ease-out]">
-                                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white flex-shrink-0 shadow-lg">
-                                        <IconFile class="w-6 h-6" />
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <h4 class="text-base font-semibold text-slate-900 dark:text-slate-100 m-0 mb-1 truncate">{{ selectedFile.name }}</h4>
-                                        <p class="text-xs text-slate-600 dark:text-slate-400 m-0 mb-0.5">{{ formatFileSize(selectedFile.size) }}</p>
-                                        <p class="text-xs text-slate-500 dark:text-slate-500 m-0">{{ getFileType(selectedFile.name) }}</p>
-                                    </div>
-                                    <button
-                                        @click="selectedFile = null"
-                                        class="w-10 h-10 rounded-lg bg-red-50 border border-red-200 text-red-600 flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-red-100 hover:scale-110 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-red-900/30 dark:border-red-800 dark:text-red-400"
-                                        :disabled="isImporting">
-                                        <IconX class="w-5 h-5" />
-                                    </button>
-                                </div>
-
-                                <div v-if="isImporting" class="w-full max-w-2xl text-center">
-                                    <div class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-4">
-                                        <div class="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-300 shadow-lg" :style="{ width: uploadProgress + '%' }"></div>
-                                    </div>
-                                    <p class="text-sm text-slate-600 dark:text-slate-400 m-0 flex items-center justify-center gap-2">
-                                        <IconLoader class="w-4 h-4 animate-spin" />
-                                        Import en cours... {{ uploadProgress }}%
-                                    </p>
+                            <!-- Messages de feedback -->
+                            <div v-if="importSuccess && importSuccessMessage" class="success-message">
+                                <IconCircleCheck class="w-5 h-5" />
+                                <div>
+                                    <h4>Import réussi</h4>
+                                    <p>{{ importSuccessMessage }}</p>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- Message de succès -->
-                        <Transition name="slide-up">
-                            <div v-if="importSuccess && importSuccessMessage" class="flex gap-3 bg-green-50 dark:bg-green-900/30 border-2 border-green-200 dark:border-green-800 rounded-xl p-3.5 mt-2 flex-shrink-0">
-                                <div class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/50 flex items-center justify-center text-green-600 dark:text-green-400 flex-shrink-0">
-                                    <IconCircleCheck class="w-5 h-5" />
-                                </div>
-                                <div class="flex-1">
-                                    <h4 class="text-base font-semibold text-green-900 dark:text-green-100 m-0 mb-1">Import réussi</h4>
-                                    <p class="text-sm text-green-700 dark:text-green-300 m-0 font-medium leading-relaxed">{{ importSuccessMessage }}</p>
-                                </div>
-                            </div>
-                        </Transition>
-
-                        <!-- Message d'erreur -->
-                        <Transition name="slide-up">
-                            <div v-if="importError && importErrorDetails" class="flex gap-3 bg-red-50 dark:bg-red-900/30 border-2 border-red-200 dark:border-red-800 rounded-xl p-3.5 mt-2 flex-1 min-h-0 max-h-[calc(100vh-420px)] overflow-y-auto overflow-x-hidden">
-                                <div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/50 flex items-center justify-center text-red-600 dark:text-red-400 flex-shrink-0">
-                                    <IconXCircle class="w-5 h-5" />
-                                </div>
-                                <div class="flex-1 flex flex-col gap-3 min-w-0">
-                                    <h4 class="text-base font-semibold text-red-900 dark:text-red-100 m-0">Erreur lors de l'import</h4>
-                                    <p class="text-sm text-red-700 dark:text-red-300 m-0 font-medium leading-relaxed">{{ importErrorDetails.message }}</p>
-
-                                    <!-- Informations sur l'inventaire -->
-                                    <div v-if="importErrorDetails.inventory_type || importErrorDetails.existing_stocks_count !== null" class="flex flex-col gap-1.5 p-2 bg-red-100/50 dark:bg-red-900/20 rounded-lg mt-1">
-                                        <div v-if="importErrorDetails.inventory_type" class="flex items-center gap-2 text-xs text-red-900 dark:text-red-100">
-                                            <strong>Type d'inventaire :</strong>
-                                            <span class="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold uppercase">{{ importErrorDetails.inventory_type }}</span>
-                                        </div>
-                                        <div v-if="importErrorDetails.existing_stocks_count !== null" class="flex items-center gap-2 text-xs text-red-900 dark:text-red-100">
-                                            <strong>Stocks existants :</strong>
-                                            <span>{{ importErrorDetails.existing_stocks_count }}</span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Action requise -->
-                                    <div v-if="importErrorDetails.action_required" class="p-3 bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-200 dark:border-amber-800 rounded-lg mt-1">
-                                        <div class="flex items-center gap-2 text-xs font-semibold text-amber-900 dark:text-amber-100 mb-1.5">
-                                            <IconInfoCircle class="w-4 h-4" />
-                                            <strong>Action requise :</strong>
-                                        </div>
-                                        <div class="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-                                            <span v-if="importErrorDetails.action_required === 'DELETE_AND_RECREATE'">
-                                                Cet inventaire de type TOURNANT a déjà des stocks importés.
-                                                Vous devez supprimer cet inventaire et en créer un nouveau pour importer de nouveaux stocks.
-                                            </span>
-                                            <span v-else-if="importErrorDetails.action_required === 'FIX_LOCATIONS'">
-                                                Problème de configuration des emplacements.
-                                                Vérifiez qu'un compte est lié à l'inventaire, qu'un regroupement d'emplacement existe pour ce compte,
-                                                et que des emplacements actifs sont disponibles.
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Résumé de l'import -->
-                                    <div v-if="importErrorDetails.summary" class="p-3 bg-red-100/50 dark:bg-red-900/20 rounded-lg mt-1">
-                                        <div class="text-xs font-semibold text-red-900 dark:text-red-100 mb-2">
-                                            <strong>Résumé de l'import :</strong>
-                                        </div>
-                                        <div class="flex gap-4 flex-wrap">
-                                            <div class="flex items-center gap-2 text-xs">
-                                                <span class="text-red-900 dark:text-red-100 font-medium">Total lignes :</span>
-                                                <span class="font-bold text-red-700 dark:text-red-300">{{ importErrorDetails.summary.total_rows }}</span>
-                                            </div>
-                                            <div class="flex items-center gap-2 text-xs">
-                                                <span class="text-red-900 dark:text-red-100 font-medium">Lignes valides :</span>
-                                                <span class="font-bold text-green-600 dark:text-green-400">{{ importErrorDetails.summary.valid_rows }}</span>
-                                            </div>
-                                            <div class="flex items-center gap-2 text-xs">
-                                                <span class="text-red-900 dark:text-red-100 font-medium">Lignes invalides :</span>
-                                                <span class="font-bold text-red-700 dark:text-red-300">{{ importErrorDetails.summary.invalid_rows }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Liste des erreurs de validation -->
-                                    <div v-if="importErrorDetails.errors && importErrorDetails.errors.length > 0" class="mt-3 pt-3 border-t-2 border-red-200 dark:border-red-800">
-                                        <div class="text-xs font-semibold text-red-900 dark:text-red-100 mb-3">
-                                            <strong>Erreurs de validation ({{ importErrorDetails.errors.length }} ligne(s)) :</strong>
-                                        </div>
-                                        <div class="flex flex-col gap-2 max-h-[200px] overflow-y-auto">
-                                            <div
-                                                v-for="(errorItem, index) in importErrorDetails.errors"
-                                                :key="index"
-                                                class="p-3 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 rounded-lg">
-                                                <div class="flex items-center justify-between mb-2 pb-1.5 border-b border-red-100 dark:border-red-900">
-                                                    <span class="font-bold text-red-700 dark:text-red-300 text-sm">Ligne {{ errorItem.row }}</span>
-                                                    <span class="text-xs text-red-900 dark:text-red-100 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded">{{ errorItem.errors.length }} erreur(s)</span>
-                                                </div>
-                                                <div class="flex flex-col gap-1.5 mb-2">
-                                                    <div
-                                                        v-for="(errorMsg, msgIndex) in errorItem.errors"
-                                                        :key="msgIndex"
-                                                        class="flex items-start gap-1.5 text-xs text-red-700 dark:text-red-300 leading-relaxed">
-                                                        <IconXCircle class="w-4 h-4 flex-shrink-0 mt-0.5" />
-                                                        <span>{{ errorMsg }}</span>
-                                                    </div>
-                                                </div>
-                                                <div v-if="errorItem.data" class="mt-2 pt-2 border-t border-red-100 dark:border-red-900 text-xs">
-                                                    <strong class="block mb-1.5 text-red-900 dark:text-red-100">Données de la ligne :</strong>
-                                                    <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2">
-                                                        <div v-if="errorItem.data.article !== undefined" class="flex flex-col gap-1">
-                                                            <span class="text-xs text-red-900 dark:text-red-100 font-medium">Article :</span>
-                                                            <span class="text-xs text-slate-700 dark:text-slate-300 px-1.5 py-1 bg-slate-100 dark:bg-slate-700 rounded font-mono">{{ errorItem.data.article || '(vide)' }}</span>
-                                                        </div>
-                                                        <div v-if="errorItem.data.emplacement !== undefined" class="flex flex-col gap-1">
-                                                            <span class="text-xs text-red-900 dark:text-red-100 font-medium">Emplacement :</span>
-                                                            <span class="text-xs text-slate-700 dark:text-slate-300 px-1.5 py-1 bg-slate-100 dark:bg-slate-700 rounded font-mono">{{ errorItem.data.emplacement || '(vide)' }}</span>
-                                                        </div>
-                                                        <div v-if="errorItem.data.quantite !== undefined" class="flex flex-col gap-1">
-                                                            <span class="text-xs text-red-900 dark:text-red-100 font-medium">Quantité :</span>
-                                                            <span class="text-xs text-slate-700 dark:text-slate-300 px-1.5 py-1 bg-slate-100 dark:bg-slate-700 rounded font-mono">{{ errorItem.data.quantite !== null ? errorItem.data.quantite : '(vide)' }}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                            <div v-if="importError && importErrorDetails" class="error-message">
+                                <IconXCircle class="w-5 h-5" />
+                                <div>
+                                    <h4>Erreur lors de l'import</h4>
+                                    <p>{{ importErrorDetails.message }}</p>
+                                    <!-- Détails d'erreur simplifiés pour la lisibilité -->
+                                    <div v-if="importErrorDetails.errors" class="error-details">
+                                        {{ importErrorDetails.errors.length }} erreur(s) de validation
                                     </div>
                                 </div>
                             </div>
-                        </Transition>
-                    </div>
+                        </template>
 
-                    <!-- Colonne secondaire -->
-                    <div class="flex flex-col gap-3 min-h-0 overflow-hidden">
-                        <!-- Instructions -->
-                        <div class="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-slate-800 border-2 border-blue-200 dark:border-blue-800 rounded-lg p-3 shadow-md flex-shrink-0 max-h-fit">
-                            <div class="flex items-center gap-2 mb-2 pb-2 border-b border-blue-300/20 dark:border-blue-700">
-                                <div class="w-8 h-8 rounded-md bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-lg flex-shrink-0">
-                                    <IconInfoCircle class="w-5 h-5" />
-                                </div>
-                                <h4 class="text-sm font-semibold m-0 dark:text-blue-100">Instructions d'import</h4>
+                        <template #sidebar>
+                            <div class="instructions">
+                                <h4>Instructions d'import</h4>
+                                <ul>
+                                    <li>Format Excel requis (.xlsx, .xls)</li>
+                                    <li>Validation des données obligatoire</li>
+                                    <li>Import peut prendre plusieurs minutes</li>
+                                </ul>
                             </div>
-                            <ul class="list-none p-0 m-0 flex flex-col gap-2">
-                                <li class="flex items-start gap-2 p-2 bg-white/60 dark:bg-slate-800/50 rounded-md transition-all duration-200 hover:bg-white/90 dark:hover:bg-slate-800/80 hover:translate-x-1">
-                                    <div class="w-6 h-6 rounded-md bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white flex-shrink-0 shadow-md">
-                                        <IconCircleCheck class="w-3.5 h-3.5" />
-                                    </div>
-                                    <div class="flex-1 flex flex-col gap-0.5 min-w-0">
-                                        <strong class="text-xs font-semibold text-blue-900 dark:text-blue-100 leading-tight mb-0.5">Format requis</strong>
-                                        <span class="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">Le fichier Excel doit contenir les colonnes requises pour l'import</span>
-                                    </div>
-                                </li>
-                                <li class="flex items-start gap-2 p-2 bg-white/60 dark:bg-slate-800/50 rounded-md transition-all duration-200 hover:bg-white/90 dark:hover:bg-slate-800/80 hover:translate-x-1">
-                                    <div class="w-6 h-6 rounded-md bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white flex-shrink-0 shadow-md">
-                                        <IconCircleCheck class="w-3.5 h-3.5" />
-                                    </div>
-                                    <div class="flex-1 flex flex-col gap-0.5 min-w-0">
-                                        <strong class="text-xs font-semibold text-blue-900 dark:text-blue-100 leading-tight mb-0.5">Validation des données</strong>
-                                        <span class="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">Assurez-vous que les données sont correctement formatées</span>
-                                    </div>
-                                </li>
-                                <li class="flex items-start gap-2 p-2 bg-white/60 dark:bg-slate-800/50 rounded-md transition-all duration-200 hover:bg-white/90 dark:hover:bg-slate-800/80 hover:translate-x-1">
-                                    <div class="w-6 h-6 rounded-md bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white flex-shrink-0 shadow-md">
-                                        <IconCircleCheck class="w-3.5 h-3.5" />
-                                    </div>
-                                    <div class="flex-1 flex flex-col gap-0.5 min-w-0">
-                                        <strong class="text-xs font-semibold text-blue-900 dark:text-blue-100 leading-tight mb-0.5">Durée d'import</strong>
-                                        <span class="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">L'import peut prendre quelques minutes selon la taille du fichier</span>
-                                    </div>
-                                </li>
-                            </ul>
-                        </div>
 
-                        <!-- Actions -->
-                        <div class="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg p-3 shadow-md flex-shrink-0">
-                            <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100 m-0 mb-3 pb-2 border-b border-slate-200 dark:border-slate-700">Actions</h4>
-                            <div class="flex flex-col gap-2">
-                                <button
-                                    @click="closeImportModalWithCleanup"
-                                    class="w-full justify-center inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm bg-slate-600 text-white hover:bg-slate-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    :disabled="isImporting">
-                                    <IconX class="w-4 h-4" />
+                            <div class="actions">
+                                <button @click="closeImportModalWithCleanup" :disabled="isImporting">
                                     Annuler
                                 </button>
                                 <button
                                     @click="() => selectedFile && processImportExcelWithProgress(selectedFile)"
                                     :disabled="!selectedFile || isImporting"
-                                    class="w-full justify-center inline-flex items-center gap-2 px-4 py-3 rounded-lg font-medium text-sm bg-gradient-to-r from-primary to-primary-light text-white hover:from-primary-dark hover:to-primary transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <IconLoader v-if="isImporting" class="w-4 h-4 animate-spin text-white" />
-                                    <IconDownload v-else class="w-4 h-4 text-white" />
+                                >
                                     {{ isImporting ? 'Import en cours...' : 'Lancer l\'import' }}
                                 </button>
                             </div>
-                        </div>
-                    </div>
-                </div>
+                        </template>
+                    </InventoryFullscreenModal>
 
-                <!-- Input file caché -->
-                <input
-                    type="file"
-                    ref="fileInput"
-                    @change="handleFileChange"
-                    accept=".xlsx,.xls"
-                    class="hidden" />
+                    <input type="file" ref="fileInput" @change="handleFileChange" accept=".xlsx,.xls" class="hidden" />
+                </div>
             </div>
-        </Modal>
+        </div>
+
+        <!--
+        Modal d'ajout de planification
+        Note: Cette modal complexe pourrait aussi être extraite dans un composant séparé
+        -->
+        <div v-if="showPlanningModal" class="fixed inset-0 z-50 overflow-y-auto">
+            <div class="flex items-stretch justify-center px-0 h-full text-center sm:block sm:p-0">
+                <div class="fixed inset-0 bg-text-dark opacity-75" @click="closePlanningModal"></div>
+                <div class="relative w-full h-full">
+                    <InventoryFullscreenModal
+                        title="Ajouter planification"
+                        :inventory="currentPlanningInventory"
+                        :close-disabled="isUploadingPlanning"
+                        :format-date="formatDate"
+                        @close="closePlanningModal"
+                    >
+                        <template #main>
+                            <FileInputUpload
+                                :is-dragging="isDraggingPlanning"
+                                :is-uploading="isUploadingPlanning"
+                                :selected-file="planningFile"
+                                :upload-progress="planningUploadProgress"
+                                uploading-label="Upload en cours..."
+                                empty-title="Glissez-déposez votre fichier de planification ici"
+                                empty-description="ou"
+                                browse-button-label="Parcourir les fichiers"
+                                accept-description="Formats acceptés : .xlsx, .xls"
+                                :file-type-label="planningFile ? getFileType(planningFile.name) : ''"
+                                @browse-click="() => (planningFileInput as any)?.click()"
+                                @dragover="handlePlanningDragOver"
+                                @dragleave="handlePlanningDragLeave"
+                                @drop="handlePlanningDrop"
+                                @clear-file="() => (planningFile = null)"
+                            />
+
+                            <!-- Messages de feedback simplifiés -->
+                            <div v-if="planningSuccess && planningSuccessMessage" class="success-message">
+                                <IconCircleCheck class="w-5 h-5" />
+                                <div>
+                                    <h4>Planification ajoutée avec succès</h4>
+                                    <p>{{ planningSuccessMessage }}</p>
+                                </div>
+                            </div>
+
+                            <div v-if="planningInfoMessage" class="info-message">
+                                <IconLoader class="w-5 h-5 animate-spin" />
+                                <div>
+                                    <h4>Import en cours</h4>
+                                    <p>{{ planningInfoMessage }}</p>
+                                </div>
+                            </div>
+
+                            <div v-if="planningError" class="error-message">
+                                <IconXCircle class="w-5 h-5" />
+                                <div>
+                                    <h4>Erreur</h4>
+                                    <p>{{ planningError }}</p>
+                                    <div v-if="planningErrorDetails?.length" class="error-details">
+                                        {{ planningErrorDetails.length }} erreur(s) détaillées
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <template #sidebar>
+                            <div class="instructions">
+                                <h4>Instructions</h4>
+                                <ul>
+                                    <li>Format Excel requis (.xlsx, .xls)</li>
+                                    <li>Validation des données obligatoire</li>
+                                    <li>Upload peut prendre plusieurs minutes</li>
+                                </ul>
+                            </div>
+
+                            <div class="actions">
+                                <button @click="closePlanningModal" :disabled="isUploadingPlanning">
+                                    Annuler
+                                </button>
+                                <button
+                                    @click="handlePlanningUpload"
+                                    :disabled="!planningFile || isUploadingPlanning"
+                                >
+                                    {{ isUploadingPlanning ? 'Upload en cours...' : 'Lancer l\'upload' }}
+                                </button>
+                            </div>
+                        </template>
+                    </InventoryFullscreenModal>
+
+                    <input type="file" ref="planningFileInput" @change="handlePlanningFileChange" accept=".xlsx,.xls" class="hidden" />
+                </div>
+            </div>
+        </div>
+
+
     </div>
 </template>
 
 <script setup lang="ts">
 /**
- * Vue InventoryManagement - Gestion des inventaires
+ * Page de gestion des inventaires
  *
- * Cette vue permet de :
- * - Visualiser la liste des inventaires avec pagination, tri et filtrage côté serveur
- * - Afficher les statistiques par statut
- * - Importer des images de stock via un fichier Excel
- * - Gérer les actions sur les inventaires (détail, modification, suppression, etc.)
+ * Affiche une table des inventaires avec possibilité de :
+ * - Consulter les détails d'un inventaire
+ * - Importer une image de stock
+ * - Ajouter une planification
+ * - Modifier ou supprimer un inventaire
  *
  * @component InventoryManagement
  */
 
-// ===== IMPORTS VUE =====
-import { onMounted } from 'vue'
-
-// ===== IMPORTS COMPOSANTS =====
+// ===== IMPORTS =====
+import { onMounted, ref, computed } from 'vue'
 import DataTable from '@/components/DataTable/DataTable.vue'
-import Modal from '@/components/Modal.vue'
-
-// ===== IMPORTS COMPOSABLES =====
+import InventoryFullscreenModal from '@/components/Inventory/InventoryFullscreenModal.vue'
+import FileInputUpload from '@/components/Upload/FileInputUpload.vue'
 import { useInventoryManagement } from '@/composables/useInventoryManagement'
-
-// ===== IMPORTS TYPES =====
-import type { DataTableColumnAny, ActionConfigAny } from '@/types/dataTable'
 
 // ===== IMPORTS ICÔNES =====
 import IconBox from '@/components/icon/icon-box.vue'
 import IconPlus from '@/components/icon/icon-plus.vue'
 import IconX from '@/components/icon/icon-x.vue'
-import IconCalendar from '@/components/icon/icon-calendar.vue'
-import IconFile from '@/components/icon/icon-file.vue'
 import IconLoader from '@/components/icon/icon-loader.vue'
 import IconXCircle from '@/components/icon/icon-x-circle.vue'
-import IconUpload from '@/components/icon/icon-upload.vue'
-import IconFolder from '@/components/icon/icon-folder.vue'
 import IconInfoCircle from '@/components/icon/icon-info-circle.vue'
 import IconCircleCheck from '@/components/icon/icon-circle-check.vue'
 import IconDownload from '@/components/icon/icon-download.vue'
@@ -459,140 +262,237 @@ import IconDownload from '@/components/icon/icon-download.vue'
  * Fournit les colonnes, actions, et la logique d'import
  */
 const {
-    // Configuration de la table
     columns,
     actions,
-
-    // Données et état
-    inventories,
-    loading,
-    currentPage,
-    pageSize,
-    pagination,
-
-    // Handlers DataTable
+    redirectToAdd,
+    handlePaginationChanged,
     handleSortChanged,
     handleFilterChanged,
-    handlePaginationChanged,
     handleGlobalSearchChanged,
     handleCellValueChanged,
-
-    // Configuration des fonctionnalités AG-Grid
-    multiSortConfig,
-    columnPinningConfig,
-    columnResizeConfig,
-    setFiltersConfig,
-
-    // Méthodes de navigation
-    redirectToAdd,
-
-    // Méthodes de rafraîchissement
-    refresh,
-
-    // États pour la modale d'import Excel
+    handleExportCsv,
+    handleExportExcel,
     showImportModal,
+    showPlanningModal,
+    currentImportInventory,
+    currentPlanningInventory,
     isImporting,
     importError,
     importErrorDetails,
     importSuccess,
     importSuccessMessage,
-    currentImportInventory,
-
-    // États pour l'upload de fichier
     selectedFile,
-    fileInput,
-    isDragging,
     uploadProgress,
-
-    // Handlers de fichier
+    isDragging,
+    planningFile,
+    isDraggingPlanning,
+    isUploadingPlanning,
+    planningUploadProgress,
+    planningSuccess,
+    planningSuccessMessage,
+    planningError,
+    planningErrorDetails,
+    planningInfoMessage,
+    closeImportModal,
+    closePlanningModal,
+    processImportExcel,
+    processPlanningUpload,
+    processImportExcelWithProgress,
     handleFileChange,
     handleDragOver,
     handleDragLeave,
     handleDrop,
-
-    // Fonctions utilitaires
-    formatFileSize,
-    getFileType,
-    formatDate,
-    getStatusCount,
-
-    // Wrappers pour l'import
-    processImportExcel,
-    processImportExcelWithProgress,
-    closeImportModal,
-    closeImportModalWithCleanup,
-
-    // Services et erreurs
+    handlePlanningFileChange,
+    handlePlanningDragOver,
+    handlePlanningDragLeave,
+    handlePlanningDrop,
     alertService,
-    handleLoadError
+    inventories,
+    loadInventories
 } = useInventoryManagement()
 
-// Toute la logique TypeScript a été migrée vers le composable useInventoryManagement
-
-// ===== LIFECYCLE =====
+// ===== COMPUTED =====
 
 /**
- * Initialisation au montage du composant
+ * État de débogage pour le bouton d'upload
  */
-onMounted(async () => {
-    try {
-        // Charger les données initiales
-        await refresh()
-    } catch (error) {
-        handleLoadError(error)
+const uploadButtonDebug = computed(() => {
+    const hasFile = !!planningFile.value
+    const isUploading = isUploadingPlanning.value
+    const isDisabled = !hasFile || isUploading
+
+    console.log('[DEBUG] uploadButtonDebug:', {
+        planningFile: planningFile.value,
+        hasFile,
+        isUploading,
+        isDisabled,
+        currentPlanningInventory: currentPlanningInventory.value
+    })
+
+    return { hasFile, isUploading, isDisabled }
+})
+
+// ===== HANDLERS =====
+
+/**
+ * Handler pour lancer l'upload de planification
+ */
+const handlePlanningUpload = async () => {
+    console.log('[handlePlanningUpload] >>>>>>>>>>>>> CLIC SUR LE BOUTON DETECTE <<<<<<<<<<<<<')
+    console.log('[handlePlanningUpload] Début de la fonction')
+    console.log('[handlePlanningUpload] planningFile:', planningFile.value)
+    console.log('[handlePlanningUpload] planningFile exists:', !!planningFile.value)
+    console.log('[handlePlanningUpload] isUploadingPlanning:', isUploadingPlanning.value)
+    console.log('[handlePlanningUpload] currentPlanningInventory:', currentPlanningInventory.value)
+
+    if (planningFile.value) {
+        console.log('[handlePlanningUpload] Appel de processPlanningUpload avec le fichier:', planningFile.value.name)
+        try {
+            await processPlanningUpload(planningFile.value)
+            console.log('[handlePlanningUpload] processPlanningUpload terminé avec succès')
+        } catch (error) {
+            console.error('[handlePlanningUpload] Erreur lors de processPlanningUpload:', error)
+        }
+    } else {
+        console.warn('[handlePlanningUpload] Aucun fichier sélectionné')
     }
+}
+
+// ===== RÉFÉRENCES DOM =====
+const fileInput = ref<HTMLInputElement>()
+const planningFileInput = ref<HTMLInputElement>()
+
+// ===== UTILITAIRES =====
+
+/**
+ * Formate le type d'un fichier
+ */
+const getFileType = (fileName: string): string => {
+    const extension = fileName.split('.').pop()?.toUpperCase()
+    return extension ? `Fichier ${extension}` : 'Fichier inconnu'
+}
+
+/**
+ * Formate une date en français
+ */
+const formatDate = (date: string | Date): string => {
+    if (!date) return ''
+    const d = new Date(date)
+    return d.toLocaleDateString('fr-FR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    })
+}
+
+/**
+ * Ferme la modal d'import avec nettoyage
+ */
+const closeImportModalWithCleanup = () => {
+    closeImportModal()
+}
+
+// ===== ÉTATS LOCAUX =====
+const isDataLoaded = ref(false)
+
+// ===== LIFECYCLE =====
+onMounted(async () => {
+    await loadInventories()
+    isDataLoaded.value = true
 })
 </script>
 
 <style scoped>
-/* Animations pour les transitions */
-@keyframes slideInFile {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+/* Messages de feedback */
+.success-message {
+    @apply flex gap-3 bg-green-50 dark:bg-green-900/30 border-2 border-green-200 dark:border-green-800 rounded-xl p-3.5 mt-2 flex-shrink-0;
 }
 
-@keyframes progress-ring {
-    0% {
-        stroke-dashoffset: 339.292;
-    }
-    50% {
-        stroke-dashoffset: 169.646;
-    }
-    100% {
-        stroke-dashoffset: 0;
-    }
+.success-message h4 {
+    @apply text-base font-semibold text-green-900 dark:text-green-100 m-0 mb-1;
 }
 
-.animate-\[slideInFile_0\.3s_ease-out\] {
-    animation: slideInFile 0.3s ease-out;
+.success-message p {
+    @apply text-sm text-green-700 dark:text-green-300 m-0 font-medium leading-relaxed;
 }
 
-.progress-ring-circle {
-    animation: progress-ring 2s linear infinite;
+.info-message {
+    @apply flex gap-3 bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-200 dark:border-blue-800 rounded-xl p-3.5 mt-2 flex-shrink-0;
 }
 
-/* Transitions pour les messages */
-.slide-up-enter-active {
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+.info-message h4 {
+    @apply text-base font-semibold text-blue-900 dark:text-blue-100 m-0 mb-1;
 }
 
+.error-message {
+    @apply flex gap-3 bg-red-50 dark:bg-red-900/30 border-2 border-red-200 dark:border-red-800 rounded-xl p-3.5 mt-2 flex-shrink-0;
+}
+
+.error-message h4 {
+    @apply text-base font-semibold text-red-900 dark:text-red-100 m-0 mb-1;
+}
+
+.error-message p {
+    @apply text-sm text-red-700 dark:text-red-300 m-0 font-medium leading-relaxed;
+}
+
+.error-details {
+    @apply text-xs font-semibold text-red-900 dark:text-red-100 m-0 mb-2;
+}
+
+/* Instructions */
+.instructions {
+    @apply bg-gradient-to-br from-blue-50 to-blue-100/60 dark:from-blue-900/30 dark:to-slate-800 border-2 border-blue-200/80 dark:border-blue-800 rounded-xl p-3.5 shadow-md flex-shrink-0 max-h-fit;
+}
+
+.instructions h4 {
+    @apply text-sm font-semibold m-0 dark:text-blue-100;
+}
+
+.instructions ul {
+    @apply list-none p-0 m-0 flex flex-col gap-2;
+}
+
+.instructions li {
+    @apply flex items-start gap-2 p-2 bg-white/60 dark:bg-slate-800/50 rounded-md transition-all duration-200;
+}
+
+/* Actions */
+.actions {
+    @apply bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg p-3 shadow-md flex-shrink-0;
+}
+
+.actions h4 {
+    @apply text-sm font-semibold text-slate-900 dark:text-slate-100 m-0 mb-3 pb-2 border-b border-slate-200 dark:border-slate-700;
+}
+
+.actions {
+    @apply flex flex-col gap-2;
+}
+
+.actions button {
+    @apply w-full justify-center inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm;
+}
+
+.actions button:first-child {
+    @apply bg-slate-600 text-white hover:bg-slate-700;
+}
+
+.actions button:last-child {
+    @apply bg-gradient-to-r from-primary to-primary-light text-white hover:from-primary-dark hover:to-primary;
+}
+
+/* Transitions */
+.slide-up-enter-active,
 .slide-up-leave-active {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    @apply transition-all duration-300;
 }
 
 .slide-up-enter-from {
-    opacity: 0;
-    transform: translateY(20px);
+    @apply opacity-0 transform translate-y-5;
 }
 
 .slide-up-leave-to {
-    opacity: 0;
-    transform: translateY(-10px);
+    @apply opacity-0 -translate-y-2;
 }
 </style>

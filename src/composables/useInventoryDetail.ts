@@ -67,16 +67,19 @@ export function useInventoryDetail(inventoryReference: string) {
     /** Erreur lors du chargement de l'inventaire */
     const inventoryError = ref<string | null>(null)
 
+    /** État de chargement initial (résolution de l'ID + chargement des détails) */
+    const initialLoading = ref(true)
+
     // ===== COMPUTED PROPERTIES =====
 
     /** Inventaire actuel depuis le store */
     const inventory = computed(() => inventoryStore.getCurrentInventoryDetail)
 
     /** État de chargement depuis le store */
-    const loading = computed(() => inventoryStore.isLoading)
+    const loading = computed(() => inventoryStore.isLoading || inventoryLoading.value || initialLoading.value)
 
     /** Erreur depuis le store */
-    const error = computed(() => inventoryStore.getError)
+    const error = computed(() => inventoryError.value || inventoryStore.getError)
 
     /** Ressources associées à l'inventaire */
     const resources = computed(() => inventory.value?.ressources || [])
@@ -132,13 +135,16 @@ export function useInventoryDetail(inventoryReference: string) {
     const loadDetailData = async () => {
         if (!inventoryId.value) {
             logger.warn('ID d\'inventaire non disponible')
+            inventoryError.value = 'ID d\'inventaire non disponible'
             return
         }
 
         try {
+            inventoryError.value = null
             await inventoryStore.fetchInventoryDetail(inventoryId.value)
         } catch (error) {
             logger.error('Erreur lors du chargement des détails', error)
+            inventoryError.value = 'Impossible de charger les détails de l\'inventaire'
             await alertService.error({
                 title: 'Erreur',
                 text: 'Impossible de charger les détails de l\'inventaire'
@@ -480,32 +486,44 @@ export function useInventoryDetail(inventoryReference: string) {
         }
     }
 
-    // ===== LIFECYCLE =====
+    // ===== MÉTHODES D'INITIALISATION =====
 
     /**
-     * Initialisation au montage du composant
+     * Initialise les données de l'inventaire
+     * À appeler depuis le composant au montage
      */
-    onMounted(async () => {
+    const initializeInventory = async () => {
         try {
+            initialLoading.value = true
+            inventoryError.value = null
+
             await fetchInventoryIdByReference(inventoryReference)
 
             if (inventoryId.value) {
                 await loadDetailData()
             } else {
                 logger.error('Impossible de récupérer l\'ID de l\'inventaire')
-                await alertService.error({
-                    title: 'Erreur',
-                    text: inventoryError.value || 'Impossible de charger l\'inventaire'
-                })
+                inventoryError.value = inventoryError.value || 'Impossible de charger l\'inventaire'
             }
         } catch (error) {
             logger.error('Erreur lors de l\'initialisation', error)
-            await alertService.error({
-                title: 'Erreur',
-                text: 'Impossible d\'initialiser les données de l\'inventaire'
-            })
+            inventoryError.value = 'Impossible d\'initialiser les données de l\'inventaire'
+        } finally {
+            initialLoading.value = false
         }
-    })
+    }
+
+    // ===== NAVIGATION =====
+
+    /**
+     * Navigation vers la page de suivi de l'importation du planning
+     */
+    const handleGoToImportTracking = () => {
+        router.push({
+            name: 'inventory-import-tracking',
+            params: { reference: inventoryReference }
+        })
+    }
 
     // ===== RETURN =====
 
@@ -535,6 +553,7 @@ export function useInventoryDetail(inventoryReference: string) {
         formatDate,
         getStatusClass,
         loadDetailData,
+        initializeInventory,
 
         // Gestion des ressources
         assignResourceToInventory,
@@ -544,6 +563,9 @@ export function useInventoryDetail(inventoryReference: string) {
 
         // Export
         exportToPDF,
-        exportJobsToPDF
+        exportJobsToPDF,
+
+        // Navigation
+        handleGoToImportTracking
     }
 }

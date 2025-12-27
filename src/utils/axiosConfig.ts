@@ -25,9 +25,17 @@ const axiosInstance = axios.create({
     // xsrfHeaderName: IS_PROD ? 'X-CSRFToken' : undefined,
 });
 
-// Intercepteur de requête pour ajouter le token d'authentification
+// Intercepteur de requête pour ajouter le token d'authentification et bloquer reasonlabsapi.com
 axiosInstance.interceptors.request.use(
     async (config: CustomAxiosRequestConfig) => {
+        // 🔒 Bloquer les requêtes vers reasonlabsapi.com
+        const url = config.url || '';
+        const fullUrl = url.startsWith('http') ? url : `${config.baseURL || ''}${url}`;
+        if (fullUrl.includes('reasonlabsapi.com')) {
+            console.warn('🚫 Requête Axios bloquée vers reasonlabsapi.com:', fullUrl);
+            return Promise.reject(new Error('Requête vers reasonlabsapi.com bloquée'));
+        }
+
         const tokens = getTokens();
         if (tokens?.access) {
             config.headers['Authorization'] = `Bearer ${tokens.access}`;
@@ -132,12 +140,23 @@ axiosInstance.interceptors.response.use(
                     }
             }
         } else if (error.request) {
-            // Erreur de réseau
+            // Erreur de réseau - ignorer si c'est reasonlabsapi.com
+            const requestUrl = error.request.responseURL || error.config?.url || '';
+            if (requestUrl.includes('reasonlabsapi.com')) {
+                console.warn('🚫 Erreur réseau ignorée pour reasonlabsapi.com:', requestUrl);
+                return Promise.reject(error);
+            }
+            
             alertService.error({
                 text: 'Erreur de connexion au serveur. Vérifiez votre connexion internet.'
             });
         } else {
-            // Erreur de configuration
+            // Erreur de configuration - ignorer si c'est reasonlabsapi.com
+            if (error.message && error.message.includes('reasonlabsapi.com')) {
+                console.warn('🚫 Erreur de configuration ignorée pour reasonlabsapi.com:', error.message);
+                return Promise.reject(error);
+            }
+            
             console.error('Erreur de configuration Axios:', error.message);
         }
 

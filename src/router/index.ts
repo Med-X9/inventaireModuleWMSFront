@@ -43,6 +43,13 @@ const routes: RouteRecordRaw[] = [
         props: route => ({ reference: route.params.reference as string }),
         meta: { requiresAuth: true }
     },
+    {
+        path: '/inventory/:reference/import-tracking',
+        name: 'inventory-import-tracking',
+        component: () => import(/* webpackChunkName: "inventory-import-tracking" */ '@/views/Inventory/ImportTracking.vue'),
+        props: route => ({ reference: route.params.reference as string }),
+        meta: { requiresAuth: true }
+    },
 
     {
         path: '/inventory/:reference/detail',
@@ -110,6 +117,17 @@ const routes: RouteRecordRaw[] = [
         component: () =>
             import(/* webpackChunkName: "inventory-job-management" */ '../views/Inventory/JobManagement.vue'),
         meta: { requiresAuth: true },
+    },
+    {
+        path: '/inventory/:inventoryId/:warehouseId/monitoring/pivot',
+        name: 'inventory-monitoring-pivot',
+        component: () =>
+            import(/* webpackChunkName: "inventory-monitoring-pivot" */ '../views/Inventory/MonitoringPivotTable.vue'),
+        props: route => ({
+            inventoryId: route.params.inventoryId as string,
+            warehouseId: route.params.warehouseId as string
+        }),
+        meta: { requiresAuth: true, layout: 'monitoring' },
     },
     {
         path: '/inventory/:inventoryId/:warehouseId/monitoring',

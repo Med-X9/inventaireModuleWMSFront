@@ -1,6 +1,14 @@
 /**
  * Helpers centralisés pour DataTable (DRY - Don't Repeat Yourself)
- * Fusion de useDataTableHelpers et utilitaires communs
+ * 
+ * Utilitaires généraux pour le DataTable :
+ * - Mapping frontend/backend (champs, opérateurs)
+ * - Construction de paramètres URL
+ * - Transformation de filtres
+ * - Filtrage et tri côté client
+ * - Mise à jour de pagination depuis les réponses backend
+ * 
+ * @module dataTableHelpers
  */
 
 import type { FilterOperator } from '../types/dataTable'
@@ -10,6 +18,19 @@ import { sortData, type SortRule } from './sortUtils'
 
 /**
  * Mappe les champs frontend vers les champs backend Django
+ * 
+ * Convertit les noms de champs du frontend vers le format attendu par le backend Django.
+ * Gère les relations Django avec la notation `__` (ex: `article__code_article`).
+ * 
+ * @param frontendField - Nom du champ côté frontend
+ * @returns Nom du champ côté backend Django
+ * 
+ * @example
+ * ```typescript
+ * mapFrontendFieldToBackend('article_code_article') // 'article__code_article'
+ * mapFrontendFieldToBackend('emplacement') // 'emplacement'
+ * mapFrontendFieldToBackend('unknown_field') // 'unknown_field' (non mappé, retourné tel quel)
+ * ```
  */
 export function mapFrontendFieldToBackend(frontendField: string): string {
     const fieldMap: Record<string, string> = {
@@ -25,6 +46,20 @@ export function mapFrontendFieldToBackend(frontendField: string): string {
 
 /**
  * Mappe les opérateurs DataTable vers Django ORM
+ * 
+ * Convertit les opérateurs utilisés par le DataTable vers les opérateurs
+ * acceptés par Django ORM pour les requêtes de filtrage.
+ * 
+ * @param operator - Opérateur du DataTable
+ * @returns Opérateur Django ORM (par défaut: 'contains')
+ * 
+ * @example
+ * ```typescript
+ * mapDataTableOperatorToBackend('equals') // 'exact'
+ * mapDataTableOperatorToBackend('greater_than') // 'gt'
+ * mapDataTableOperatorToBackend('contains') // 'contains'
+ * mapDataTableOperatorToBackend('unknown') // 'contains' (défaut)
+ * ```
  */
 export function mapDataTableOperatorToBackend(operator: FilterOperator): string {
     const operatorMap: Record<string, string> = {
@@ -47,6 +82,33 @@ export function mapDataTableOperatorToBackend(operator: FilterOperator): string 
 
 /**
  * Construit les paramètres URL au format DataTable standard
+ * 
+ * Crée des paramètres URLSearchParams au format DataTables standard
+ * (compatible avec l'ancien format DataTables pour compatibilité).
+ * 
+ * Note : Pour les nouvelles implémentations, préférer `convertQueryModelToQueryParams`
+ * de `queryModelConverter.ts` qui utilise le format QueryModel standard.
+ * 
+ * @param params - Paramètres de la table
+ * @param params.page - Numéro de page
+ * @param params.pageSize - Taille de page
+ * @param params.search - Recherche globale (optionnel)
+ * @param params.sortModel - Modèle de tri (optionnel)
+ * @param params.filters - Filtres (optionnel)
+ * @returns URLSearchParams au format DataTables standard
+ * 
+ * @deprecated Préférer `convertQueryModelToQueryParams` de `queryModelConverter.ts`
+ * 
+ * @example
+ * ```typescript
+ * buildDataTableParams({
+ *   page: 2,
+ *   pageSize: 20,
+ *   search: 'test',
+ *   sortModel: [{ field: 'name', direction: 'asc' }],
+ *   filters: { status: { operator: 'equals', value: 'active' } }
+ * })
+ * ```
  */
 export function buildDataTableParams(params: {
     page: number
@@ -90,6 +152,20 @@ export function buildDataTableParams(params: {
 
 /**
  * Transforme les filtres DataTable vers le format backend
+ * 
+ * Normalise les filtres depuis différents formats vers le format unifié FilterValue.
+ * 
+ * @param filters - Filtres au format variable (peut avoir value ou values)
+ * @returns Filtres normalisés au format FilterValue
+ * 
+ * @example
+ * ```typescript
+ * transformDataTableFilters({
+ *   status: { operator: 'equals', value: 'active' },
+ *   tags: { operator: 'in', values: ['tag1', 'tag2'] }
+ * })
+ * // Résultat : { status: { operator: 'equals', value: 'active' }, tags: { operator: 'in', values: ['tag1', 'tag2'] } }
+ * ```
  */
 export function transformDataTableFilters(filters: Record<string, any>): Record<string, FilterValue> {
     const transformed: Record<string, FilterValue> = {}
@@ -110,6 +186,33 @@ export function transformDataTableFilters(filters: Record<string, any>): Record<
 
 /**
  * Filtre et trie les données côté client
+ * 
+ * Applique successivement :
+ * 1. Recherche globale (sur toutes les colonnes)
+ * 2. Filtres par colonne (tous doivent correspondre, opérateur AND)
+ * 3. Tri multi-colonnes selon les priorités
+ * 
+ * @param data - Données à filtrer et trier
+ * @param filters - Filtres par colonne (optionnel)
+ * @param sortRules - Règles de tri (optionnel)
+ * @param globalSearch - Recherche globale (optionnel)
+ * @returns Nouveau tableau filtré et trié (ne modifie pas l'original)
+ * 
+ * @example
+ * ```typescript
+ * const data = [
+ *   { name: 'John', age: 30, status: 'active' },
+ *   { name: 'Jane', age: 25, status: 'inactive' },
+ *   { name: 'Bob', age: 35, status: 'active' }
+ * ]
+ * 
+ * filterAndSortData(data, 
+ *   { status: { operator: 'equals', value: 'active' } },
+ *   [{ field: 'age', direction: 'desc', priority: 1 }],
+ *   'john'
+ * )
+ * // Résultat : [{ name: 'John', age: 30, status: 'active' }]
+ * ```
  */
 export function filterAndSortData<T extends Record<string, any>>(
     data: T[],
@@ -139,6 +242,29 @@ export function filterAndSortData<T extends Record<string, any>>(
 
 /**
  * Met à jour la pagination depuis une réponse backend
+ * 
+ * Extrait le nombre total d'éléments depuis différentes propriétés possibles
+ * de la réponse backend et met à jour l'état de pagination.
+ * 
+ * Propriétés recherchées (par ordre de priorité) :
+ * - recordsFiltered (format DataTables)
+ * - totalRows
+ * - recordsTotal (format DataTables)
+ * - total
+ * 
+ * @param result - Réponse du backend
+ * @param state - État de pagination actuel (non utilisé, conservé pour compatibilité)
+ * @param setTotalItems - Fonction pour mettre à jour le nombre total d'éléments
+ * 
+ * @example
+ * ```typescript
+ * updatePaginationFromResult(
+ *   { recordsFiltered: 100 },
+ *   { currentPage: 1, pageSize: 20, totalItems: 0 },
+ *   (total) => { totalItems.value = total }
+ * )
+ * // totalItems.value devient 100
+ * ```
  */
 export function updatePaginationFromResult(
     result: any,

@@ -1,5 +1,5 @@
 /**
- * Composable pour gérer le redimensionnement de colonnes (style AG-Grid)
+ * Composable pour gérer le redimensionnement de colonnes
  * Permet de redimensionner les colonnes par glisser-déposer
  */
 

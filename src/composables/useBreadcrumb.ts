@@ -81,6 +81,14 @@ const breadcrumbConfig: BreadcrumbConfig = {
         { label: params.reference || '' }
     ],
 
+    // Route de suivi d'importation du planning
+    'inventory-import-tracking': (params) => [
+        { label: 'Gestion d\'inventaire', path: '/inventory/management' },
+        { label: 'Détail inventaire', path: `/inventory/${params.reference}/detail` },
+        { label: 'Suivi d\'importation', isActive: true },
+        { label: params.reference || '' }
+    ],
+
     // Route de planning d'inventaire (avec reference et warehouse)
     'inventory-planning': (params) => [
         { label: 'Gestion d\'inventaire', path: '/inventory/management' },

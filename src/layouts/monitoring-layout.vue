@@ -1,5 +1,5 @@
 <template>
-    <div class="min-h-screen bg-slate-50">
+    <div class="monitoring-layout-container">
         <router-view></router-view>
     </div>
 </template>
@@ -18,4 +18,20 @@ onMounted(() => {
   }
 })
 </script>
+
+<style scoped>
+.monitoring-layout-container {
+  width: 100vw !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background-color: rgb(241 245 249);
+}
+
+.monitoring-layout-container :deep(> *) {
+  width: 100% !important;
+  height: 100% !important;
+}
+</style>
 

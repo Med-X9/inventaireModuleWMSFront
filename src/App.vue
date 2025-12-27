@@ -1,7 +1,7 @@
 <template>
     <div
         class="main-section antialiased relative font-nunito text-sm font-normal"
-        :class="[store.sidebar ? 'toggle-sidebar' : '', store.menu, store.layout, store.rtlClass]"
+        :class="[!store.sidebar ? 'toggle-sidebar' : '', store.menu, store.layout, store.rtlClass, route.meta.layout === 'monitoring' ? 'h-screen w-screen overflow-hidden' : '']"
     >
         <component v-bind:is="mainLayout"></component>
     </div>
@@ -31,3 +31,8 @@
         return store.mainLayout === 'auth' ? authLayout : appLayout;
     });
 </script>
+
+<style>
+
+
+</style>

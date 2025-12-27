@@ -38,9 +38,9 @@ export interface ExportConfig {
     
     /**
      * Paramètre export à envoyer à l'API
-     * Défaut: 'excel'
+     * Défaut: 'spreadsheet'
      */
-    exportType?: 'excel' | 'csv' | 'pdf';
+    exportType?: 'spreadsheet' | 'csv' | 'pdf';
     
     /**
      * Paramètres additionnels à passer à l'action Vuex
@@ -94,7 +94,7 @@ export function useDataTableExport(
             });
 
             // Ajouter le paramètre export
-            const exportType = config.exportType || 'excel';
+            const exportType = config.exportType || 'spreadsheet';
             urlParams.append('export', exportType);
 
             const url = `?${urlParams.toString()}`;
@@ -162,12 +162,12 @@ export function useDataTableExport(
     };
 
     /**
-     * Export Excel
+     * Export tableur (format XLSX)
      */
-    const exportToExcel = async (config: Omit<ExportConfig, 'exportType' | 'fileExtension' | 'mimeType'>) => {
+    const exportToSpreadsheet = async (config: Omit<ExportConfig, 'exportType' | 'fileExtension' | 'mimeType'>) => {
         await exportData({
             ...config,
-            exportType: 'excel',
+            exportType: 'spreadsheet',
             fileExtension: 'xlsx',
             mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         });
@@ -246,11 +246,11 @@ export function useDataTableExport(
     }
 
     /**
-     * Export Excel côté client (utilise une bibliothèque externe si disponible)
+     * Export tableur côté client (utilise une bibliothèque externe si disponible)
      * Pour l'instant, exporte en CSV avec extension .xlsx
      */
-    const exportToExcelClient = (data: any[], filename: string = 'export', columns?: string[]) => {
-        // Pour un vrai export Excel, il faudrait utiliser une bibliothèque comme xlsx
+    const exportToSpreadsheetClient = (data: any[], filename: string = 'export', columns?: string[]) => {
+        // Pour un vrai export tableur, il faudrait utiliser une bibliothèque comme xlsx
         // Pour l'instant, on exporte en CSV avec extension .xlsx
         return exportToCsvClient(data, filename, columns)
     }
@@ -258,11 +258,11 @@ export function useDataTableExport(
     return {
         exportLoading,
         exportData,
-        exportToExcel,
+        exportToSpreadsheet,
         exportToCsv,
         exportToPdf,
         exportToCsvClient,
-        exportToExcelClient
+        exportToSpreadsheetClient
     };
 }
 

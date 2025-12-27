@@ -1,5 +1,5 @@
 /**
- * Composable pour gérer l'épinglage de colonnes (style AG-Grid)
+ * Composable pour gérer l'épinglage de colonnes
  * Permet d'épingler des colonnes à gauche ou à droite
  */
 

@@ -13,16 +13,31 @@
 
         <!-- Mode édition -->
         <div v-else class="cell-edit">
-            <!-- Input texte -->
-            <input v-if="inputType === 'text' || inputType === 'number'"
-                   ref="inputRef"
-                   :type="inputType"
-                   :value="editValue"
-                   @input="handleInput"
-                   @keydown="handleKeydown"
-                   @blur="saveEdit"
-                   class="edit-input"
-                   :class="inputClass" />
+            <!-- Message d'erreur de validation -->
+            <div v-if="validationError" class="validation-error-message" role="alert" aria-live="polite">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{{ validationError }}</span>
+            </div>
+
+            <!-- Input texte/number avec TextInput personnalisé -->
+            <TextInput
+                v-if="inputType === 'text' || inputType === 'number'"
+                ref="inputRef"
+                :field="textFieldConfig"
+                :value="editValue"
+                :error="!!validationError"
+                :error-message="validationError"
+                :disabled="!isEditable"
+                class="w-full"
+                :aria-invalid="!!validationError"
+                :aria-describedby="validationError ? `error-${props.column.field}` : undefined"
+                @update:value="handleTextValueUpdate"
+                @change="handleTextChange"
+                @keydown="handleKeydown"
+                @blur="saveEdit"
+            />
 
             <!-- Select simple -->
             <SelectField
@@ -34,8 +49,12 @@
                 :placeholder="selectPlaceholder"
                 :clearable="!props.column.required"
                 :disabled="!isEditable"
+                :error="!!validationError"
+                :error-message="validationError"
                 class="w-full"
                 compact
+                :aria-invalid="!!validationError"
+                :aria-describedby="validationError ? `error-${props.column.field}` : undefined"
                 @keydown="handleKeydown"
                 @close="handleSelectClose"
             />
@@ -46,9 +65,12 @@
                 ref="inputRef"
                 :field="dateFieldConfig"
                 :value="editValue"
-                :error="false"
+                :error="!!validationError"
+                :error-message="validationError"
                 :disabled="!isEditable"
                 class="w-full"
+                :aria-invalid="!!validationError"
+                :aria-describedby="validationError ? `error-${props.column.field}` : undefined"
                 @update:value="handleDateValueUpdate"
                 @change="handleDateChange"
                 @keydown="handleKeydown"
@@ -63,7 +85,8 @@
                    @input="handleDatetimeInput"
                    @keydown="handleKeydown"
                    @blur="saveEdit"
-                   class="edit-input" />
+                   class="edit-input"
+                   :class="baseInputClasses" />
 
             <!-- Checkbox -->
             <input v-else-if="inputType === 'checkbox'"
@@ -83,17 +106,23 @@
                       @keydown="handleKeydown"
                       @blur="saveEdit"
                       class="edit-textarea"
+                      :class="baseInputClasses"
                       rows="3" />
 
-            <!-- Fallback input texte -->
-            <input v-else
-                   ref="inputRef"
-                   type="text"
-                   :value="editValue"
-                   @input="handleInput"
-                   @keydown="handleKeydown"
-                   @blur="saveEdit"
-                   class="edit-input" />
+            <!-- Fallback input texte avec TextInput -->
+            <TextInput
+                v-else
+                ref="inputRef"
+                :field="textFieldConfig"
+                :value="editValue"
+                :error="false"
+                :disabled="!isEditable"
+                class="w-full"
+                @update:value="handleTextValueUpdate"
+                @change="handleTextChange"
+                @keydown="handleKeydown"
+                @blur="saveEdit"
+            />
 
             <!-- Boutons d'action -->
             <div class="edit-actions">
@@ -117,6 +146,7 @@ import { ref, computed, nextTick, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import SelectField from '@/components/Form/SelectField.vue'
 import DateInput from '@/components/Form/fields/DateInput.vue'
+import TextInput from '@/components/Form/fields/TextInput.vue'
 import { logger } from '@/services/loggerService'
 import type { FieldConfig } from '@/interfaces/form'
 
@@ -140,6 +170,14 @@ const inputRef = ref<HTMLElement | ComponentPublicInstance | null>(null)
 
 // État local pour l'édition
 const editValue = ref<any>(props.value)
+const validationError = ref<string | null>(null)
+
+// Classes Tailwind communes pour les champs d'édition
+const baseInputClasses =
+    'w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm ' +
+    'focus:outline-none focus:ring-2 focus:ring-yellow-300 focus:border-yellow-400 ' +
+    'disabled:bg-gray-100 disabled:text-gray-400 ' +
+    'dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400'
 
 // Computed pour déterminer le type d'input
 const inputType = computed(() => {
@@ -252,6 +290,19 @@ const dateFieldConfig = computed<FieldConfig>(() => ({
     }
 }))
 
+const textFieldConfig = computed<FieldConfig>(() => ({
+    key: `datatable-text-${props.column.field || 'col'}`,
+    label: props.column.headerName || props.column.field || 'Texte',
+    type: inputType.value === 'number' ? 'number' : 'text',
+    props: {
+        placeholder: props.column.editPlaceholder || 'Saisir une valeur',
+        min: props.column.min,
+        max: props.column.max,
+        step: props.column.step,
+        ...(props.column.inputProps || {})
+    }
+}))
+
 const datetimeValue = computed(() => {
     if (!props.value) return ''
 
@@ -264,16 +315,6 @@ const datetimeValue = computed(() => {
     }
 })
 
-// Computed pour les classes CSS de l'input
-const inputClass = computed(() => {
-    const classes = ['edit-input']
-
-    if (inputType.value === 'number') {
-        classes.push('edit-input-number')
-    }
-
-    return classes.join(' ')
-})
 
 // Fonction pour vérifier si le contenu contient du HTML
 const containsHTML = (content: any): boolean => {
@@ -332,10 +373,18 @@ const handleClick = () => {
 const saveEdit = () => {
     const finalValue = editValue.value
 
-    // Validation basique
+    // Validation complète avant sauvegarde
+    const error = validateValue(finalValue)
+    if (error) {
+        validationError.value = error
+        logger.warn('Validation échouée', { value: finalValue, error })
+        return
+    }
+
+    // Validation basique pour nombre
     if (inputType.value === 'number' && isNaN(Number(finalValue))) {
+        validationError.value = 'Veuillez entrer une valeur numérique valide'
         logger.warn('Valeur numérique invalide', finalValue)
-        alert('Veuillez entrer une valeur numérique valide.')
         return
     }
 
@@ -343,11 +392,14 @@ const saveEdit = () => {
     if (inputType.value === 'date' && finalValue) {
         const date = new Date(finalValue)
         if (isNaN(date.getTime())) {
+            validationError.value = 'Veuillez entrer une date valide'
             logger.warn('Date invalide', finalValue)
-            alert('Veuillez entrer une date valide.')
             return
         }
     }
+
+    // Réinitialiser l'erreur si validation OK
+    validationError.value = null
 
     // Ne pas sauvegarder si la valeur n'a pas changé
     if (finalValue === props.value) {
@@ -361,13 +413,57 @@ const saveEdit = () => {
 // Fonction pour annuler l'édition
 const cancelEdit = () => {
     editValue.value = props.value
+    validationError.value = null
     emit('cancel-edit')
+}
+
+// Fonction de validation
+const validateValue = (value: any): string | null => {
+    const validation = props.column.validation
+    if (!validation) return null
+
+    // Validation required
+    if (validation.required && (value === null || value === undefined || value === '')) {
+        return 'Ce champ est obligatoire'
+    }
+
+    // Validation min/max pour nombres
+    if (inputType.value === 'number' && typeof value === 'number') {
+        if (validation.min !== undefined && value < validation.min) {
+            return `La valeur doit être supérieure ou égale à ${validation.min}`
+        }
+        if (validation.max !== undefined && value > validation.max) {
+            return `La valeur doit être inférieure ou égale à ${validation.max}`
+        }
+    }
+
+    // Validation pattern (regex)
+    if (validation.pattern && typeof value === 'string') {
+        const regex = new RegExp(validation.pattern)
+        if (!regex.test(value)) {
+            return 'Le format de la valeur est invalide'
+        }
+    }
+
+    // Validation custom
+    if (validation.custom) {
+        const result = validation.custom(value)
+        if (result !== true) {
+            return typeof result === 'string' ? result : 'La valeur est invalide'
+        }
+    }
+
+    return null
 }
 
 // Handlers pour les différents types d'inputs
 const handleInput = (event: Event) => {
     const target = event.target as HTMLInputElement
-    editValue.value = inputType.value === 'number' ? Number(target.value) : target.value
+    const newValue = inputType.value === 'number' ? Number(target.value) : target.value
+    editValue.value = newValue
+    
+    // Validation en temps réel
+    validationError.value = validateValue(newValue)
 }
 
 const handleDateValueUpdate = (value: unknown) => {
@@ -376,6 +472,19 @@ const handleDateValueUpdate = (value: unknown) => {
 
 const handleDateChange = () => {
     saveEdit()
+}
+
+const handleTextValueUpdate = (value: unknown) => {
+    const newValue = inputType.value === 'number' ? Number(value) : value
+    editValue.value = newValue
+    
+    // Validation en temps réel
+    validationError.value = validateValue(newValue)
+}
+
+const handleTextChange = () => {
+    // Ne pas sauvegarder automatiquement sur change pour text/number
+    // La sauvegarde se fait sur blur ou Enter
 }
 
 const handleDatetimeInput = (event: Event) => {
@@ -403,6 +512,7 @@ const handleSelectClose = () => {
 watch(() => props.value, (newValue) => {
     if (!props.isEditing) {
         editValue.value = newValue
+        validationError.value = null
     }
 })
 
@@ -410,6 +520,7 @@ watch(() => props.value, (newValue) => {
 watch(() => props.isEditing, (isEditing) => {
     if (!isEditing) {
         editValue.value = props.value
+        validationError.value = null
     }
 })
 
@@ -773,6 +884,38 @@ const handleKeydown = (event: KeyboardEvent) => {
 .edit-textarea:focus::placeholder {
     color: #9ca3af;
     transition: color 0.2s ease;
+}
+
+/* Styles pour les messages d'erreur de validation */
+.validation-error-message {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 0.375rem;
+    color: #dc2626;
+    font-size: 0.875rem;
+    animation: slideDown 0.2s ease-out;
+}
+
+.dark .validation-error-message {
+    background-color: #7f1d1d;
+    border-color: #991b1b;
+    color: #fca5a5;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Animation pour les changements de valeur */
