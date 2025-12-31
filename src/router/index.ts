@@ -130,13 +130,13 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true, layout: 'monitoring' },
     },
     {
-        path: '/inventory/:inventoryId/:warehouseId/monitoring',
+        path: '/inventory/:reference/:warehouse/monitoring',
         name: 'inventory-monitoring',
         component: () =>
             import(/* webpackChunkName: "inventory-monitoring" */ '../views/Inventory/Monitoring.vue'),
         props: route => ({
-            inventoryId: route.params.inventoryId as string,
-            warehouseId: route.params.warehouseId as string
+            inventoryReference: route.params.reference as string,
+            warehouseReference: route.params.warehouse as string
         }),
         meta: { requiresAuth: true, layout: 'monitoring' },
     },

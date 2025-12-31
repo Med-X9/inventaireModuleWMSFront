@@ -17,33 +17,6 @@
 
     <!-- Toolbar normale quand pas de chargement -->
     <div v-else class="actions-container flex items-center justify-end">
-        <!-- Gestionnaire de colonnes en premier -->
-        <div class="action-group">
-            <button @click="toggleColumnManager" class="action-btn" title="Afficher/Masquer les colonnes">
-                <IconLayout class="w-3.5 h-3.5" />
-            </button>
-        </div>
-        
-        <!-- Popup du gestionnaire de colonnes -->
-        <Transition name="popup-fade">
-            <div v-if="showColumnManager" class="column-manager-popup-overlay" @click.self="toggleColumnManager">
-                <div class="column-manager-popup" @click.stop>
-                    <ColumnManager 
-                        :columns="columns" 
-                        :visibleColumns="visibleColumns" 
-                        :columnWidths="columnWidths"
-                        :enableColumnPinning="enableColumnPinning"
-                        :columnPinning="columnPinning"
-                        :stickyHeader="stickyHeader"
-                        @columns-changed="handleColumnsChanged" 
-                        @reorder-columns="handleReorderColumns" 
-                        @pin-column="handlePinColumn"
-                        @sticky-header-changed="handleStickyHeaderChanged"
-                        @close="toggleColumnManager"
-                    />
-                </div>
-            </div>
-        </Transition>
 
         <!-- Export avec dropdown amélioré en second -->
         <div class="action-group">
@@ -123,7 +96,6 @@ import IconLayout from '../icon/icon-layout.vue'
 import IconDownload from '../icon/icon-download.vue'
 import IconChevronDown from '../icon/icon-chevron-down.vue'
 import IconFile from '../icon/icon-file.vue'
-import ColumnManager from './ColumnManager.vue'
 
 interface Props {
     columns: any[]
@@ -145,16 +117,12 @@ interface Props {
 }
 
 interface Emits {
-    (e: 'columns-changed', visibleColumns: string[], columnWidths: Record<string, number>): void
-    (e: 'reorder-columns', fromIndex: number, toIndex: number): void
     (e: 'export-csv'): void
     (e: 'export-spreadsheet'): void
     (e: 'export-pdf'): void
     (e: 'export-selected-csv'): void
     (e: 'export-selected-spreadsheet'): void
     (e: 'deselect-all'): void
-    (e: 'pin-column', field: string, direction: 'left' | 'right' | null): void
-    (e: 'sticky-header-changed', enabled: boolean): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -162,32 +130,12 @@ const props = withDefaults(defineProps<Props>(), {
 })
 const emit = defineEmits<Emits>()
 
-const showColumnManager = ref(false)
 const showExportDropdown = ref(false)
-
-const toggleColumnManager = () => {
-    showColumnManager.value = !showColumnManager.value
-}
-
-const handlePinColumn = (field: string, direction: 'left' | 'right' | null) => {
-    emit('pin-column', field, direction)
-}
-
-const handleStickyHeaderChanged = (enabled: boolean) => {
-    emit('sticky-header-changed', enabled)
-}
 
 const toggleExportDropdown = () => {
     showExportDropdown.value = !showExportDropdown.value
 }
 
-const handleColumnsChanged = (newVisibleColumns: string[], newColumnWidths: Record<string, number>) => {
-    emit('columns-changed', newVisibleColumns, newColumnWidths)
-}
-
-const handleReorderColumns = (fromIndex: number, toIndex: number) => {
-    emit('reorder-columns', fromIndex, toIndex)
-}
 
 const exportToCsv = () => {
     emit('export-csv')

@@ -71,11 +71,6 @@
                 :columnPinning="columnPinning"
                 :stickyHeader="stickyHeaderState"
                 :defaultVisibleColumnsCount="defaultVisibleColumnsCountState"
-                @columns-changed="handleVisibleColumnsChanged"
-                @reorder-columns="dataTable?.reorderColumns"
-                @pin-column="handlePinColumn"
-                @sticky-header-changed="handleStickyHeaderChanged"
-                @default-visible-columns-changed="handleDefaultVisibleColumnsCountChanged"
                 @export-csv="emit('export-csv')"
                 @export-spreadsheet="emit('export-spreadsheet')"
                 @export-pdf="emit('export-pdf')"
@@ -89,10 +84,7 @@
                 :currentPage="props.currentPageProp ?? dataTable?.effectiveCurrentPage ?? 1"
                 :totalPages="props.totalPagesProp ?? dataTable?.effectiveTotalPages ?? 1"
                 :totalItems="dataTable?.effectiveTotalItems || 0"
-                :pageSize="(() => {
-                    const ps = dataTable?.effectivePageSize;
-                    return ps;
-                })()" :total="dataTable?.effectiveTotalItems || 0"
+                :pageSize="dataTable?.effectivePageSize || 20" :total="dataTable?.effectiveTotalItems || 0"
                 :start="dataTable?.start || 0" :end="dataTable?.end || 0" :loading="dataTable?.loading || false"
                 @page-changed="handlePaginationChanged"
                 @page-size-changed="handlePageSizeChanged" />
@@ -257,10 +249,12 @@ const props = withDefaults(defineProps<DataTableProps<Record<string, unknown>>>(
     // Props avec valeurs par défaut sûres
     advancedFilters: () => ({}),     // Objet vide par défaut
     actions: () => [],               // Array vide par défaut
-    rowDataProp: () => []            // Array vide par défaut
+    rowDataProp: () => [],           // Array vide par défaut
+    defaultVisibleColumnsCount: 50   // Nombre de colonnes visibles par défaut
 })
 const emit = defineEmits<{
     'pagination-changed': [queryModel: QueryModel]
+    'page-size-changed': [queryModel: QueryModel]
     'sort-changed': [queryModel: QueryModel]
     'filter-changed': [queryModel: QueryModel]
     'global-search-changed': [queryModel: QueryModel]
@@ -269,7 +263,7 @@ const emit = defineEmits<{
     'grouping-changed': [groups: any[]]
     'pivot-changed': [pivotData: any]
     'master-detail-changed': [detailState: any]
-    'row-clicked': [row: any]
+    'row-clicked': [rowId: string]
     'export-spreadsheet': []
     'export-csv': []
     'export-pdf': []
@@ -312,10 +306,6 @@ const {
     handleGlobalSearchUpdate,
     handleClearAllFilters,
     handleSelectionChanged,
-    handlePinColumn,
-    handleStickyHeaderChanged,
-    handleVisibleColumnsChanged,
-    handleDefaultVisibleColumnsCountChanged,
     createQueryModelFromCurrentState,
     visibleColumnNames,
     columnsForManager,
@@ -362,53 +352,53 @@ const handleFilterChangedWrapper = async (filters: Record<string, any> | QueryMo
     }
 
     // Convertir le Proxy réactif en objet plain
-    let filtersPlain: Record<string, any> = {}
-    try {
+        let filtersPlain: Record<string, any> = {}
+        try {
         filtersPlain = JSON.parse(JSON.stringify(filters))
-    } catch (e) {
+                        } catch (e) {
         console.warn('[DataTable] handleFilterChangedWrapper - Erreur de conversion, utilisation directe')
         filtersPlain = { ...filters } as Record<string, any>
-    }
+        }
 
     // Vérifier si c'est un QueryModel imbriqué (cas d'erreur)
-    if (filtersPlain && typeof filtersPlain === 'object') {
-        const filterKeys = Object.keys(filtersPlain)
-        const hasQueryModelKeys = filterKeys.some(key => ['page', 'pageSize', 'filters', 'sort', 'search', 'customParams'].includes(key))
+        if (filtersPlain && typeof filtersPlain === 'object') {
+            const filterKeys = Object.keys(filtersPlain)
+            const hasQueryModelKeys = filterKeys.some(key => ['page', 'pageSize', 'filters', 'sort', 'search', 'customParams'].includes(key))
 
-        if (hasQueryModelKeys && 'filters' in filtersPlain && typeof filtersPlain.filters === 'object') {
+            if (hasQueryModelKeys && 'filters' in filtersPlain && typeof filtersPlain.filters === 'object') {
             console.warn('[DataTable] handleFilterChangedWrapper - QueryModel imbriqué détecté, extraction des filtres')
-            filtersPlain = filtersPlain.filters || {}
+                filtersPlain = filtersPlain.filters || {}
+            }
         }
-    }
 
     console.log('[DataTable] handleFilterChangedWrapper - Filtres convertis:', filtersPlain)
 
     // Convertir vers le format attendu par le backend
-    const filtersConverted: Record<string, any> = {}
-    for (const [fieldName, filterData] of Object.entries(filtersPlain)) {
-        if (filterData && typeof filterData === 'object') {
+        const filtersConverted: Record<string, any> = {}
+        for (const [fieldName, filterData] of Object.entries(filtersPlain)) {
+            if (filterData && typeof filterData === 'object') {
             // Format simple pour les selects multi
-            if (filterData.operator === 'in' && filterData.values && Array.isArray(filterData.values)) {
-                filtersConverted[fieldName] = filterData.values
-            } else if (filterData.operator && filterData.value !== undefined) {
+                if (filterData.operator === 'in' && filterData.values && Array.isArray(filterData.values)) {
+                    filtersConverted[fieldName] = filterData.values
+                } else if (filterData.operator && filterData.value !== undefined) {
                 // Format backend: { type: operator, filter: value }
-                filtersConverted[fieldName] = {
+                    filtersConverted[fieldName] = {
                     type: filterData.operator,  // 'equals', 'contains', etc.
                     filter: filterData.value    // la valeur du filtre
-                }
+                    }
                 // Support pour les ranges (si nécessaire)
                 if (filterData.value2 !== undefined && filterData.operator === 'between') {
-                    filtersConverted[fieldName].from = filterData.value
-                    filtersConverted[fieldName].to = filterData.value2
+                        filtersConverted[fieldName].from = filterData.value
+                        filtersConverted[fieldName].to = filterData.value2
                     filtersConverted[fieldName].type = 'range'
                     delete filtersConverted[fieldName].filter
-                }
-            } else {
+                    }
+                } else {
                 // Fallback
-                filtersConverted[fieldName] = filterData
+                    filtersConverted[fieldName] = filterData
+                }
             }
         }
-    }
 
     // Créer le QueryModel final
     const currentQueryModel = createQueryModelFromCurrentState()

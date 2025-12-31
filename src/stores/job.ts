@@ -16,7 +16,6 @@ import type {
     JobResult,
     JobAssignmentsTeamRequest,
     JobAssignmentsResourceRequest,
-    JobManualAssignmentsRequest,
     JobReadyResponse
 } from '@/models/Job';
 import type { DataTableResponse } from '@/utils/dataTableUtils';
@@ -33,6 +32,13 @@ export const useJobStore = defineStore('job', () => {
     const error = ref<string | null>(null);
     const totalCount = ref(0);
     const currentPage = ref(1);
+    // Métadonnées de pagination depuis la dernière réponse (pour fetchJobsDiscrepancies)
+    const jobsPaginationMetadata = ref<{
+        page?: number;
+        totalPages?: number;
+        pageSize?: number;
+        total?: number;
+    } | null>(null);
     const pageSize = ref(50);
     // Métadonnées de pagination depuis la dernière réponse
     const paginationMetadata = ref<{
@@ -100,27 +106,44 @@ export const useJobStore = defineStore('job', () => {
         error.value = null;
         try {
             // Convertir QueryModel en paramètres de requête
-            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
+            const requestParams = params ? convertQueryModelToQueryParams(params) : new URLSearchParams();
+            console.log('[jobStore.fetchJobs] 🔄 Converted query params:', Object.fromEntries(requestParams.entries()))
 
             const requestBody = {
                 inventory_id: inventoryId,
                 warehouse_id: warehouseId,
-                ...requestParams
+                ...Object.fromEntries(requestParams.entries()) // Convertir URLSearchParams en objet
             } as any; // Type any pour permettre l'accès aux propriétés dynamiques
+
+            console.log('[jobStore.fetchJobs] 📤 Final request body:', requestBody)
 
             const responseData = await JobService.getAll(inventoryId, warehouseId, requestBody);
 
+            // Utiliser la pageSize demandée si elle existe, sinon celle de la réponse
+            const requestedPageSize = requestBody.pageSize || requestBody.page_size
+            const responsePageSize = responseData.pageSize
 
             // Stocker les données brutes
             jobs.value = responseData.data || [];
+
+            // Convertir pageSize en number pour éviter les erreurs de type
+            const pageSizeNumber = Number(requestedPageSize) || Number(responsePageSize) || 20;
 
             // Stocker les métadonnées de pagination brutes du backend (sans calcul)
             paginationMetadata.value = {
                 page: responseData.page ?? 1,
                 totalPages: responseData.totalPages ?? 1,
-                pageSize: responseData.pageSize ?? 20,
+                pageSize: pageSizeNumber,
                 total: responseData.total ?? responseData.recordsFiltered ?? responseData.recordsTotal ?? 0
             };
+
+            console.log('[jobStore.fetchJobs] 📊 Final pagination metadata:', {
+                requestedPageSize,
+                responsePageSize,
+                finalPageSize: paginationMetadata.value.pageSize,
+                page: paginationMetadata.value.page,
+                total: paginationMetadata.value.total
+            })
 
             // Mettre à jour totalCount pour compatibilité
             totalCount.value = paginationMetadata.value.total ?? 0;
@@ -159,22 +182,29 @@ export const useJobStore = defineStore('job', () => {
             }
 
             // Convertir QueryModel en paramètres de requête
-            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
+            const requestParams = params ? convertQueryModelToQueryParams(params) : new URLSearchParams();
+            console.log('[jobStore.fetchJobsValidated] 🔄 Converted query params:', Object.fromEntries(requestParams.entries()))
 
             const requestBody = {
                 inventory_id: inventoryId,
                 warehouse_id: warehouseId,
-                ...requestParams
+                ...Object.fromEntries(requestParams.entries()) // Convertir URLSearchParams en objet
             } as any; // Type any pour permettre l'accès aux propriétés dynamiques
+
+            console.log('[jobStore.fetchJobsValidated] 📤 Final request body:', requestBody)
 
             const responseData = await JobService.getAllValidated(inventoryId, warehouseId, requestBody);
 
+            // Utiliser la pageSize demandée si elle existe, sinon celle de la réponse
+            const requestedPageSize = requestBody.pageSize || requestBody.page_size
+            const responsePageSize = responseData.pageSize
+
             console.log('[jobStore] fetchJobsValidated - API response:', {
-                requestedPageSize: requestBody.pageSize || requestBody.page_size,
+                requestedPageSize,
+                responsePageSize,
                 actualDataLength: responseData.data?.length || 0,
                 total: responseData.total,
-                page: responseData.page,
-                pageSize: responseData.pageSize
+                page: responseData.page
             });
 
             // Stocker les données brutes
@@ -183,13 +213,23 @@ export const useJobStore = defineStore('job', () => {
             // Synchroniser avec la propriété principale du store pour useBackendDataTable
             jobs.value = (responseData.data || []) as any;
 
+            // Convertir pageSize en number pour éviter les erreurs de type
+            const pageSizeNumber = Number(requestedPageSize) || Number(responsePageSize) || 20;
+
             // Stocker les métadonnées de pagination brutes du backend (sans calcul)
             paginationMetadata.value = {
                 page: responseData.page ?? 1,
                 totalPages: responseData.totalPages ?? 1,
-                pageSize: responseData.pageSize ?? 20,
+                pageSize: pageSizeNumber,
                 total: responseData.total ?? responseData.recordsFiltered ?? responseData.recordsTotal ?? 0
             };
+
+            console.log('[jobStore.fetchJobsValidated] 📊 Final pagination metadata:', {
+                page: paginationMetadata.value.page,
+                pageSize: paginationMetadata.value.pageSize,
+                totalPages: paginationMetadata.value.totalPages,
+                total: paginationMetadata.value.total
+            });
 
             // Mettre à jour totalCount pour compatibilité
             totalCount.value = paginationMetadata.value.total ?? 0;
@@ -312,6 +352,19 @@ export const useJobStore = defineStore('job', () => {
         return await JobService.validateJob(id);
     };
 
+    const validateAllJobs = async (inventoryId: number, warehouseId: number): Promise<UpdateJobStatusResponse> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            return await JobService.validateAllJobs(inventoryId, warehouseId);
+        } catch (err: any) {
+            await handleError(err, 'Erreur lors de la validation de tous les jobs');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
     const completeJob = async (id: number | string): Promise<UpdateJobStatusResponse> => {
         return updateJobStatus(id, 'TERMINE');
     };
@@ -392,6 +445,58 @@ export const useJobStore = defineStore('job', () => {
         }
     };
 
+    /**
+     * Assigner une équipe à un job spécifique pour un counting_order
+     */
+    const assignTeamToJob = async (inventoryId: number, data: {
+        job_id: number;
+        counting_order: number;
+        session_id: number;
+        date_start: string;
+    }): Promise<any> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            // Utiliser la méthode existante avec un seul job_id
+            const request: JobAssignmentsTeamRequest = {
+                job_ids: [data.job_id],
+                counting_order: data.counting_order,
+                session_id: data.session_id,
+                date_start: data.date_start
+            };
+
+            const response = await JobService.jobAssignmentsTeam(inventoryId, request);
+            return response;
+        } catch (err: any) {
+            await handleError(err, 'Erreur lors de l\'assignation de l\'équipe au job');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    /**
+     * Assigner automatiquement une équipe à un job (sauvegarde automatique)
+     */
+    const assignTeamToJobAuto = async (data: {
+        job_id: number;
+        team: number;
+        counting_order: number;
+        complete: boolean;
+    }): Promise<any> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await JobService.assignTeamToJobAuto(data);
+            return response;
+        } catch (err: any) {
+            await handleError(err, 'Erreur lors de l\'assignation automatique de l\'équipe');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
     // Assigner des ressources aux jobs
     const assignResourcesToJobs = async (inventoryId: number, data: JobAssignmentsResourceRequest): Promise<JobAssignmentsResourceRequest> => {
         loading.value = true;
@@ -407,19 +512,6 @@ export const useJobStore = defineStore('job', () => {
         }
     };
 
-    const assignJobsManual = async (data: JobManualAssignmentsRequest[]): Promise<JobManualAssignmentsRequest> => {
-        loading.value = true;
-        error.value = null;
-        try {
-            const response = await JobService.jobManualAssignments(data);
-            return response;
-        } catch (err: any) {
-            await handleError(err, 'Erreur lors de l\'assignation des jobs manuellement');
-            throw err;
-        } finally {
-            loading.value = false;
-        }
-    };
 
     const jobReady = async (job_ids: number[]): Promise<JobReadyResponse> => {
         return await JobService.jobReady(job_ids);
@@ -541,6 +633,16 @@ export const useJobStore = defineStore('job', () => {
         error.value = null;
         try {
             const response = await JobService.getJobsDiscrepancies(inventoryId, warehouseId, params);
+
+            // Stocker les métadonnées de pagination brutes du backend (sans calcul)
+            // Format: { success: true, data: [...], rowCount: 2, totalCount: 2, page: 1, pageSize: 20 }
+            jobsPaginationMetadata.value = {
+                page: response.page ?? 1,
+                totalPages: response.totalPages ?? response.total_pages ?? 1,
+                pageSize: response.pageSize ?? response.page_size ?? 20,
+                total: response.total ?? response.totalCount ?? response.recordsFiltered ?? response.recordsTotal ?? 0
+            };
+
             return response;
         } catch (err: any) {
             await handleError(err, 'Erreur lors de la récupération des jobs avec discrepancies');
@@ -659,6 +761,7 @@ export const useJobStore = defineStore('job', () => {
         currentPage,
         pageSize,
         paginationMetadata,
+        jobsPaginationMetadata,
 
         // Getters
         getCurrentJob,
@@ -679,14 +782,16 @@ export const useJobStore = defineStore('job', () => {
         deleteJob,
         updateJobStatus,
         validateJob,
+        validateAllJobs,
         completeJob,
         setJobWaiting,
         fetchJobsByWarehouse,
         fetchJobsByInventory,
         fetchJobsByStatus,
         assignTeamsToJobs,
+        assignTeamToJob,
+        assignTeamToJobAuto,
         assignResourcesToJobs,
-        assignJobsManual,
         clearError,
         clearCurrentJob,
         resetState,

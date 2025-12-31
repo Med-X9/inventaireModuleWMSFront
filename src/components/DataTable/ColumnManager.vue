@@ -34,7 +34,7 @@
                     <span class="option-hint">(Min: 4, Max: {{ totalAvailableColumns }})</span>
                 </label>
                 <div class="option-description">
-                    Les colonnes restantes seront disponibles via le bouton "plus" (responsive)
+                    Toutes les colonnes visibles sont affichées (pas de limitation responsive)
                 </div>
             </div>
 

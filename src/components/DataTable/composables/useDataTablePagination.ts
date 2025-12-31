@@ -65,13 +65,17 @@ export function useDataTablePagination(config: UseDataTablePaginationConfig) {
         const currentPageSize = props.serverSidePagination
             ? (props.pageSizeProp ?? dataTable?.effectivePageSize ?? 20)
             : (dataTable?.effectivePageSize || 20)
-        
+
         const newQueryModel = createPaginationQueryModel(page, currentPageSize)
 
         if (autoDataTable && shouldUseAutoHandlers.value) {
             await autoDataTable.handlePaginationChanged(newQueryModel)
             return
         }
+
+        // ✅ Émettre l'événement pagination-changed pour que le parent gère la pagination serveur
+        // Cela permet aux composables comme useInventoryResults, usePlanning, etc. de réagir
+        emit(newQueryModel)
 
         // Mettre à jour l'état local uniquement pour la pagination côté client
         // Pour la pagination serveur, on attend que le parent mette à jour les props depuis la réponse du backend
@@ -108,7 +112,7 @@ export function useDataTablePagination(config: UseDataTablePaginationConfig) {
         // Réinitialiser à la page 1 (conforme PAGINATION_FRONTEND.md)
         const newQueryModel = createPaginationQueryModel(1, size)
         console.log('[useDataTablePagination] Emitting pagination-changed with queryModel:', newQueryModel)
-        emit('pagination-changed', newQueryModel)
+        emit(newQueryModel)
     }
 
     return {

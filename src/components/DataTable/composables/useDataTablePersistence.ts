@@ -165,9 +165,9 @@ export function useDataTablePersistence(config: UseDataTablePersistenceConfig) {
 
   // Interface retournée
   const state: PersistenceState = {
-    config: currentConfig,
-    lastSaved,
-    isSaving
+    config: currentConfig.value,
+    lastSaved: lastSaved.value,
+    isSaving: isSaving.value
   }
 
   const actions: PersistenceActions = {

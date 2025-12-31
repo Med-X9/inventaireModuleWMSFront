@@ -57,18 +57,22 @@
         <!-- DataTable harmonisée avec Affecter.vue -->
         <div v-if="selectedStore" class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
             <DataTable
+                :key="resultsKey"
                 :columns="columns"
                 :rowDataProp="results"
                 :actions="actions as any"
                 :enableVirtualScrolling="false"
+                :currentPageProp="pagination.current_page"
                 :totalPagesProp="pagination.total_pages"
                 :totalItemsProp="pagination.total"
-                :rowSelection="false"
+                :pageSizeProp="pagination.page_size"
                 @pagination-changed="(queryModel) => onResultsTableEvent('pagination', queryModel)"
+                @page-size-changed="(queryModel) => onResultsTableEvent('page-size-changed', queryModel)"
                 @sort-changed="(queryModel) => onResultsTableEvent('sort', queryModel)"
                 @filter-changed="(queryModel) => onResultsTableEvent('filter', queryModel)"
                 @global-search-changed="(queryModel) => onResultsTableEvent('search', queryModel)"
                 storageKey="inventory_results_table"
+                ref="resultsTableRef"
                 :loading="loading">
             </DataTable>
         </div>
@@ -83,6 +87,31 @@
             <h3 class="text-2xl font-bold text-slate-900 dark:text-slate-100 m-0 mb-2">Sélectionnez un magasin</h3>
             <p class="text-base text-slate-600 dark:text-slate-400 m-0">Veuillez sélectionner un magasin pour afficher les résultats d'inventaire</p>
         </div>
+
+        <!-- Modal d'export des résultats -->
+        <Modal
+            v-model="showExportResultsModal"
+            size="sm"
+            :hide-close-button="true"
+        >
+            <template #header>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    Export en cours
+                </h3>
+            </template>
+
+            <template #body>
+                <div class="flex flex-col items-center justify-center py-8">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mb-4"></div>
+                    <p class="text-slate-600 dark:text-slate-400 text-center">
+                        {{ exportResultsModalMessage }}
+                    </p>
+                    <p class="text-sm text-slate-500 dark:text-slate-500 mt-2">
+                        Veuillez patienter, cette opération peut prendre quelques instants...
+                    </p>
+                </div>
+            </template>
+        </Modal>
     </div>
 </template>
 
@@ -121,32 +150,22 @@
  */
 
 // ===== IMPORTS VUE =====
-import { ref, computed, watch, onMounted } from 'vue'
+import { computed, watch, onMounted } from 'vue'
 
 // ===== IMPORTS ROUTER =====
 import { useRoute, useRouter } from 'vue-router'
 
 // ===== IMPORTS SERVICES =====
 import { logger } from '@/services/loggerService'
-import { InventoryResultsService } from '@/services/inventoryResultsService'
-import { alertService } from '@/services/alertService'
 
 // ===== IMPORTS COMPOSANTS =====
 import DataTable from '@/components/DataTable/DataTable.vue'
 import SelectField from '@/components/Form/SelectField.vue'
-import ButtonGroup, { type ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
+import ButtonGroup from '@/components/Form/ButtonGroup.vue'
+import Modal from '@/components/Modal.vue'
 
 // ===== IMPORTS COMPOSABLES =====
 import { useInventoryResults } from '@/composables/useInventoryResults'
-
-// ===== IMPORTS TYPES =====
-import type { InventoryResult } from '@/interfaces/inventoryResults'
-
-// ===== IMPORTS ICÔNES =====
-import IconPlay from '@/components/icon/icon-play.vue'
-import IconDownload from '@/components/icon/icon-download.vue'
-import IconListCheck from '@/components/icon/icon-list-check.vue'
-import Swal from 'sweetalert2'
 
 // ===== ROUTE =====
 const route = useRoute()
@@ -158,7 +177,6 @@ const router = useRouter()
  */
 const inventoryReference = computed(() => route.params.reference as string)
 
-
 // ===== COMPOSABLE =====
 /**
  * Initialisation du composable useInventoryResults
@@ -167,6 +185,7 @@ const inventoryReference = computed(() => route.params.reference as string)
  * - Chargement des données (inventaire, magasins, résultats)
  * - Configuration du DataTable (colonnes, actions, pagination)
  * - Actions sur les résultats (validation, modification, lancement de comptage)
+ * - Gestion des boutons d'action et handlers
  *
  * Le DataTable utilise maintenant l'approche harmonisée avec useAffecter.ts
  */
@@ -179,195 +198,34 @@ const {
     selectedStore,
     inventoryId,
     pagination,
+    resultsStore,
     handleStoreSelect,
     initialize,
     reinitialize,
+    reloadResults,
     showLaunchCountingModal,
-    onResultsTableEvent
-} = useInventoryResults({ inventoryReference: inventoryReference.value })
-
-// ===== ÉTAT EXPORT =====
-const exportLoading = ref(false)
-
-// Style commun pour les boutons d'action (fond blanc + bordure primary)
-const ACTION_BUTTON_CLASS =
-    'bg-white text-primary border border-primary hover:bg-primary hover:text-white ' +
-    'dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary ' +
-    'dark:hover:text-white';
-
-// ===== BOUTONS D'ACTION (pour le ButtonGroup) =====
-const actionButtons = computed<ButtonGroupButton[]>(() => {
-    const buttons: ButtonGroupButton[] = []
-
-    buttons.push({
-        id: 'jobs',
-        label: 'Suivi des jobs',
-        icon: IconListCheck,
-        variant: 'default',
-        class: ACTION_BUTTON_CLASS,
-        disabled: !inventoryReference.value,
-        visible: !!inventoryReference.value,
-        onClick: () => {
-            if (inventoryReference.value) {
-                void router.push({ name: 'inventory-job-tracking', params: { reference: inventoryReference.value } })
-            }
-        }
-    })
-
-    buttons.push({
-        id: 'launch-counting',
-        label: 'Lancer comptage',
-        icon: IconPlay,
-        variant: 'default',
-        class: ACTION_BUTTON_CLASS,
-        disabled: !selectedStore.value,
-        visible: !!selectedStore.value,
-        onClick: () => { void handleLaunchCounting() }
-    })
-
-    buttons.push({
-        id: 'export-consolidated',
-        label: exportLoading.value ? 'Export...' : 'Exporter consolidé',
-        icon: IconDownload,
-        variant: 'default',
-        class: ACTION_BUTTON_CLASS,
-        disabled: !inventoryId.value || !selectedStore.value || exportLoading.value,
-        visible: !!inventoryId.value && !!selectedStore.value,
-        onClick: () => { void handleExportConsolidatedArticles() }
-    })
-
-    return buttons.filter(b => b.visible !== false)
+    onResultsTableEvent,
+    // Pour la vue
+    actionButtons,
+    exportLoading,
+    exportResultsLoading,
+    showExportResultsModal,
+    exportResultsModalMessage,
+    onStoreChanged,
+    resultsKey,
+    resultsTableRef,
+    resultsQueryModel
+} = useInventoryResults({
+    inventoryReference: inventoryReference.value,
+    route,
+    router
 })
 
+// ===== BOUTONS D'ACTION =====
+// Les boutons sont maintenant gérés par le composable useInventoryResults
+
 // ===== HANDLERS =====
-
-/**
- * Handler pour le changement de magasin dans le SelectField
- *
- * Appelé quand l'utilisateur sélectionne un nouveau magasin.
- * Le DataTable détecte automatiquement le changement via customDataTableParams
- * et recharge les résultats du nouveau magasin.
- *
- * @param {string | number | string[] | number[] | null} value - ID du magasin sélectionné
- * @async
- * @returns {Promise<void>}
- */
-const onStoreChanged = async (value: string | number | string[] | number[] | null) => {
-    if (!value) {
-        return
-    }
-
-    const storeId = Array.isArray(value) ? value[0] : value
-    await handleStoreSelectWrapper(String(storeId))
-}
-
-/**
- * Wrapper pour le handler de sélection de magasin
- *
- * Convertit la valeur du SelectField (qui peut être un tableau) en string simple.
- *
- * @param {string | null} storeId - ID du magasin
- * @async
- * @returns {Promise<void>}
- */
-const handleStoreSelectWrapper = async (storeId: string | null) => {
-    if (!storeId) return
-    await handleStoreSelect(storeId)
-}
-
-/**
- * Handler pour lancer le comptage suivant
- *
- * Affiche la modal permettant de sélectionner les jobs nécessitant un comptage suivant
- * (3ème, 4ème, etc.) et de sélectionner une session pour le comptage.
- *
- * @async
- * @returns {Promise<void>}
- */
-const handleLaunchCounting = async () => {
-    await showLaunchCountingModal()
-}
-
-/**
- * Handler pour l'export des articles consolidés en Excel
- *
- * Exporte tous les articles consolidés de l'inventaire actuel dans un fichier Excel.
- * Affiche un loader pendant l'export et télécharge automatiquement le fichier.
- *
- * @async
- * @returns {Promise<void>}
- * @throws {Error} Si l'inventaire n'est pas sélectionné ou si l'export échoue
- */
-const handleExportConsolidatedArticles = async () => {
-    if (!inventoryId.value) {
-        await alertService.warning({ text: 'Aucun inventaire sélectionné' })
-            return
-        }
-
-    exportLoading.value = true
-
-    try {
-        // Afficher un loader
-        const loadingSwal = Swal.fire({
-            title: 'Export en cours...',
-            text: 'Le fichier Excel est en cours de préparation. Veuillez patienter.',
-            icon: 'info',
-            allowOutsideClick: false,
-            showConfirmButton: false,
-            didOpen: () => {
-                Swal.showLoading()
-            }
-        })
-
-        // Appeler le service d'export
-        const response = await InventoryResultsService.exportConsolidatedArticles(inventoryId.value)
-
-        // Vérifier que la réponse contient un blob
-        if (!response.data || !(response.data instanceof Blob)) {
-            throw new Error('Aucune donnée reçue du backend')
-        }
-
-        // response.data est déjà un Blob quand responseType: 'blob' est utilisé
-        const blob = response.data as Blob
-
-        // Récupérer le type MIME depuis les headers ou utiliser un type par défaut
-        const contentType = response.headers['content-type'] || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-
-        // Générer le nom du fichier
-        const timestamp = new Date().toISOString().split('T')[0]
-        const filename = `Articles_Consolides_${inventoryReference.value || inventoryId.value}_${timestamp}.xlsx`
-
-        // Télécharger le fichier
-        const downloadUrl = window.URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = downloadUrl
-        link.setAttribute('download', filename)
-        document.body.appendChild(link)
-        link.click()
-        link.remove()
-        window.URL.revokeObjectURL(downloadUrl)
-
-        // Fermer le loader et afficher le succès
-        await Swal.close()
-        await alertService.success({
-            text: 'Export Excel réussi'
-        })
-
-        logger.debug('Export des articles consolidés réussi', { filename })
-    } catch (error: any) {
-        logger.error('Erreur lors de l\'export des articles consolidés', error)
-
-        // Extraire le message d'erreur
-        const errorMessage = error?.response?.data?.message ||
-                            error?.message ||
-                            'Erreur lors de l\'export Excel'
-
-        await Swal.close()
-        await alertService.error({ text: errorMessage })
-    } finally {
-        exportLoading.value = false
-    }
-}
+// Tous les handlers sont maintenant gérés par le composable useInventoryResults
 
 // ===== LIFECYCLE =====
 

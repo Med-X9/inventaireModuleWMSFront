@@ -14,7 +14,6 @@ import type {
     JobPaginatedResponse,
     JobAssignmentsTeamRequest,
     JobAssignmentsResourceRequest,
-    JobManualAssignmentsRequest,
     JobReadyResponse,
     JobDataTableResponse,
     JobValidatedDataTableResponse
@@ -45,13 +44,27 @@ export class JobService {
     // Récupérer tous les jobs avec pagination, tri et filtres (format FORMAT_ACTUEL.md)
     // Le service reçoit les paramètres déjà convertis au format FORMAT_ACTUEL.md par le store
     static async getAll(inventoryId: number, warehouseId: number, params?: Record<string, any>): Promise<JobDataTableResponse & { page: number; totalPages: number; pageSize: number; total: number }> {
+        console.log('[JobService.getAll] 🌐 API Call - URL:', `${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/`)
+        console.log('[JobService.getAll] 📋 Params sent to API:', params || {})
+
         const response = await axiosInstance.get<UnifiedDataTableResponse<JobTable>>(
             `${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/`,
             {
                 params: params || {}
             }
         );
+
+        console.log('[JobService.getAll] 📥 API Response status:', response.status)
+        console.log('[JobService.getAll] 📊 Raw response data keys:', Object.keys(response.data))
+
         const unifiedResponse = normalizeDataTableResponse<JobTable>(response.data);
+        console.log('[JobService.getAll] 🔄 Unified response:', {
+            total: unifiedResponse.total,
+            page: unifiedResponse.page,
+            pageSize: unifiedResponse.pageSize,
+            totalPages: unifiedResponse.totalPages,
+            recordsCount: unifiedResponse.rows?.length || 0
+        })
         const standardResponse = convertUnifiedToStandardDataTable(unifiedResponse);
         return {
             ...standardResponse,
@@ -83,13 +96,27 @@ export class JobService {
             throw new Error(`IDs invalides pour getAllValidated: inventoryId=${inventoryId}, warehouseId=${warehouseId}`);
         }
 
+        console.log('[JobService.getAllValidated] 🌐 API Call - URL:', `${this.baseUrlJob}valid/warehouse/${warehouseId}/inventory/${inventoryId}/`)
+        console.log('[JobService.getAllValidated] 📋 Params sent to API:', params || {})
+
         const response = await axiosInstance.get<UnifiedDataTableResponse<any>>(
             `${this.baseUrlJob}valid/warehouse/${warehouseId}/inventory/${inventoryId}/`,
             {
                 params: params || {}
             }
         );
+
+        console.log('[JobService.getAllValidated] 📥 API Response status:', response.status)
+        console.log('[JobService.getAllValidated] 📊 Raw response data keys:', Object.keys(response.data))
+
         const unifiedResponse = normalizeDataTableResponse<any>(response.data);
+        console.log('[JobService.getAllValidated] 🔄 Unified response:', {
+            total: unifiedResponse.total,
+            page: unifiedResponse.page,
+            pageSize: unifiedResponse.pageSize,
+            totalPages: unifiedResponse.totalPages,
+            recordsCount: unifiedResponse.rows?.length || 0
+        })
         const standardResponse = convertUnifiedToStandardDataTable(unifiedResponse);
         return {
             ...standardResponse,
@@ -126,7 +153,7 @@ export class JobService {
     static async getJobsDiscrepanciesByCounting(
         inventoryId: number,
         warehouseId: number
-    ): Promise<Array<{ counting_order: number; jobs: Array<{ job_id: number; job_reference: string }> } | { next_counting_order: number; jobs: Array<{ job_id: number; job_reference: string; current_max_counting?: number; has_unresolved_discrepancies?: boolean; discrepancies_locations_count?: number }> }>> {
+    ): Promise<any> {
         const response = await axiosInstance.get<{
             success: boolean
             message: string
@@ -144,8 +171,8 @@ export class JobService {
             }
             // Ancien format : tableau d'objets avec counting_order
             if (Array.isArray(response.data.data)) {
-                return response.data.data
-            }
+            return response.data.data
+        }
         }
 
         // Si la réponse n'a pas le format attendu, vérifier directement response.data
@@ -277,10 +304,35 @@ export class JobService {
         return response.data;
     }
 
+    /**
+     * Valider tous les jobs pour un inventaire et un entrepôt
+     * POST inventory/<int:inventory_id>/warehouse/<int:warehouse_id>/jobs/validate-all/
+     */
+    static async validateAllJobs(inventoryId: number, warehouseId: number): Promise<UpdateJobStatusResponse> {
+        console.log('[JobService.validateAllJobs] 🌐 API Call - URL:', `${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/validate-all/`);
+
+        const response = await axiosInstance.post<UpdateJobStatusResponse>(
+            `${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/validate-all/`
+        );
+
+        console.log('[JobService.validateAllJobs] ✅ Response:', response.data);
+        return response.data;
+    }
+
 
 
     static async jobAssignmentsTeam(inventoryId:number,data:JobAssignmentsTeamRequest):Promise<JobAssignmentsTeamRequest>{
         const response = await axiosInstance.post<JobAssignmentsTeamRequest>(`${this.baseUrlInventory}${inventoryId}/assign-jobs/`,data);
+        return response.data;
+    }
+
+    static async assignTeamToJobAuto(data: {
+        job_id: number;
+        team: number;
+        counting_order: number;
+        complete: boolean;
+    }): Promise<any> {
+        const response = await axiosInstance.post(`${this.baseUrlInventory}assign-jobs-manual/`, data);
         return response.data;
     }
 
@@ -289,10 +341,7 @@ export class JobService {
         return response.data;
     }
 
-    static async jobManualAssignments(data:JobManualAssignmentsRequest[]):Promise<JobManualAssignmentsRequest>{
-        const response = await axiosInstance.post<JobManualAssignmentsRequest>(`${this.baseUrlInventory}assign-jobs-manual/`,data);
-        return response.data;
-    }
+
 
     // Terminer un job
     static async completeJob(id: number | string): Promise<UpdateJobStatusResponse> {

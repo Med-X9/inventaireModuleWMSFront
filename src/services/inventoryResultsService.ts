@@ -58,18 +58,30 @@ export class InventoryResultsService {
                 params
             });
 
-            // Le service reçoit les paramètres déjà convertis au format FORMAT_ACTUEL.md par le store
-            // Il fait uniquement l'appel API avec POST et JSON body
-            const response = await axiosInstance.post(
+            console.log('[InventoryResultsService.getResults] 📤 Sending request params:', params || {});
+
+            // ⚠️ Changement : Utiliser GET avec query params au lieu de POST avec body JSON
+            // pour être cohérent avec JobService.getAllValidated qui utilise GET avec params
+            const response = await axiosInstance.get(
                 `${this.baseUrl}${inventoryId}/warehouses/${storeId}/results/`,
-                params || {},
                 {
+                    params: params || {},
                     headers: {
                         'Content-Type': 'application/json'
                     }
                 }
             );
             const payload = response.data;
+
+            console.log('[InventoryResultsService.getResults] 📥 API Response:', {
+                status: response.status,
+                dataKeys: Object.keys(payload),
+                page: payload.page,
+                pageSize: payload.pageSize,
+                total: payload.total,
+                totalPages: payload.totalPages,
+                rowsCount: payload.rows?.length || 0
+            });
 
             // Normaliser la réponse backend vers le format FORMAT_ACTUEL.md
             // Format attendu : { rows: [...], page: 2, pageSize: 10, total: 28, totalPages: 3 }
@@ -218,16 +230,6 @@ export class InventoryResultsService {
             const page = unifiedResponse.page ?? 1
             const totalPages = unifiedResponse.totalPages ?? 0 // ⚠️ Utiliser uniquement la valeur du backend (pas de || qui masque 0)
 
-            // Debug: logger les valeurs extraites (seulement en mode développement)
-            if (process.env.NODE_ENV === 'development') {
-                logger.debug('inventoryResultsService: Valeurs extraites', {
-                    page,
-                    totalPages,
-                    pageSize: unifiedResponse.pageSize,
-                    total: unifiedResponse.total
-                })
-            }
-
             return {
                 data: normalizedResults,
                 recordsFiltered,
@@ -338,6 +340,46 @@ export class InventoryResultsService {
             return response;
         } catch (error) {
             logger.error('Erreur lors de l\'export des résultats', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Exporter les résultats d'inventaire via l'endpoint dédié
+     *
+     * @param inventoryId - ID de l'inventaire
+     * @param warehouseId - ID du warehouse
+     * @returns Promise avec la réponse contenant le blob du fichier Excel
+     */
+    static async exportResultsData(
+        inventoryId: number,
+        warehouseId: number
+    ): Promise<AxiosResponse<Blob>> {
+        try {
+            logger.debug('Export des données de résultats via endpoint dédié', {
+                inventoryId,
+                warehouseId,
+                endpoint: `${this.baseUrl}${inventoryId}/warehouses/${warehouseId}/results/export/`
+            });
+
+            const response = await axiosInstance.get(
+                `${this.baseUrl}${inventoryId}/warehouses/${warehouseId}/results/export/`,
+                {
+                    responseType: 'blob'
+                }
+            );
+
+            logger.debug('Export des données de résultats réussi', {
+                inventoryId,
+                warehouseId,
+                contentType: response.headers['content-type'],
+                contentDisposition: response.headers['content-disposition'],
+                contentLength: response.headers['content-length']
+            });
+
+            return response;
+        } catch (error) {
+            logger.error('Erreur lors de l\'export des données de résultats', error);
             throw error;
         }
     }

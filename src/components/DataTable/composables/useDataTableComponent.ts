@@ -56,9 +56,10 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
     const safeProps = {
         ...props,
         actions: props.actions || [],
-        advancedFilters: props.advancedFilters || {},
         rowSelection: props.rowSelection ?? false,
-        rowDataProp: props.rowDataProp || []
+        rowDataProp: props.rowDataProp || [],
+        advancedFilters: props.advancedFilters || {},
+        defaultVisibleColumnsCount: props.defaultVisibleColumnsCount ?? 50
     }
 
     /**
@@ -159,7 +160,6 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
 
         // Méthodes (références stables)
         setFilterState: dataTableComposable.setFilterState,
-        handleVisibleColumnsChanged: dataTableComposable.handleVisibleColumnsChanged,
         updateGlobalSearchTerm: dataTableComposable.updateGlobalSearchTerm,
         goToPage: dataTableComposable.goToPage,
         changePageSize: handlePageSizeChanged,
@@ -298,7 +298,7 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
             if (dataLength >= 2000) return 500   // Volumes moyens
             if (dataLength >= 1000) return 450   // Volumes importants
             if (dataLength >= 500) return 400    // Volumes modérés
-            return 350 // Petits volumes
+            return 500 // Petits volumes - Afficher 10 lignes (50px * 10)
         }
 
         const baseConfig = safeProps.virtualScrollingConfig || {
@@ -415,7 +415,13 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
             }
         },
         dataTable,
-        queryModel: queryModel as any,
+        queryModel: {
+            ...queryModel,
+            updateSort: updateQuerySort,
+            updateFilter: updateQueryFilter,
+            updatePagination: updateQueryPagination,
+            updateGlobalSearch: updateQueryGlobalSearch
+        } as any,
         autoDataTable,
         currentSortModel,
         multiSort,
@@ -429,9 +435,16 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
             savePageSizeToConfig(size)
         }
 
-        // ✅ NOUVELLE FONCTIONNALITÉ : Émettre QueryModel obligatoire
-        const queryModel = createQueryModelFromCurrentState()
-        safeEmit('query-model-changed', queryModel)
+        // ✅ Créer un QueryModel avec la nouvelle taille de page
+        // Utiliser l'état actuel mais forcer la nouvelle pageSize et réinitialiser à la page 1
+        const currentState = createQueryModelFromCurrentState()
+        const queryModel: QueryModel = {
+            ...currentState,
+            page: 1,           // Toujours revenir à la page 1 lors du changement de taille
+            pageSize: size,    // Utiliser la nouvelle taille de page
+        }
+
+        safeEmit('page-size-changed', queryModel)
     }
 
     // Fonction helper pour sauvegarder les filtres
@@ -476,8 +489,9 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
             saveFiltersToConfig(filters)
         }
 
-        // ✅ NOUVELLE FONCTIONNALITÉ : Émettre QueryModel obligatoire
+        // ✅ Émettre les événements appropriés
         const queryModel = createQueryModelFromCurrentState()
+        safeEmit('filter-changed', queryModel)
         safeEmit('query-model-changed', queryModel)
     }
 
@@ -502,8 +516,9 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
             saveSortToConfig(currentSortModel.value)
         }
 
-        // ✅ NOUVELLE FONCTIONNALITÉ : Émettre QueryModel obligatoire
+        // ✅ Émettre les événements appropriés
         const queryModel = createQueryModelFromCurrentState()
+        safeEmit('sort-changed', queryModel)
         safeEmit('query-model-changed', queryModel)
     }
 
@@ -626,11 +641,10 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
     const visibleColumnNames = ref<string[]>(initialVisibleColumns)
 
     // Flag pour éviter les boucles infinies entre watch et wrapper
-    let isUpdatingFromWrapper = false
 
     // Watch pour synchroniser depuis dataTable.visibleColumns (uniquement si pas de mise à jour depuis wrapper)
     watch(() => dataTable?.visibleColumns, (newCols) => {
-        if (newCols && !isUpdatingFromWrapper) {
+        if (newCols) {
             // Filtrer les colonnes avec visible: false qui ne sont pas dans newCols
             // (pour éviter d'afficher des colonnes avec visible: false par défaut)
             const filtered = newCols.filter(col => {
@@ -650,32 +664,8 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
                 visibleColumnNames.value = filtered
             }
         }
-        isUpdatingFromWrapper = false
     }, { immediate: true, deep: true })
 
-    // Wrapper pour handleVisibleColumnsChanged qui met à jour visibleColumnNames immédiatement
-    const handleVisibleColumnsChangedWrapper = (newVisibleColumns: string[], newColumnWidths: Record<string, number>) => {
-        // Filtrer les colonnes avec hide: true avant de mettre à jour
-        const filteredColumns = newVisibleColumns.filter(col => {
-            if (col === '__rowNumber__') return true
-
-            const columnDef = props.columns.find(c => c.field === col)
-            if (columnDef && columnDef.hide === true) {
-                return false
-            }
-
-            return true
-        })
-
-        // Marquer qu'on met à jour depuis le wrapper pour éviter que le watch écrase
-        isUpdatingFromWrapper = true
-
-        // Mettre à jour visibleColumnNames immédiatement pour que finalColumns se mette à jour
-        visibleColumnNames.value = filteredColumns
-
-        // Appeler la fonction originale avec les colonnes filtrées
-        dataTable?.handleVisibleColumnsChanged(filteredColumns, newColumnWidths)
-    }
 
     /**
      * Composable pour gérer les colonnes formatées
@@ -724,13 +714,6 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
             columnChangeTimeout = window.setTimeout(() => {
                 const newVisibleColumns = dataTable.visibleColumns
 
-                if (!newVisibleColumns.includes('__rowNumber__')) {
-                    dataTable?.handleVisibleColumnsChanged(
-                        ['__rowNumber__', ...newVisibleColumns],
-                        dataTable.columnWidths || {}
-                    )
-                    return
-                }
 
                 if (columnPinning && columnPinning.getPinDirection('__rowNumber__') !== 'left') {
                     columnPinning.pinColumn('__rowNumber__', 'left')
@@ -877,46 +860,6 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
     }
 
     // Handlers pour les fonctionnalités avancées
-    const handlePinColumn = (field: string, direction: 'left' | 'right' | null) => {
-        if (columnPinning) {
-            columnPinning.pinColumn(field, direction)
-            if (tableConfig) {
-                const pinnedColumnsArray = Array.from(columnPinning.pinnedColumns.value.entries()).map(([field, direction]) => ({
-                    field,
-                    pinned: direction
-                }))
-                tableConfig.updatePinnedColumns(pinnedColumnsArray)
-            }
-        }
-    }
-
-    const handleStickyHeaderChanged = (enabled: boolean) => {
-        stickyHeaderState.value = enabled
-        if (tableConfig) {
-            tableConfig.updateStickyHeader(enabled)
-        }
-    }
-
-    // Handler pour le changement du nombre de colonnes visibles par défaut
-    const handleDefaultVisibleColumnsCountChanged = (count: number) => {
-        // Valider les limites
-        const currentVisibleWithoutRowNumber = visibleColumnNames.value.filter(field => field !== '__rowNumber__')
-        const minCount = 4
-        const maxCount = currentVisibleWithoutRowNumber.length
-        const clampedCount = Math.max(minCount, Math.min(count, maxCount))
-
-        // IMPORTANT : Ne PAS limiter visibleColumnNames ici !
-        // On doit garder TOUTES les colonnes visibles dans visibleColumnNames
-        // La limitation sera faite par responsiveColumns et hiddenColumns dans TableBody
-        // selon defaultVisibleColumnsCountState
-
-        // Mettre à jour uniquement defaultVisibleColumnsCountState
-        // Cela déclenchera automatiquement la mise à jour de responsiveColumns et hiddenColumns
-        defaultVisibleColumnsCountState.value = clampedCount
-
-        // Les colonnes déplacées vers le responsive seront automatiquement gérées par hiddenColumns dans TableBody
-        // car responsiveColumns et hiddenColumns sont des computed qui dépendent de defaultVisibleColumnsCount
-    }
 
     // Charger la configuration au montage
     onMounted(async () => {
@@ -939,31 +882,26 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
                 })
 
                 const columnsWithRowNumber = ['__rowNumber__', ...savedColumns]
-
-                // Utiliser le wrapper pour mettre à jour visibleColumnNames
-                isUpdatingFromWrapper = true
                 visibleColumnNames.value = columnsWithRowNumber
-
-                dataTable?.handleVisibleColumnsChanged(
-                    columnsWithRowNumber,
-                    tableConfig.columnWidths.value
-                )
-
                 tableConfig.updateVisibleColumns(columnsWithRowNumber)
             } else {
                 const allVisibleColumns = props.columns
                     .filter(col => col.visible !== false && col.hide !== true)
                     .map(col => col.field)
                 const columnsWithRowNumber = ['__rowNumber__', ...allVisibleColumns]
-
-                // Utiliser le wrapper pour mettre à jour visibleColumnNames
-                isUpdatingFromWrapper = true
                 visibleColumnNames.value = columnsWithRowNumber
 
-                dataTable?.handleVisibleColumnsChanged(
-                    columnsWithRowNumber,
-                    {}
-                )
+                // S'assurer que toutes les colonnes visibles sont dans visibleColumnNames
+                // (important pour les colonnes dynamiques)
+                const currentVisibleFields = visibleColumnNames.value.filter(field => field !== '__rowNumber__')
+                const newVisibleFields = allVisibleColumns
+
+                // Si de nouvelles colonnes ont été ajoutées, les inclure
+                const missingColumns = newVisibleFields.filter(field => !currentVisibleFields.includes(field))
+                if (missingColumns.length > 0) {
+                    const updatedVisibleColumns = ['__rowNumber__', ...newVisibleFields]
+                    visibleColumnNames.value = updatedVisibleColumns
+                }
             }
 
             if (Object.keys(tableConfig.columnWidths.value).length > 0) {
@@ -1321,10 +1259,6 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
         handleGlobalSearchUpdate,
         handleClearAllFilters,
         handleSelectionChanged,
-        handlePinColumn,
-        handleStickyHeaderChanged,
-        handleDefaultVisibleColumnsCountChanged,
-        handleVisibleColumnsChanged: handleVisibleColumnsChangedWrapper,
         createQueryModelFromCurrentState,
 
         // Colonnes

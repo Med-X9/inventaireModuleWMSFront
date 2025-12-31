@@ -12,10 +12,13 @@
  */
 
 // ===== IMPORTS VUE =====
-import { ref, computed, watch, markRaw } from 'vue'
+import { ref, computed, watch, markRaw, onMounted, nextTick } from 'vue'
 
 // ===== IMPORTS PINIA =====
 import { storeToRefs } from 'pinia'
+
+// ===== IMPORTS COMPOSABLES =====
+import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
 
 // ===== IMPORTS STORES =====
 import { useInventoryStore } from '@/stores/inventory'
@@ -36,6 +39,9 @@ import type { JobResult, JobAssignment, JobEmplacement } from '@/models/Job'
 import type { DataTableColumn, ColumnDataType, ActionConfig } from '@/types/dataTable'
 import type { QueryModel } from '@/components/DataTable/types/QueryModel'
 import { createQueryModelFromDataTableParams, convertQueryModelToQueryParams } from '@/components/DataTable/utils/queryModelConverter'
+
+// ===== IMPORTS UTILS =====
+import { mergeQueryModelWithCustomParams } from '@/components/DataTable/utils/queryModelConverter'
 
 // ===== IMPORTS ICÔNES =====
 import IconPrinter from '@/components/icon/icon-printer.vue'
@@ -85,6 +91,10 @@ export interface JobTrackingRow {
      * ID de l'assignment par défaut pour l'impression (priorité : 1er comptage puis 2ème, sinon null)
      */
     assignmentId: number | null
+    /**
+     * Données d'écarts par comptage (discrepancy_count_3er, discrepancy_count_4er, etc.)
+     */
+    countingDiscrepancies: Record<string, number | null>
 }
 
 /**
@@ -157,7 +167,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
     // ===== STORE REFS =====
     const { loading: inventoryLoading } = storeToRefs(inventoryStore)
     const { warehouses } = storeToRefs(warehouseStore)
-    const { jobsValidated, loading: jobsLoading } = storeToRefs(jobStore)
+    const { jobsValidated, loading: jobsLoading, jobsPaginationMetadata } = storeToRefs(jobStore)
 
     // ===== ÉTAT RÉACTIF =====
 
@@ -182,14 +192,191 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
     /** Magasin sélectionné */
     const selectedStore = ref<string | null>(config?.initialStoreId ?? null)
 
+    // Paramètres personnalisés pour les appels API
+    const trackingCustomParams = computed(() => ({
+        inventory_id: inventoryId.value,
+        warehouse_id: selectedStore.value ? Number(selectedStore.value) : null
+    }))
+
+    // ===== ÉTAT POUR LA VUE =====
+    const trackingLoadingLocal = ref(false)
+
+    // ===== QUERYMODEL POUR TRACKING =====
+
+    /**
+     * QueryModel pour gérer les requêtes Tracking
+     * Harmonisé avec useInventoryResults.ts - utilise maintenant useQueryModel
+     */
+    const {
+        queryModel: trackingQueryModelRef,
+        updatePagination,
+        updateSort,
+        updateFilter,
+        updateGlobalSearch
+    } = useQueryModel({
+        columns: [] as any // Les colonnes sont dynamiques, on passe un tableau vide pour commencer
+    })
+
+    // Cache des derniers appels pour éviter les appels répétés
+    let lastExecutedQueryModel: QueryModel | null = null
+
+    // File d'attente pour les événements DataTable qui arrivent avant l'initialisation
+    const pendingEventsQueue: Array<{ eventType: string; queryModel: QueryModel }> = []
+
     /** État de chargement des magasins */
     const isFetchingStores = ref(false)
+
+    /** Clé pour forcer le re-render des tables (harmonisé avec useAffecter.ts et useInventoryResults.ts) */
+    const trackingKey = ref(0)
+
+    /** Référence au composant DataTable du tracking */
+    const trackingTableRef = ref<any>(null)
+
+    // ===== PAGINATION CALCULÉE =====
+
+    /**
+     * Pagination calculée pour les jobs de suivi
+     *
+     * Utilise UNIQUEMENT les valeurs retournées par le backend via jobsPaginationMetadata du store.
+     * Le backend retourne { page, pageSize, total, totalPages } selon PAGINATION_FRONTEND.md.
+     *
+     * Le DataTable utilise ces valeurs pour afficher la pagination correctement.
+     *
+     * @computed {Object} trackingPaginationComputed - Objet de pagination avec les valeurs du backend
+     * @computed {number} current_page - Page actuelle (1-indexed)
+     * @computed {number} total_pages - Nombre total de pages
+     * @computed {boolean} has_next - True s'il y a une page suivante
+     * @computed {boolean} has_previous - True s'il y a une page précédente
+     * @computed {number} page_size - Taille de la page
+     * @computed {number} total - Nombre total d'éléments
+     */
+    const trackingPaginationComputed = computed(() => {
+        const storeMetadata = jobsPaginationMetadata.value
+
+        // Utiliser directement les valeurs du backend depuis jobsPaginationMetadata
+        const currentPageValue = storeMetadata?.page ?? 1
+        const pageSizeValue = storeMetadata?.pageSize ?? 20
+        const totalValue = storeMetadata?.total ?? 0
+        let totalPagesValue = storeMetadata?.totalPages ?? 0
+
+        // Calculer totalPages seulement si le backend ne le fournit pas
+        if (totalPagesValue === 0 && totalValue > 0 && pageSizeValue > 0) {
+            totalPagesValue = Math.max(1, Math.ceil(totalValue / pageSizeValue))
+        } else if (totalPagesValue === 0 && totalValue === 0) {
+            // Si total est 0, totalPages doit être au minimum 1 pour éviter "Page 1 sur 0"
+            totalPagesValue = 1
+        }
+
+        return {
+            current_page: currentPageValue,
+            total_pages: totalPagesValue,
+            has_next: totalPagesValue > 0 ? currentPageValue < totalPagesValue : false,
+            has_previous: currentPageValue > 1,
+            page_size: pageSizeValue,
+            total: totalValue
+        }
+    })
 
     /** Lignes de suivi */
     const trackingRows = ref<JobTrackingRow[]>([])
 
     /** IDs des lignes sélectionnées */
     const selectedRows = ref<string[]>([])
+
+    /**
+     * Traite un événement DataTable directement (sans vérification d'initialisation)
+     * Utilisé pour traiter les événements mis en file d'attente
+     */
+    const processEventDirectly = async (eventType: string, queryModel: QueryModel) => {
+        // S'assurer que le QueryModel a des valeurs par défaut valides
+        const sanitizedQueryModel: QueryModel = {
+            page: queryModel.page ?? 1,
+            pageSize: queryModel.pageSize ?? 20,
+            sort: queryModel.sort ?? [],
+            filters: queryModel.filters ?? {},
+            search: queryModel.search ?? '',
+            customParams: queryModel.customParams ?? {}
+        }
+
+        // Toujours fusionner avec les customParams requis
+        const finalQueryModel = mergeQueryModelWithCustomParams(sanitizedQueryModel, trackingCustomParams.value)
+
+        // Éviter les appels API inutiles en comparant avec le dernier appel réussi
+        const queryModelStr = JSON.stringify(finalQueryModel)
+        const lastQueryModelStr = lastExecutedQueryModel ? JSON.stringify(lastExecutedQueryModel) : null
+
+        if (queryModelStr === lastQueryModelStr) {
+            return
+        }
+
+        // Éviter les appels API inutiles pour les événements de filtre/recherche vides
+        if (eventType === 'filter' || eventType === 'search') {
+            const hasFilters = Object.keys(finalQueryModel.filters || {}).length > 0
+            const hasSearch = !!finalQueryModel.search?.trim()
+            const hasSorting = (finalQueryModel.sort || []).length > 0
+
+            // Si c'est un événement filter/search complètement vide (pas de filtres, pas de recherche, pas de tri),
+            // et que c'est la page 1, éviter l'appel API inutile
+            if (!hasFilters && !hasSearch && !hasSorting && finalQueryModel.page === 1) {
+                return
+            }
+        }
+
+        try {
+            // Activer le loading pour les événements DataTable
+            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+                trackingLoadingLocal.value = true
+            }
+
+            await fetchTrackingData(finalQueryModel)
+
+            // Mettre à jour le cache après un appel réussi
+            lastExecutedQueryModel = { ...finalQueryModel }
+
+            // Forcer le re-rendu de la DataTable pour tous les événements qui modifient les données
+            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+                trackingKey.value++
+                trackingLoadingLocal.value = false
+            }
+        } catch (error) {
+            console.error('[useJobTracking] ❌ Error in fetchTrackingData:', {
+                eventType,
+                error: error,
+                queryModel: finalQueryModel
+            })
+            await alertService.error({ text: 'Erreur lors du chargement des données de suivi' })
+            // Désactiver le loading en cas d'erreur
+            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+                trackingLoadingLocal.value = false
+            }
+        }
+    }
+
+    /**
+     * Handler unifié pour toutes les opérations de la DataTable Tracking
+     */
+    const onTrackingTableEvent = async (eventType: string, queryModel: QueryModel) => {
+        console.log('[useJobTracking.onTrackingTableEvent] Event received:', eventType, 'initialized:', isInitialized.value, 'queue length:', pendingEventsQueue.length)
+
+        // Vérifier que les IDs requis sont disponibles avant de lancer l'API
+        if (!inventoryId.value || !selectedStore.value) {
+            console.warn('[useJobTracking] Tracking API not called: missing inventoryId or selectedStore')
+            return
+        }
+
+        // Si l'initialisation n'est pas terminée, mettre l'événement en file d'attente
+        // Ces événements sont souvent déclenchés automatiquement par le DataTable au montage
+        // quand il restaure son état sauvegardé
+        if (!isInitialized.value) {
+            console.log('[useJobTracking.onTrackingTableEvent] Queueing event:', eventType)
+            pendingEventsQueue.push({ eventType, queryModel })
+            return
+        }
+
+        // Traiter l'événement directement
+        console.log('[useJobTracking.onTrackingTableEvent] Processing event directly:', eventType)
+        await processEventDirectly(eventType, queryModel)
+    }
 
     // ===== COMPUTED PROPERTIES =====
 
@@ -266,6 +453,27 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         return `${order}ème comptage`
     }
 
+    /** Helper : récupère les comptages qui ont des données d'écarts (>= 3) */
+    const getCountingOrdersWithDiscrepancies = (): number[] => {
+        if (!trackingRows.value.length) {
+            return []
+        }
+
+        const ordersWithDiscrepancies = new Set<number>()
+        trackingRows.value.forEach(row => {
+            if (row.countingDiscrepancies) {
+                Object.keys(row.countingDiscrepancies).forEach(key => {
+                    const order = parseInt(key)
+                    if (!isNaN(order) && order >= 3) {
+                        ordersWithDiscrepancies.add(order)
+                    }
+                })
+            }
+        })
+
+        return Array.from(ordersWithDiscrepancies).sort((a, b) => a - b)
+    }
+
     /** Helper : récupère le max des counting_order présents dans les lignes */
     const getMaxCountingOrder = (): number => {
         if (!trackingRows.value.length) {
@@ -297,11 +505,22 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
         const ordersSet = new Set<number>()
         trackingRows.value.forEach(row => {
+            // Ajouter les counting_order des assignments
             if (row.assignments && Array.isArray(row.assignments)) {
                 row.assignments.forEach(ass => {
                     // Inclure tous les counting_order, même ceux avec status null (pour les colonnes futures)
                     if (ass.counting_order) {
                         ordersSet.add(ass.counting_order)
+                    }
+                })
+            }
+
+            // Ajouter les counting_order des données d'écarts (discrepancy_count_Xer)
+            if (row.countingDiscrepancies) {
+                Object.keys(row.countingDiscrepancies).forEach(key => {
+                    const order = parseInt(key)
+                    if (!isNaN(order)) {
+                        ordersSet.add(order)
                     }
                 })
             }
@@ -402,6 +621,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         // Colonnes dynamiques par comptage : Session + Statut (badge), Taux d'écart, Nombre d'écarts
         // Utiliser les counting_order disponibles dans les données pour créer les colonnes dynamiquement
         const availableOrders = getAvailableCountingOrders()
+        const ordersWithDiscrepancies = getCountingOrdersWithDiscrepancies()
 
         availableOrders.forEach(order => {
             // Colonne 1 : Session avec badge de statut du comptage (fusionné)
@@ -461,115 +681,99 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 }
             })
 
-            // Colonne 2 : Taux d'écart du comptage
-            cols.push({
-                headerName: `${getCountingOrderLabel(order)} - Taux écart`,
-                field: `counting_${order}_rate`,
-                sortable: true,
-                filterable: false,
-                dataType: 'number' as ColumnDataType,
-                width: 130,
-                minWidth: 110,
-                align: 'center' as const,
-                description: `Taux d'écart du ${getCountingOrderLabel(order)} (en %)`,
-                cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
-                    let rowData: JobTrackingRow | null = null
+            // Ajouter les colonnes d'écarts seulement si ce comptage a des données d'écarts
+            if (ordersWithDiscrepancies.includes(order)) {
+                // Colonne 2 : Taux d'écart du comptage (seulement pour comptages qui ont des données d'écarts)
+                cols.push({
+                    headerName: `${getCountingOrderLabel(order)} - Taux écart`,
+                    field: `counting_${order}_rate`,
+                    sortable: true,
+                    filterable: false,
+                    dataType: 'number' as ColumnDataType,
+                    width: 130,
+                    minWidth: 110,
+                    align: 'center' as const,
+                    description: `Taux d'écart du ${getCountingOrderLabel(order)} (en %)`,
+                    cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
+                        let rowData: JobTrackingRow | null = null
 
-                    if (row && typeof row === 'object') {
-                        rowData = row as JobTrackingRow
-                    } else if (paramsOrValue && typeof paramsOrValue === 'object') {
-                        if (paramsOrValue.data) {
-                            rowData = paramsOrValue.data as JobTrackingRow
-                        } else {
-                            rowData = paramsOrValue as JobTrackingRow
+                        if (row && typeof row === 'object') {
+                            rowData = row as JobTrackingRow
+                        } else if (paramsOrValue && typeof paramsOrValue === 'object') {
+                            if (paramsOrValue.data) {
+                                rowData = paramsOrValue.data as JobTrackingRow
+                            } else {
+                                rowData = paramsOrValue as JobTrackingRow
+                            }
                         }
-                    }
 
-                    if (!rowData) {
-                        return '-'
-                    }
-
-                    const assignments = rowData?.assignments || []
-                    const assignment = assignments.find((a: any) => a.counting_order === order)
-
-                    if (!assignment || !assignment.status || assignment.status === null) {
-                        return '-'
-                    }
-
-                    const rawRate =
-                        (assignment as any).discrepancy_rate ??
-                        (assignment as any).discrepancyRate ??
-                        null
-                    const hasRate = rawRate !== null && rawRate !== undefined && rawRate !== '' && !Number.isNaN(Number(rawRate))
-
-                    if (!hasRate) {
-                        return '-'
-                    }
-
-                    const rate = Number(rawRate)
-                    const colorClass = rate === 0
-                        ? 'text-green-600 font-semibold'
-                        : rate < 10
-                        ? 'text-yellow-600 font-semibold'
-                        : 'text-red-600 font-semibold'
-
-                    return `<span class="${colorClass}">${rate.toFixed(2)}%</span>`
-                }) as any
-            })
-
-            // Colonne 3 : Nombre d'écarts du comptage
-            cols.push({
-                headerName: `${getCountingOrderLabel(order)} - Nb écarts`,
-                field: `counting_${order}_count`,
-                sortable: true,
-                filterable: false,
-                dataType: 'number' as ColumnDataType,
-                width: 120,
-                minWidth: 100,
-                align: 'center' as const,
-                description: `Nombre d'écarts du ${getCountingOrderLabel(order)}`,
-                cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
-                    let rowData: JobTrackingRow | null = null
-
-                    if (row && typeof row === 'object') {
-                        rowData = row as JobTrackingRow
-                    } else if (paramsOrValue && typeof paramsOrValue === 'object') {
-                        if (paramsOrValue.data) {
-                            rowData = paramsOrValue.data as JobTrackingRow
-                        } else {
-                            rowData = paramsOrValue as JobTrackingRow
+                        if (!rowData) {
+                            return '-'
                         }
-                    }
 
-                    if (!rowData) {
-                        return '-'
-                    }
+                        // Récupérer le taux d'écart global (car les données spécifiques par comptage ne sont pas disponibles)
+                        const rate = rowData.discrepancyRate
+                        if (rate === null || rate === undefined) {
+                            return '-'
+                        }
 
-                    const assignments = rowData?.assignments || []
-                    const assignment = assignments.find((a: any) => a.counting_order === order)
+                        const numRate = Number(rate)
+                        const colorClass = numRate === 0
+                            ? 'text-green-600 font-semibold'
+                            : numRate < 10
+                            ? 'text-yellow-600 font-semibold'
+                            : 'text-red-600 font-semibold'
 
-                    if (!assignment || !assignment.status || assignment.status === null) {
-                        return '-'
-                    }
+                        return `<span class="${colorClass}">${numRate.toFixed(2)}%</span>`
+                    }) as any
+                })
 
-                    const count =
-                        (assignment as any).discrepancy_count ??
-                        (assignment as any).discrepancyCount ??
-                        null
+                // Colonne 3 : Nombre d'écarts du comptage (seulement pour comptages qui ont des données d'écarts)
+                cols.push({
+                    headerName: `${getCountingOrderLabel(order)} - Nb écarts`,
+                    field: `counting_${order}_count`,
+                    sortable: true,
+                    filterable: false,
+                    dataType: 'number' as ColumnDataType,
+                    width: 120,
+                    minWidth: 100,
+                    align: 'center' as const,
+                    description: `Nombre d'écarts du ${getCountingOrderLabel(order)}`,
+                    cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
+                        let rowData: JobTrackingRow | null = null
 
-                    if (count === null || count === undefined) {
-                        return '-'
-                    }
+                        if (row && typeof row === 'object') {
+                            rowData = row as JobTrackingRow
+                        } else if (paramsOrValue && typeof paramsOrValue === 'object') {
+                            if (paramsOrValue.data) {
+                                rowData = paramsOrValue.data as JobTrackingRow
+                            } else {
+                                rowData = paramsOrValue as JobTrackingRow
+                            }
+                        }
 
-                    const colorClass = count === 0
-                        ? 'text-green-600 font-semibold'
-                        : count < 10
-                        ? 'text-yellow-600 font-semibold'
-                        : 'text-red-600 font-semibold'
+                        if (!rowData) {
+                            return '-'
+                        }
 
-                    return `<span class="${colorClass}">${count}</span>`
-                }) as any
-            })
+                        // Récupérer le nombre d'écarts depuis countingDiscrepancies
+                        const count = rowData.countingDiscrepancies?.[order.toString()] ?? null
+
+                        if (count === null || count === undefined) {
+                            return '-'
+                        }
+
+                        const numCount = Number(count)
+                        const colorClass = numCount === 0
+                            ? 'text-green-600 font-semibold'
+                            : numCount < 10
+                            ? 'text-yellow-600 font-semibold'
+                            : 'text-red-600 font-semibold'
+
+                        return `<span class="${colorClass}">${numCount}</span>`
+                    }) as any
+                })
+            }
         })
 
         // Colonne : Taux d'écart global (tous comptages)
@@ -590,12 +794,24 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 if (rate === null || rate === undefined) return '-'
                 return `${Number(rate).toFixed(2)}%`
             },
-            cellRenderer: (params: any) => {
-                if (!params) {
+            cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
+                let rowData: JobTrackingRow | null = null
+
+                if (row && typeof row === 'object') {
+                    rowData = row as JobTrackingRow
+                } else if (paramsOrValue && typeof paramsOrValue === 'object') {
+                    if (paramsOrValue.data) {
+                        rowData = paramsOrValue.data as JobTrackingRow
+                    } else {
+                        rowData = paramsOrValue as JobTrackingRow
+                    }
+                }
+
+                if (!rowData) {
                     return '-'
                 }
 
-                const rate = params.value
+                const rate = rowData.discrepancyRate
                 if (rate === null || rate === undefined) return '-'
                 const numRate = Number(rate)
                 const colorClass =
@@ -605,7 +821,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                         ? 'text-yellow-600 font-semibold'
                         : 'text-red-600 font-semibold'
                 return `<span class="${colorClass}">${numRate.toFixed(2)}%</span>`
-            }
+            }) as any
         })
 
         // Colonne : Nombre d'écarts global (tous comptages)
@@ -621,12 +837,24 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             visible: true,
             editable: false,
             description: 'Nombre d\'écarts global tous comptages confondus',
-            cellRenderer: (params: any) => {
-                if (!params) {
+            cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
+                let rowData: JobTrackingRow | null = null
+
+                if (row && typeof row === 'object') {
+                    rowData = row as JobTrackingRow
+                } else if (paramsOrValue && typeof paramsOrValue === 'object') {
+                    if (paramsOrValue.data) {
+                        rowData = paramsOrValue.data as JobTrackingRow
+                    } else {
+                        rowData = paramsOrValue as JobTrackingRow
+                    }
+                }
+
+                if (!rowData) {
                     return '-'
                 }
 
-                const count = params.value
+                const count = rowData.discrepancyCount
                 if (count === null || count === undefined) return '-'
                 const numCount = Number(count)
                 const colorClass =
@@ -636,7 +864,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                         ? 'text-yellow-600 font-semibold'
                         : 'text-red-600 font-semibold'
                 return `<span class="${colorClass}">${numCount}</span>`
-            }
+            }) as any
         })
 
         return cols
@@ -699,12 +927,13 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             rows.push({
                 id: `${job.id}`,
                 jobId: typeof job.id === 'number' ? job.id : parseInt(String(job.id)) || 0,
-                jobReference: job.reference,
+                jobReference: job.reference || `Job ${job.id}`,
                 jobStatus: job.status || null,
                 assignments: assignments as AssignmentWithDates[],
                 discrepancyCount: null,
                 discrepancyRate: null,
-                assignmentId
+                assignmentId,
+                countingDiscrepancies: {}
             })
         })
 
@@ -735,6 +964,19 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             // Récupérer les informations d'écarts du job
             const discrepancyCount = job.discrepancy_count ?? null
             const discrepancyRate = job.discrepancy_rate ?? null
+
+            // Récupérer les données d'écarts par comptage (discrepancy_count_3er, discrepancy_count_4er, etc.)
+            const countingDiscrepancies: Record<string, number | null> = {}
+            Object.keys(job).forEach(key => {
+                if (key.startsWith('discrepancy_count_') && key !== 'discrepancy_count') {
+                    // Extraire le numéro du comptage (ex: "3er" -> 3, "4er" -> 4)
+                    const match = key.match(/discrepancy_count_(\d+)er/)
+                    if (match) {
+                        const countingOrder = parseInt(match[1])
+                        countingDiscrepancies[countingOrder.toString()] = job[key] ?? null
+                    }
+                }
+            })
 
             // Déterminer l'assignment_id à utiliser pour l'impression
             // Priorité : 1er comptage, sinon 2e comptage, sinon null
@@ -769,13 +1011,15 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 assignments: assignments as AssignmentWithDates[], // Garder tous les assignments pour les colonnes dynamiques
                 discrepancyCount,
                 discrepancyRate,
-                assignmentId
+                assignmentId,
+                countingDiscrepancies
             }
 
             logger.debug('Ligne créée pour job', {
                 jobId: job.job_id,
                 jobReference: row.jobReference,
                 assignmentsCount: row.assignments.length,
+                countingDiscrepancies: row.countingDiscrepancies,
                 assignments: row.assignments.map((a: any) => ({
                     counting_order: a.counting_order,
                     status: a.status,
@@ -865,24 +1109,23 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
         // Adapter les noms de champs si nécessaire (mapping entre les champs du DataTable et ceux de l'API)
         const apiParams: Record<string, any> = {
-            page: params.page || 1,
-            page_size: params.pageSize || 1000
+            page: parseInt(params.get('page') || '1'),
+            page_size: parseInt(params.get('pageSize') || '1000')
         }
 
         // Ajouter le tri si présent
-        if (params.sort && params.sort.length > 0) {
+        if (queryModel.sort && queryModel.sort.length > 0) {
             // Convertir le format de tri pour l'API
-            // L'API attend probablement un format spécifique, à adapter selon le backend
-            apiParams.ordering = params.sort.map((s: any) => {
-                const field = s.field || s.colId
-                const direction = (s.direction || s.sort || 'asc') === 'desc' ? '-' : ''
+            apiParams.ordering = queryModel.sort.map((s: any) => {
+                const field = s.colId
+                const direction = s.sort === 'desc' ? '-' : ''
                 return `${direction}${field}`
             }).join(',')
         }
 
         // Ajouter les filtres si présents
-        if (params.filters && Object.keys(params.filters).length > 0) {
-            Object.entries(params.filters).forEach(([field, filterModel]: [string, any]) => {
+        if (queryModel.filters && Object.keys(queryModel.filters).length > 0) {
+            Object.entries(queryModel.filters).forEach(([field, filterModel]: [string, any]) => {
                 if (filterModel && filterModel.value !== undefined && filterModel.value !== null && filterModel.value !== '') {
                     // Adapter selon le format attendu par l'API
                     // Pour les filtres de type 'equals', utiliser directement le champ
@@ -897,8 +1140,8 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         }
 
         // Ajouter la recherche globale si présente
-        if (params.search && params.search.trim() !== '') {
-            apiParams.search = params.search.trim()
+        if (queryModel.search && queryModel.search.trim() !== '') {
+            apiParams.search = queryModel.search.trim()
         }
 
         return apiParams
@@ -907,11 +1150,10 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
     /**
      * Charge les données de suivi des jobs depuis l'endpoint discrepancies
      * Prérequis : inventory et selectedStore doivent être définis
-     * Optimisé : page_size réduit pour le chargement initial (plus rapide)
      *
-     * @param queryModel - Modèle de requête optionnel avec tri, filtres et recherche
+     * @param queryModel - Modèle de requête avec tri, filtres et recherche
      */
-    const fetchTrackingData = async (queryModel?: QueryModel) => {
+    const fetchTrackingData = async (queryModel: QueryModel) => {
         if (!inventoryId.value || !selectedStore.value) {
             logger.debug('fetchTrackingData: conditions non remplies', {
                 inventoryId: inventoryId.value,
@@ -929,18 +1171,8 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             })
             const warehouseId = Number(selectedStore.value)
 
-            // Construire les paramètres de requête
-            // OPTIMISATION : page_size réduit pour le chargement initial (20 au lieu de 1000)
-            // Le DataTable peut charger plus de pages si nécessaire via la pagination
-            let apiParams: Record<string, any> = {
-                page: 1,
-                page_size: queryModel?.pageSize || 20 // Réduire pour le chargement initial
-            }
-
-            // Si un QueryModel est fourni, convertir les paramètres
-            if (queryModel) {
-                apiParams = convertTrackingParams(queryModel)
-            }
+            // Convertir le QueryModel en paramètres API
+            const apiParams = convertTrackingParams(queryModel)
 
             // Charger les jobs depuis le nouvel endpoint discrepancies via le store
             const response = await jobStore.fetchJobsDiscrepancies(inventoryId.value, warehouseId, apiParams)
@@ -1058,16 +1290,107 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
             // Charger les données immédiatement (non-bloquant)
             if (selectedStore.value && inventoryId.value) {
-                fetchTrackingData().catch((error) => {
+                // Charger avec un QueryModel par défaut
+                const defaultQueryModel: QueryModel = {
+                    page: 1,
+                    pageSize: 20,
+                    sort: [],
+                    filters: {},
+                    search: '',
+                    customParams: trackingCustomParams.value
+                }
+                fetchTrackingData(defaultQueryModel).catch((error) => {
                     logger.warn('Erreur lors du chargement initial des jobs', error)
                 })
             }
 
+            // Attendre que le DataTable ait fini de s'initialiser et de restaurer son état
+            await nextTick()
+            // Ajouter un petit délai supplémentaire pour être sûr que tous les événements sont capturés
+            await new Promise(resolve => setTimeout(resolve, 50))
+            console.log('[useJobTracking.initialize] After nextTick + delay, queue length:', pendingEventsQueue.length)
+
             isInitialized.value = true
+
+            // Traiter les événements DataTable mis en file d'attente
+            // ⚠️ Logique harmonisée avec useAffecter.ts et useInventoryResults.ts
+            console.log('[useJobTracking.initialize] Processing pending events, queue length:', pendingEventsQueue.length)
+
+            if (pendingEventsQueue.length > 0) {
+                // Si des événements sont en file d'attente (DataTable a restauré son état),
+                // traiter le premier événement pour charger avec les bonnes données
+                const firstEvent = pendingEventsQueue[0]
+                console.log('[useJobTracking.initialize] Processing first queued event:', firstEvent.eventType, firstEvent.queryModel)
+                await processEventDirectly(firstEvent.eventType, firstEvent.queryModel)
+                pendingEventsQueue.shift() // Retirer le premier événement traité
+            }
+
+            // Traiter les événements restants en file d'attente (s'il y en a)
+            if (pendingEventsQueue.length > 0) {
+                console.log('[useJobTracking.initialize] Processing remaining queued events:', pendingEventsQueue.length)
+                for (const queuedEvent of pendingEventsQueue) {
+                    await processEventDirectly(queuedEvent.eventType, queuedEvent.queryModel)
+                }
+                pendingEventsQueue.length = 0 // Vider la file d'attente
+            }
+
+            // Si aucun événement en file d'attente, vérifier si le DataTable a un état sauvegardé
+            if (pendingEventsQueue.length === 0) {
+                console.log('[useJobTracking.initialize] No queued events, checking for saved DataTable state')
+
+                // Essayer de récupérer l'état sauvegardé du DataTable depuis localStorage
+                const savedState = localStorage.getItem('job_tracking_table')
+                if (savedState) {
+                    try {
+                        const parsedState = JSON.parse(savedState)
+                        console.log('[useJobTracking.initialize] Found saved DataTable state:', parsedState)
+
+                        // Créer un QueryModel depuis l'état sauvegardé
+                        const savedQueryModel: QueryModel = {
+                            page: parsedState.page || 1,
+                            pageSize: parsedState.pageSize || 20,
+                            sort: parsedState.sort || [],
+                            filters: parsedState.filters || {},
+                            search: parsedState.search || ''
+                        }
+
+                        console.log('[useJobTracking.initialize] Loading data with saved state:', savedQueryModel)
+                        await fetchTrackingData(savedQueryModel)
+                        return
+                    } catch (error) {
+                        console.warn('[useJobTracking.initialize] Error parsing saved state:', error)
+                    }
+                }
+
+                // Aucun état sauvegardé, chargement par défaut
+                console.log('[useJobTracking.initialize] No saved state, loading default data')
+                await fetchTrackingData({
+                    page: 1,
+                    pageSize: 20,
+                    sort: [],
+                    filters: {},
+                    search: '',
+                    customParams: trackingCustomParams.value
+                })
+            }
         } catch (error) {
             logger.error('Erreur lors de l\'initialisation du suivi des jobs', error)
             await alertService.error({ text: 'Impossible d\'initialiser le suivi des jobs' })
             throw error
+        }
+    }
+
+    /**
+     * Traite les événements DataTable mis en file d'attente pendant l'initialisation
+     */
+    const processPendingEvents = async () => {
+        if (pendingEventsQueue.length === 0) return
+
+        const events = [...pendingEventsQueue]
+        pendingEventsQueue.length = 0 // Vider la file
+
+        for (const event of events) {
+            await processEventDirectly(event.eventType, event.queryModel)
         }
     }
 
@@ -1085,19 +1408,18 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         storeOptions.value = []
         selectedStore.value = config?.initialStoreId ?? null
 
+        // Réinitialiser le cache des requêtes
+        lastExecutedQueryModel = null
+        pendingEventsQueue.length = 0 // Vider la file d'attente
+
         await initialize(reference)
     }
 
     // ===== WATCHERS =====
 
     /**
-     * Watcher sur les sélections (magasin et comptage)
-     * Recharge les données quand les sélections changent
-     *
-     * Note :
-     * - Le changement de magasin déclenche un rechargement des jobs depuis l'API
-     * - Le changement de comptage re-transforme les jobs déjà chargés (sans recharger l'API)
-     * - Les comptages sont résolus depuis l'inventaire si disponibles, sinon depuis les jobs
+     * Watcher sur les sélections (magasin)
+     * Recharge les données quand le magasin change
      */
     watch(selectedStore, async () => {
         if (!isInitialized.value) {
@@ -1106,8 +1428,16 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
         // Si le magasin change, recharger les jobs depuis l'API
         if (selectedStore.value && inventoryId.value) {
-            // Charger immédiatement sans bloquer (non-bloquant pour meilleure UX)
-            fetchTrackingData().catch((error) => {
+            // Charger immédiatement avec un QueryModel par défaut (non-bloquant pour meilleure UX)
+            const defaultQueryModel: QueryModel = {
+                page: 1,
+                pageSize: 20,
+                sort: [],
+                filters: {},
+                search: '',
+                customParams: trackingCustomParams.value
+            }
+            fetchTrackingData(defaultQueryModel).catch((error) => {
                 logger.warn('Erreur lors du rechargement des jobs', error)
             })
         } else {
@@ -1340,78 +1670,6 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
     // ===== HANDLERS DATATABLE =====
 
-    /**
-     * Handler pour les changements de tri
-     * Reçoit TOUJOURS le format QueryModel standard du DataTable
-     *
-     * @param queryModel - Modèle de requête au format QueryModel standard
-     */
-    const onSortChanged = async (queryModel: QueryModel) => {
-        try {
-            if (!queryModel || typeof queryModel !== 'object') {
-                return
-            }
-
-            if (!inventoryId.value || !selectedStore.value) {
-                return
-            }
-
-            // Recharger les données avec le nouveau tri
-            await fetchTrackingData(queryModel)
-        } catch (error) {
-            logger.error('Erreur lors du changement de tri', error)
-            await alertService.error({ text: 'Erreur lors du changement de tri' })
-        }
-    }
-
-    /**
-     * Handler pour les changements de filtres
-     * Reçoit TOUJOURS le format QueryModel standard du DataTable
-     *
-     * @param queryModel - Modèle de requête au format QueryModel standard
-     */
-    const onFilterChanged = async (queryModel: QueryModel) => {
-        try {
-            if (!queryModel || typeof queryModel !== 'object') {
-                return
-            }
-
-            if (!inventoryId.value || !selectedStore.value) {
-                return
-            }
-
-            // Recharger les données avec les nouveaux filtres
-            await fetchTrackingData(queryModel)
-        } catch (error) {
-            logger.error('Erreur lors du changement de filtre', error)
-            await alertService.error({ text: 'Erreur lors du changement de filtre' })
-        }
-    }
-
-    /**
-     * Handler pour les changements de recherche globale
-     * Reçoit TOUJOURS le format QueryModel standard du DataTable
-     *
-     * @param queryModel - Modèle de requête au format QueryModel standard
-     */
-    const onGlobalSearchChanged = async (queryModel: QueryModel) => {
-        try {
-            if (!queryModel || typeof queryModel !== 'object') {
-                return
-            }
-
-            if (!inventoryId.value || !selectedStore.value) {
-                return
-            }
-
-            // Recharger les données avec la nouvelle recherche
-            await fetchTrackingData(queryModel)
-        } catch (error) {
-            logger.error('Erreur lors de la recherche', error)
-            await alertService.error({ text: 'Erreur lors de la recherche' })
-        }
-    }
-
     // ===== ACTIONS DATATABLE =====
 
     /**
@@ -1498,7 +1756,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         inventoryReference: computed(() => inventoryReference.value),
         inventoryId: computed(() => inventoryId.value),
         isInitialized,
-        loading: isLoading,
+        loading: computed(() => isLoading.value || trackingLoadingLocal.value),
 
         // Sélections
         storeOptions,
@@ -1513,6 +1771,13 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         actions,
         hasRows,
 
+        // DataTable harmonisé avec Affecter et InventoryResults
+        queryModel: trackingQueryModelRef,
+
+        // Pagination (harmonisé avec useInventoryResults.ts)
+        pagination: trackingPaginationComputed,
+        trackingTotalItems: computed(() => jobsPaginationMetadata.value?.total ?? 0),
+
         // Actions
         initialize,
         reinitialize,
@@ -1521,9 +1786,14 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         onSelectionChanged,
         resetSelection,
 
-        // Handlers DataTable
-        onSortChanged,
-        onFilterChanged,
-        onGlobalSearchChanged
+        // Handlers DataTable harmonisés avec useInventoryResults.ts
+        onTrackingTableEvent,
+
+        // Clés pour forcer le re-render (harmonisé avec useAffecter.ts et useInventoryResults.ts)
+        trackingKey,
+        trackingTableRef,
+
+        // Loading local pour les événements DataTable
+        trackingLoadingLocal: computed(() => trackingLoadingLocal.value)
     }
 }

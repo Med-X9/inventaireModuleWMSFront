@@ -148,22 +148,20 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
     /**
      * Colonnes pour QueryModel (vide par défaut, sera rempli par les colonnes du DataTable)
      */
-    const columnsRef = computed(() => [])
+    const columnsRef = computed(() => [] as any[])
 
     /**
      * QueryModel pour gérer les requêtes avec mode de sortie configurable
      */
     const {
         queryModel: queryModelRef,
-        toStandardParams,
         updatePagination: updateQueryPagination,
         updateSort: updateQuerySort,
         updateFilter: updateQueryFilter,
         updateGlobalSearch: updateQueryGlobalSearch,
         fromDataTableParams: fromDataTableParamsQueryModel
     } = useQueryModel({
-        columns: columnsRef,
-        enabled: true
+        columns: columnsRef.value
     })
 
     /**
@@ -179,7 +177,7 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
                 return convertQueryModelToQueryParams(queryModelData)
             case 'dataTable':
             default:
-                return toStandardParams.value
+                return convertToStandardDataTableParams(queryModelData)
         }
     }
 
@@ -239,7 +237,7 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
                         }
                     ])
                 ) : undefined,
-                globalSearch: searchQuery.value || undefined,
+                search: searchQuery.value || undefined,
                 customParams: resolvedAdditionalParams || {}
             })
 

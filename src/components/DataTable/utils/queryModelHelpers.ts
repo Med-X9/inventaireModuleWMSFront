@@ -39,12 +39,12 @@ export function updatePagination(queryModel: QueryModel, page: number, pageSize:
  * Ajoute/modifie un tri dans QueryModel
  */
 export function updateSort(queryModel: QueryModel, field: string, direction: 'asc' | 'desc'): QueryModel {
-  const existingSortIndex = queryModel.sort.findIndex(sort => sort.field === field)
+  const existingSortIndex = queryModel.sort?.findIndex(sort => sort.colId === field) ?? -1
 
   if (existingSortIndex >= 0) {
     // Modifier le tri existant
-    const newSort = [...queryModel.sort]
-    newSort[existingSortIndex] = { field, direction }
+    const newSort = [...(queryModel.sort || [])]
+    newSort[existingSortIndex] = { colId: field, sort: direction }
     return {
       ...queryModel,
       sort: newSort
@@ -53,7 +53,7 @@ export function updateSort(queryModel: QueryModel, field: string, direction: 'as
     // Ajouter un nouveau tri
     return {
       ...queryModel,
-      sort: [...queryModel.sort, { field, direction }]
+      sort: [...(queryModel.sort || []), { colId: field, sort: direction }]
     }
   }
 }
@@ -64,7 +64,7 @@ export function updateSort(queryModel: QueryModel, field: string, direction: 'as
 export function removeSort(queryModel: QueryModel, field: string): QueryModel {
   return {
     ...queryModel,
-    sort: queryModel.sort.filter(sort => sort.field !== field)
+    sort: (queryModel.sort || []).filter(sort => sort.colId !== field)
   }
 }
 
@@ -77,11 +77,11 @@ export function updateFilter(
   operator: FilterOperator,
   value: any
 ): QueryModel {
-  const existingFilterIndex = queryModel.filters.findIndex(filter => filter.field === field)
+  const existingFilterIndex = queryModel.filters?.findIndex(filter => filter.field === field) ?? -1
 
   if (existingFilterIndex >= 0) {
     // Modifier le filtre existant
-    const newFilters = [...queryModel.filters]
+    const newFilters = { ...(queryModel.filters || {}) }
     newFilters[existingFilterIndex] = { field, operator, value }
     return {
       ...queryModel,
@@ -91,7 +91,7 @@ export function updateFilter(
     // Ajouter un nouveau filtre
     return {
       ...queryModel,
-      filters: [...queryModel.filters, { field, operator, value }]
+      filters: { ...(queryModel.filters || {}), [field]: { field, operator, value } }
     }
   }
 }
@@ -102,7 +102,7 @@ export function updateFilter(
 export function removeFilter(queryModel: QueryModel, field: string): QueryModel {
   return {
     ...queryModel,
-    filters: queryModel.filters.filter(filter => filter.field !== field)
+    filters: (queryModel.filters || []).filter(filter => filter.field !== field)
   }
 }
 
@@ -136,20 +136,24 @@ export function queryModelToUrlParams(queryModel: QueryModel): URLSearchParams {
   const params = new URLSearchParams()
 
   // Pagination
-  params.set('page', queryModel.pagination.page.toString())
-  params.set('pageSize', queryModel.pagination.pageSize.toString())
+  if (queryModel.pagination?.page) {
+    params.set('page', queryModel.pagination.page.toString())
+  }
+  if (queryModel.pagination?.pageSize) {
+    params.set('pageSize', queryModel.pagination.pageSize.toString())
+  }
 
   // Tri
-  if (queryModel.sort.length > 0) {
-    queryModel.sort.forEach((sort, index) => {
-      params.set(`sort[${index}][field]`, sort.field)
-      params.set(`sort[${index}][direction]`, sort.direction)
+  if (queryModel.sort && queryModel.sort.length > 0) {
+    (queryModel.sort || []).forEach((sort, index) => {
+      params.set(`sort[${index}][field]`, sort.colId)
+      params.set(`sort[${index}][direction]`, sort.sort)
     })
   }
 
   // Filtres
-  if (queryModel.filters.length > 0) {
-    queryModel.filters.forEach((filter, index) => {
+  if (queryModel.filters && queryModel.filters.length > 0) {
+    (queryModel.filters || []).forEach((filter, index) => {
       params.set(`filters[${index}][field]`, filter.field)
       params.set(`filters[${index}][operator]`, filter.operator)
       params.set(`filters[${index}][value]`, JSON.stringify(filter.value))
@@ -180,8 +184,8 @@ export function urlParamsToQueryModel(params: URLSearchParams): QueryModel {
   // Pagination
   const page = params.get('page')
   const pageSize = params.get('pageSize')
-  if (page) queryModel.pagination.page = parseInt(page, 10)
-  if (pageSize) queryModel.pagination.pageSize = parseInt(pageSize, 10)
+  if (page && queryModel.pagination) queryModel.pagination.page = parseInt(page, 10)
+  if (pageSize && queryModel.pagination) queryModel.pagination.pageSize = parseInt(pageSize, 10)
 
   // Tri - TODO: Parser le format sort[index][field]
   // Pour l'instant, on laisse vide
@@ -217,25 +221,27 @@ export function validateQueryModel(queryModel: QueryModel): { valid: boolean; er
   const errors: string[] = []
 
   // Validation pagination
-  if (queryModel.pagination.page < 1) {
+  if (queryModel.pagination && queryModel.pagination.page < 1) {
     errors.push('Page doit être >= 1')
   }
-  if (queryModel.pagination.pageSize < 1) {
+  if (queryModel.pagination && queryModel.pagination.pageSize < 1) {
     errors.push('PageSize doit être >= 1')
   }
 
   // Validation tri
-  queryModel.sort.forEach((sort, index) => {
-    if (!sort.field) {
-      errors.push(`Tri ${index}: field requis`)
-    }
-    if (!['asc', 'desc'].includes(sort.direction)) {
-      errors.push(`Tri ${index}: direction doit être 'asc' ou 'desc'`)
-    }
-  })
+  if (queryModel.sort) {
+    queryModel.sort.forEach((sort, index) => {
+      if (!sort.colId) {
+        errors.push(`Tri ${index}: field requis`)
+      }
+      if (!['asc', 'desc'].includes(sort.sort)) {
+        errors.push(`Tri ${index}: direction doit être 'asc' ou 'desc'`)
+      }
+    })
+  }
 
   // Validation filtres
-  queryModel.filters.forEach((filter, index) => {
+  (queryModel.filters || []).forEach((filter, index) => {
     if (!filter.field) {
       errors.push(`Filtre ${index}: field requis`)
     }
@@ -256,8 +262,8 @@ export function validateQueryModel(queryModel: QueryModel): { valid: boolean; er
 export function cleanQueryModel(queryModel: QueryModel): QueryModel {
   return {
     ...queryModel,
-    sort: queryModel.sort.filter(sort => sort.field),
-    filters: queryModel.filters.filter(filter =>
+    sort: (queryModel.sort || []).filter(sort => sort.colId),
+    filters: (queryModel.filters || []).filter(filter =>
       filter.field && filter.operator && filter.value !== undefined && filter.value !== null && filter.value !== ''
     ),
     search: queryModel.search || undefined,

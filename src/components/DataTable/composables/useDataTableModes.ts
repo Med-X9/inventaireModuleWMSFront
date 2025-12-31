@@ -36,11 +36,8 @@ export function detectDataTableMode(props: DataTableProps): DataTableMode {
   // Mode Advanced : Features étendues activées
   if (props.enableColumnPinning ||
       props.enableColumnResize ||
-      props.enableColumnGrouping ||
-      props.enableColumnAggregation ||
-      props.enableBatchEditing ||
-      props.enableInlineEditing ||
-      props.enableExport ||
+      props.enableGrouping ||
+      props.inlineEditing ||
       props.enableSetFilters) {
     return 'advanced'
   }
@@ -73,8 +70,6 @@ export function getOptimizedConfigForMode(mode: DataTableMode, props: DataTableP
         // Features avancées désactivées
         enableColumnPinning: false,
         enableColumnResize: false,
-        enableExport: false,
-        enableInlineEditing: false,
         // Optimisations performance
         enableVirtualScrolling: false,
         enableInfiniteScroll: false,
@@ -90,8 +85,6 @@ export function getOptimizedConfigForMode(mode: DataTableMode, props: DataTableP
         // Features avancées activées
         enableColumnResize: props.enableColumnResize !== false,
         enableColumnPinning: props.enableColumnPinning !== false,
-        enableExport: props.enableExport !== false,
-        enableInlineEditing: props.enableInlineEditing !== false,
         // Optimisations conditionnelles
         enableVirtualScrolling: props.enableVirtualScrolling || false,
         enableInfiniteScroll: props.enableInfiniteScroll || false,
@@ -107,11 +100,6 @@ export function getOptimizedConfigForMode(mode: DataTableMode, props: DataTableP
         // Toutes les features disponibles
         enableColumnResize: props.enableColumnResize !== false,
         enableColumnPinning: props.enableColumnPinning !== false,
-        enableColumnGrouping: props.enableColumnGrouping !== false,
-        enableColumnAggregation: props.enableColumnAggregation !== false,
-        enableInlineEditing: props.enableInlineEditing !== false,
-        enableBatchEditing: props.enableBatchEditing !== false,
-        enableExport: props.enableExport !== false,
         enableSetFilters: props.enableSetFilters !== false,
         enableVirtualScrolling: props.enableVirtualScrolling || false,
         enableInfiniteScroll: props.enableInfiniteScroll || false,
@@ -250,8 +238,6 @@ export function useDataTableModes(props: DataTableProps): DataTableModeConfig {
     mode,
     optimizedConfig,
     defaultFeatures,
-    recommendations,
-    // Actions
-    updateMode
+    recommendations
   }
 }

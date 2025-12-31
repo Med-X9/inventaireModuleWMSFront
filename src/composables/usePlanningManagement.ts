@@ -287,8 +287,29 @@ export function usePlanningManagement(inventoryRef?: string) {
             label: 'Monitoring',
             icon: IconBarChart,
             handler: (store: Store) => {
-                if (store.id && store.id > 0) {
-                    goToMonitoring(inventoryId.value!, store.id)
+                console.log('[usePlanningManagement] Monitoring action triggered', {
+                    store,
+                    storeId: store.id,
+                    storeReference: store.reference,
+                    inventoryId: inventoryId.value,
+                    inventoryReference: inventoryReference.value
+                })
+
+                if (store.reference && inventoryId.value && inventoryReference.value) {
+                    console.log('[usePlanningManagement] Navigating to monitoring', {
+                        inventoryId: inventoryId.value,
+                        inventoryReference: inventoryReference.value,
+                        warehouseReference: store.reference
+                    })
+                    goToMonitoring(inventoryReference.value, store.reference)
+                } else {
+                    console.warn('[usePlanningManagement] Cannot navigate to monitoring - missing data', {
+                        storeId: store.id,
+                        storeReference: store.reference,
+                        inventoryId: inventoryId.value,
+                        inventoryReference: inventoryReference.value
+                    })
+                    alertService.error({ text: 'Données manquantes pour accéder au monitoring' })
                 }
             }
         }] : [])
@@ -331,6 +352,7 @@ export function usePlanningManagement(inventoryRef?: string) {
             const inventory = await inventoryStore.fetchInventoryByReference(reference)
             if (inventory) {
                 inventoryId.value = inventory.id
+                inventoryReference.value = reference // S'assurer que la référence est définie
             } else {
                 inventoryError.value = `Aucun inventaire trouvé avec la référence: ${reference}`
             }
@@ -525,11 +547,30 @@ export function usePlanningManagement(inventoryRef?: string) {
     /**
      * Navigation vers la page de monitoring
      */
-    const goToMonitoring = (inventoryId: number, warehouseId: number): void => {
-        router.push({
-            name: 'inventory-monitoring',
-            params: { inventoryId: String(inventoryId), warehouseId: String(warehouseId) }
+    const goToMonitoring = (inventoryReference: string, warehouseReference: string): void => {
+        console.log('[usePlanningManagement] goToMonitoring called with:', {
+            inventoryReference,
+            warehouseReference,
+            routeName: 'inventory-monitoring'
         })
+
+        try {
+            router.push({
+                name: 'inventory-monitoring',
+                params: {
+                    reference: inventoryReference,
+                    warehouse: warehouseReference
+                }
+            }).then(() => {
+                console.log('[usePlanningManagement] Navigation to monitoring successful')
+            }).catch((error) => {
+                console.error('[usePlanningManagement] Navigation to monitoring failed:', error)
+                alertService.error({ text: 'Erreur de navigation vers le monitoring' })
+            })
+        } catch (error) {
+            console.error('[usePlanningManagement] Error in goToMonitoring:', error)
+            alertService.error({ text: 'Erreur lors de la navigation vers le monitoring' })
+        }
     }
 
     // ===== RETURN =====
@@ -576,7 +617,7 @@ export function usePlanningManagement(inventoryRef?: string) {
 
             const currentQueryModel = queryModelRef.value
             const exportParams = convertQueryModelToQueryParams(currentQueryModel)
-            exportParams.export = 'csv'
+            exportParams.set('export', 'csv')
 
             const response = await InventoryService.exportAll(exportParams)
             const blob = response.data as Blob
@@ -608,7 +649,7 @@ export function usePlanningManagement(inventoryRef?: string) {
 
             const currentQueryModel = queryModelRef.value
             const exportParams = convertQueryModelToQueryParams(currentQueryModel)
-            exportParams.export = 'excel'
+            exportParams.set('export', 'excel')
 
             const response = await InventoryService.exportAll(exportParams)
             const blob = response.data as Blob

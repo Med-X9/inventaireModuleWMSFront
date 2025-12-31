@@ -172,13 +172,20 @@
                 :key="jobsKey"
                 :columns="adaptedStoreJobsColumns"
                 :rowDataProp="jobs"
+                :queryModelProp="jobsQueryModel"
                 :actions="[]"
+                :loading="jobsLoading"
                 :enableVirtualScrolling="false"
+                :currentPageProp="jobPaginationMetadata?.page"
                 :totalPagesProp="jobPaginationMetadata?.totalPages"
                 :totalItemsProp="jobPaginationMetadata?.total"
+                :pageSizeProp="jobPaginationMetadata?.pageSize"
                 :rowSelection="true"
+                :enableRowClick="true"
                 @selection-changed="onJobSelectionChanged"
+                @row-clicked="onRowClicked"
                 @pagination-changed="(queryModel) => onJobsTableEvent('pagination', queryModel)"
+                @page-size-changed="(queryModel) => onJobsTableEvent('page-size-changed', queryModel)"
                 @sort-changed="(queryModel) => onJobsTableEvent('sort', queryModel)"
                 @filter-changed="(queryModel) => onJobsTableEvent('filter', queryModel)"
                 @global-search-changed="(queryModel) => onJobsTableEvent('search', queryModel)"
@@ -209,6 +216,18 @@
                     :columns="1" />
             </div>
         </Modal>
+
+        <!-- Modal d'affectation de job spécialisée -->
+        <JobAffectationModal
+            :key="modalKey"
+            v-model="showJobAffectationModal"
+            :selected-job="selectedJobForModal"
+            :team-options="modalTeamOptions"
+            :team-options-by-counting-order="modalTeamOptionsByCountingOrder"
+            :inventory-id="inventoryId"
+            @team-changed="handleJobAffectationModalTeamChanged"
+            @finish="handleJobAffectationModalFinish"
+        />
 
         <Modal v-model="showTransferModal" :title="`Transférer ${eligibleJobsForTransfer.length} Job(s)`" :size="'xl'">
             <div class="flex flex-col" style="height: 75vh; max-height: 75vh;">
@@ -414,7 +433,7 @@
  */
 
 // ===== IMPORTS VUE =====
-import { ref, nextTick, Teleport } from 'vue'
+import { ref, nextTick, Teleport, watch } from 'vue'
 
 // ===== IMPORTS ROUTER =====
 import { useRoute } from 'vue-router'
@@ -422,6 +441,7 @@ import { useRoute } from 'vue-router'
 // ===== IMPORTS COMPOSANTS =====
 import DataTable from '@/components/DataTable/DataTable.vue'
 import Modal from '@/components/Modal.vue'
+import JobAffectationModal from '@/components/JobAffectationModal.vue'
 import FormBuilder from '@/components/Form/FormBuilder.vue'
 import ButtonGroup from '@/components/Form/ButtonGroup.vue'
 
@@ -430,7 +450,6 @@ import { useAffecter } from '@/composables/useAffecter'
 
 // ===== IMPORTS ICÔNES =====
 import IconCalendar from '@/components/icon/icon-calendar.vue'
-import IconEye from '@/components/icon/icon-eye.vue'
 
 // ===== ROUTE =====
 const route = useRoute()
@@ -451,6 +470,20 @@ const statusLegendTooltip = ref<HTMLElement | null>(null)
 const tooltipElement = ref<HTMLElement | null>(null)
 const tooltipStyle = ref<Record<string, string>>({})
 let tooltipTimeoutId: number | null = null
+
+// ===== MODAL D'AFFECTATION =====
+// Utiliser les propriétés du composable useAffecter
+const { showJobAffectationModal, selectedJobForModal, modalTeamOptions, modalTeamOptionsByCountingOrder } = affecter
+
+// Clé pour forcer le re-render de la modal
+const modalKey = ref(0)
+
+// Forcer le re-render de la modal quand les options changent
+watch(() => modalTeamOptionsByCountingOrder, (newVal) => {
+    if (newVal && Object.keys(newVal).length > 0) {
+        modalKey.value++
+    }
+}, { immediate: true })
 
 const showStatusTooltip = async () => {
     if (tooltipTimeoutId) clearTimeout(tooltipTimeoutId)
@@ -496,6 +529,9 @@ const positionStatusTooltip = () => {
     }
 }
 
+// Utiliser les handlers du composable useAffecter
+const { handleJobAffectationModalTeamChanged, handleJobAffectationModalFinish } = affecter
+
 // ===== HANDLERS DATATABLE =====
 // Handlers harmonisés avec usePlanning.ts - plus besoin de wrapper
 
@@ -534,7 +570,6 @@ const {
 
     // Dropdown
     dropdownItems,
-    saveAllChanges,
     resetAllChanges,
     resetAllSelections,
     resetDataTableSelections,
@@ -556,7 +591,6 @@ const {
     handleManualSubmit,
     handleReadyClick,
     handleReadyAll,
-    handleResetClick,
     handleGoToInventoryDetail,
     handleGoToAffectation,
     handleGoToResults,
@@ -570,19 +604,8 @@ const {
     // Pagination et métadonnées harmonisées avec usePlanning.ts
     jobPaginationMetadata,
 
-    // États de chargement
-    jobsLoading,
-    loading,
-
-    // Paramètres personnalisés DataTable
-    jobsCustomParams,
-
-    // Handlers DataTable harmonisés avec usePlanning.ts
+    // Handler DataTable unifié
     onJobsTableEvent,
-    onJobPaginationChanged,
-    onJobSortChanged,
-    onJobFilterChanged,
-    onJobSearchChanged,
 
     // Gestion des IDs
     initializeIdsFromReferences,
@@ -600,7 +623,6 @@ const {
     showTransferButton,
     showManualButton,
     showReadyButton,
-    showResetButton,
     actionButtons,
     navigationButtons,
     jobsColumns,
@@ -616,6 +638,12 @@ const {
     // Export handlers
     handleExportCsv,
     handleExportExcel,
+
+    // États de chargement
+    jobsLoading,
+
+    // QueryModel pour synchronisation DataTable
+    jobsQueryModel,
 
     // Méthodes de chargement
     loadJobs,

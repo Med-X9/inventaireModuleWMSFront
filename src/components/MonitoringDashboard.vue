@@ -4,7 +4,6 @@ import { useMonitoring, type ZoneMonitoringData } from '@/composables/useMonitor
 import IconCheck from '@/components/icon/icon-check.vue'
 import IconPlay from '@/components/icon/icon-play.vue'
 import IconClock from '@/components/icon/icon-clock.vue'
-import IconUsers from '@/components/icon/icon-users.vue'
 import IconBox from '@/components/icon/icon-box.vue'
 
 // ===== PROPS =====
@@ -12,405 +11,551 @@ import IconBox from '@/components/icon/icon-box.vue'
  * Props pour le monitoring dashboard
  */
 interface Props {
-  inventoryId?: number
-  warehouseId?: number
+    inventoryId?: number
+    warehouseId?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  inventoryId: undefined,
-  warehouseId: undefined
+    inventoryId: undefined,
+    warehouseId: undefined
 })
 
 // ===== COMPOSABLE =====
 const {
-  loading,
-  monitoringData,
-  autoRefreshEnabled,
-  chargerDonnees,
-  toggleAutoRefresh
+    loading,
+    monitoringData,
+    autoRefreshEnabled,
+    chargerDonnees,
+    toggleAutoRefresh
 } = useMonitoring({
-  inventoryId: props.inventoryId,
-  warehouseId: props.warehouseId
+    inventoryId: props.inventoryId,
+    warehouseId: props.warehouseId
 })
 
 // Classes CSS pour les LEDs selon le statut
 const getLedClass = (status: string) => {
-  const baseClass = 'w-2 h-2 rounded-full inline-block'
-  switch (status) {
-    case 'success':
-      return `${baseClass} bg-emerald-500`
-    case 'warning':
-      // Utilisation de la couleur primaire du projet pour le statut "warning"
-      return `${baseClass} bg-[#FECD1C]`
-    case 'danger':
-      return `${baseClass} bg-red-500`
-    case 'info':
-      return `${baseClass} bg-blue-500`
-    default:
-      return `${baseClass} bg-slate-400`
-  }
+    const baseClass = 'w-2 h-2 rounded-full inline-block'
+    switch (status) {
+        case 'success':
+            return `${baseClass} bg-emerald-500`
+        case 'warning':
+            // Utilisation de la couleur primaire du projet pour le statut "warning"
+            return `${baseClass} bg-[#FECD1C]`
+        case 'danger':
+            return `${baseClass} bg-red-500`
+        case 'info':
+            return `${baseClass} bg-blue-500`
+        default:
+            return `${baseClass} bg-slate-400`
+    }
 }
 
 // Formatage des pourcentages
-const formatPourcentage = (value: number) => {
-  return `${value}%`
+const formatPourcentage = (value: any) => {
+    if (value === undefined || value === null || isNaN(value)) {
+        return '0%'
+    }
+    return `${Number(value)}%`
 }
 
 // Formatage des nombres
-const formatNombre = (value: number) => {
-  return value.toString()
+const formatNombre = (value: any) => {
+    if (value === undefined || value === null || isNaN(value)) {
+        return '0'
+    }
+    return Number(value).toString()
 }
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col bg-slate-500 dark:bg-slate-800 overflow-auto">
-    <!-- En-tête minimaliste -->
-    <div class="flex-shrink-0 flex justify-end items-center px-4 py-2 bg-white dark:bg-[#1b2e4b] border-b border-slate-200 dark:border-gray-700">
-      <div class="flex gap-2">
+    <div class="h-screen flex flex-col bg-slate-500 dark:bg-slate-800 overflow-hidden">
+        <!-- En-tête minimaliste -->
+        <div
+            class="flex-shrink-0 flex justify-end items-center px-4 py-2 bg-white dark:bg-[#1b2e4b] border-b border-slate-200 dark:border-gray-700 z-10">
+            <div class="flex gap-2">
                 <button @click="chargerDonnees" :disabled="loading"
-                    class="w-7 h-7 flex items-center justify-center text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-all disabled:opacity-40 rounded hover:bg-slate-100 dark:hover:bg-gray-700">
-          <span class="text-sm" :class="{ 'animate-spin': loading }">↻</span>
-        </button>
+                    class="w-7 h-7 flex items-center justify-center text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-all disabled:opacity-40 rounded hover:bg-slate-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/50">
+                    <span class="text-sm" :class="{ 'animate-spin': loading }">↻</span>
+                </button>
                 <button @click="toggleAutoRefresh" :class="[
-            'w-7 h-7 flex items-center justify-center rounded transition-all',
-            autoRefreshEnabled
-              ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-              : 'text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 hover:bg-slate-100 dark:hover:bg-gray-700'
+                    'w-7 h-7 flex items-center justify-center rounded transition-all focus:outline-none focus:ring-2 focus:ring-primary/50',
+                    autoRefreshEnabled
+                        ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                        : 'text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 hover:bg-slate-100 dark:hover:bg-gray-700'
                 ]">
                     <span class="w-1.5 h-1.5 rounded-full"
-                        :class="autoRefreshEnabled ? 'bg-emerald-500' : 'bg-slate-400'"></span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Skeleton loading -->
-    <div v-if="loading && !monitoringData" class="monitoring-container bg-slate-500 dark:bg-slate-800 p-1">
-      <div class="flex flex-col gap-1">
-        <!-- Skeleton métriques globales -->
-        <div class="grid grid-cols-5 gap-1">
-          <div v-for="i in 5" :key="`metric-${i}`" class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 shadow-sm">
-            <div class="flex items-center justify-center gap-1">
-              <div class="w-4 h-4 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-              <div class="h-3 w-16 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-              <div class="h-6 w-12 bg-slate-300 dark:bg-slate-700 rounded animate-pulse"></div>
+                        :class="autoRefreshEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"></span>
+                </button>
             </div>
-          </div>
         </div>
 
-        <!-- Skeleton zones en grille -->
-        <div class="grid grid-cols-3 grid-rows-3 gap-1">
-          <div v-for="i in 9" :key="`zone-${i}`" class="bg-white dark:bg-[#1b2e4b] rounded-lg border border-slate-200/60 dark:border-gray-700 p-1 shadow-sm">
-            <!-- Skeleton en-tête zone -->
-            <div class="flex items-center justify-between gap-1 mb-1 pb-1 border-b border-slate-200 dark:border-gray-700">
-              <div class="w-2 h-2 bg-slate-300 dark:bg-slate-600 rounded-full animate-pulse"></div>
-              <div class="flex-1 text-center">
-                <div class="h-3 w-20 bg-slate-200 dark:bg-slate-600 rounded animate-pulse mx-auto"></div>
-              </div>
-            </div>
+        <!-- Contenu scrollable -->
+        <div
+            class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600 scrollbar-track-transparent hover:scrollbar-thumb-slate-400 dark:hover:scrollbar-thumb-slate-500">
 
-            <!-- Skeleton métriques -->
-            <div class="flex flex-col gap-0.5">
-              <!-- Équipes et JOB -->
-              <div class="flex gap-1">
-                <div class="flex-1 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                  <div class="flex items-center justify-center gap-1">
-                    <div class="w-3 h-3 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                    <div class="h-2 w-12 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                    <div class="h-3 w-8 bg-slate-300 dark:bg-slate-700 rounded animate-pulse"></div>
-                  </div>
-                </div>
-                <div class="flex-1 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                  <div class="flex items-center justify-center gap-1">
-                    <div class="w-3 h-3 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                    <div class="h-2 w-12 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                    <div class="h-3 w-16 bg-slate-300 dark:bg-slate-700 rounded animate-pulse"></div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 1er comptage -->
-              <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                <div class="h-2 w-20 bg-slate-300 dark:bg-slate-700 rounded animate-pulse mx-auto mb-0.5"></div>
-                <div class="flex gap-0.5">
-                  <div v-for="j in 3" :key="`count1-${j}`" class="flex-1 bg-white dark:bg-[#1b2e4b] rounded p-0.5 shadow-sm">
-                    <div class="flex items-center justify-center gap-1">
-                      <div class="w-3 h-3 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                      <div class="h-2 w-10 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                      <div class="h-3 w-6 bg-slate-300 dark:bg-slate-700 rounded animate-pulse"></div>
-                      <div class="h-2 w-8 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 2ème comptage -->
-              <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                <div class="h-2 w-20 bg-slate-300 dark:bg-slate-700 rounded animate-pulse mx-auto mb-0.5"></div>
-                <div class="flex gap-0.5">
-                  <div v-for="j in 3" :key="`count2-${j}`" class="flex-1 bg-white dark:bg-[#1b2e4b] rounded p-0.5 shadow-sm">
-                    <div class="flex items-center justify-center gap-1">
-                      <div class="w-3 h-3 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                      <div class="h-2 w-10 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                      <div class="h-3 w-6 bg-slate-300 dark:bg-slate-700 rounded animate-pulse"></div>
-                      <div class="h-2 w-8 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 3ème comptage -->
-              <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                <div class="h-2 w-20 bg-slate-300 dark:bg-slate-700 rounded animate-pulse mx-auto mb-0.5"></div>
-                <div class="flex items-center justify-center gap-1 bg-white dark:bg-[#1b2e4b] rounded p-0.5 shadow-sm">
-                  <div class="w-3 h-3 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                  <div class="h-2 w-10 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                  <div class="h-3 w-12 bg-slate-300 dark:bg-slate-700 rounded animate-pulse"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Dashboard de monitoring compact -->
-    <div v-else-if="monitoringData" class="monitoring-container bg-slate-500 dark:bg-slate-800 p-1">
-            <div class="flex flex-col gap-1">
-        <!-- Métriques globales compactes -->
-        <div class="grid grid-cols-5 gap-1">
-                    <div
-                        class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 shadow-sm hover:shadow-md transition-all duration-300">
-                        <div class="flex items-center justify-center gap-1">
-                            <IconUsers class="w-4 h-4 text-slate-500 dark:text-gray-400" />
-                            <span class="text-xs text-slate-500 dark:text-gray-400">Total Équipe</span>
-                            <span class="text-xl font-bold text-slate-900 dark:text-white-light">{{
-                                formatNombre(monitoringData.total.nombreEquipes) }}</span>
+            <!-- Skeleton loading -->
+            <div v-if="loading && !monitoringData" class="monitoring-container bg-slate-500 dark:bg-slate-800 p-1">
+                <div class="flex flex-col gap-1">
+                    <!-- Skeleton métriques globales -->
+                    <div class="grid grid-cols-4 gap-1">
+                        <div v-for="i in 4" :key="`metric-${i}`"
+                            class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 shadow-sm">
+                            <div class="flex items-center justify-center gap-1">
+                                <div class="w-4 h-4 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
+                                <div class="h-3 w-16 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
+                                <div class="h-6 w-12 bg-slate-300 dark:bg-slate-700 rounded animate-pulse"></div>
+                            </div>
                         </div>
                     </div>
-                    <div
-                        class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 shadow-sm hover:shadow-md transition-all duration-300">
-                        <div class="flex items-center justify-center gap-1">
-                            <IconBox class="w-4 h-4 text-slate-500 dark:text-gray-400" />
-                            <span class="text-xs text-slate-500 dark:text-gray-400">Total JOB</span>
-                            <span class="text-xl font-bold text-slate-900 dark:text-white-light">{{
-                                formatNombre(monitoringData.total.totalJobs) }}</span>
-                        </div>
-                    </div>
-                    <div
-                        class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 border border-emerald-200/60 dark:border-emerald-800/60 shadow-sm hover:shadow-md transition-all duration-300">
-                        <div class="flex items-center justify-center gap-1">
-                            <IconCheck class="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                            <span class="text-xs text-slate-500 dark:text-gray-400">1er Clôturé</span>
-                            <span class="text-xl font-bold text-emerald-600 dark:text-emerald-400">{{
-                                formatNombre(monitoringData.total.premierComptage.cloture) }}</span>
-                            <span class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">({{
-                                formatPourcentage(monitoringData.total.premierComptage.cloturePourcentage) }})</span>
-                        </div>
-          </div>
-                    <div
-                        class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 border border-emerald-200/60 dark:border-emerald-800/60 shadow-sm hover:shadow-md transition-all duration-300">
-                        <div class="flex items-center justify-center gap-1">
-                            <IconCheck class="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                            <span class="text-xs text-slate-500 dark:text-gray-400">2ème Clôturé</span>
-                            <span class="text-xl font-bold text-emerald-600 dark:text-emerald-400">{{
-                                formatNombre(monitoringData.total.deuxiemeComptage.cloture) }}</span>
-                            <span class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">({{
-                                formatPourcentage(monitoringData.total.deuxiemeComptage.cloturePourcentage) }})</span>
-          </div>
-          </div>
-                    <div
-                        class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 border border-emerald-200/60 dark:border-emerald-800/60 shadow-sm hover:shadow-md transition-all duration-300">
-                        <div class="flex items-center justify-center gap-1">
-                            <IconCheck class="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                            <span class="text-xs text-slate-500 dark:text-gray-400">3ème Terminé</span>
-                            <span class="text-xl font-bold text-emerald-600 dark:text-emerald-400">{{
-                                formatNombre(monitoringData.total.troisiemeComptage.termine) }}</span>
-                            <span class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">({{
-                                formatPourcentage(monitoringData.total.troisiemeComptage.terminePourcentage) }})</span>
-          </div>
-          </div>
-        </div>
 
-        <!-- Zones en grille compacte -->
-                <div class="grid grid-cols-3 grid-rows-3 gap-1">
-                    <div v-for="zone in monitoringData.zones" :key="zone.zoneId"
-                        class="bg-white dark:bg-[#1b2e4b] rounded-lg border border-slate-200/60 dark:border-gray-700 p-1 hover:shadow-lg transition-all duration-300 shadow-sm">
-                        <!-- En-tête zone horizontale -->
-                        <div class="flex items-center justify-between gap-1 mb-1 pb-1 border-b border-slate-200 dark:border-gray-700">
-              <span :class="getLedClass(zone.statusLed)" class="animate-pulse"></span>
-                            <div class="flex-1 text-center">
-                                <div class="text-xs font-semibold text-slate-900 dark:text-white-light">{{ zone.zoneDescription }}</div>
-              </div>
-            </div>
-
-                        <!-- Métriques horizontales -->
-                        <div class="flex flex-col gap-0.5">
-                            <!-- Équipes et JOB - horizontale -->
-                            <div class="flex gap-1">
-                                <div class="flex-1 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                                    <div class="flex items-center justify-center gap-1">
-                                        <IconUsers class="w-3 h-3 text-slate-500 dark:text-gray-400" />
-                                        <span class="text-[10px] text-slate-500 dark:text-gray-400">Équipes</span>
-                                        <span class="text-sm font-bold text-slate-900 dark:text-white-light">
-                                            {{ formatNombre(zone.nombreEquipes) }}
-                                        </span>
+                    <!-- Skeleton zones en grille -->
+                    <div class="grid grid-cols-3 grid-rows-3 gap-1">
+                        <div v-for="i in 9" :key="`zone-${i}`"
+                            class="bg-white dark:bg-[#1b2e4b] rounded-lg border border-slate-200/60 dark:border-gray-700 p-1 shadow-sm">
+                            <!-- Skeleton en-tête zone -->
+                            <div
+                                class="flex items-center justify-between gap-1 mb-1 pb-1 border-b border-slate-200 dark:border-gray-700">
+                                <div class="w-2 h-2 bg-slate-300 dark:bg-slate-600 rounded-full animate-pulse"></div>
+                                <div class="flex-1 text-center">
+                                    <div class="h-3 w-20 bg-slate-200 dark:bg-slate-600 rounded animate-pulse mx-auto">
                                     </div>
                                 </div>
-                                <div class="flex-1 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
+                            </div>
+
+                            <!-- Skeleton métriques -->
+                            <div class="flex flex-col gap-0.5">
+                                <!-- JOB et Emplacements -->
+                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
+                                    <div class="flex items-center justify-center gap-1">
+                                        <div class="w-3 h-3 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
+                                        </div>
+                                        <div class="h-2 w-12 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
+                                        </div>
+                                        <div class="h-3 w-16 bg-slate-300 dark:bg-slate-700 rounded animate-pulse">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 1er comptage -->
+                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
+                                    <div
+                                        class="h-2 w-20 bg-slate-300 dark:bg-slate-700 rounded animate-pulse mx-auto mb-0.5">
+                                    </div>
+                                    <div class="flex gap-0.5">
+                                        <div v-for="j in 3" :key="`count1-${j}`"
+                                            class="flex-1 bg-white dark:bg-[#1b2e4b] rounded p-0.5 shadow-sm">
+                                            <div class="flex items-center justify-center gap-1">
+                                                <div
+                                                    class="w-3 h-3 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
+                                                </div>
+                                                <div
+                                                    class="h-2 w-10 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
+                                                </div>
+                                                <div
+                                                    class="h-3 w-6 bg-slate-300 dark:bg-slate-700 rounded animate-pulse">
+                                                </div>
+                                                <div
+                                                    class="h-2 w-8 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 2ème comptage -->
+                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
+                                    <div
+                                        class="h-2 w-20 bg-slate-300 dark:bg-slate-700 rounded animate-pulse mx-auto mb-0.5">
+                                    </div>
+                                    <div class="flex gap-0.5">
+                                        <div v-for="j in 3" :key="`count2-${j}`"
+                                            class="flex-1 bg-white dark:bg-[#1b2e4b] rounded p-0.5 shadow-sm">
+                                            <div class="flex items-center justify-center gap-1">
+                                                <div
+                                                    class="w-3 h-3 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
+                                                </div>
+                                                <div
+                                                    class="h-2 w-10 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
+                                                </div>
+                                                <div
+                                                    class="h-3 w-6 bg-slate-300 dark:bg-slate-700 rounded animate-pulse">
+                                                </div>
+                                                <div
+                                                    class="h-2 w-8 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 3ème comptage -->
+                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
+                                    <div
+                                        class="h-2 w-20 bg-slate-300 dark:bg-slate-700 rounded animate-pulse mx-auto mb-0.5">
+                                    </div>
+                                    <div
+                                        class="flex items-center justify-center gap-1 bg-white dark:bg-[#1b2e4b] rounded p-0.5 shadow-sm">
+                                        <div class="w-3 h-3 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
+                                        <div class="h-2 w-10 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
+                                        </div>
+                                        <div class="h-3 w-12 bg-slate-300 dark:bg-slate-700 rounded animate-pulse">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard de monitoring compact -->
+            <div v-else-if="monitoringData" class="monitoring-container bg-slate-500 dark:bg-slate-800 p-1">
+                <div class="flex flex-col gap-1">
+                    <!-- Métriques globales compactes -->
+                    <div class="grid grid-cols-4 gap-1">
+                        <div
+                            class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 shadow-sm hover:shadow-md transition-all duration-300">
+                            <div class="flex items-center justify-center gap-1">
+                                <IconBox class="w-4 h-4 text-slate-500 dark:text-gray-400" />
+                                <span class="text-xs text-slate-500 dark:text-gray-400">Total JOB</span>
+                                <span class="text-xl font-bold text-slate-900 dark:text-white-light">{{
+                                    formatNombre(monitoringData.total.totalJobs) }}</span>
+                            </div>
+                        </div>
+                        <div
+                            class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 border border-emerald-200/60 dark:border-emerald-800/60 shadow-sm hover:shadow-md transition-all duration-300">
+                            <div class="flex items-center justify-center gap-1">
+                                <IconCheck class="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                <span class="text-xs text-slate-500 dark:text-gray-400">1er Clôturé</span>
+                                <span class="text-xl font-bold text-emerald-600 dark:text-emerald-400">{{
+                                    formatNombre(monitoringData.total.premierComptage.cloture) }}</span>
+                                <span class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">({{
+                                    formatPourcentage(monitoringData.total.premierComptage.cloturePourcentage)
+                                    }})</span>
+                            </div>
+                        </div>
+                        <div
+                            class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 border border-emerald-200/60 dark:border-emerald-800/60 shadow-sm hover:shadow-md transition-all duration-300">
+                            <div class="flex items-center justify-center gap-1">
+                                <IconCheck class="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                <span class="text-xs text-slate-500 dark:text-gray-400">2ème Clôturé</span>
+                                <span class="text-xl font-bold text-emerald-600 dark:text-emerald-400">{{
+                                    formatNombre(monitoringData.total.deuxiemeComptage.cloture) }}</span>
+                                <span class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">({{
+                                    formatPourcentage(monitoringData.total.deuxiemeComptage.cloturePourcentage)
+                                    }})</span>
+                            </div>
+                        </div>
+                        <div
+                            class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 border border-emerald-200/60 dark:border-emerald-800/60 shadow-sm hover:shadow-md transition-all duration-300">
+                            <div class="flex items-center justify-center gap-1">
+                                <IconCheck class="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                <span class="text-xs text-slate-500 dark:text-gray-400">3ème Terminé</span>
+                                <span class="text-xl font-bold text-emerald-600 dark:text-emerald-400">{{
+                                    formatNombre(monitoringData.total.troisiemeComptage.termine) }}</span>
+                                <span class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">({{
+                                    formatPourcentage(monitoringData.total.troisiemeComptage.terminePourcentage)
+                                    }})</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Zones en grille compacte -->
+                    <div class="grid grid-cols-3 grid-rows-3 gap-1">
+                        <div v-for="zone in monitoringData.zones" :key="zone.zoneId"
+                            class="bg-white dark:bg-[#1b2e4b] rounded-lg border border-slate-200/60 dark:border-gray-700 p-1 hover:shadow-lg transition-all duration-300 shadow-sm">
+                            <!-- En-tête zone horizontale -->
+                            <div
+                                class="flex items-center justify-between gap-1 mb-1 pb-1 border-b border-slate-200 dark:border-gray-700">
+                                <span :class="getLedClass(zone.statusLed)" class="animate-pulse"></span>
+                                <div class="flex-1 text-center">
+                                    <div class="text-xs font-semibold text-slate-900 dark:text-white-light">{{
+                                        zone.zoneDescription }}</div>
+                                </div>
+                            </div>
+
+                            <!-- Métriques horizontales -->
+                            <div class="flex flex-col gap-0.5">
+                                <!-- JOB et Emplacements - horizontale -->
+                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
                                     <div class="flex items-center justify-center gap-1">
                                         <IconBox class="w-3 h-3 text-slate-500 dark:text-gray-400" />
                                         <span class="text-[10px] text-slate-500 dark:text-gray-400">JOB</span>
                                         <span class="text-sm font-bold text-slate-900 dark:text-white-light">
-                                            {{ formatNombre(zone.totalJobs) }} ({{ formatNombre(zone.totalEmplacements) }})
+                                            {{ formatNombre(zone.totalJobs) }} ({{
+                                            formatNombre(zone.totalEmplacements) }})
                                         </span>
                                     </div>
                                 </div>
-                            </div>
 
-                            <!-- 1er comptage - horizontale -->
-                            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                                <div class="text-[10px] text-slate-600 dark:text-gray-300 mb-0.5 text-center font-semibold">1er Comptage
-                                </div>
-                                <div class="flex gap-0.5">
-                                    <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                        <div class="flex items-center justify-center gap-1">
-                                            <IconCheck class="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Terminé</span>
-                                            <span class="text-sm font-bold text-emerald-600 dark:text-emerald-400">{{
-                                                formatNombre(zone.premierComptage.cloture) }}</span>
-                                            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">{{
-                                                formatPourcentage(zone.premierComptage.cloturePourcentage) }}</span>
+                                <!-- 1er comptage - horizontale -->
+                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
+                                    <div
+                                        class="text-[10px] text-slate-600 dark:text-gray-300 mb-0.5 text-center font-semibold">
+                                        1er Comptage
+                                    </div>
+                                    <div class="flex gap-0.5">
+                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
+                                            <div class="flex items-center justify-center gap-1">
+                                                <IconClock class="w-3 h-3 text-[#FECD1C]" />
+                                                <span class="text-[10px] text-[#FECD1C] font-medium">Attente</span>
+                                                <span class="text-sm font-bold text-[#FECD1C]">{{
+                                                    formatNombre(zone.premierComptage.nonEntame) }}</span>
+                                                <span class="text-[10px] text-[#FECD1C] font-medium">{{
+                                                    formatPourcentage(zone.premierComptage.nonEntamePourcentage)
+                                                    }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
+                                            <div class="flex items-center justify-center gap-1">
+                                                <IconPlay class="w-3 h-3 text-primary" />
+                                                <span class="text-[10px] text-primary font-medium">Entamé</span>
+                                                <span class="text-sm font-bold text-primary">{{
+                                                    formatNombre(zone.premierComptage.enCours) }}</span>
+                                                <span class="text-[10px] text-primary font-medium">{{
+                                                    formatPourcentage(zone.premierComptage.enCoursPourcentage) }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
+                                            <div class="flex items-center justify-center gap-1">
+                                                <IconCheck class="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                                <span
+                                                    class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Terminé</span>
+                                                <span
+                                                    class="text-sm font-bold text-emerald-600 dark:text-emerald-400">{{
+                                                        formatNombre(zone.premierComptage.cloture) }}</span>
+                                                <span
+                                                    class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">{{
+                                                        formatPourcentage(zone.premierComptage.cloturePourcentage) }}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                        <div class="flex items-center justify-center gap-1">
-                                            <IconPlay class="w-3 h-3 text-[#FECD1C]" />
-                                            <span class="text-[10px] text-[#FECD1C] font-medium">Entamé</span>
-                                            <span class="text-sm font-bold text-[#FECD1C]">{{
-                                                formatNombre(zone.premierComptage.enCours) }}</span>
-                                            <span class="text-[10px] text-[#FECD1C] font-medium">{{
-                                                formatPourcentage(zone.premierComptage.enCoursPourcentage) }}</span>
-                                        </div>
-                  </div>
-                                    <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                        <div class="flex items-center justify-center gap-1">
-                                            <IconClock class="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                                            <span class="text-[10px] text-amber-600 dark:text-amber-400 font-medium">Attente</span>
-                                            <span class="text-sm font-bold text-amber-600 dark:text-amber-400">{{
-                                                formatNombre(zone.premierComptage.nonEntame) }}</span>
-                                            <span class="text-[10px] text-amber-600 dark:text-amber-400 font-medium">{{
-                                                formatPourcentage(zone.premierComptage.nonEntamePourcentage) }}</span>
-                  </div>
-                  </div>
-                </div>
-              </div>
-
-                            <!-- 2e comptage - horizontale -->
-                            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                                <div class="text-[10px] text-slate-600 dark:text-gray-300 mb-0.5 text-center font-semibold">2ème Comptage
                                 </div>
-                                <div class="flex gap-0.5">
-                                    <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                        <div class="flex items-center justify-center gap-1">
-                                            <IconCheck class="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Terminé</span>
-                                            <span class="text-sm font-bold text-emerald-600 dark:text-emerald-400">{{
-                                                formatNombre(zone.deuxiemeComptage.cloture) }}</span>
-                                            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">{{
-                                                formatPourcentage(zone.deuxiemeComptage.cloturePourcentage) }}</span>
+
+                                <!-- 2e comptage - horizontale -->
+                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
+                                    <div
+                                        class="text-[10px] text-slate-600 dark:text-gray-300 mb-0.5 text-center font-semibold">
+                                        2ème Comptage
+                                    </div>
+                                    <div class="flex gap-0.5">
+                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
+                                            <div class="flex items-center justify-center gap-1">
+                                                <IconClock class="w-3 h-3 text-[#FECD1C]" />
+                                                <span class="text-[10px] text-[#FECD1C] font-medium">Attente</span>
+                                                <span class="text-sm font-bold text-[#FECD1C]">{{
+                                                    formatNombre(zone.deuxiemeComptage.nonEntame) }}</span>
+                                                <span class="text-[10px] text-[#FECD1C] font-medium">{{
+                                                    formatPourcentage(zone.deuxiemeComptage.nonEntamePourcentage)
+                                                    }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
+                                            <div class="flex items-center justify-center gap-1">
+                                                <IconPlay class="w-3 h-3 text-primary" />
+                                                <span class="text-[10px] text-primary font-medium">Entamé</span>
+                                                <span class="text-sm font-bold text-primary">{{
+                                                    formatNombre(zone.deuxiemeComptage.enCours) }}</span>
+                                                <span class="text-[10px] text-primary font-medium">{{
+                                                    formatPourcentage(zone.deuxiemeComptage.enCoursPourcentage)
+                                                    }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
+                                            <div class="flex items-center justify-center gap-1">
+                                                <IconCheck class="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                                <span
+                                                    class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Terminé</span>
+                                                <span
+                                                    class="text-sm font-bold text-emerald-600 dark:text-emerald-400">{{
+                                                        formatNombre(zone.deuxiemeComptage.cloture) }}</span>
+                                                <span
+                                                    class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">{{
+                                                        formatPourcentage(zone.deuxiemeComptage.cloturePourcentage)
+                                                    }}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                        <div class="flex items-center justify-center gap-1">
-                                            <IconPlay class="w-3 h-3 text-[#FECD1C]" />
-                                            <span class="text-[10px] text-[#FECD1C] font-medium">Entamé</span>
-                                            <span class="text-sm font-bold text-[#FECD1C]">{{
-                                                formatNombre(zone.deuxiemeComptage.enCours) }}</span>
-                                            <span class="text-[10px] text-[#FECD1C] font-medium">{{
-                                                formatPourcentage(zone.deuxiemeComptage.enCoursPourcentage) }}</span>
-                                        </div>
-                  </div>
-                                    <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                        <div class="flex items-center justify-center gap-1">
-                                            <IconClock class="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                                            <span class="text-[10px] text-amber-600 dark:text-amber-400 font-medium">Attente</span>
-                                            <span class="text-sm font-bold text-amber-600 dark:text-amber-400">{{
-                                                formatNombre(zone.deuxiemeComptage.nonEntame) }}</span>
-                                            <span class="text-[10px] text-amber-600 dark:text-amber-400 font-medium">{{
-                                                formatPourcentage(zone.deuxiemeComptage.nonEntamePourcentage) }}</span>
-                  </div>
-                  </div>
-                </div>
-              </div>
-
-                            <!-- 3e comptage - horizontale -->
-                            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                                <div class="text-[10px] text-slate-600 dark:text-gray-300 mb-0.5 text-center font-semibold">
-                                    3ème Comptage
                                 </div>
-                                <div class="flex items-center justify-center gap-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                    <IconBox class="w-3 h-3 text-slate-500 dark:text-gray-400" />
-                                    <span class="text-[10px] text-slate-500 dark:text-gray-400">Total</span>
-                                    <span class="text-sm font-bold text-slate-900 dark:text-white-light">
-                                        {{ formatNombre(zone.troisiemeComptage.jobs) }} ({{ formatNombre(zone.totalEmplacements) }})
-                                    </span>
+
+                                <!-- 3e comptage - horizontale -->
+                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
+                                    <div
+                                        class="text-[10px] text-slate-600 dark:text-gray-300 mb-0.5 text-center font-semibold">
+                                        3ème Comptage
+                                    </div>
+                                    <div class="flex gap-0.5">
+                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
+                                            <div class="flex items-center justify-center gap-1">
+                                                <IconClock class="w-3 h-3 text-[#FECD1C]" />
+                                                <span class="text-[10px] text-[#FECD1C] font-medium">Attente</span>
+                                                <span class="text-sm font-bold text-[#FECD1C]">{{
+                                                    formatNombre(zone.troisiemeComptage.nonEntame) }}</span>
+                                                <span class="text-[10px] text-[#FECD1C] font-medium">{{
+                                                    formatPourcentage(zone.troisiemeComptage.nonEntamePourcentage)
+                                                    }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
+                                            <div class="flex items-center justify-center gap-1">
+                                                <IconPlay class="w-3 h-3 text-primary" />
+                                                <span class="text-[10px] text-primary font-medium">Entamé</span>
+                                                <span class="text-sm font-bold text-primary">{{
+                                                    formatNombre(zone.troisiemeComptage.enCours) }}</span>
+                                                <span class="text-[10px] text-primary font-medium">{{
+                                                    formatPourcentage(zone.troisiemeComptage.enCoursPourcentage)
+                                                    }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
+                                            <div class="flex items-center justify-center gap-1">
+                                                <IconCheck class="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                                <span
+                                                    class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Terminé</span>
+                                                <span
+                                                    class="text-sm font-bold text-emerald-600 dark:text-emerald-400">{{
+                                                        formatNombre(zone.troisiemeComptage.termine) }}</span>
+                                                <span
+                                                    class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">{{
+                                                        formatPourcentage(zone.troisiemeComptage.terminePourcentage)
+                                                    }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- État vide -->
-        <div v-else class="flex items-center justify-center bg-white dark:bg-[#1b2e4b] py-8">
-      <div class="text-center">
-                <button @click="chargerDonnees"
-                    class="w-8 h-8 flex items-center justify-center text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 transition-all rounded hover:bg-slate-100 dark:hover:bg-gray-700">
-          ↻
-        </button>
-      </div>
+            <!-- État vide -->
+            <div v-else class="flex items-center justify-center bg-white dark:bg-[#1b2e4b] py-8">
+                <div class="text-center">
+                    <button @click="chargerDonnees"
+                        class="w-8 h-8 flex items-center justify-center text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 transition-all rounded hover:bg-slate-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/50">
+                        ↻
+                    </button>
+                </div>
+            </div>
+
+        </div> <!-- Fin du contenu scrollable -->
     </div>
-  </div>
 </template>
 
 <style scoped>
 /* Animation pulse subtile pour les LEDs */
 @keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
 }
 
 .animate-pulse {
-  animation: pulse 2s ease-in-out infinite;
+    animation: pulse 2s ease-in-out infinite;
 }
 
 /* Animation shimmer pour le skeleton loading */
 @keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
 }
 
 /* Amélioration du skeleton avec animation shimmer */
 .monitoring-container .bg-slate-200,
 .monitoring-container .bg-slate-300 {
-  background: linear-gradient(90deg, #e2e8f0 25%, #cbd5e1 50%, #e2e8f0 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+    background: linear-gradient(90deg, #e2e8f0 25%, #cbd5e1 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
 }
 
 .dark .monitoring-container .bg-slate-200,
 .dark .monitoring-container .bg-slate-300 {
-  background: linear-gradient(90deg, #374151 25%, #4a5568 50%, #374151 75%);
-  background-size: 200% 100%;
+    background: linear-gradient(90deg, #374151 25%, #4a5568 50%, #374151 75%);
+    background-size: 200% 100%;
+}
+
+/* Styles pour la scrollbar personnalisée */
+.scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(148 163 184) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(148 163 184);
+    border-radius: 3px;
+    border: none;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(100 116 139);
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:active {
+    background-color: rgb(71 85 105);
+}
+
+.dark .scrollbar-thin {
+    scrollbar-color: rgb(71 85 105) transparent;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(71 85 105);
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(51 65 85);
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:active {
+    background-color: rgb(30 41 59);
+}
+
+/* Styles pour les boutons */
+button {
+    transition: all 0.2s ease-in-out;
+}
+
+button:focus {
+    outline: none;
+}
+
+button:disabled {
+    cursor: not-allowed;
+}
+
+/* Amélioration de l'animation de spin */
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Variables CSS pour adaptation responsive - Base (mobile/tablette) */
@@ -424,6 +569,9 @@ const formatNombre = (value: number) => {
     --monitoring-icon-sm: 0.75rem;
     --monitoring-icon-md: 1rem;
     --monitoring-icon-led: 0.5rem;
+    /* Variables pour le scroll */
+    --scroll-behavior: smooth;
+    --scroll-padding: 1rem;
 }
 
 /* Laptop (1366px - 1919px) */
@@ -438,6 +586,11 @@ const formatNombre = (value: number) => {
         --monitoring-icon-sm: 1rem;
         --monitoring-icon-md: 1.25rem;
         --monitoring-icon-led: 0.625rem;
+    }
+
+    /* Amélioration du scroll sur laptop */
+    .scrollbar-thin::-webkit-scrollbar {
+        width: 8px;
     }
 }
 
@@ -454,6 +607,15 @@ const formatNombre = (value: number) => {
         --monitoring-icon-md: 1.5rem;
         --monitoring-icon-led: 0.75rem;
     }
+
+    /* Scroll amélioré sur desktop */
+    .scrollbar-thin::-webkit-scrollbar {
+        width: 10px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+        border-radius: 5px;
+    }
 }
 
 /* Tableau interactif / 4K (2560px - 3839px) */
@@ -468,6 +630,15 @@ const formatNombre = (value: number) => {
         --monitoring-icon-sm: 1.5rem;
         --monitoring-icon-md: 2rem;
         --monitoring-icon-led: 1rem;
+    }
+
+    /* Scroll optimisé pour 4K */
+    .scrollbar-thin::-webkit-scrollbar {
+        width: 12px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+        border-radius: 6px;
     }
 }
 
@@ -485,6 +656,15 @@ const formatNombre = (value: number) => {
         --monitoring-icon-led: 1.25rem;
         max-width: 3840px;
         margin: 0 auto;
+    }
+
+    /* Scroll ultra-large pour 4K */
+    .scrollbar-thin::-webkit-scrollbar {
+        width: 16px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+        border-radius: 8px;
     }
 }
 
@@ -526,5 +706,42 @@ const formatNombre = (value: number) => {
 
 .monitoring-gap {
     gap: var(--monitoring-gap);
+}
+
+/* Utilitaires pour le scroll */
+.scroll-smooth {
+    scroll-behavior: var(--scroll-behavior);
+}
+
+.scroll-padding {
+    scroll-padding: var(--scroll-padding);
+}
+
+/* Amélioration de l'accessibilité */
+@media (prefers-reduced-motion: reduce) {
+
+    .animate-pulse,
+    .animate-spin,
+    .scrollbar-thin::-webkit-scrollbar-thumb,
+    button,
+    .monitoring-container>div {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+/* Focus visible pour l'accessibilité */
+.focus-visible:focus-visible {
+    outline: 2px solid rgb(59 130 246);
+    outline-offset: 2px;
+}
+
+/* Amélioration du contraste en mode sombre */
+.dark .monitoring-container {
+    --monitoring-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.monitoring-container>div {
+    box-shadow: var(--monitoring-shadow, 0 1px 3px rgba(0, 0, 0, 0.1));
 }
 </style>

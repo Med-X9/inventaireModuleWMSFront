@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { InventoryResultsService } from '@/services/inventoryResultsService';
+import { EcartComptageService, type BulkResolveEcartsResponse } from '@/services/EcartComptageService';
 import type { InventoryResult, StoreOption } from '@/interfaces/inventoryResults';
 import type { AxiosResponse } from 'axios';
 import { logger } from '@/services/loggerService';
@@ -40,7 +41,7 @@ export const useResultsStore = defineStore('results', () => {
      * Action wrapper pour la gestion automatique du DataTable
      * Accepte un QueryModel avec customParams (inventory_id, store_id)
      * et appelle fetchResults automatiquement
-     * 
+     *
      * @param queryModel - QueryModel contenant les paramètres DataTable et customParams
      * @returns Réponse avec les résultats et la pagination
      */
@@ -72,8 +73,19 @@ export const useResultsStore = defineStore('results', () => {
         error.value = null;
         try {
             // Convertir QueryModel en paramètres de requête
-            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
-            const response = await InventoryResultsService.getResults(inventoryId, storeId, requestParams);
+            const urlSearchParams = params ? convertQueryModelToQueryParams(params) : new URLSearchParams();
+            const requestParams = Object.fromEntries(urlSearchParams.entries());
+            console.log('[resultsStore.fetchResults] 🔄 Converted query params:', requestParams);
+
+            // Créer le body de la requête (comme dans jobStore)
+            const requestBody = {
+                inventory_id: inventoryId,
+                store_id: storeId,
+                ...requestParams
+            };
+            console.log('[resultsStore.fetchResults] 📤 Final request body:', requestBody);
+
+            const response = await InventoryResultsService.getResults(inventoryId, storeId, requestBody);
 
             // Stocker les données brutes
             results.value = response.data || [];
@@ -134,6 +146,27 @@ export const useResultsStore = defineStore('results', () => {
             return response;
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erreur lors de la validation des résultats';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    /**
+     * Résoudre tous les écarts de comptage d'un inventaire en masse
+     */
+    const bulkResolveEcarts = async (inventoryId: number): Promise<AxiosResponse<BulkResolveEcartsResponse>> => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await EcartComptageService.bulkResolveEcarts(inventoryId);
+
+            // Ne pas forcer resolved: true - laisser l'API décider du statut réel
+            // Le rechargement des données mettra à jour les statuts correctement
+            logger.debug('Écarts résolus en masse', response.data);
+            return response;
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Erreur lors de la résolution en masse des écarts';
             throw err;
         } finally {
             loading.value = false;
@@ -241,6 +274,7 @@ export const useResultsStore = defineStore('results', () => {
         fetchResultsAuto,
         updateValue,
         validateResults,
+        bulkResolveEcarts,
         fetchStores,
         setSelectedStore,
         addSelectedResult,

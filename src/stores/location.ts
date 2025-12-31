@@ -165,7 +165,7 @@ export const useLocationStore = defineStore('location', () => {
             };
 
             // Mettre à jour totalCount pour compatibilité
-            totalCount.value = paginationMetadata.value.total;
+            totalCount.value = paginationMetadata.value?.total || 0;
 
             // Retourner le format DataTable minimal (le DataTable gère la pagination)
             return {

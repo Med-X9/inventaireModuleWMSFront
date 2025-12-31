@@ -197,7 +197,6 @@ export function useDataTableFilters(config: UseDataTableFiltersConfig) {
         })
 
         emit(queryModel)
-        emit('global-search-changed', queryModel)
     }
 
     return {

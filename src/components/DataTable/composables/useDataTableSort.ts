@@ -92,7 +92,7 @@ export function useDataTableSort(config: UseDataTableSortConfig) {
             currentSortModel.value = sortModel
 
             // Ne mettre à jour le QueryModel que si on est en mode côté serveur
-            if (props.serverSideSorting && updateQuerySort) {
+            if (props.serverSideSorting) {
                 const sortModels = sortModel.map((s, index) => ({
                     field: s.colId,
                     direction: s.sort,
@@ -119,7 +119,7 @@ export function useDataTableSort(config: UseDataTableSortConfig) {
             currentSortModel.value = sortModel
 
             // Ne mettre à jour le QueryModel que si on est en mode côté serveur
-            if (props.serverSideSorting && updateQuerySort) {
+            if (props.serverSideSorting) {
                 // Émettre directement le QueryModel
                 const queryModel = createSortQueryModel(sortModel)
                 console.log('[DataTable] 📤 SORT - Emitting sort-changed:', {

@@ -468,7 +468,7 @@ const moveDropdownToBody = () => {
     if (!dropdownMenu) {
         // Chercher tous les dropdowns visibles
         const allDropdowns = document.querySelectorAll('.vs__dropdown-menu:not([data-moved-to-body])') as NodeListOf<HTMLElement>
-        for (const dropdown of allDropdowns) {
+        for (const dropdown of Array.from(allDropdowns)) {
             // Vérifier si ce dropdown est lié à notre select (en vérifiant la position)
             const rect = selectElement.getBoundingClientRect()
             const dropdownRect = dropdown.getBoundingClientRect()

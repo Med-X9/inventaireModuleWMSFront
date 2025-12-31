@@ -59,12 +59,20 @@ export function useDataTable(props: DataTableProps, emit: any) {
             })
             .map(col => col.field)
 
-        // Limiter le nombre de colonnes visibles selon defaultVisibleColumnsCount
-        // Les autres seront dans le responsive (bouton "plus")
-        const minCount = 4
-        const maxCount = visibleCols.length
-        const limitedCount = Math.max(minCount, Math.min(defaultCount, maxCount))
-        const limitedCols = visibleCols.slice(0, limitedCount)
+        // Limiter le nombre de colonnes visibles selon defaultVisibleColumnsCount seulement si < 50
+        // Si defaultVisibleColumnsCount >= 50, afficher toutes les colonnes visibles
+        let limitedCols: string[]
+        if (defaultCount >= 50) {
+            // Afficher toutes les colonnes visibles
+            limitedCols = visibleCols
+        } else {
+            // Limiter le nombre de colonnes visibles selon defaultVisibleColumnsCount
+            // Les autres seront dans le responsive (bouton "plus")
+            const minCount = 4
+            const maxCount = visibleCols.length
+            const limitedCount = Math.max(minCount, Math.min(defaultCount, maxCount))
+            limitedCols = visibleCols.slice(0, limitedCount)
+        }
 
         // Ajouter la colonne de numéro de ligne en première position (si pas déjà présente)
         const columnsWithRowNumber = [

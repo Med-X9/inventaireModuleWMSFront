@@ -58,28 +58,31 @@
             </div>
         </div>
 
-        <!-- DataTable avec container moderne -->
+        <!-- DataTable harmonisée avec InventoryResults.vue et Affecter.vue -->
         <div v-if="selectedStore" class="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             <DataTable
+                ref="trackingTableRef"
+                :key="trackingKey"
                 :columns="columns"
                 :rowDataProp="rows"
-                :loading="storeLoading"
                 :actions="[]"
-                :pagination="false"
+                :queryModelProp="queryModel"
+                :enableVirtualScrolling="false"
+                :currentPageProp="pagination.current_page"
+                :totalPagesProp="pagination.total_pages"
+                :totalItemsProp="trackingTotalItems"
+                :pageSizeProp="pagination.page_size"
                 :rowSelection="true"
-                :enableGlobalSearch="true"
-                :enableFiltering="true"
-                :enableAdvancedEditing="false"
-                :enableGrouping="false"
-                :enablePivot="false"
-                :serverSideFiltering="true"
-                :serverSideSorting="true"
+                :enableRowClick="false"
+                @pagination-changed="(queryModel) => onTrackingTableEvent('pagination', queryModel)"
+                @page-size-changed="(queryModel) => onTrackingTableEvent('page-size-changed', queryModel)"
+                @sort-changed="(queryModel) => onTrackingTableEvent('sort', queryModel)"
+                @filter-changed="(queryModel) => onTrackingTableEvent('filter', queryModel)"
+                @global-search-changed="(queryModel) => onTrackingTableEvent('search', queryModel)"
                 storageKey="job_tracking_table"
+                :loading="loading || trackingLoadingLocal"
                 emptyMessage="Aucune donnée disponible pour ces critères"
                 @selection-changed="onSelectionChanged"
-                @sort-changed="onSortChanged"
-                @filter-changed="onFilterChanged"
-                @global-search-changed="onGlobalSearchChanged"
             />
         </div>
 
@@ -144,30 +147,37 @@ const referenceParam = computed(() => route.params.reference as string)
 const warehouseStore = useWarehouseStore()
 const { warehouses, loading: warehousesLoading } = storeToRefs(warehouseStore)
 
-// ===== COMPOSABLE =====
-/**
- * Initialisation du composable useJobTracking
- * Gère toute la logique métier de la page
- */
-const {
-    inventoryReference,
-    loading,
-    storeOptions,
-    selectedStore,
-    rows,
-    columns,
-    selectedRows,
-    selectedRowsCount,
-    hasSelectedRows,
-    initialize,
-    reinitialize,
-    printJobs,
-    onSelectionChanged,
-    resetSelection,
-    onSortChanged,
-    onFilterChanged,
-    onGlobalSearchChanged
-} = useJobTracking({ inventoryReference: referenceParam.value })
+    // ===== COMPOSABLE =====
+    /**
+     * Initialisation du composable useJobTracking
+     * Gère toute la logique métier de la page
+     * Harmonisé avec useInventoryResults.ts et useAffecter.ts
+     */
+    const {
+        inventoryReference,
+        loading,
+        storeOptions,
+        selectedStore,
+        rows,
+        columns,
+        selectedRows,
+        selectedRowsCount,
+        hasSelectedRows,
+        initialize,
+        reinitialize,
+        printJobs,
+        onSelectionChanged,
+        resetSelection,
+        // DataTable harmonisé avec useInventoryResults.ts
+        queryModel,
+        pagination,
+        trackingTotalItems,
+        onTrackingTableEvent,
+        // Clés pour forcer le re-render
+        trackingKey,
+        trackingTableRef,
+        trackingLoadingLocal
+    } = useJobTracking({ inventoryReference: referenceParam.value })
 
 // ===== COMPUTED =====
 

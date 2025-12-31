@@ -301,6 +301,8 @@ export interface DataTableProps<T = Record<string, unknown>> {
     columns: DataTableColumn<T>[]
     /** Actions disponibles */
     actions: ActionConfig<T>[]
+    /** Filtres avancés */
+    advancedFilters?: Record<string, any>
     /** Données de la table */
     rowDataProp: any[]
     /** URL pour charger les données */
@@ -349,7 +351,7 @@ export interface DataTableProps<T = Record<string, unknown>> {
     /** État forbidden (permissions insuffisantes) */
     forbidden?: boolean
 
-    /** Active le click sur les lignes (désactivé par défaut) */
+    /** Active le double-clic sur les lignes (désactivé par défaut) */
     enableRowClick?: boolean
 
     /** Configuration de l'empty state personnalisé */

@@ -131,9 +131,9 @@ export function createSimpleDataTableHandler<T extends StandardDataTableParams =
                 draw: 1,
                 start: 0,
                 length: 10,
-                ...params,
+                ...(params as object || {}),
                 ...(extractParams ? extractParams(params) : {})
-            } as T
+            } as unknown as T
 
             await handler(standardParams)
         } catch (error) {

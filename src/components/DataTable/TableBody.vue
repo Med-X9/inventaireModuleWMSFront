@@ -4,7 +4,7 @@
         Inclut le skeleton loader, la table principale, les contrôles d'en-tête
         et la gestion des actions par ligne
     -->
-    <div ref="tableContainerRef" class="border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 transition-all duration-300 w-full" :class="{
+    <div ref="tableContainerRef" class="border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 transition-all duration-300 w-full" :class="{ 
         'relative': hasMinHeight,
         'overflow-x-auto overflow-y-auto': !editingCell,
         'overflow-visible': editingCell !== null,
@@ -23,7 +23,7 @@
             </div>
 
             <!-- Data rows skeleton avec nombre configurable de lignes -->
-            <div v-for="rowIndex in skeletonRowsCount" :key="`row-${rowIndex}`" class="flex border-b border-gray-200 dark:border-gray-700 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
+            <div v-for="rowIndex in skeletonRowsCount" :key="`row-${rowIndex}`" class="flex border-b border-gray-200 dark:border-gray-700 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 even:bg-gray-50 dark:even:bg-gray-800">
                 <div v-for="col in columns" :key="`cell-${rowIndex}-${col.field}`" class="flex-1 p-3 min-w-[120px] flex items-center">
                     <div class="h-4 w-4/5 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 bg-[length:200%_100%] animate-[shimmer_1.5s_infinite] rounded"></div>
                 </div>
@@ -179,13 +179,13 @@
                     <template v-for="(row, rowIndex) in paginatedData" :key="getRowId(row, rowIndex)">
                     <!-- Ligne principale avec v-memo pour optimiser le rendu -->
                     <tr v-memo="[getRowId(row, rowIndex), row, isRowSelected(getRowId(row, rowIndex)), editingCell]"
-                        class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors even:bg-gray-50 dark:even:bg-gray-800"
                         :class="{ 'cursor-pointer': props.enableRowClick }"
-                        role="row"
+                        role="row" 
                         :aria-selected="isRowSelected(getRowId(row, rowIndex))"
-                        @click="props.enableRowClick ? emit('row-clicked', row) : undefined">
+                        @dblclick="props.enableRowClick ? emit('row-clicked', getRowId(row, rowIndex)) : undefined">
                         <!-- Cellule de sélection -->
-                        <td v-if="rowSelection" class="w-10 text-center p-2 sticky z-[5] left-0 bg-white dark:bg-gray-900 shadow-[2px_0_4px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_4px_rgba(0,0,0,0.3)]" role="cell">
+                        <td v-if="rowSelection" class="w-10 text-center p-2 sticky z-[5] left-0 bg-white dark:bg-gray-900 shadow-[2px_0_4px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_4px_rgba(0,0,0,0.3)] border-b border-r border-gray-200 dark:border-gray-700" role="cell">
                             <input
                                 type="checkbox"
                                 :checked="isRowSelected(getRowId(row, rowIndex))"
@@ -195,7 +195,7 @@
                             />
                         </td>
                         <!-- Cellule de numéro de ligne (OBLIGATOIRE - toujours visible) -->
-                        <td class="relative min-w-[60px] max-w-[60px] w-[60px] whitespace-nowrap text-center p-3 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 sticky z-[5] bg-white dark:bg-gray-900 shadow-[2px_0_4px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_4px_rgba(0,0,0,0.3)] border-r-0"
+                        <td class="relative min-w-[60px] max-w-[60px] w-[60px] whitespace-nowrap text-center p-3 border-b border-r border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 sticky z-[5] bg-white dark:bg-gray-900 shadow-[2px_0_4px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_4px_rgba(0,0,0,0.3)]"
                             role="cell"
                             :aria-label="`Numéro de ligne ${globalStartIndex + rowIndex + 1}`"
                             :style="{ left: rowSelection ? '40px' : '0px' }">
@@ -217,7 +217,7 @@
                             :data-row-index="rowIndex"
                             :data-col-index="colIndex"
                             tabindex="0"
-                            class="relative min-w-[80px] whitespace-nowrap text-ellipsis p-3 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                            class="relative min-w-[80px] whitespace-nowrap text-ellipsis p-3 border-b border-r border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
                             :class="{
                                 'hidden': !isColumnVisible(col),
                                 'overflow-hidden': !isEditing(getRowId(row, rowIndex), col.field),
@@ -266,7 +266,7 @@
                                     @cancel-edit="cancelEditCell()" />
 
                                 <!-- Affichage normal avec cache -->
-                                <span v-else
+                                <span v-else 
                                     class="block w-full whitespace-nowrap overflow-hidden text-ellipsis"
                                     :class="{
                                         'text-center': col.align === 'center',
@@ -279,7 +279,7 @@
                                     v-html="renderCell(row[col.field], col, row, getRowId(row, rowIndex))"></span>
                         </td>
                         <!-- Cellule des actions avec menu déroulant -->
-                        <td v-if="actions && actions.length > 0" class="text-center p-2 w-[120px]" role="cell" aria-label="Actions pour la ligne">
+                        <td v-if="actions && actions.length > 0" class="text-center p-2 w-[120px] border-b border-r border-gray-200 dark:border-gray-700" role="cell" aria-label="Actions pour la ligne">
                             <ActionMenu :actions="actions" :row="row" />
                         </td>
                     </tr>
@@ -307,7 +307,7 @@
                                         <table class="w-full border-collapse text-sm">
                                             <thead>
                                                 <tr>
-                                                    <th v-for="nestedCol in col.nestedData.columns || []" :key="nestedCol.field"
+                                                    <th v-for="nestedCol in col.nestedData.columns || []" :key="nestedCol.field" 
                                                         class="font-semibold text-gray-700 dark:text-gray-200 p-2 px-3 border-b border-gray-200 dark:border-gray-700"
                                                         :class="{
                                                             'text-center': nestedCol.align === 'center',
@@ -321,7 +321,7 @@
                                             </thead>
                                             <tbody>
                                                 <tr v-for="(item, index) in getNestedItems(row[col.field], col)" :key="`nested-item-${index}`" class="last:border-b-0">
-                                                    <td v-for="nestedCol in col.nestedData.columns || []" :key="nestedCol.field"
+                                                    <td v-for="nestedCol in col.nestedData.columns || []" :key="nestedCol.field" 
                                                         class="p-2 px-3 border-b border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200"
                                                         :class="{
                                                             'text-center': nestedCol.align === 'center',
@@ -353,9 +353,9 @@
                                 <div class="w-full">
                                     <dl class="grid grid-cols-[auto_1fr] gap-y-3 gap-x-4 m-0 p-0">
                                         <template v-for="col in hiddenColumns" :key="col.field">
-                                            <dt class="font-semibold text-gray-700 dark:text-gray-200 m-0 py-2">{{ col.headerName || col.field }}</dt>
+                                            <dt class="font-semibold text-gray-700 dark:text-gray-200 m-0 py-2">{{ (col as any).headerName || (col as any).field }}</dt>
                                             <dd class="m-0 py-2 text-gray-500 dark:text-gray-400 break-words">
-                                                <span v-html="renderCell(row[col.field], col, row, getRowId(row, rowIndex))"></span>
+                                                <span v-html="renderCell(row[(col as any).field], col as any, row, getRowId(row, rowIndex))"></span>
                                             </dd>
                                         </template>
                                     </dl>
@@ -469,6 +469,7 @@ interface Props {
     // Colonnes actuellement visibles (pour le calcul du responsive)
     visibleColumnNames?: string[]
     // Active le click sur les lignes (désactivé par défaut)
+    /** Active le double-clic sur les lignes (émet l'événement 'row-clicked') */
     enableRowClick?: boolean
 }
 
@@ -561,7 +562,7 @@ const isColumnVisible = (col: any): boolean => {
                 }
             }
         }
-
+        
         return true
     }
 
@@ -665,7 +666,7 @@ const responsiveColumns = computed(() => {
                 return isColumnVisible(col)
             })
             .map(col => col.field)
-
+    
     // Récupérer tous les objets colonnes correspondants (pas de limitation)
     const allVisibleColumns = visibleFields.map(field => {
         const col = props.columns.find(c => c.field === field)
@@ -674,7 +675,7 @@ const responsiveColumns = computed(() => {
         // mais pas encore dans finalColumns. Dans ce cas, on retourne null et on filtre après.
         return null
     }).filter(col => col !== null) as any[]
-
+    
     return allVisibleColumns
 })
 
@@ -682,29 +683,8 @@ const responsiveColumns = computed(() => {
 // Les colonnes avec visible: false ou hide: true ne doivent PAS apparaître ici
 // Elles ne sont gérées que via ColumnManager
 const hiddenColumns = computed(() => {
-    // Utiliser visibleColumnNames si disponible, sinon utiliser props.columns
-    const visibleFields = props.visibleColumnNames && props.visibleColumnNames.length > 0
-        ? props.visibleColumnNames.filter(field => field !== '__rowNumber__')
-        : props.columns
-            .filter(col => {
-                if (col.field === '__rowNumber__') return false
-                if (col.hide === true) return false
-                if (col.visible === false) return false
-                return isColumnVisible(col)
-            })
-            .map(col => col.field)
-
-    // Les colonnes masquées sont celles qui sont dans visibleFields mais au-delà de defaultVisibleColumnsCount
-    const defaultCount = props.defaultVisibleColumnsCount ?? 6
-    const minCount = 4
-    const maxCount = visibleFields.length
-    const limitedCount = Math.max(minCount, Math.min(defaultCount, maxCount))
-    const hiddenFields = visibleFields.slice(limitedCount)
-
-    // Récupérer les objets colonnes correspondants depuis props.columns
-    const hidden = props.columns.filter(col => hiddenFields.includes(col.field))
-
-    return hidden
+    // Fonctionnalité responsive désactivée - retourner toujours un tableau vide
+    return []
 })
 
 // Vérifier si une ligne a des colonnes masquées à afficher
@@ -1259,9 +1239,11 @@ const handleClickOutside = (event: MouseEvent) => {
     // Vérifier si le clic est dans le dropdown ou sur le bouton de filtre
     const isClickInDropdown = target.closest('.filter-dropdown')
     const isClickOnFilterButton = target.closest('.filter-btn') || target.closest('.column-header')
+    const isClickOnInput = target.closest('input, textarea, select')
 
     // Si le clic est en dehors du dropdown et du bouton, fermer le dropdown
-    if (!isClickInDropdown && !isClickOnFilterButton) {
+    // Mais ne pas fermer si on clique sur un champ de saisie (pour éviter de fermer le filtre pendant la saisie)
+    if (!isClickInDropdown && !isClickOnFilterButton && !isClickOnInput) {
         showFilter.value = ''
     }
 }
@@ -1527,7 +1509,7 @@ const emit = defineEmits<{
     'selection-changed': [selectedRows: Set<string>]
     'clear-selections': []
     'cell-value-changed': [event: { data: any; field: string; newValue: any; oldValue: any }]
-    'row-clicked': [row: any]
+    'row-clicked': [rowId: string]
 }>()
 
 /**

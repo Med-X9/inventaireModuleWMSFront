@@ -175,12 +175,17 @@ export interface JobEmplacement {
 
 // Interface pour un job dans la réponse
 export interface JobResult {
-    id: number;
-    reference: string;
-    status: string;
-    emplacements: JobEmplacement[];
-    assignments: JobAssignment[];
-    ressources: any[];
+    id?: number;
+    job_id?: number;
+    reference?: string;
+    job_reference?: string;
+    status?: string;
+    current_max_counting?: number;
+    has_unresolved_discrepancies?: boolean;
+    discrepancies_locations_count?: number;
+    emplacements?: JobEmplacement[];
+    assignments?: JobAssignment[];
+    ressources?: any[];
     valide_date?: string | null;
     en_attente_date?: string | null;
     termine_date?: string | null;
@@ -224,14 +229,7 @@ export interface JobAssignmentsResourceRequest {
     resource_assignments: number[];
 }
 
-export interface JobManualAssignmentsRequest {
-    job_id: number;
-    team1: number | null;
-    date1: string | null;
-    team2: number | null;
-    date2: string | null;
-    resources?: number[] | null;
-}
+
 
 // Interface pour le transfert de jobs
 export interface JobTransferRequest {

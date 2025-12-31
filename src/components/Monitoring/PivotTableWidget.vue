@@ -453,10 +453,7 @@ const toggleValue = (value: string) => {
                 :key="`total-${colIdx}-${value}`"
                 class="border border-slate-300 dark:border-gray-600 px-1 py-1 text-center text-slate-900 dark:text-white"
               >
-                {{ pivotTable.rows.reduce((sum, row) => {
-                  const cell = row.cells.get(getCellKey(colData, value))
-                  return sum + (cell?.value || 0)
-                }, 0) }}
+                {{ (pivotTable.rows as any[]).reduce((sum, row) => sum + ((row.cells?.get(getCellKey(colData, value)) as any) || 0), 0) }}
               </td>
             </template>
           </tr>

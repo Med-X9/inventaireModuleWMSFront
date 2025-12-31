@@ -12,7 +12,7 @@
  */
 
 // ===== IMPORTS VUE =====
-import { ref, computed, onMounted, onUnmounted, watch, nextTick, shallowRef, reactive, markRaw } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, shallowRef, reactive, markRaw, createApp, h } from 'vue'
 
 // ===== IMPORTS ROUTER =====
 import { useRoute, useRouter } from 'vue-router'
@@ -27,17 +27,20 @@ import { storeToRefs } from 'pinia'
 
 // ===== IMPORTS SERVICES =====
 import { alertService } from '@/services/alertService'
+import { logger } from '@/services/loggerService'
 import { Validators } from '@/utils/validators'
 import { JobService } from '@/services/jobService'
 
+// ===== IMPORTS COMPOSANTS =====
+import SelectField from '@/components/Form/SelectField.vue'
+
 // ===== IMPORTS COMPOSABLES =====
-import { useBackendDataTable } from '@/components/DataTable/composables/useBackendDataTable'
 import type { FieldConfig } from '@/interfaces/form'
-import { JobManualAssignmentsRequest, Job } from '@/models/Job'
+import { Job } from '@/models/Job'
 import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
 import { convertQueryModelToQueryParams, createQueryModelFromDataTableParams, mergeQueryModelWithCustomParams } from '@/components/DataTable/utils/queryModelConverter'
 import type { QueryModel } from '@/components/DataTable/types/QueryModel'
-import type { DataTableColumn, DataTableColumnAny, ActionConfig } from '@/components/DataTable/types/dataTable'
+import type { DataTableColumn, DataTableColumnAny, ActionConfig, ColumnDataType } from '@/components/DataTable/types/dataTable'
 import type { InventoryDetails } from '@/models/Inventory'
 import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
 import type { Component } from 'vue'
@@ -59,6 +62,14 @@ import IconUsers from '@/components/icon/icon-users.vue'
 import IconXCircle from '@/components/icon/icon-x-circle.vue'
 import IconUpload from '@/components/icon/icon-upload.vue'
 import IconTrash from '@/components/icon/icon-trash.vue'
+
+// ===== IMPORTS COMPOSANTS =====
+import Modal from '@/components/Modal.vue'
+import JobAffectationModal from '@/components/JobAffectationModal.vue'
+
+// ===== IMPORTS EXTERNES =====
+import Swal from 'sweetalert2'
+
 
 // ===== INITIALISATION DES STORES =====
 const jobStore = useJobStore()
@@ -122,15 +133,6 @@ export interface RowAction {
 
 // ===== FONCTIONS UTILITAIRES =====
 
-/**
- * Logger les performances des opérations
- */
-const logPerformance = (operation: string, startTime: number) => {
-    const duration = performance.now() - startTime
-    if (duration > 100) { // Log seulement les opérations lentes
-        // Performance logging disabled
-    }
-}
 
 /**
  * Récupère l'ID de l'inventaire par sa référence
@@ -149,11 +151,7 @@ const fetchInventoryIdByReference = async (
         const inventory = await inventoryStore.fetchInventoryByReference(reference)
         options?.onInventoryResolved?.(inventory ?? null)
 
-        if (inventory && inventory.id) {
-            return inventory.id
-        } else {
-            return null
-        }
+        return inventory?.id || null
     } catch (error) {
         return null
     }
@@ -267,55 +265,15 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     /** IDs des jobs sélectionnés dans le DataTable */
     const selectedJobs = ref<string[]>([])
 
-    /**
-     * Cache pour les lookups rapides RowNode par ID (évite les reconstructions répétées)
-     */
-    const rowNodeCache = new Map<string, RowNode>()
-
-    /**
-     * Hash des données actuelles pour détecter les changements
-     */
-    let currentDataHash = ''
-
-    /**
-     * Invalide le cache RowNode quand les données changent
-     */
-    const invalidateRowNodeCache = () => {
-        rowNodeCache.clear()
-        currentDataHash = ''
-    }
 
     /**
      * Fonction helper pour obtenir les RowNode sélectionnés à partir des IDs
-     * Optimisée pour les gros volumes avec cache intelligent
      */
     const getSelectedRowNodes = (): RowNode[] => {
         const selectedIds = selectedJobs.value
         if (selectedIds.length === 0) return []
 
-        const result: RowNode[] = []
-        const displayDataArray = displayData.value
-
-        // Construire le cache seulement si nécessaire et si les données ont changé
-        const newDataHash = displayDataArray.length + '-' + displayDataArray[0]?.id + '-' + displayDataArray[displayDataArray.length - 1]?.id
-        if (rowNodeCache.size === 0 || currentDataHash !== newDataHash) {
-            // Reconstruire le cache de manière optimisée
-            rowNodeCache.clear()
-            for (const row of displayDataArray) {
-                if (row && !row.isChild) {
-                    rowNodeCache.set(row.id, row)
-                }
-            }
-            currentDataHash = newDataHash
-        }
-
-        // Lookup rapide depuis le cache
-        for (const id of selectedIds) {
-            const row = rowNodeCache.get(id)
-            if (row) result.push(row)
-        }
-
-        return result
+        return displayData.value.filter(row => selectedIds.includes(row.id) && !row.isChild)
     }
 
     /** Modifications en attente de sauvegarde (Map<jobId, Map<field, value>>) */
@@ -329,6 +287,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     const showResourceModal = ref(false)
     const showTransferModal = ref(false)
     const showManualModal = ref(false)
+    const showJobAffectationModal = ref(false)
 
     /** Type d'équipe en cours d'affectation */
     const currentTeamType = ref<'premier' | 'deuxieme'>('premier')
@@ -342,62 +301,115 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     /** Titre de la modale d'équipe */
     const modalTitle = computed(() => `Affecter ${currentTeamType.value === 'premier' ? 'Premier' : 'Deuxième'} Comptage`)
 
+    /** Job sélectionné pour la modal d'affectation */
+    const selectedJobForModal = ref<any>(null)
+
+    /** Options d'équipes pour la modal d'affectation (chargées dynamiquement) */
+    const modalTeamOptions = ref<Array<{ value: string; label: string }>>([])
+
+    /** Options d'équipes par comptage pour la modal */
+    const modalTeamOptionsByCountingOrder = ref<Record<number, Array<{ value: string; label: string }>>>({})
+
     // ===== HANDLERS DATATABLE =====
 
-    // Cache des derniers appels pour éviter les appels répétés
-    let lastJobsQueryModel: QueryModel | null = null
+    /** Cache du dernier QueryModel pour éviter les appels redondants */
+    let lastExecutedQueryModel: QueryModel | null = null
+
+    /** File d'attente des événements DataTable pendant l'initialisation */
+    const pendingEventsQueue: Array<{ eventType: string; queryModel: QueryModel }> = []
 
     /**
-     * Handler unifié pour toutes les opérations de la DataTable Jobs
-     * Utilise la ref pour identifier l'instance et éviter les conflits
-     * Évite les appels API répétés avec le même QueryModel
+     * Traite un événement DataTable directement (sans vérification d'initialisation)
+     * Utilisé pour traiter les événements mis en file d'attente
      */
-    const onJobsTableEvent = async (eventType: string, queryModel: QueryModel) => {
-        // Vérifier que les IDs requis sont disponibles avant de lancer l'API
-        if (!inventoryId.value || !warehouseId.value) {
-            console.warn('[useAffecter] Jobs API not called: missing inventoryId or warehouseId')
+    const processEventDirectly = async (eventType: string, queryModel: QueryModel) => {
+        // S'assurer que le QueryModel a des valeurs par défaut valides
+        const sanitizedQueryModel: QueryModel = {
+            page: queryModel.page ?? 1,
+            pageSize: queryModel.pageSize ?? 20,
+            sort: queryModel.sort ?? [],
+            filters: queryModel.filters ?? {},
+            search: queryModel.search ?? '',
+            customParams: queryModel.customParams ?? {}
+        }
+
+        // Toujours fusionner avec les customParams requis (inventory_id, warehouse_id)
+        const finalQueryModel = mergeQueryModelWithCustomParams(sanitizedQueryModel, jobsCustomParams.value)
+
+        // Éviter les appels API inutiles en comparant avec le dernier appel réussi
+        const queryModelStr = JSON.stringify(finalQueryModel)
+        const lastQueryModelStr = lastExecutedQueryModel ? JSON.stringify(lastExecutedQueryModel) : null
+
+            if (queryModelStr === lastQueryModelStr) {
             return
         }
 
-        // Vérifier si le QueryModel a changé depuis le dernier appel
-        const queryModelStr = JSON.stringify(queryModel)
-        const lastQueryModelStr = lastJobsQueryModel ? JSON.stringify(lastJobsQueryModel) : null
+        // Éviter les appels API inutiles pour les événements de filtre/recherche vides
+        // MAIS permettre le premier chargement même avec un événement "vide"
+        if (eventType === 'filter' || eventType === 'search') {
+            const hasFilters = Object.keys(finalQueryModel.filters || {}).length > 0
+            const hasSearch = !!finalQueryModel.search?.trim()
+            const hasSorting = (finalQueryModel.sort || []).length > 0
 
-        if (queryModelStr === lastQueryModelStr) {
-            return
+            // Si c'est un événement filter/search complètement vide (pas de filtres, pas de recherche, pas de tri),
+            // et que c'est la page 1, vérifier si c'est vraiment le premier chargement
+            if (!hasFilters && !hasSearch && !hasSorting && finalQueryModel.page === 1) {
+                // Permettre le premier chargement si aucune donnée n'a encore été chargée
+                if (lastExecutedQueryModel) {
+                    return
+                }
+                // Sinon, continuer pour permettre le premier chargement
+            }
         }
 
         try {
-            // Vérifier que c'est bien la table jobs qui fait l'appel
-            if (jobsTableRef.value && typeof jobsTableRef.value === 'object') {
-                await jobStore.fetchJobsValidated(inventoryId.value, warehouseId.value, queryModel)
-                lastJobsQueryModel = { ...queryModel } // Copier pour éviter les références
+            // Activer le loading pour les événements DataTable
+            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+                jobsLoadingLocal.value = true
+            }
+
+            // Mettre à jour le QueryModel local pour synchroniser avec la DataTable
+            jobsQueryModelRef.value = { ...finalQueryModel }
+
+            await jobStore.fetchJobsValidated(inventoryId.value!, warehouseId.value!, finalQueryModel)
+
+            // Mettre à jour les données transformées pour s'assurer que la table se met à jour
+            updateDisplayData()
+
+            // Mettre à jour le cache après un appel réussi
+            lastExecutedQueryModel = { ...finalQueryModel }
+
+            // Forcer le re-rendu de la DataTable pour tous les événements qui modifient les données
+            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+                jobsKey.value++
+                jobsLoadingLocal.value = false
             }
         } catch (error) {
-            console.error('[useAffecter] Error in jobStore.fetchJobsValidated:', error)
+            console.error('[useAffecter] ❌ Error in jobStore.fetchJobsValidated:', {
+                eventType,
+                error: error,
+                queryModel: finalQueryModel
+            })
             await alertService.error({ text: 'Erreur lors du chargement des jobs' })
         }
     }
 
     /**
-     * Handler pour les changements de pagination des jobs
+     * Handler unifié pour toutes les opérations de la DataTable Jobs
      */
-    const onJobPaginationChanged = (queryModel: QueryModel) => onJobsTableEvent('pagination', queryModel)
+    const onJobsTableEvent = async (eventType: string, queryModel: QueryModel) => {
+        // Si l'initialisation n'est pas terminée, mettre l'événement en file d'attente
+        // Ces événements sont souvent déclenchés automatiquement par le DataTable au montage
+        // quand il restaure son état sauvegardé
+        if (!isInitialized.value) {
+            pendingEventsQueue.push({ eventType, queryModel })
+            return
+        }
 
-    /**
-     * Handler pour les changements de tri des jobs
-     */
-    const onJobSortChanged = (queryModel: QueryModel) => onJobsTableEvent('sort', queryModel)
+        // Traiter l'événement directement
+        await processEventDirectly(eventType, queryModel)
+    }
 
-    /**
-     * Handler pour les changements de filtre des jobs
-     */
-    const onJobFilterChanged = (queryModel: QueryModel) => onJobsTableEvent('filter', queryModel)
-
-    /**
-     * Handler pour les changements de recherche des jobs
-     */
-    const onJobSearchChanged = (queryModel: QueryModel) => onJobsTableEvent('search', queryModel)
 
     /**
      * Paramètres personnalisés pour les jobs
@@ -424,13 +436,8 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     /** Statut de l'inventaire */
     const inventoryStatus = ref<string>('')
 
-    /** Cache local de l'inventaire pour éviter les doubles appels */
-    const inventoryDetailsCache = ref<InventoryDetails | null>(null)
-
-    /** États de chargement locaux pour afficher le skeleton immédiatement */
+    /** État de chargement local */
     const jobsLoadingLocal = ref(false)
-
-    // ===== MÉTHODES D'INITIALISATION =====
 
     /**
      * Initialise les IDs depuis les références
@@ -452,7 +459,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             promises.push(
                 fetchInventoryIdByReference(inventoryReference, {
                     onInventoryResolved: (inventory) => {
-                        inventoryDetailsCache.value = inventory
                         if (inventory?.status) {
                             inventoryStatus.value = inventory.status
                         }
@@ -513,14 +519,9 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
      * Récupère le statut de l'inventaire
      */
     const fetchInventoryStatus = async () => {
-        if (inventoryDetailsCache.value?.status) {
-            inventoryStatus.value = inventoryDetailsCache.value.status
-            return
-        }
         try {
             const inventory = await inventoryStore.fetchInventoryByReference(inventoryReference)
-            if (inventory) {
-                inventoryDetailsCache.value = inventory
+            if (inventory?.status) {
                 inventoryStatus.value = inventory.status
             }
         } catch (error) {
@@ -659,9 +660,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
     // ===== HANDLERS DATATABLE =====
 
-    // ===== ANCIENS HANDLERS SUPPRIMÉS =====
-    // Remplacés par les nouveaux handlers harmonisés avec usePlanning.ts
-
 
 
     /**
@@ -683,25 +681,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
     // ===== COMPUTED PROPERTIES =====
 
-    /** États de chargement optimisés avec shallowRef pour éviter les re-calculs excessifs */
-    const jobsLoadingComputed = shallowRef(false)
-    const locationsLoadingComputed = shallowRef(false)
-    const loading = shallowRef(false)
 
-
-    /**
-     * Met à jour les états de chargement de manière optimisée
-     */
-    /**
-     * Met à jour les états de chargement de manière synchrone
-     * Plus de debounce nécessaire car appelée manuellement
-     */
-    const updateLoadingStates = () => {
-        jobsLoadingComputed.value = jobsLoadingLocal.value
-        loading.value = jobsLoadingComputed.value
-    }
-
-    // Watcher supprimé pour éviter les boucles infinies - gestion manuelle des états de chargement
 
     /**
      * Pagination calculée pour les jobs (optimisé avec shallowRef)
@@ -751,7 +731,27 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     // Watchers optimisés pour les paginations
 
     /**
-     * Options des équipes (sessions) pour les selects
+     * Récupère les options d'équipes pour un counting_order spécifique
+     * Utilise le service SessionService et le store session pour la gestion centralisée
+     */
+    const getTeamOptionsForCountingOrder = async (countingOrder: number) => {
+        try {
+            // Utiliser fetchMobileUsersForCountingOrder pour récupérer les utilisateurs mobiles spécifiques au counting_order
+            const users = await sessionStore.fetchMobileUsersForCountingOrder(countingOrder)
+
+            return users.map((user: any) => ({
+                value: user.id.toString(),
+                label: user.username || user.name || `User ${user.id}`
+            }))
+        } catch (error) {
+            logger.error(`Erreur lors de la récupération des utilisateurs pour le comptage ${countingOrder}:`, error)
+            // Plus de fallback - retourner une liste vide en cas d'erreur
+            return []
+        }
+    }
+
+    /**
+     * Options des équipes (sessions) pour les selects (fallback)
      */
     const teamOptions = computed(() => {
         const sessions = sessionStore.getAllSessions
@@ -798,69 +798,11 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         return options
     })
 
-    // ===== OPTIMISATION : CACHE INTELLIGENT =====
 
     /**
-     * Cache pour les locations transformées par job
-     * Clé : job.id
-     * Valeur : locations transformées
-     */
-    const locationsCache = new Map<string | number, any[]>()
-
-    /**
-     * Cache pour les RowNode transformés par job
-     * Clé : job.id
-     * Valeur : RowNode transformé
-     */
-    const transformedJobsCache = new Map<string | number, RowNode>()
-
-    /**
-     * Hash des IDs de jobs pour détecter les changements
-     */
-    let lastJobsHash = ''
-    let lastJobsLength = 0
-
-    /**
-     * Système de monitoring des performances (optionnel)
-     */
-    const performanceDebug = ref(false) // Activer en mode développement si nécessaire
-
-    const logPerformance = (operation: string, startTime: number) => {
-        // Performance logging disabled
-    }
-
-    /**
-     * Génère un hash léger pour détecter les changements de jobs
-     */
-    const generateJobsHash = (jobs: any[]): string => {
-        if (!jobs || jobs.length === 0) return '0'
-
-        // Hash ultra-léger : longueur + premier ID + dernier ID + statuts des 3 premiers
-        const firstJob = jobs[0]
-        const lastJob = jobs[jobs.length - 1]
-        const statusSample = jobs.slice(0, 3).map(j => j.status || '').join(',')
-
-        return `${jobs.length}-${firstJob.id}-${lastJob.id}-${statusSample}`
-    }
-
-    /**
-     * Invalide le cache pour un job spécifique
-     */
-    const invalidateJobCache = (jobId: string | number) => {
-        locationsCache.delete(jobId)
-        transformedJobsCache.delete(jobId)
-    }
-
-    /**
-     * Transforme les locations d'un job avec cache
+     * Transforme les locations d'un job
      */
     const transformLocations = (jobId: string | number, emplacements: any[]): any[] => {
-        // Vérifier le cache
-        const cached = locationsCache.get(jobId)
-        if (cached) {
-            return cached
-        }
-
         // Transformer les locations
         const locations: any[] = []
         for (let i = 0, len = emplacements.length; i < len; i++) {
@@ -876,25 +818,15 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             })
         }
 
-        // Mettre en cache
-        locationsCache.set(jobId, locations)
         return locations
     }
 
     /**
-     * Transforme un job en RowNode avec cache
+     * Transforme un job en RowNode
      * ⚠️ OPTIMISATION CRITIQUE : Les locations NE SONT PAS transformées ici !
      * Elles sont conservées brutes et transformées UNIQUEMENT lors de l'expansion de la nested table
      */
     const transformJobToRowNode = (parentRow: any): RowNode => {
-        const jobId = String(parentRow.id)
-
-        // Vérifier le cache
-        const cached = transformedJobsCache.get(jobId)
-        if (cached) {
-            return cached
-        }
-
         // Transformer le job
         const premierAssignment = (parentRow as any).assignments?.find((a: any) => a.counting_order === 1)
         const deuxiemeAssignment = (parentRow as any).assignments?.find((a: any) => a.counting_order === 2)
@@ -914,7 +846,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         const locations = (parentRow as any).emplacements || (parentRow as any).locations || []
 
         const rowNode: RowNode = {
-            id: jobId,
+            id: String(parentRow.id),
             job: parentRow.reference || `Job ${parentRow.id}`,
             locations,  // ⚠️ Emplacements bruts, pas transformés
             team1: team1Name,
@@ -932,8 +864,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             assignments: (parentRow as any).assignments || []  // Ajouter les assignments complets
         }
 
-        // Mettre en cache
-        transformedJobsCache.set(jobId, rowNode)
         return rowNode
     }
 
@@ -946,56 +876,20 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     }
 
     /**
-     * Transforme les jobs en lignes compatibles DataTable (OPTIMISÉ avec cache)
+     * Transforme les jobs en lignes compatibles DataTable
      */
     const mapJobsToRows = (jobs: any[] | undefined | null): RowNode[] => {
         if (!jobs || jobs.length === 0) {
             return []
         }
 
-        // Quick check : si la longueur est la même, vérifier les IDs
-        const currentLength = jobs.length
-        if (currentLength === lastJobsLength) {
-            // Vérifier si les IDs des premiers et derniers jobs sont identiques
-            const currentHash = generateJobsHash(jobs)
-            if (currentHash === lastJobsHash) {
-                // Données identiques, retourner depuis le cache
-                const cached: RowNode[] = []
-                for (let i = 0; i < currentLength; i++) {
-                    const job = jobs[i]
-                    const cachedRow = transformedJobsCache.get(job.id)
-                    if (cachedRow) {
-                        cached.push(cachedRow)
-                    } else {
-                        // Cache manquant, transformer et ajouter
-                        cached.push(transformJobToRowNode(job))
-                    }
-                }
-                return cached
-            }
-            lastJobsHash = currentHash
-        } else {
-            lastJobsLength = currentLength
-            lastJobsHash = generateJobsHash(jobs)
+        // Transformer tous les jobs
+        const result: RowNode[] = []
+        for (let i = 0; i < jobs.length; i++) {
+            result[i] = transformJobToRowNode(jobs[i])
         }
 
-        // Pré-allouer le tableau pour de meilleures performances
-        const newData: RowNode[] = new Array(currentLength)
-
-        // Utiliser une boucle for classique (plus rapide que forEach)
-        for (let i = 0; i < currentLength; i++) {
-            newData[i] = transformJobToRowNode(jobs[i])
-        }
-
-        // Nettoyer le cache pour les jobs qui n'existent plus
-        const currentJobIds = new Set(jobs.map(j => String(j.id)))
-        for (const cachedId of transformedJobsCache.keys()) {
-            if (!currentJobIds.has(String(cachedId))) {
-                invalidateJobCache(cachedId)
-            }
-        }
-
-        return newData
+        return result
     }
 
     // ===== DONNÉES JOBS (HARMONISÉ AVEC usePlanning.ts) =====
@@ -1020,188 +914,16 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
      * Pour les gros volumes (>100 éléments), utilise un traitement par chunks pour éviter de bloquer le thread
      */
     const updateDisplayData = () => {
-        const startTime = performance.now()
-
-        // Vérification ultra-rapide : si même longueur et déjà transformé, probablement identique
-        if (jobsDataRaw.value.length === lastJobsLength &&
-            displayData.value.length === jobsDataRaw.value.length &&
-            jobsDataRaw.value.length > 0) {
-            // Vérification rapide du premier et dernier ID (conversion en string pour comparaison)
-            const firstMatch = String(jobsDataRaw.value[0]?.id) === displayData.value[0]?.id
-            const lastMatch = String(jobsDataRaw.value[jobsDataRaw.value.length - 1]?.id) === displayData.value[displayData.value.length - 1]?.id
-
-            if (firstMatch && lastMatch) {
-                logPerformance('updateDisplayData (skipped - quick check)', startTime)
+        const jobs = jobsDataRaw.value
+        if (!jobs || jobs.length === 0) {
+            displayData.value = []
                 return
-            }
         }
 
-        // Si longueur différente, c'est sûr qu'il y a eu un changement
-        if (jobsDataRaw.value.length !== lastJobsLength) {
-            lastJobsLength = jobsDataRaw.value.length
-            lastJobsHash = '' // Invalider le hash
-        }
-
-        // Créer un hash seulement si nécessaire
-        const currentJobsHash = jobsDataRaw.value.map(j => j.id).join(',')
-        if (currentJobsHash === lastJobsHash) {
-            logPerformance('updateDisplayData (skipped - hash match)', startTime)
-            return
-        }
-
-        lastJobsHash = currentJobsHash
-
-        // Nettoyer le cache seulement si vraiment nécessaire (> 3x la taille actuelle)
-        // Optimisation : nettoyer de manière plus efficace
-        if (transformedJobsCache.size > jobsDataRaw.value.length * 3) {
-            const jobIds = new Set(jobsDataRaw.value.map(j => j.id))
-            const idsToDelete: (string | number)[] = []
-
-            // Collecter d'abord les IDs à supprimer pour éviter les modifications pendant l'itération
-            for (const [cachedId] of transformedJobsCache) {
-                if (!jobIds.has(cachedId as any)) {
-                    idsToDelete.push(cachedId as string | number)
-                }
-            }
-
-            // Supprimer en une seule passe
-            idsToDelete.forEach(id => invalidateJobCache(id))
-        }
-
-        // Pour les gros volumes, traiter par chunks pour éviter de bloquer le thread
-        const totalItems = jobsDataRaw.value.length
-        // Ajuster la taille des chunks selon le volume pour optimiser les performances
-        const CHUNK_SIZE = totalItems > 1000 ? 25 : totalItems > 500 ? 50 : 100
-
-        if (totalItems <= CHUNK_SIZE) {
-            // Pour les petits volumes, traitement synchrone normal
-            const result: RowNode[] = new Array(totalItems)
-            for (let i = 0; i < totalItems; i++) {
-                const job = jobsDataRaw.value[i]
-                const jobId = job.id
-
-                // Vérifier si le job est déjà en cache
-                if (jobId && transformedJobsCache.has(jobId)) {
-                    result[i] = transformedJobsCache.get(jobId)!
-                    continue
-                }
-
-                // Transformation optimisée : ne copier que les propriétés essentielles
-                const transformed = transformJobToRowNode(job)
-
-                // Mettre en cache
-                if (jobId) {
-                    transformedJobsCache.set(jobId, transformed)
-                }
-
-                result[i] = transformed
-            }
-
-            displayData.value = result
-            logPerformance('updateDisplayData (sync)', startTime)
-        } else {
-            // Pour les gros volumes, traitement asynchrone par chunks
-            const result: RowNode[] = new Array(totalItems)
-            let processedCount = 0
-
-            const processChunk = () => {
-                const startIndex = processedCount
-                const endIndex = Math.min(startIndex + CHUNK_SIZE, totalItems)
-
-                for (let i = startIndex; i < endIndex; i++) {
-                    const job = jobsDataRaw.value[i]
-                    const jobId = job.id
-
-                    // Vérifier si le job est déjà en cache
-                    if (jobId && transformedJobsCache.has(jobId)) {
-                        result[i] = transformedJobsCache.get(jobId)!
-                        continue
-                    }
-
-                    // Transformation optimisée avec gestion d'erreur défensive
-                    try {
-                        const transformed = transformJobToRowNode(job)
-
-                        // Mettre en cache seulement si transformation réussie
-                        if (jobId && transformed) {
-                            transformedJobsCache.set(jobId, transformed)
-                        }
-
-                        result[i] = transformed
-                    } catch (error) {
-                        console.warn(`Erreur lors de la transformation du job ${jobId}:`, error)
-                        // Créer un RowNode d'erreur pour éviter les crashes
-                        result[i] = {
-                            id: jobId || `error_${i}`,
-                            reference: job?.reference || 'Erreur',
-                            status: 'ERREUR',
-                            isChild: false,
-                            assignments: [],
-                            assignments_premier: [],
-                            assignments_deuxieme: [],
-                            job: null,
-                            team1: null,
-                            date1: null,
-                            team2: null,
-                            date2: null,
-                            totalTime: null,
-                            totalTimeFormated: null,
-                            resources: [],
-                            resourcesList: [],
-                            nbResources: 0
-                        } as unknown as RowNode
-                    }
-                }
-
-                processedCount = endIndex
-
-                if (processedCount < totalItems) {
-                    // Continuer avec le chunk suivant (optimisé pour éviter la surcharge)
-                    setTimeout(() => requestAnimationFrame(processChunk), 0)
-                } else {
-                    // Traitement terminé
-                    displayData.value = result
-                    logPerformance('updateDisplayData (chunked)', startTime)
-                }
-            }
-
-            // Démarrer le traitement par chunks
-            requestAnimationFrame(processChunk)
-        }
+        // Transformer tous les jobs
+        displayData.value = mapJobsToRows(jobs)
     }
 
-    /**
-     * Met à jour les données transformées en une seule fois (optimisé)
-     * Utilise requestAnimationFrame pour ne pas bloquer le thread principal
-     */
-    let updateScheduled = false
-    const updateAllTransformedData = () => {
-        if (updateScheduled) return
-
-        updateScheduled = true
-        requestAnimationFrame(() => {
-            updateDisplayData()
-            updateScheduled = false
-        })
-    }
-
-    /**
-     * Version synchrone pour les cas où on a besoin des données immédiatement
-     */
-    const updateAllTransformedDataSync = () => {
-        updateDisplayData()
-    }
-
-    /**
-     * Version optimisée pour les gros volumes (>100 éléments)
-     * Diffère automatiquement l'appel pour éviter les blocages
-     */
-    const updateAllTransformedDataOptimized = () => {
-        // Pour les gros volumes, toujours différer
-
-            updateAllTransformedDataSync()
-
-    }
 
     // Les données sont mises à jour manuellement après chaque appel fetchJobs
     // pour éviter les problèmes de réactivité avec les watchers
@@ -1276,12 +998,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         return inventoryStatus.value === 'EN PREPARATION'
     })
 
-    /**
-     * Afficher le bouton Annuler si l'inventaire est en préparation
-     */
-    const showResetButton = computed(() => {
-        return inventoryStatus.value === 'EN PREPARATION'
-    })
 
     /**
      * Classe CSS commune pour les boutons d'action
@@ -1360,11 +1076,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
      *    - visible: inventoryStatus === 'EN PREPARATION'
      *    - Action: Met les jobs sélectionnés en statut "Prêt"
      *
-     * 3. Bouton "Retourner"
-     *    - visible: inventoryStatus === 'EN PREPARATION'
-     *    - Action: Réinitialise les jobs sélectionnés
-     *
-     * === EN REALISATION ===
+ * === EN REALISATION ===
      * 4. Bouton "Manuel"
      *    - visible: inventoryStatus === 'EN PREPARATION' (actuellement)
      *    - Action: Lance manuellement les jobs sélectionnés
@@ -1382,21 +1094,15 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
      *    - disabled: Si hasUnsavedChanges === false (pas de modifications en attente)
      *    - Action: Sauvegarde toutes les modifications en attente
      *
-     * 8. Bouton "Réinitialiser"
-     *    - visible: inventoryStatus === 'EN REALISATION'
-     *    - disabled: Si hasUnsavedChanges === false (pas de modifications en attente)
-     *    - Action: Réinitialise toutes les modifications en attente
-     *
-     * 9. Bouton "Clôturer"
-     *    - visible: inventoryStatus === 'EN REALISATION'
-     *    - Action: Clôture l'inventaire
-     *
-     * DEBUG: Pour vérifier pourquoi les boutons ne s'affichent pas :
-     * - inventoryStatus actuel: ${inventoryStatus.value}
-     * - showManualButton: ${showManualButton.value}
-     * - showTransferButton: ${showTransferButton.value}
-     * - showReadyButton: ${showReadyButton.value}
-     * - showResetButton: ${showResetButton.value}
+ * 8. Bouton "Clôturer"
+ *    - visible: inventoryStatus === 'EN REALISATION'
+ *    - Action: Clôture l'inventaire
+ *
+ * DEBUG: Pour vérifier pourquoi les boutons ne s'affichent pas :
+ * - inventoryStatus actuel: ${inventoryStatus.value}
+ * - showManualButton: ${showManualButton.value}
+ * - showTransferButton: ${showTransferButton.value}
+ * - showReadyButton: ${showReadyButton.value}
      */
     const actionButtons = computed<ButtonGroupButton[]>(() => {
         const buttons: ButtonGroupButton[] = []
@@ -1451,30 +1157,17 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             onClick: () => { void handleTransferAllBulk() }
         })
 
-        // Bouton Sauvegarder
-        // Condition: inventoryStatus === 'EN REALISATION'
-        buttons.push({
-            id: 'save',
-            label: pendingChangesCount > 0 ? `Sauvegarder (${pendingChangesCount})` : 'Sauvegarder',
-            icon: IconCheck as Component,
-            variant: 'default',
-            class: ACTION_BUTTON_CLASS,
-            disabled: !hasUnsavedChanges.value, // Désactivé si pas de modifications
-            visible: showTransferButton.value, // inventoryStatus === 'EN REALISATION'
-            onClick: () => { void saveAllChanges() }
-        })
 
-        // Bouton Réinitialiser
+        // Bouton Valider tous
         // Condition: inventoryStatus === 'EN REALISATION'
         buttons.push({
-            id: 'reset',
-            label: pendingChangesCount > 0 ? `Réinitialiser (${pendingChangesCount})` : 'Réinitialiser',
-            icon: IconCancel as Component,
-            variant: 'default',
+            id: 'validate-all',
+            label: 'Valider tous',
+            icon: IconCheck as Component,
+            variant: 'success',
             class: ACTION_BUTTON_CLASS,
-            disabled: !hasUnsavedChanges.value, // Désactivé si pas de modifications
             visible: showTransferButton.value, // inventoryStatus === 'EN REALISATION'
-            onClick: () => { void resetAllChanges() }
+            onClick: () => { void handleValidateAllJobs() }
         })
 
         // Bouton Clôturer
@@ -1513,17 +1206,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             onClick: () => { void handleReadyAll() }
         })
 
-        // Bouton Retourner (anciennement Annuler)
-        // Condition: inventoryStatus === 'EN PREPARATION'
-        buttons.push({
-            id: 'return',
-            label: 'Retourner',
-            icon: IconCancel as Component,
-            variant: 'default',
-            class: ACTION_BUTTON_CLASS,
-            visible: showResetButton.value, // inventoryStatus === 'EN PREPARATION'
-            onClick: () => { void handleResetClick() }
-        })
 
         const filteredButtons = buttons.filter(b => b.visible !== false)
 
@@ -1723,40 +1405,251 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
      */
     const getMaxCountingOrder = (): number => {
         let maxOrder = 2 // Minimum 2 pour team1 et team2
+        const allCountingOrders: number[] = []
+
         for (const job of jobsDataRaw.value) {
             const jobAssignments = (job as any).assignments
             if (jobAssignments && Array.isArray(jobAssignments)) {
                 for (const assignment of jobAssignments) {
-                    if (assignment.counting_order && assignment.counting_order > maxOrder) {
-                        maxOrder = assignment.counting_order
+                    if (assignment.counting_order !== null && assignment.counting_order !== undefined) {
+                        const order = Number(assignment.counting_order)
+                        allCountingOrders.push(order)
+                        if (order > maxOrder) {
+                            maxOrder = order
+                        }
                     }
                 }
             }
         }
+
+        // DEBUG temporaire
+        console.log('🔍 getMaxCountingOrder:', {
+            maxOrder,
+            jobsCount: jobsDataRaw.value.length,
+            allCountingOrders,
+            uniqueOrders: [...new Set(allCountingOrders)],
+            jobsDataRaw: jobsDataRaw.value.map(job => ({
+                id: job.id,
+                reference: job.reference,
+                assignments: (job as any).assignments?.map((a: any) => ({
+                    counting_order: a.counting_order,
+                    status: a.status
+                }))
+            }))
+        })
+
         return maxOrder
     }
 
     /**
      * Configuration des colonnes pour la DataTable des jobs
      */
+    // Helper : récupère tous les counting_order uniques présents dans les données
+    const getAvailableCountingOrders = (): number[] => {
+        if (!jobsDataRaw.value.length) {
+            return [1, 2] // Par défaut, afficher au moins 1er et 2ème comptage
+        }
+
+        const ordersSet = new Set<number>()
+        jobsDataRaw.value.forEach(job => {
+            const jobAssignments = (job as any).assignments
+            if (jobAssignments && Array.isArray(jobAssignments)) {
+                jobAssignments.forEach((assignment: any) => {
+                    // Inclure tous les counting_order, même ceux avec status null (pour les colonnes futures)
+                    if (assignment.counting_order !== null && assignment.counting_order !== undefined) {
+                        ordersSet.add(Number(assignment.counting_order))
+                    }
+                })
+            }
+        })
+
+        const orders = Array.from(ordersSet).sort((a, b) => a - b)
+        // Toujours inclure au moins 1 et 2
+        if (!orders.includes(1)) orders.unshift(1)
+        if (!orders.includes(2)) {
+            const index = orders.findIndex(o => o > 2)
+            if (index === -1) orders.push(2)
+            else orders.splice(index, 0, 2)
+        }
+
+        return orders
+    }
+
+    // Helper : retourne le label pour un ordre de comptage (1er, 2ème, 3ème, Nème)
+    const getCountingOrderLabel = (order: number): string => {
+        if (order === 1) return '1er comptage'
+        if (order === 2) return '2ème comptage'
+        if (order === 3) return '3ème comptage'
+        return `${order}ème comptage`
+    }
+
     const jobsColumns = computed<DataTableColumnAny[]>(() => {
-        const cols: DataTableColumnAny[] = [
-            {
-                field: 'reference',
-                headerName: 'Job',
+        const cols: DataTableColumnAny[] = []
+
+        // Colonne principale : Job avec badge de statut (style useAffecter.ts)
+        cols.push({
+            headerName: 'Job',
+            field: 'job',
+            sortable: true,
+            filterable: true,
+            dataType: 'text' as ColumnDataType,
+            width: 180,
+            minWidth: 150,
+            visible: true,
+            editable: false,
+            draggable: true,
+            autoSize: true,
+            align: 'center' as const,
+            description: 'Référence du job avec badge de statut',
+            badgeStyles: [
+                {
+                    value: 'EN ATTENTE',
+                    class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
+                },
+                {
+                    value: 'VALIDE',
+                    class: 'inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
+                },
+                {
+                    value: 'AFFECTE',
+                    class: 'inline-flex items-center rounded-md bg-teal-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-teal-600/20 ring-inset'
+                },
+                {
+                    value: 'PRET',
+                    class: 'inline-flex items-center rounded-md bg-purple-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-purple-600/20 ring-inset'
+                },
+                {
+                    value: 'TRANSFERT',
+                    class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
+                },
+                {
+                    value: 'ENTAME',
+                    class: 'inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset'
+                },
+                {
+                    value: 'TERMINE',
+                    class: 'inline-flex items-center rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-700/20 ring-inset'
+                },
+                {
+                    value: 'CLOTURE',
+                    class: 'inline-flex items-center rounded-md bg-slate-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
+                }
+            ],
+            badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
+            allowWrap: true,
+            cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
+                let rowData: RowNode | null = null
+
+                if (row && typeof row === 'object' && column) {
+                    rowData = row as RowNode
+                } else if (paramsOrValue && typeof paramsOrValue === 'object') {
+                    if (paramsOrValue.data) {
+                        rowData = paramsOrValue.data as RowNode
+                    } else {
+                        rowData = paramsOrValue as RowNode
+                    }
+                }
+
+                if (!rowData) {
+                    return '-'
+                }
+
+                const reference = rowData.job || '-'
+                const status = rowData.status || ''
+
+                if (!status) {
+                    return `<span class="font-medium text-slate-900">${reference}</span>`
+                }
+
+                const badgeStyle = column?.badgeStyles.find((s: any) => s.value === status)
+                const badgeClass = badgeStyle?.class || column?.badgeDefaultClass || 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+
+                return `<span class="${badgeClass}">${reference}</span>`
+            }) as any,
+            filterConfig: {
+                dataType: 'select' as const,
+                operator: 'equals' as const,
+                options: [
+                    { label: 'EN ATTENTE', value: 'EN ATTENTE' },
+                    { label: 'VALIDE', value: 'VALIDE' },
+                    { label: 'AFFECTE', value: 'AFFECTE' },
+                    { label: 'PRET', value: 'PRET' },
+                    { label: 'TRANSFERT', value: 'TRANSFERT' },
+                    { label: 'ENTAME', value: 'ENTAME' },
+                    { label: 'TERMINE', value: 'TERMINE' },
+                    { label: 'CLOTURE', value: 'CLOTURE' }
+                ]
+            }
+        })
+
+        // Colonne Emplacements
+        cols.push({
+            headerName: 'Emplacements',
+            field: 'locations',
+            sortable: false,
+            dataType: 'text' as ColumnDataType,
+            filterable: false,
+            width: 200,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-map-pin',
+            description: 'Emplacements du job',
+            nestedData: {
+                key: 'locations',
+                displayKey: 'location_reference',
+                countSuffix: 'emplacements',
+                expandable: true,
+                showCount: true,
+                title: 'Emplacements du job',
+                columns: [
+                    {
+                        field: 'reference',
+                        headerName: 'Référence',
+                        sortable: true,
+                        filterable: true,
+                        width: 150
+                    },
+                    {
+                        field: 'zone_name',
+                        headerName: 'Zone',
+                        sortable: true,
+                        filterable: true,
+                        width: 150
+                    },
+                    {
+                        field: 'sous_zone_name',
+                        headerName: 'Sous-zone',
+                        sortable: true,
+                        filterable: true,
+                        width: 150
+                    }
+                ]
+            }
+        })
+
+        // Colonnes dynamiques par comptage : Session + Statut (badge)
+        // Utiliser les counting_order disponibles dans les données pour créer les colonnes dynamiquement
+        const availableOrders = getAvailableCountingOrders()
+
+        availableOrders.forEach(order => {
+            // Colonne 1 : Session avec badge de statut du comptage (fusionné)
+            cols.push({
+                headerName: `${getCountingOrderLabel(order)} - Session`,
+                field: `counting_${order}_session`,
                 sortable: true,
                 filterable: true,
-                width: 120,
-                minWidth: 100,
-                editable: false,
-                dataType: 'text' as const,
+                dataType: 'text' as ColumnDataType,
+                width: 180,
+                minWidth: 160,
                 align: 'center' as const,
                 allowWrap: true,
-                description: 'Référence du job avec badge de statut',
+                description: `Session et statut du ${getCountingOrderLabel(order)}`,
                 badgeStyles: [
                     {
                         value: 'EN ATTENTE',
-                        class: 'inline-flex items-center rounded-md bg-slate-200 px-2 py-1 text-xs font-medium text-slate-900 ring-1 ring-slate-300/20 ring-inset'
+                        class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
                     },
                     {
                         value: 'VALIDE',
@@ -1775,23 +1668,62 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                         class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
                     },
                     {
+                        value: 'ENTAME',
+                        class: 'inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset'
+                    },
+                    {
                         value: 'TERMINE',
                         class: 'inline-flex items-center rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-700/20 ring-inset'
                     },
                     {
-                        value: 'ENTAME',
-                        class: 'inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset'
+                        value: 'CLOTURE',
+                        class: 'inline-flex items-center rounded-md bg-slate-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
                     }
                 ],
                 badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
-                cellRenderer: jobCellRenderer,
+                cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
+                    let rowData: RowNode | null = null
+
+                    if (row && typeof row === 'object' && column) {
+                        rowData = row as RowNode
+                    } else if (paramsOrValue && typeof paramsOrValue === 'object') {
+                        if (paramsOrValue.data) {
+                            rowData = paramsOrValue.data as RowNode
+                        } else {
+                            rowData = paramsOrValue as RowNode
+                        }
+                    }
+
+                    if (!rowData) {
+                        return '-'
+                    }
+
+                    const assignments = rowData?.assignments || []
+                    const assignment = assignments.find((a: any) => a.counting_order === order)
+
+                    if (!assignment || !assignment.status || assignment.status === null) {
+                        return '-'
+                    }
+
+                    const sessionLabel =
+                        (assignment as any).username ||
+                        assignment.session?.username ||
+                        (assignment as any).session_full_name ||
+                        'Session inconnue'
+                    const status = assignment.status || ''
+
+                    const badgeStyle = column?.badgeStyles.find((s: any) => s.value === status)
+                    const badgeClass = badgeStyle?.class || column?.badgeDefaultClass || 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+
+                    return `<span class="${badgeClass}">${sessionLabel}</span>`
+                }) as any,
                 filterConfig: {
                     dataType: 'select' as const,
                     operator: 'equals' as const,
                     options: [
                         { label: 'EN ATTENTE', value: 'EN ATTENTE' },
-                        { label: 'AFFECTE', value: 'AFFECTE' },
                         { label: 'VALIDE', value: 'VALIDE' },
+                        { label: 'AFFECTE', value: 'AFFECTE' },
                         { label: 'PRET', value: 'PRET' },
                         { label: 'TRANSFERT', value: 'TRANSFERT' },
                         { label: 'ENTAME', value: 'ENTAME' },
@@ -1799,157 +1731,26 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                         { label: 'CLOTURE', value: 'CLOTURE' }
                     ]
                 }
-            },
-            {
-                field: 'emplacements',
-                headerName: 'Emplacements',
-                sortable: false,
-                filterable: false,
-                width: 200,
-                minWidth: 150,
-                editable: false,
-                dataType: 'text' as const,
-                align: 'center' as const,
-                nestedData: {
-                    key: 'locations',
-                    displayKey: 'location_reference',
-                    countSuffix: 'emplacements',
-                    expandable: true,
-                    showCount: true,
-                    title: 'Emplacements du job',
-                    columns: [
-                        {
-                            field: 'location_reference',
-                            headerName: 'Référence',
-                            sortable: true,
-                            filterable: true,
-                            width: 150
-                        },
-                        {
-                            field: 'zone_name',
-                            headerName: 'Zone',
-                            sortable: true,
-                            filterable: true,
-                            width: 150
-                        },
-                        {
-                            field: 'sous_zone_name',
-                            headerName: 'Sous-zone',
-                            sortable: true,
-                            filterable: true,
-                            width: 150
-                        }
-                    ]
-                }
-            },
-            // Colonnes d'équipes dynamiques basées sur les counting_order
-            ...(() => {
-                const maxOrder = getMaxCountingOrder()
-                const teamColumns: DataTableColumnAny[] = []
-
-                for (let order = 1; order <= maxOrder; order++) {
-                    // Créer le cell renderer dynamique pour cette équipe
-                    const cellRenderer = ((paramsOrValue: any, column?: any, row?: any) => {
-                        let rowData: RowNode | null = null
-
-                        if (row && typeof row === 'object' && column) {
-                            rowData = row as RowNode
-                        } else if (paramsOrValue && typeof paramsOrValue === 'object') {
-                            if (paramsOrValue.data) {
-                                rowData = paramsOrValue.data as RowNode
-                            } else {
-                                rowData = paramsOrValue as RowNode
-                            }
-                        }
-
-                        if (!rowData) {
-                            return '-'
-                        }
-
-                        // Trouver l'assignment pour ce counting_order
-                        const assignment = (rowData as any).assignments?.find((a: any) => a.counting_order === order)
-                        const teamName = assignment?.session?.username || ''
-
-                        if (!teamName) {
-                            return '-'
-                        }
-
-                        const badgeStyles = column?.badgeStyles as Array<{value: string, class: string}> | undefined
-                        const badgeDefaultClass = (column?.badgeDefaultClass as string) || 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-600/20 ring-inset'
-
-                        // Utiliser le statut réel de l'équipe pour déterminer le style du badge
-                        const teamStatus = assignment?.status || ''
-                        const badgeStyle = badgeStyles?.find((s: any) => s.value === teamStatus)
-                        const badgeClass = badgeStyle?.class || badgeDefaultClass
-
-                        return `<span class="${badgeClass}">${teamName}</span>`
-                    }) as any
-
-                    teamColumns.push({
-                        field: `team${order}`,
-                        headerName: `Équipe ${order}${order === 1 ? 'er' : 'e'} Comptage`,
-                        sortable: true,
-                        filterable: true,
-                        width: 180,
-                        minWidth: 150,
-                        editable: true,
-                        dataType: 'select' as const,
-                        align: 'center' as const,
-                        allowWrap: true,
-                        description: `Équipe affectée au ${order}${order === 1 ? 'er' : 'e'} comptage`,
-                        badgeStyles: [
-                            {
-                                value: 'EN ATTENTE',
-                                class: 'inline-flex items-center rounded-md bg-slate-200 px-2 py-1 text-xs font-medium text-slate-900 ring-1 ring-slate-300/20 ring-inset'
-                            },
-                            {
-                                value: 'VALIDE',
-                                class: 'inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
-                            },
-                            {
-                                value: 'AFFECTE',
-                                class: 'inline-flex items-center rounded-md bg-teal-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-teal-600/20 ring-inset'
-                            },
-                            {
-                                value: 'PRET',
-                                class: 'inline-flex items-center rounded-md bg-purple-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-purple-600/20 ring-inset'
-                            },
-                            {
-                                value: 'TRANSFERT',
-                                class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
-                            },
-                            {
-                                value: 'TERMINE',
-                                class: 'inline-flex items-center rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-700/20 ring-inset'
-                            },
-                            {
-                                value: 'ENTAME',
-                                class: 'inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset'
-                            }
-                        ],
-                        badgeDefaultClass: order === 1
-                            ? 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-600/20 ring-inset'
-                            : 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-800 ring-1 ring-green-600/20 ring-inset',
-                        cellRenderer: cellRenderer,
-                        editValueFormatter: (value: any) => {
-                            if (!value || value === '') {
-                                return 'Sélectionner une équipe...'
-                            }
-                            return value
-                        },
-                        filterConfig: {
-                            dataType: 'select' as const,
-                            operator: 'equals' as const,
-                            options: sessionOptions.value
-                        },
-                    })
-                }
-
-                return teamColumns
-            })(),
-        ]
+            })
+        })
 
         return cols
+    })
+
+    // ===== QUERYMODEL POUR JOBS =====
+
+    /**
+     * QueryModel pour gérer les requêtes Jobs
+     * Le DataTable utilise UNIQUEMENT QueryModel comme format standard
+     */
+    const {
+        queryModel: jobsQueryModelRef,
+        updatePagination: updateJobsQueryPagination,
+        updateSort: updateJobsQuerySort,
+        updateFilter: updateJobsQueryFilter,
+        updateGlobalSearch: updateJobsQueryGlobalSearch
+    } = useQueryModel({
+        columns: jobsColumns.value as any
     })
 
     /**
@@ -1970,8 +1771,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                     if (result.isConfirmed) {
                         await jobStore.validateJob([job.id])
                         await alertService.success({ text: 'Job validé avec succès' })
-                        // Invalider le cache pour ce job car son statut a changé
-                        invalidateJobCache(job.id)
                         resetAllSelections()
                         // Rafraîchir les données complètes (jobs + locations)
                         await refreshJobs()
@@ -1996,8 +1795,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                     if (result.isConfirmed) {
                         await jobStore.deleteJob([job.id])
                         await alertService.success({ text: 'Job supprimé avec succès' })
-                        // Invalider le cache pour ce job
-                        invalidateJobCache(job.id)
                         resetAllSelections()
                         await refreshJobs()
                     }
@@ -2022,14 +1819,12 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             return
         }
 
-        const startTime = performance.now()
-        // Activer le loading immédiatement pour afficher le skeleton
+        // Activer le loading
         jobsLoadingLocal.value = true
-        updateLoadingStates()
 
         try {
             // Si params est fourni, utiliser directement (déjà fusionné avec customParams par mergeQueryModelWithCustomParams)
-            // Sinon, construire un QueryModel minimal avec les customParams
+            // Sinon, construire un QueryModel par défaut (le DataTable restaurera son état automatiquement)
             const finalParams: QueryModel = params || mergeQueryModelWithCustomParams(
                 {
                     page: 1,
@@ -2038,25 +1833,26 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                 jobsCustomParams.value
             )
 
+
             await jobStore.fetchJobsValidated(inventoryId.value, warehouseId.value, finalParams)
             await nextTick()
 
-            // Désactiver le loading AVANT les transformations lourdes pour éviter le skeleton bloqué
+            // Mettre à jour le cache après un appel réussi
+            lastExecutedQueryModel = { ...finalParams }
+
+            // Transformer les données
+            updateDisplayData()
+
+
+            // Désactiver le loading
             jobsLoadingLocal.value = false
-            updateLoadingStates()
-
-            // Invalider le cache car les données ont changé
-            invalidateRowNodeCache()
-
-            // Décaler les transformations lourdes avec requestAnimationFrame (optimisé pour gros volumes)
-            updateAllTransformedDataOptimized()
         } catch (error) {
+            console.error('[useAffecter.loadJobs] ❌ Error during job load:', error)
             await alertService.error({ text: 'Erreur lors du chargement des jobs' })
             // Désactiver le loading même en cas d'erreur
             jobsLoadingLocal.value = false
-            updateLoadingStates()
         } finally {
-            logPerformance('loadJobs', startTime)
+            // Le loading est déjà désactivé dans try/catch
         }
     }
 
@@ -2066,7 +1862,12 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
      * @param params - Paramètres de requête optionnels au format QueryModel
      */
     const refreshJobs = async (params?: QueryModel) => {
+
         await loadJobs(params)
+
+        // Forcer le re-rendu de la DataTable après le chargement des données
+        jobsKey.value++
+
     }
 
     // ===== GESTION DES MODIFICATIONS =====
@@ -2085,99 +1886,29 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         pendingChanges.value.get(jobId)!.set(field, value)
     }
 
+
     /**
-     * Sauvegarde toutes les modifications en attente
+     * Sauvegarde automatique d'une seule affectation d'équipe
      */
-    async function saveAllChanges() {
-        if (pendingChanges.value.size === 0) {
-            alertService.info({ text: 'Aucune modification à sauvegarder.' })
-            return
-        }
-
+    async function saveSingleAssignment(inventoryId: number, assignmentData: {
+        job_id: number;
+        team: number;
+        counting_order: number;
+        complete: boolean;
+    }) {
         try {
-            alertService.info({ text: 'Sauvegarde en cours...' })
+            // TEST : Afficher les valeurs dans la console au lieu d'exécuter l'action
+            // Utiliser le nouveau service pour l'affectation automatique
+            await jobStore.assignTeamToJobAuto(assignmentData);
 
-            // Préparer les données pour assignJobsManual
-            const manualAssignments: JobManualAssignmentsRequest[] = []
+            // Commenté pour le test
+            // await jobStore.assignTeamToJobAuto(assignmentData);
 
-            for (const [jobId, changes] of pendingChanges.value.entries()) {
-                const jobData: JobManualAssignmentsRequest = {
-                    job_id: parseInt(jobId),
-                    team1: null,
-                    date1: null,
-                    team2: null,
-                    date2: null,
-                    resources: null
-                }
-
-                // Traiter chaque changement
-                for (const [field, value] of changes.entries()) {
-                    switch (field) {
-                        case 'team1':
-                            // Trouver l'ID de session par username
-                            const team1Session = sessionStore.getAllSessions.find(s => s.username === value)
-                            jobData.team1 = team1Session ? team1Session.id : null
-                            break
-                        case 'team2':
-                            // Trouver l'ID de session par username
-                            const team2Session = sessionStore.getAllSessions.find(s => s.username === value)
-                            jobData.team2 = team2Session ? team2Session.id : null
-                            break
-                        case 'date1':
-                            jobData.date1 = value
-                            break
-                        case 'date2':
-                            jobData.date2 = value
-                            break
-                        case 'resources':
-                            // Les ressources peuvent être des IDs ou des références
-                            if (Array.isArray(value)) {
-                                const resourceIds: number[] = []
-                                for (const resourceValue of value) {
-                                    // Essayer d'abord de convertir en ID numérique
-                                    const numericId = parseInt(resourceValue)
-                                    if (!isNaN(numericId)) {
-                                        resourceIds.push(numericId)
-                                    } else {
-                                        // Si ce n'est pas un ID numérique, chercher la ressource par référence
-                                        const resource = resourceStore.getResources.find(r => r.reference === resourceValue)
-                                        if (resource && resource.id) {
-                                            resourceIds.push(resource.id)
-                                        }
-                                    }
-                                }
-                                jobData.resources = resourceIds
-                            }
-                            break
-                    }
-                }
-
-                manualAssignments.push(jobData)
-            }
-
-            // Envoyer les modifications via assignJobsManual
-            await jobStore.assignJobsManual(manualAssignments)
-
-            pendingChanges.value.clear()
-
-            alertService.success({
-                text: `${manualAssignments.length} modification(s) sauvegardée(s) avec succès !`
-            })
-
-            // Invalider le cache pour tous les jobs modifiés
-            for (const jobId of pendingChanges.value.keys()) {
-                invalidateJobCache(jobId)
-            }
-
-            // Réinitialiser la sélection après la sauvegarde
-            await resetAllSelections()
-
-            await refreshJobs()
+            // Simulation de succès
+            logger.debug('TEST - Affectation simulée:', assignmentData);
         } catch (error) {
-            alertService.error({
-                title: 'Erreur de sauvegarde',
-                text: 'Certaines modifications n\'ont pas pu être sauvegardées. Veuillez réessayer.'
-            })
+            logger.error('Erreur lors de la sauvegarde automatique:', error);
+            throw error;
         }
     }
 
@@ -2277,12 +2008,120 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
 
     /**
-     * Handler pour le clic sur une ligne
-     *
-     * @param event - Événement de clic
+     * Handler pour le clic sur une ligne du DataTable
+     * Ouvre la modal JobAffectationModal pour l'affectation et réaffectation
      */
-    function onRowClicked(event: any) {
-        // Logique de clic sur ligne (à implémenter si nécessaire)
+    async function onRowClicked(jobId: string) {
+        try {
+            // Trouver le job correspondant à l'ID
+            const selectedJob: any = jobs.value.find((job: any) => {
+                const jobRowId = job.id?.toString() || job.reference || `job-${job.id}`;
+                return jobRowId === jobId;
+            });
+
+            if (!selectedJob) {
+                logger.warn('Job non trouvé pour l\'ID:', jobId);
+                alertService.error({ text: 'Job introuvable' });
+                return;
+            }
+
+            logger.debug('Clic sur ligne détecté pour job:', selectedJob.reference || selectedJob.id);
+
+            // Charger les options d'équipes pour tous les counting_orders du job (exclure les null)
+            const assignments = selectedJob.assignments || [];
+            const countingOrders = assignments
+                .map((a: any) => a.counting_order)
+                .filter((order: number | null) => order !== null && order !== undefined);
+
+            // Ajouter les counting_orders par défaut si aucun assignment
+            if (countingOrders.length === 0) {
+                countingOrders.push(1, 2);
+            }
+
+            // Charger les options pour chaque counting_order (options séparées par comptage)
+            const optionsPromises = countingOrders.map((order: number) =>
+                getTeamOptionsForCountingOrder(order).then(options => ({ countingOrder: order, options }))
+            );
+            const optionsResults = await Promise.all(optionsPromises);
+
+            // Créer un objet avec les options par comptage (pas de fusion)
+            const optionsByCountingOrder: Record<number, Array<{ value: string; label: string }>> = {};
+            optionsResults.forEach(({ countingOrder, options }) => {
+                optionsByCountingOrder[countingOrder] = options;
+            });
+
+            // Mettre à jour les options par comptage
+            modalTeamOptionsByCountingOrder.value = { ...optionsByCountingOrder };
+
+
+            // Ouvrir la modal JobAffectationModal APRÈS avoir chargé les options
+            selectedJobForModal.value = selectedJob;
+            showJobAffectationModal.value = true;
+
+        } catch (error) {
+            logger.error('Erreur lors du clic sur la ligne:', error);
+            alertService.error({ text: 'Erreur lors de l\'affichage des options d\'affectation' });
+        }
+    }
+
+    /**
+     * Handler pour les changements d'équipe dans JobAffectationModal
+     */
+    const handleJobAffectationModalTeamChanged = async (countingOrder: number, teamId: string, assignmentType?: 'complet' | 'partiel') => {
+        if (!selectedJobForModal.value) return
+
+        try {
+            // Déterminer si l'affectation est complète selon le choix de l'utilisateur
+            // Par défaut : partiel (complete: false)
+            const isComplete = assignmentType === 'complet'
+
+            await saveSingleAssignment(inventoryId.value!, {
+                job_id: selectedJobForModal.value.id,
+                team: parseInt(teamId),
+                counting_order: countingOrder,
+                complete: isComplete
+            })
+
+            // Logique métier selon le type d'affectation
+            if (isComplete) {
+                // Affectation COMPLÈTE
+                // - Le job peut être considéré comme entièrement affecté pour ce counting_order
+                // - Possibilité de mettre à jour le statut du job ou de l'assignment
+                logger.debug(`Affectation complète effectuée pour le job ${selectedJobForModal.value.id}, counting_order ${countingOrder}`)
+            } else {
+                // Affectation PARTIELLE
+                // - Le job reste en cours d'affectation
+                // - Permet d'autres modifications ou ajouts
+                logger.debug(`Affectation partielle effectuée pour le job ${selectedJobForModal.value.id}, counting_order ${countingOrder}`)
+            }
+
+            // Mettre à jour les données du job dans la modal
+            const assignmentIndex = selectedJobForModal.value.assignments?.findIndex((a: any) => a.counting_order === countingOrder)
+            if (assignmentIndex !== undefined && assignmentIndex >= 0) {
+                const session = sessionStore.getAllSessions.find(s => s.id.toString() === teamId)
+                if (session) {
+                    selectedJobForModal.value.assignments[assignmentIndex].session = session
+                }
+            }
+
+            // Rafraîchir les données du DataTable après le changement d'équipe
+            await refreshJobs()
+                        } catch (error) {
+            logger.error('Erreur lors du changement d\'équipe:', error)
+            alertService.error({ text: 'Erreur lors de l\'assignation de l\'équipe' })
+                        }
+    }
+
+    /**
+     * Handler pour la fin de l'affectation dans JobAffectationModal
+     */
+    const handleJobAffectationModalFinish = async () => {
+        // Fermer la modal
+        showJobAffectationModal.value = false
+        selectedJobForModal.value = null
+
+        // Rafraîchir les données
+        await refreshJobs()
     }
 
     /**
@@ -2522,8 +2361,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         try {
             const jobIds: number[] = selectedRowNodes.map(r => parseInt(r.id))
 
-            // Invalider le cache pour tous les jobs modifiés
-            jobIds.forEach(jobId => invalidateJobCache(jobId))
 
             await jobStore.jobReady(jobIds)
             alertService.success({ text: `${jobIds.length} job(s) mis en statut 'Prêt' avec succès !` })
@@ -2555,8 +2392,8 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                     alertService.error({
                         text: 'IDs d\'inventaire ou d\'entrepôt non disponibles'
                     })
-                    return
-                }
+            return
+        }
 
 
                 const response = await jobStore.setReady(inventoryId.value, warehouseId.value)
@@ -2608,28 +2445,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         }
     }
 
-    /**
-     * Handler pour réinitialiser les jobs (Retourner)
-     */
-    async function handleResetClick() {
-        const selectedRowNodes = getSelectedRowNodes()
-        if (!selectedRowNodes.length) {
-            alertService.warning({ text: 'Veuillez sélectionner au moins un job.' })
-            return
-        }
-        const jobIds: number[] = selectedRowNodes.map(r => parseInt(r.id))
-
-        // Invalider le cache pour tous les jobs modifiés
-        jobIds.forEach(jobId => invalidateJobCache(jobId))
-
-        await jobStore.jobReset(jobIds)
-        alertService.success({ text: `${jobIds.length} job(s) retourné(s) avec succès !` })
-
-        // Réinitialiser la sélection après la réinitialisation des jobs
-        await resetAllSelections()
-
-        await refreshJobs()
-    }
 
     /**
      * Handler pour clôturer l'inventaire
@@ -2781,6 +2596,78 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
      * Handler pour affecter automatiquement tous les jobs depuis les location-jobs
      * Utilise l'endpoint d'auto-affectation automatique
      */
+    const handleValidateAllJobs = async () => {
+        // Vérifier que les IDs requis sont disponibles
+        if (!inventoryId.value || !warehouseId.value) {
+            await alertService.warning({ text: 'Inventaire ou entrepôt non disponible' })
+            return
+        }
+
+        try {
+            // Confirmation avant validation
+            const confirmation = await Swal.fire({
+                title: 'Valider tous les jobs',
+                html: `
+                    <div style="text-align: left; padding: 1rem 0;">
+                        <p style="color: #6b7280; font-size: 0.95rem; margin-bottom: 1rem;">
+                            Voulez-vous vraiment valider tous les jobs de cet inventaire ?
+                        </p>
+                        <div style="background: #f9fafb; border-radius: 0.5rem; padding: 1rem; margin-top: 1rem;">
+                            <div style="font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem;">Inventaire :</div>
+                            <div style="font-size: 1.125rem; font-weight: 600; color: #1f2937;">${inventoryReference}</div>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Valider tous',
+                cancelButtonText: 'Annuler',
+                confirmButtonColor: '#10B981',
+                cancelButtonColor: '#FECD1C',
+                customClass: {
+                    popup: 'sweet-alerts',
+                    confirmButton: 'btn btn-success',
+                    cancelButton: 'btn-cancel-primary'
+                }
+            })
+
+            if (!confirmation.isConfirmed) {
+                return
+            }
+
+            // Afficher un loader
+            const loadingSwal = Swal.fire({
+                title: 'Validation en cours...',
+                html: 'Veuillez patienter pendant la validation de tous les jobs',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    Swal.showLoading()
+                }
+            })
+
+            // Appeler l'API de validation de tous les jobs
+            await jobStore.validateAllJobs(inventoryId.value, warehouseId.value)
+
+            // Fermer le loader et afficher le succès
+            await Swal.close()
+            await alertService.success({ text: 'Tous les jobs ont été validés avec succès' })
+
+            // Rafraîchir les données
+            resetAllSelections()
+            await refreshJobs()
+
+        } catch (error: any) {
+            await Swal.close()
+
+            // Extraire le message d'erreur du backend
+            const errorMessage = error?.response?.data?.message ||
+                                error?.message ||
+                                'Erreur lors de la validation de tous les jobs'
+
+            await alertService.error({ text: errorMessage })
+        }
+    }
+
     const handleAffectAll = async () => {
         // Vérifier que l'inventaire ID est disponible
         if (!inventoryId.value) {
@@ -2877,7 +2764,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
         try {
             // Invalider le cache pour tous les jobs modifiés
-            eligibleJobIds.forEach(jobId => invalidateJobCache(jobId))
 
             await jobStore.jobTransfer(eligibleJobIds, countingOrder)
 
@@ -2922,7 +2808,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
         try {
             // Invalider le cache pour tous les jobs modifiés
-            eligibleJobIds.forEach(jobId => invalidateJobCache(jobId))
 
             await jobStore.jobTransfer(eligibleJobIds, countingOrder)
 
@@ -2978,8 +2863,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                 return
             }
 
-            // Invalider le cache pour tous les jobs modifiés
-            jobIds.forEach(jobId => invalidateJobCache(jobId))
 
             await jobStore.assignResourcesToJobs(inventoryId.value!, {
                 job_ids: jobIds.map(id => parseInt(id)),
@@ -3005,6 +2888,26 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     }
 
     /**
+     * Handler pour l'assignation d'une équipe à un job spécifique (utilisé par la modal)
+     */
+    async function handleTeamAssignment(jobId: number, countingOrder: number, teamId: string) {
+        try {
+            await saveSingleAssignment(inventoryId.value!, {
+                job_id: jobId,
+                team: parseInt(teamId),
+                counting_order: countingOrder,
+                complete: false // Par défaut : partiel
+            })
+
+
+            logger.debug(`Équipe ${teamId} assignée au job ${jobId} pour le comptage ${countingOrder}`)
+        } catch (error) {
+            logger.error('Erreur lors de l\'assignation d\'équipe:', error)
+            throw error
+        }
+    }
+
+    /**
      * Handler pour la soumission du formulaire d'affectation d'équipe
      *
      * @param data - Données du formulaire (team, date)
@@ -3014,8 +2917,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         const jobIds = selectedJobs.value
 
         try {
-            // Invalider le cache pour tous les jobs modifiés
-            jobIds.forEach(jobId => invalidateJobCache(jobId))
 
             await jobStore.assignTeamsToJobs(inventoryId.value!, {
                 job_ids: jobIds.map(id => parseInt(id)),
@@ -3118,23 +3019,40 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
                 // 2. Vérifier que les IDs sont valides avant de charger les jobs
                 if (!inventoryId.value || !warehouseId.value || inventoryId.value <= 0 || warehouseId.value <= 0) {
+                    console.error('[useAffecter.onMounted] ❌ Invalid IDs:', { inventoryId: inventoryId.value, warehouseId: warehouseId.value })
                     await alertService.error({
                         text: `IDs invalides après initialisation - Inventaire: ${inventoryId.value}, Entrepôt: ${warehouseId.value}`
                     })
                     return
                 }
 
-                // 3. Maintenant que les IDs sont valides, charger les jobs
-                await loadJobs()
+                // 3. Charger les jobs - soit directement, soit via les événements en file d'attente
+                if (pendingEventsQueue.length > 0) {
+                    // Si des événements sont en file d'attente (DataTable a restauré son état),
+                    // traiter le premier événement pour charger avec les bonnes données
+                    const firstEvent = pendingEventsQueue[0]
+                    await processEventDirectly(firstEvent.eventType, firstEvent.queryModel)
+                    pendingEventsQueue.shift() // Retirer le premier événement traité
+                } else {
+                    // Aucun événement en file d'attente, chargement normal
+                    await loadJobs()
+                }
 
                 // 4. Synchroniser les états après l'initialisation (avec nextTick pour éviter les boucles réactives)
                 await nextTick()
-                updateAllTransformedDataSync()
+                updateDisplayData()
                 updateJobsPagination()
-                // updateLoadingStates() supprimé - le watcher s'en charge automatiquement
 
                 // 5. Marquer l'initialisation comme terminée
                 isInitialized.value = true
+
+                // 6. Traiter les événements restants en file d'attente (s'il y en a)
+                if (pendingEventsQueue.length > 0) {
+                    for (const queuedEvent of pendingEventsQueue) {
+                        await processEventDirectly(queuedEvent.eventType, queuedEvent.queryModel)
+                    }
+                    pendingEventsQueue.length = 0 // Vider la file d'attente
+                }
 
                 // Rafraîchir le statut sans bloquer l'affichage
                 fetchInventoryStatus().catch(() => {
@@ -3178,7 +3096,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             }
             // Convertir au format FORMAT_ACTUEL.md pour l'export
             const exportParams = convertQueryModelToQueryParams(currentQueryModel)
-            exportParams.export = 'csv'
+            exportParams.set('export', 'csv')
 
             // Appeler le service d'export (GET avec responseType: 'blob')
             const response = await JobService.exportValidated(inventoryId.value, warehouseId.value, exportParams)
@@ -3224,7 +3142,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             }
             // Convertir au format FORMAT_ACTUEL.md pour l'export
             const exportParams = convertQueryModelToQueryParams(currentQueryModel)
-            exportParams.export = 'excel'
+            exportParams.set('export', 'excel')
 
             // Appeler le service d'export (GET avec responseType: 'blob')
             const response = await JobService.exportValidated(inventoryId.value, warehouseId.value, exportParams)
@@ -3273,6 +3191,10 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         showResourceModal,
         showTransferModal,
         showManualModal,
+        showJobAffectationModal,
+        selectedJobForModal,
+        modalTeamOptions,
+        modalTeamOptionsByCountingOrder,
         modalTitle,
 
         // Formulaires
@@ -3287,7 +3209,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
         // Dropdown
         dropdownItems,
-        saveAllChanges,
         resetAllChanges,
         resetAllSelections,
         resetDataTableSelections,
@@ -3304,12 +3225,12 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         // Handlers d'actions
         handleValiderClick,
         handleResourceSubmit,
+        handleTeamAssignment,
         handleTeamSubmit,
         handleTransferSubmit,
         handleManualSubmit,
         handleReadyClick,
         handleReadyAll,
-        handleResetClick,
         handleGoToInventoryDetail,
         handleGoToAffectation,
         handleGoToResults,
@@ -3320,23 +3241,26 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         handleTransferAll,
         handleTransferAllBulk,
         handleAffectAll,
+        handleValidateAllJobs,
+
+        // Handlers JobAffectationModal
+        handleJobAffectationModalTeamChanged,
+        handleJobAffectationModalFinish,
 
         // Pagination et métadonnées harmonisées avec usePlanning.ts
         jobPaginationMetadata: jobPaginationMetadataComputed,
 
         // États de chargement
-        jobsLoading: computed(() => jobsLoadingComputed.value),
-        loading: computed(() => loading.value),
+        jobsLoading: computed(() => jobsLoadingLocal.value),
+
+        // QueryModel pour synchronisation DataTable
+        jobsQueryModel: jobsQueryModelRef,
 
         // Paramètres personnalisés DataTable
         jobsCustomParams,
 
         // Handlers DataTable harmonisés avec usePlanning.ts
         onJobsTableEvent,
-        onJobPaginationChanged,
-        onJobSortChanged,
-        onJobFilterChanged,
-        onJobSearchChanged,
 
         // Gestion des IDs
         initializeIdsFromReferences,
@@ -3354,7 +3278,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         showTransferButton,
         showManualButton,
         showReadyButton,
-        showResetButton,
         actionButtons,
         navigationButtons,
         jobsColumns,

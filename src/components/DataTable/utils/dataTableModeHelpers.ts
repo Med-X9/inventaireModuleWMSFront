@@ -24,11 +24,8 @@ export function detectDataTableMode(props: DataTableProps): DataTableMode {
   // Mode Advanced : Features étendues activées
   if (props.enableColumnPinning ||
       props.enableColumnResize ||
-      props.enableColumnGrouping ||
-      props.enableColumnAggregation ||
-      props.enableBatchEditing ||
-      props.enableInlineEditing ||
-      props.enableExport ||
+      props.enableGrouping ||
+      props.inlineEditing ||
       props.enableSetFilters) {
     return 'advanced'
   }
@@ -104,7 +101,7 @@ export function recommendMode(props: DataTableProps): { recommendedMode: DataTab
   }
 
   // Si données volumineuses potentielles
-  if (props.dataUrl && (props.enableExport || props.enableColumnResize)) {
+  if (props.dataUrl && props.enableColumnResize) {
     return {
       recommendedMode: 'advanced',
       reason: 'Données server-side avec features étendues'
@@ -129,11 +126,6 @@ export function generateOptimizedConfig(mode: DataTableMode, baseProps: DataTabl
       // Désactiver toutes les features avancées
       optimized.enableColumnPinning = false
       optimized.enableColumnResize = false
-      optimized.enableColumnGrouping = false
-      optimized.enableColumnAggregation = false
-      optimized.enableInlineEditing = false
-      optimized.enableBatchEditing = false
-      optimized.enableExport = false
       optimized.enableVirtualScrolling = false
       optimized.enableInfiniteScroll = false
       optimized.enablePivot = false
@@ -152,8 +144,6 @@ export function generateOptimizedConfig(mode: DataTableMode, baseProps: DataTabl
       // Activer les features utiles
       optimized.enableColumnResize = baseProps.enableColumnResize !== false
       optimized.enableColumnPinning = baseProps.enableColumnPinning !== false
-      optimized.enableExport = baseProps.enableExport !== false
-      optimized.enableInlineEditing = baseProps.enableInlineEditing !== false
 
       // Désactiver les features trop complexes
       optimized.enablePivot = false
@@ -167,11 +157,6 @@ export function generateOptimizedConfig(mode: DataTableMode, baseProps: DataTabl
       // Tout activer selon les besoins
       optimized.enableColumnResize = baseProps.enableColumnResize !== false
       optimized.enableColumnPinning = baseProps.enableColumnPinning !== false
-      optimized.enableColumnGrouping = baseProps.enableColumnGrouping !== false
-      optimized.enableColumnAggregation = baseProps.enableColumnAggregation !== false
-      optimized.enableInlineEditing = baseProps.enableInlineEditing !== false
-      optimized.enableBatchEditing = baseProps.enableBatchEditing !== false
-      optimized.enableExport = baseProps.enableExport !== false
       optimized.enableSetFilters = baseProps.enableSetFilters !== false
       optimized.enableVirtualScrolling = baseProps.enableVirtualScrolling || false
       optimized.enableInfiniteScroll = baseProps.enableInfiniteScroll || false
@@ -198,11 +183,6 @@ export function calculateUsageMetrics(props: DataTableProps): {
   const features = [
     props.enableColumnPinning,
     props.enableColumnResize,
-    props.enableColumnGrouping,
-    props.enableColumnAggregation,
-    props.enableInlineEditing,
-    props.enableBatchEditing,
-    props.enableExport,
     props.enableVirtualScrolling,
     props.enableInfiniteScroll,
     props.enablePivot,

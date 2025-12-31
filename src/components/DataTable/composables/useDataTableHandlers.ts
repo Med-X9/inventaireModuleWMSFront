@@ -1,13 +1,13 @@
 /**
  * Composable pour gérer les handlers du DataTable
- *
+ * 
  * Orchestre les composables spécialisés pour chaque fonctionnalité :
  * - Pagination → useDataTablePagination
  * - Recherche → useDataTableSearch
  * - Filtres → useDataTableFilters
  * - Tri → useDataTableSort
  * - Sélection → useDataTableSelectionHandler
- *
+ * 
  * @module useDataTableHandlers
  */
 
@@ -52,7 +52,7 @@ export interface UseDataTableHandlersConfig {
 
 /**
  * Composable pour gérer les handlers du DataTable
- *
+ * 
  * @param config - Configuration du composable
  * @returns Handlers et utilitaires pour le DataTable
  */
@@ -70,26 +70,26 @@ export function useDataTableHandlers(config: UseDataTableHandlersConfig) {
 
     /**
      * Crée un QueryModel depuis l'état actuel du DataTable
-     *
+     * 
      * Utilisé pour émettre les événements avec l'état complet.
      * Préserve toutes les valeurs : pagination, tri, filtres, recherche, customParams.
-     *
+     * 
      * Pour la pagination côté serveur, utilise les props du backend (currentPageProp, pageSizeProp)
      * qui reflètent l'état réel retourné par le backend selon PAGINATION_FRONTEND.md.
-     *
+     * 
      * @returns QueryModel complet reflétant l'état actuel
      */
     const createQueryModelFromCurrentState = (): QueryModel => {
         // En pagination serveur, utiliser les props du backend qui reflètent l'état réel
         // Sinon utiliser l'état local du DataTable
-        const currentPage = props.serverSidePagination
+        const currentPage = props.serverSidePagination 
             ? (props.currentPageProp ?? dataTable?.effectiveCurrentPage ?? 1)
             : (dataTable?.effectiveCurrentPage || 1)
-
+        
         const currentPageSize = props.serverSidePagination
             ? (props.pageSizeProp ?? dataTable?.effectivePageSize ?? 20)
             : (dataTable?.effectivePageSize || 20)
-
+        
         return createQueryModelFromDataTableParams({
             page: currentPage,
             pageSize: currentPageSize,
@@ -104,7 +104,7 @@ export function useDataTableHandlers(config: UseDataTableHandlersConfig) {
     }
 
     // === COMPOSABLES SPÉCIALISÉS ===
-
+    
     // Pagination
     const pagination = useDataTablePagination({
         props,

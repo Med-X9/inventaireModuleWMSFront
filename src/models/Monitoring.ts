@@ -3,14 +3,22 @@
  */
 
 /**
+ * Assignment dans un comptage
+ */
+export interface CountingAssignment {
+    status: 'TERMINE' | 'ENTAME' | 'TRANSFERT'
+    count: number
+    percentage: number
+}
+
+/**
  * Réponse d'un comptage dans le monitoring par zone
  */
 export interface CountingMonitoring {
     counting_id: number
     counting_reference: string
     counting_order: number
-    nombre_jobs: number
-    nombre_emplacements: number
+    assignments?: CountingAssignment[]
 }
 
 /**

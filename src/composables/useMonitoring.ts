@@ -9,6 +9,47 @@ import type {
 } from '@/models/Monitoring'
 import type { JobResult } from '@/models/Job'
 
+// État réactif pour les zones récupérées depuis l'API
+const zonesPredefinies = ref<Array<{
+    id: number
+    name: string
+    description: string
+}>>([])
+
+
+// Fonction pour calculer le statut LED d'une zone
+const calculerStatusLed = (zone: ZoneMonitoringData): 'success' | 'warning' | 'danger' | 'info' => {
+    const totalJobs = zone.totalJobs
+    if (totalJobs === 0) return 'info'
+
+    // Calculer le pourcentage terminé (clôturé)
+    const premierTermine = zone.premierComptage.cloture
+    const deuxiemeTermine = zone.deuxiemeComptage.cloture
+    const troisiemeTermine = zone.troisiemeComptage.termine
+
+    // Si le 3ème comptage a commencé, on se base dessus
+    if (troisiemeTermine > 0 || zone.troisiemeComptage.enCours > 0) {
+        const troisiemePourcentage = (troisiemeTermine / zone.troisiemeComptage.jobs) * 100
+        if (troisiemePourcentage >= 80) return 'success'
+        if (troisiemePourcentage >= 50) return 'warning'
+        return 'danger'
+    }
+
+    // Si le 2ème comptage est terminé, excellent
+    if (deuxiemeTermine === totalJobs) return 'success'
+
+    // Si le 1er comptage n'est pas terminé, danger
+    if (premierTermine < totalJobs) return 'danger'
+
+    // Si le 2ème comptage a commencé mais n'est pas terminé
+    if (zone.deuxiemeComptage.enCours > 0 || zone.deuxiemeComptage.cloture > 0) {
+        return 'warning'
+    }
+
+    // Par défaut
+    return 'info'
+}
+
 export interface ZoneMonitoringData {
     zoneId: number
     zoneName: string
@@ -119,43 +160,7 @@ export function useMonitoring(options?: MonitoringOptions) {
     const autoRefreshEnabled = ref(true)
     const refreshIntervalMs = ref(120000) // 2 minutes par défaut
 
-    // Zones prédéfinies basées sur l'image
-    const zonesPredefinies = [
-        { id: 1, name: 'Zone 1', description: 'Reserve Rack' },
-        { id: 2, name: 'Zone 2', description: 'Picking Rack' },
-        { id: 3, name: 'Zone 3', description: 'Mezza 1 DPP' },
-        { id: 4, name: 'Zone 4', description: 'Mezza 2 DPGP' },
-        { id: 5, name: 'Zone 5', description: 'Mezza 3 DPLuxe' },
-        { id: 6, name: 'Zone 6', description: 'Mezza Cellule 2' },
-        { id: 7, name: 'Zone 7', description: 'Zone 7' },
-        { id: 8, name: 'Zone 8', description: 'Zone 8' },
-        { id: 9, name: 'Zone 9', description: 'Zone 9' }
-    ]
 
-    /**
-     * Calcule le statut LED en fonction des métriques de la zone
-     */
-    const calculerStatusLed = (zone: ZoneMonitoringData): 'success' | 'warning' | 'danger' | 'info' => {
-        const { premierComptage, deuxiemeComptage } = zone
-
-        // Si plus de 80% des jobs du 1er comptage sont clôturés
-        if (premierComptage.cloturePourcentage >= 80) {
-            return 'success'
-        }
-
-        // Si entre 50% et 80% clôturés
-        if (premierComptage.cloturePourcentage >= 50) {
-            return 'warning'
-        }
-
-        // Si moins de 50% clôturés mais des jobs en cours
-        if (premierComptage.enCours > 0) {
-            return 'info'
-        }
-
-        // Si aucun job en cours
-        return 'danger'
-    }
 
     /**
      * Analyse les jobs et calcule les statistiques par zone
@@ -164,7 +169,7 @@ export function useMonitoring(options?: MonitoringOptions) {
         const zonesMap = new Map<number, ZoneMonitoringData>()
 
         // Initialiser les zones
-        zonesPredefinies.forEach(zone => {
+        zonesPredefinies.value.forEach(zone => {
             zonesMap.set(zone.id, {
                 zoneId: zone.id,
                 zoneName: zone.name,
@@ -476,7 +481,7 @@ export function useMonitoring(options?: MonitoringOptions) {
      * Génère des données mock logiques pour le monitoring
      */
     const genererDonneesMock = (): MonitoringStats => {
-        const zones: ZoneMonitoringData[] = zonesPredefinies.map((zone, index) => {
+        const zones: ZoneMonitoringData[] = zonesPredefinies.value.map((zone, index) => {
             // Générer des données proches du réel : gros volume de jobs, quelques équipes
             const baseJobs = [120, 80, 150, 200, 180, 60, 90, 110, 70][index] || 120
             const baseEquipes = [16, 6, 8, 10, 12, 4, 5, 7, 4][index] || 6
@@ -576,47 +581,49 @@ export function useMonitoring(options?: MonitoringOptions) {
             const deuxiemeComptage = zone.countings.find(c => c.counting_order === 2)
             const troisiemeComptage = zone.countings.find(c => c.counting_order === 3)
 
-            // Calculer les métriques du 1er comptage
-            // Le backend fournit nombre_jobs pour chaque comptage dans la zone
-            const totalJobsPremier = premierComptage?.nombre_jobs || 0
-            // Pour les zones, on considère que si un comptage existe, les jobs sont en cours ou terminés
-            // On utilise le nombre total de jobs de la zone comme référence
-            const cloturePremier = totalJobsPremier
-            const cloturePourcentagePremier = zone.nombre_jobs > 0
-                ? Math.round((cloturePremier / zone.nombre_jobs) * 100)
-                : 0
-            const enCoursPremier = Math.max(0, zone.nombre_jobs - cloturePremier)
-            const enCoursPourcentagePremier = zone.nombre_jobs > 0
-                ? Math.round((enCoursPremier / zone.nombre_jobs) * 100)
-                : 0
-            const nonEntamePremier = 0 // Tous les jobs ont au moins un comptage
-            const nonEntamePourcentagePremier = 0
+            // Fonction helper pour calculer les métriques à partir des assignments
+            const calculerMetriquesComptage = (counting: any) => {
+                if (!counting?.assignments || counting.assignments.length === 0) {
+                    return {
+                        cloture: 0,
+                        cloturePourcentage: 0,
+                        enCours: 0,
+                        enCoursPourcentage: 0,
+                        nonEntame: 0,
+                        nonEntamePourcentage: 0,
+                        totalJobs: 0
+                    }
+                }
 
-            // Calculer les métriques du 2ème comptage
-            const totalJobsDeuxieme = deuxiemeComptage?.nombre_jobs || 0
-            const clotureDeuxieme = totalJobsDeuxieme
-            const cloturePourcentageDeuxieme = zone.nombre_jobs > 0
-                ? Math.round((clotureDeuxieme / zone.nombre_jobs) * 100)
-                : 0
-            const enCoursDeuxieme = Math.max(0, zone.nombre_jobs - clotureDeuxieme)
-            const enCoursPourcentageDeuxieme = zone.nombre_jobs > 0
-                ? Math.round((enCoursDeuxieme / zone.nombre_jobs) * 100)
-                : 0
-            const nonEntameDeuxieme = 0
-            const nonEntamePourcentageDeuxieme = 0
+                // Utiliser directement les données des assignments
+                const termineAssignment = counting.assignments.find((a: any) => a.status === 'TERMINE')
+                const entameAssignment = counting.assignments.find((a: any) => a.status === 'ENTAME')
+                const transfertAssignment = counting.assignments.find((a: any) => a.status === 'TRANSFERT')
 
-            // Calculer les métriques du 3ème comptage
-            const totalJobsTroisieme = troisiemeComptage?.nombre_jobs || 0
-            const termineTroisieme = totalJobsTroisieme
-            const terminePourcentageTroisieme = zone.nombre_jobs > 0
-                ? Math.round((termineTroisieme / zone.nombre_jobs) * 100)
-                : 0
-            const enCoursTroisieme = Math.max(0, zone.nombre_jobs - termineTroisieme)
-            const enCoursPourcentageTroisieme = zone.nombre_jobs > 0
-                ? Math.round((enCoursTroisieme / zone.nombre_jobs) * 100)
-                : 0
-            const nonEntameTroisieme = 0
-            const nonEntamePourcentageTroisieme = 0
+                // Calculer le total des jobs dans ce comptage
+                const totalJobs = (termineAssignment?.count || 0) +
+                                (entameAssignment?.count || 0) +
+                                (transfertAssignment?.count || 0)
+
+                return {
+                    cloture: termineAssignment?.count || 0,
+                    cloturePourcentage: Math.round(termineAssignment?.percentage || 0),
+                    enCours: entameAssignment?.count || 0,
+                    enCoursPourcentage: Math.round(entameAssignment?.percentage || 0),
+                    nonEntame: transfertAssignment?.count || 0,
+                    nonEntamePourcentage: Math.round(transfertAssignment?.percentage || 0),
+                    totalJobs
+                }
+            }
+
+            // Calculer les métriques du 1er comptage à partir des assignments
+            const premierMetriques = calculerMetriquesComptage(premierComptage)
+
+            // Calculer les métriques du 2ème comptage à partir des assignments
+            const deuxiemeMetriques = calculerMetriquesComptage(deuxiemeComptage)
+
+            // Calculer les métriques du 3ème comptage à partir des assignments
+            const troisiemeMetriques = calculerMetriquesComptage(troisiemeComptage)
 
             // Calculer le statut LED basé sur le statut de la zone
             let statusLed: 'success' | 'warning' | 'danger' | 'info' = 'info'
@@ -634,33 +641,19 @@ export function useMonitoring(options?: MonitoringOptions) {
                 zoneId: zone.zone_id,
                 zoneName: zone.zone_name,
                 zoneDescription: zone.zone_name, // Utiliser zone_name comme description
-                nombreEquipes: zone.nombre_equipes,
-                totalJobs: zone.nombre_jobs,
-                totalEmplacements: zone.nombre_emplacements,
-                premierComptage: {
-                    cloture: cloturePremier,
-                    cloturePourcentage: cloturePourcentagePremier,
-                    enCours: enCoursPremier,
-                    enCoursPourcentage: enCoursPourcentagePremier,
-                    nonEntame: nonEntamePremier,
-                    nonEntamePourcentage: nonEntamePourcentagePremier
-                },
-                deuxiemeComptage: {
-                    cloture: clotureDeuxieme,
-                    cloturePourcentage: cloturePourcentageDeuxieme,
-                    enCours: enCoursDeuxieme,
-                    enCoursPourcentage: enCoursPourcentageDeuxieme,
-                    nonEntame: nonEntameDeuxieme,
-                    nonEntamePourcentage: nonEntamePourcentageDeuxieme
-                },
+                nombreEquipes: zone.nombre_equipes || 0,
+                totalJobs: zone.nombre_jobs || 0,
+                totalEmplacements: zone.nombre_emplacements || 0,
+                premierComptage: premierMetriques,
+                deuxiemeComptage: deuxiemeMetriques,
                 troisiemeComptage: {
-                    jobs: totalJobsTroisieme,
-                    termine: termineTroisieme,
-                    terminePourcentage: terminePourcentageTroisieme,
-                    enCours: enCoursTroisieme,
-                    enCoursPourcentage: enCoursPourcentageTroisieme,
-                    nonEntame: nonEntameTroisieme,
-                    nonEntamePourcentage: nonEntamePourcentageTroisieme
+                    jobs: troisiemeMetriques.totalJobs,
+                    termine: troisiemeMetriques.cloture,
+                    terminePourcentage: troisiemeMetriques.cloturePourcentage,
+                    enCours: troisiemeMetriques.enCours,
+                    enCoursPourcentage: troisiemeMetriques.enCoursPourcentage,
+                    nonEntame: troisiemeMetriques.nonEntame,
+                    nonEntamePourcentage: troisiemeMetriques.nonEntamePourcentage
                 },
                 statusLed
             }
@@ -760,6 +753,15 @@ export function useMonitoring(options?: MonitoringOptions) {
             )
 
             if (byZone && global && byZone.data && global.data) {
+                // Charger les zones depuis l'API
+                if (byZone.data.zones) {
+                    zonesPredefinies.value = byZone.data.zones.map(zone => ({
+                        id: zone.zone_id,
+                        name: zone.zone_name,
+                        description: zone.zone_reference || zone.zone_name
+                    }))
+                }
+
                 // Mapper les données du backend vers le format attendu
                 monitoringData.value = mapperDonneesBackend(byZone.data.zones, global.data)
             } else {

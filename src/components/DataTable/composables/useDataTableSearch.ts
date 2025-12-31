@@ -44,7 +44,7 @@ export function useDataTableSearch(config: UseDataTableSearchConfig) {
 
     // Récupérer les méthodes de manière sécurisée
     const updateQueryPagination = queryModel?.updatePagination
-    const updateQueryGlobalSearch = queryModel?.updateGlobalSearch
+    const updateQueryGlobalSearch = queryModel?.updateSearch
 
     /**
      * Détermine si les handlers automatiques doivent être utilisés

@@ -88,7 +88,7 @@ export function useQueryModel(config: UseQueryModelConfig = {}) {
 
   // Computed properties
   const hasActiveFilters = computed(() =>
-    queryModel.value.filters.length > 0
+    queryModel.value.filters?.length > 0
   )
 
   const hasActiveSearch = computed(() =>
@@ -96,11 +96,11 @@ export function useQueryModel(config: UseQueryModelConfig = {}) {
   )
 
   const hasActiveSort = computed(() =>
-    queryModel.value.sort.length > 0
+    (queryModel.value.sort?.length || 0) > 0
   )
 
   const activeFiltersCount = computed(() =>
-    queryModel.value.filters.length
+    queryModel.value.filters?.length || 0
   )
 
   // Actions
@@ -110,7 +110,7 @@ export function useQueryModel(config: UseQueryModelConfig = {}) {
   }
 
   const updateSortAction = (sortModel: SortModel[]) => {
-    let newQueryModel = { ...queryModel.value, sort: [] }
+    let newQueryModel: QueryModel = { ...queryModel.value, sort: [] }
 
     sortModel.forEach(sort => {
       if (sort.field && sort.direction) {
@@ -122,7 +122,7 @@ export function useQueryModel(config: UseQueryModelConfig = {}) {
   }
 
   const updateFiltersAction = (filterModel: FilterModel[]) => {
-    let newQueryModel = { ...queryModel.value, filters: [] }
+    let newQueryModel: QueryModel = { ...queryModel.value, filters: [] }
 
     filterModel.forEach(filter => {
       if (filter.field && filter.operator) {
@@ -149,12 +149,12 @@ export function useQueryModel(config: UseQueryModelConfig = {}) {
   }
 
   const applyPartialAction = (partial: Partial<QueryModel>) => {
-    const newQueryModel = {
+    const newQueryModel: QueryModel = {
       ...queryModel.value,
       ...partial,
       pagination: {
-        ...queryModel.value.pagination,
-        ...partial.pagination
+        page: partial.pagination?.page ?? queryModel.value.pagination?.page ?? 1,
+        pageSize: partial.pagination?.pageSize ?? queryModel.value.pagination?.pageSize ?? 20
       },
       sort: partial.sort || queryModel.value.sort,
       filters: partial.filters || queryModel.value.filters,

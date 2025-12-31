@@ -1,10 +1,10 @@
 /**
  * Service pour la gestion des écarts de comptage
- * 
+ *
  * Ce service gère :
  * - La mise à jour du résultat final d'un écart
  * - La résolution d'un écart
- * 
+ *
  * @module EcartComptageService
  */
 
@@ -69,6 +69,23 @@ export interface ResolveEcartResponse {
 }
 
 /**
+ * Réponse de l'API pour la résolution en masse des écarts
+ */
+export interface BulkResolveEcartsResponse {
+    success: boolean
+    message: string
+    data: {
+        resolved_count: number
+        total_count: number
+        resolved_ecarts: Array<{
+            id: number
+            reference: string
+            resolved: boolean
+        }>
+    }
+}
+
+/**
  * Service pour la gestion des écarts de comptage
  */
 export class EcartComptageService {
@@ -76,7 +93,7 @@ export class EcartComptageService {
 
     /**
      * Mettre à jour le résultat final d'un écart de comptage
-     * 
+     *
      * @param ecartId - ID de l'écart de comptage
      * @param data - Données de mise à jour
      * @returns Réponse de l'API
@@ -87,7 +104,7 @@ export class EcartComptageService {
     ): Promise<AxiosResponse<UpdateFinalResultResponse>> {
         try {
             logger.debug('Mise à jour du résultat final de l\'écart', { ecartId, data })
-            
+
             const response = await axiosInstance.patch<UpdateFinalResultResponse>(
                 `${this.baseUrl}${ecartId}/final-result/`,
                 data
@@ -103,7 +120,7 @@ export class EcartComptageService {
 
     /**
      * Résoudre un écart de comptage
-     * 
+     *
      * @param ecartId - ID de l'écart de comptage
      * @param data - Données de résolution (justification optionnelle)
      * @returns Réponse de l'API
@@ -114,7 +131,7 @@ export class EcartComptageService {
     ): Promise<AxiosResponse<ResolveEcartResponse>> {
         try {
             logger.debug('Résolution de l\'écart de comptage', { ecartId, data })
-            
+
             const response = await axiosInstance.patch<ResolveEcartResponse>(
                 `${this.baseUrl}${ecartId}/resolve/`,
                 data || {}
@@ -124,6 +141,31 @@ export class EcartComptageService {
             return response
         } catch (error: any) {
             logger.error('Erreur lors de la résolution de l\'écart', { ecartId, error })
+            throw error
+        }
+    }
+
+    /**
+     * Résoudre tous les écarts de comptage d'un inventaire en masse
+     *
+     * @param inventoryId - ID de l'inventaire
+     * @param data - Données de résolution (justification optionnelle)
+     * @returns Réponse de l'API
+     */
+    static async bulkResolveEcarts(
+        inventoryId: number,
+        data?: ResolveEcartRequest
+    ): Promise<AxiosResponse<BulkResolveEcartsResponse>> {
+        try {
+            logger.debug('Résolution en masse des écarts de comptage', { inventoryId, data })
+
+            const response = await axiosInstance.patch<BulkResolveEcartsResponse>(
+                `${this.baseUrl}bulk-resolve/${inventoryId}/`)
+
+            logger.debug('Écarts résolus en masse avec succès', response.data)
+            return response
+        } catch (error: any) {
+            logger.error('Erreur lors de la résolution en masse des écarts', { inventoryId, error })
             throw error
         }
     }

@@ -16,7 +16,7 @@
  */
 
 // ===== IMPORTS VUE =====
-import { ref, computed, markRaw, onMounted, nextTick, watch, shallowRef, reactive } from 'vue'
+import { ref, computed, markRaw, onMounted, nextTick, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import type { Router } from 'vue-router'
@@ -116,16 +116,13 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
     const isInitializing = ref(false)
 
 
-    /** Système de monitoring des performances (optionnel) */
-    const performanceDebug = ref(false) // Activer en mode développement si nécessaire
-
-    const logPerformance = (operation: string, startTime: number) => {
-        // Performance logging disabled
-    }
-
     /** États de chargement locaux pour afficher le skeleton immédiatement */
     const jobsLoadingLocal = ref(false)
     const locationsLoadingLocal = ref(false)
+
+    // File d'attente pour les événements DataTable qui arrivent avant l'initialisation
+    const jobsPendingEventsQueue: Array<{ eventType: string; queryModel: QueryModel }> = []
+    const locationsPendingEventsQueue: Array<{ eventType: string; queryModel: QueryModel }> = []
 
     // ===== SÉLECTIONS =====
 
@@ -138,8 +135,8 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
     // ===== ÉTATS LOCAUX =====
 
     /** États de chargement */
-    const jobsLoading = ref(false)
-    const locationsLoading = ref(false)
+    const jobsLoading = computed(() => jobsLoadingLocal.value)
+    const locationsLoading = computed(() => locationsLoadingLocal.value)
     const loading = ref(false)
 
     /** États d'erreur */
@@ -243,6 +240,14 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
      * Boutons d'actions pour les jobs créés
      */
     const jobsActionButtons = computed<ButtonGroupButton[]>(() => [
+        {
+            id: 'validate-all',
+            label: 'Valider tous',
+            icon: markRaw(IconCheck),
+            variant: 'success',
+            onClick: async () => { await validateAllJobs() },
+            class: 'text-white bg-green-600 border-2 border-green-600 hover:bg-green-700 hover:text-white'
+        },
         {
             id: 'validate',
             label: `Valider (${selectedJobsCount.value})`,
@@ -379,7 +384,7 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
                 title: 'Emplacements du job',
                 columns: [
                     {
-                        field: 'location_reference',
+                        field: 'reference',
                         headerName: 'Référence',
                         sortable: true,
                         filterable: true,
@@ -391,8 +396,8 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
                         sortable: true,
                         filterable: true,
                         width: 150
-                    },
-                    {
+        },
+        {
                         field: 'sous_zone_name',
                         headerName: 'Sous-zone',
                         sortable: true,
@@ -520,6 +525,27 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
         return (queryModel: QueryModel) => convertQueryModelToQueryParams(queryModel)
     })
 
+    // ===== QUERYMODEL POUR LOCATIONS =====
+
+    /**
+     * QueryModel pour gérer les requêtes Locations
+     * Le DataTable utilise UNIQUEMENT QueryModel comme format standard
+     */
+    const {
+        queryModel: locationsQueryModelRef,
+        updatePagination: updateLocationsQueryPagination,
+        updateSort: updateLocationsQuerySort,
+        updateFilter: updateLocationsQueryFilter,
+        updateGlobalSearch: updateLocationsQueryGlobalSearch
+    } = useQueryModel({
+        columns: locationsColumns.value as any
+    })
+
+    // Fonction helper pour convertir QueryModel en query params
+    const locationsToQueryParams = computed(() => {
+        return (queryModel: QueryModel) => convertQueryModelToQueryParams(queryModel)
+    })
+
     // ===== COMPUTED PROPERTIES =====
 
     // ===== CONFIGURATIONS DATATABLE =====
@@ -560,376 +586,6 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
 
     // === GESTION DES ERREURS ET ÉTATS AVANCÉS ===
 
-
-    /**
-     * Cache pour les locations dédupliquées par job
-     * Clé: job.id, Valeur: locations dédupliquées
-     */
-    const jobLocationsCache = new Map<number | string, any[]>()
-
-    /**
-     * Dédupliquer les locations d'un job (optimisé)
-     * Transforme les locations pour aplatir les propriétés imbriquées (zone, sous_zone)
-     * et supprime les doublons basés sur l'ID ou la référence
-     *
-     * @param job - Job contenant les locations à traiter
-     * @returns Tableau de locations uniques avec propriétés aplaties
-     */
-    const dedupeJobLocations = (job: Job | JobTable) => {
-        // Vérifier le cache d'abord
-        const jobId = job.id
-        if (jobId && jobLocationsCache.has(jobId)) {
-            return jobLocationsCache.get(jobId)!
-        }
-
-        const rawLocations = ((job as any).locations ?? (job as any).emplacements ?? []) as Array<Record<string, any>>
-
-        // Si pas de locations, retourner un tableau vide
-        if (!rawLocations || rawLocations.length === 0) {
-            const emptyResult: any[] = []
-            if (jobId) jobLocationsCache.set(jobId, emptyResult)
-            return emptyResult
-        }
-
-        const uniqueLocations = new Map<string | number, Record<string, any>>()
-        let fallbackIndex = 0
-
-        for (let i = 0; i < rawLocations.length; i++) {
-            const loc = rawLocations[i]
-
-            // Identifier la location par son ID (optimisé pour éviter Symbol)
-            const key = loc.id ?? loc.location_id ?? loc.location_reference ?? loc.reference
-
-            // Si pas de clé valide, utiliser un index (plus rapide que Symbol)
-            const finalKey = key ?? `__fallback_${fallbackIndex++}`
-
-            // Ne garder que la première occurrence
-            if (!uniqueLocations.has(finalKey)) {
-                // Optimisation : ne copier que les propriétés nécessaires
-                uniqueLocations.set(finalKey, {
-                    id: loc.id,
-                    location_id: loc.location_id,
-                    location_reference: loc.location_reference ?? loc.reference,
-                    reference: loc.reference,
-                    zone_name: loc.zone?.zone_name || loc.zone_name || 'N/A',
-                    sous_zone_name: loc.sous_zone?.sous_zone_name || loc.sous_zone_name || 'N/A',
-                    // Garder d'autres propriétés si nécessaires
-                    zone: loc.zone,
-                    sous_zone: loc.sous_zone
-                })
-            }
-        }
-
-        const result = Array.from(uniqueLocations.values())
-
-        // Mettre en cache le résultat
-        if (jobId) jobLocationsCache.set(jobId, result)
-
-        return result
-    }
-
-    /**
-     * Nettoyer le cache des locations de jobs
-     */
-    const clearJobLocationsCache = () => {
-        jobLocationsCache.clear()
-    }
-
-    /**
-     * Jobs transformés avec locations dédupliquées (optimisé avec shallowRef)
-     * Chaque job a ses locations traitées pour supprimer les doublons
-     */
-    const transformedJobs = shallowRef<(Job & { locations: any[] })[]>([])
-
-    /**
-     * Cache pour les jobs transformés complets
-     * Clé: job.id, Valeur: job transformé
-     */
-    const transformedJobsCache = new Map<number | string, any>()
-
-    /**
-     * Hash des IDs de jobs pour détecter les changements
-     */
-    let lastJobsHash = ''
-    let lastJobsLength = 0
-
-    /**
-     * Met à jour les jobs transformés de manière optimisée
-     */
-    const updateTransformedJobs = () => {
-        const startTime = performance.now()
-
-        // Vérification ultra-rapide : si même longueur et déjà transformé, probablement identique
-        if (jobs.value.length === lastJobsLength &&
-            transformedJobs.value.length === jobs.value.length &&
-            jobs.value.length > 0) {
-            // Vérification rapide du premier et dernier ID
-            const firstMatch = jobs.value[0]?.id === transformedJobs.value[0]?.id
-            const lastMatch = jobs.value[jobs.value.length - 1]?.id === transformedJobs.value[transformedJobs.value.length - 1]?.id
-
-            if (firstMatch && lastMatch) {
-                logPerformance('updateTransformedJobs (skipped - quick check)', startTime)
-                return
-            }
-        }
-
-        // Si longueur différente, c'est sûr qu'il y a eu un changement
-        if (jobs.value.length !== lastJobsLength) {
-            lastJobsLength = jobs.value.length
-            lastJobsHash = '' // Invalider le hash
-        }
-
-        // Créer un hash seulement si nécessaire
-        const currentJobsHash = jobs.value.map(j => j.id).join(',')
-
-        // Si les jobs n'ont pas changé, éviter la transformation
-        if (currentJobsHash === lastJobsHash) {
-            logPerformance('updateTransformedJobs (skipped - hash match)', startTime)
-            return
-        }
-
-        lastJobsHash = currentJobsHash
-
-        // Nettoyer le cache seulement si vraiment nécessaire (> 3x la taille actuelle)
-        if (transformedJobsCache.size > jobs.value.length * 3) {
-            const jobIds = new Set(jobs.value.map(j => Number(j.id)))
-            // Nettoyer seulement les jobs qui ne sont plus dans la liste
-            for (const [cachedId] of transformedJobsCache) {
-                if (!jobIds.has(Number(cachedId))) {
-                    transformedJobsCache.delete(cachedId)
-                    jobLocationsCache.delete(cachedId)
-                }
-            }
-        }
-
-        // Transformation optimisée avec pré-allocation
-        const result: any[] = new Array(jobs.value.length)
-
-        for (let i = 0; i < jobs.value.length; i++) {
-            const job = jobs.value[i]
-            const jobId = job.id
-
-            // Vérifier si le job est déjà en cache
-            if (jobId && transformedJobsCache.has(jobId)) {
-                result[i] = transformedJobsCache.get(jobId)!
-                continue
-            }
-
-            // Transformation optimisée : ne copier que les propriétés essentielles
-            const transformed = {
-                id: job.id,
-                reference: job.reference,
-                status: job.status,
-                created_at: job.created_at,
-                updated_at: (job as any).updated_at,
-                inventory_id: (job as any).inventory_id,
-                warehouse_id: (job as any).warehouse_id,
-                locations: dedupeJobLocations(job),
-                // Ajouter d'autres propriétés nécessaires
-                ...(job as any) // Fallback pour les propriétés non listées
-            }
-
-            // Mettre en cache
-            if (jobId) {
-                transformedJobsCache.set(jobId, transformed)
-            }
-
-            result[i] = transformed
-        }
-
-        transformedJobs.value = result
-
-        logPerformance('updateTransformedJobs', startTime)
-    }
-
-    /**
-     * Invalider le cache d'un job spécifique
-     */
-    const invalidateJobCache = (jobId: number | string) => {
-        transformedJobsCache.delete(jobId)
-        jobLocationsCache.delete(jobId)
-    }
-
-    /**
-     * Nettoyer tous les caches de jobs
-     */
-    const clearAllJobCaches = () => {
-        transformedJobsCache.clear()
-        clearJobLocationsCache()
-    }
-
-    /**
-     * Locations mappées avec propriétés aplaties (optimisé avec shallowRef)
-     * Aplatit les propriétés imbriquées (zone, sous_zone) pour faciliter l'affichage dans la DataTable
-     */
-    const mappedLocations = shallowRef<any[]>([])
-
-    /**
-     * Hash des locations pour détecter les changements
-     */
-    let lastLocationsHash = ''
-    let lastLocationsLength = 0
-
-    /**
-     * Met à jour les locations mappées de manière optimisée
-     */
-    const updateMappedLocations = () => {
-        const startTime = performance.now()
-        const locationsData = locationStore.locations || []
-
-        // Vérification ultra-rapide de la longueur
-        if (locationsData.length === lastLocationsLength &&
-            mappedLocations.value.length === locationsData.length &&
-            locationsData.length > 0) {
-            // Vérification rapide du premier et dernier ID
-            const firstMatch = locationsData[0]?.id === mappedLocations.value[0]?.id
-            const lastMatch = locationsData[locationsData.length - 1]?.id === mappedLocations.value[mappedLocations.value.length - 1]?.id
-
-            if (firstMatch && lastMatch) {
-                logPerformance('updateMappedLocations (skipped - quick check)', startTime)
-                return
-            }
-        }
-
-        // Si longueur différente, c'est sûr qu'il y a eu un changement
-        if (locationsData.length !== lastLocationsLength) {
-            lastLocationsLength = locationsData.length
-            lastLocationsHash = ''
-        }
-
-        // Créer un hash seulement si vraiment nécessaire (pour validation finale)
-        if (lastLocationsHash) {
-            const currentHash = locationsData.length > 0 ?
-                `${locationsData[0].id}-${locationsData[locationsData.length - 1].id}-${locationsData.length}` :
-                '0-0-0'
-
-            if (currentHash === lastLocationsHash) {
-                logPerformance('updateMappedLocations (skipped - hash match)', startTime)
-                return
-            }
-            lastLocationsHash = currentHash
-        } else {
-            lastLocationsHash = locationsData.length > 0 ?
-                `${locationsData[0].id}-${locationsData[locationsData.length - 1].id}-${locationsData.length}` :
-                '0-0-0'
-        }
-
-        // Transformation optimisée avec for loop (plus rapide que map)
-        const mapped: any[] = new Array(locationsData.length)
-        for (let i = 0; i < locationsData.length; i++) {
-            const loc = locationsData[i]
-            mapped[i] = {
-                ...loc,
-                location_reference: (loc as any).location_reference ?? (loc as any).reference ?? loc.reference ?? '',
-                zone_name: loc.zone?.zone_name || (loc as any).zone_name || 'N/A',
-                sous_zone_name: loc.sous_zone?.sous_zone_name || (loc as any).sous_zone_name || 'N/A'
-            }
-        }
-
-        mappedLocations.value = mapped
-        logPerformance('updateMappedLocations', startTime)
-    }
-
-    /**
-     * Locations disponibles (non utilisées dans les jobs) - optimisé avec shallowRef
-     * Filtre les locations pour exclure celles déjà assignées à un job
-     */
-    const availableLocations = shallowRef<any[]>([])
-
-    /**
-     * Cache des IDs de locations utilisées
-     */
-    let cachedUsedLocationIds = new Set<number | string>()
-    let lastUsedLocationsHash = ''
-
-    /**
-     * Met à jour les locations disponibles de manière optimisée
-     */
-    const updateAvailableLocations = () => {
-        const startTime = performance.now()
-
-        // Vérification ultra-rapide : si rien n'a changé dans les tailles
-        const totalMapped = mappedLocations.value.length
-        const totalAvailable = availableLocations.value.length
-        const totalUsed = cachedUsedLocationIds.size
-
-        // Si les tailles correspondent, probablement pas de changement
-        if (totalMapped === (totalAvailable + totalUsed) && totalAvailable > 0) {
-            logPerformance('updateAvailableLocations (skipped - size match)', startTime)
-            return
-        }
-
-        // Créer un hash léger seulement si nécessaire
-        const currentHash = `${transformedJobs.value.length}:${mappedLocations.value.length}:${transformedJobs.value.reduce((sum, j) => sum + (j.locations?.length || 0), 0)}`
-
-        // Si le hash correspond, pas de changement
-        if (currentHash === lastUsedLocationsHash) {
-            logPerformance('updateAvailableLocations (skipped - hash match)', startTime)
-            return
-        }
-
-        lastUsedLocationsHash = currentHash
-        const usedLocationIds = new Set<number | string>()
-
-        // Collecter tous les IDs de locations utilisées dans les jobs (optimisé)
-        for (let i = 0; i < transformedJobs.value.length; i++) {
-            const job = transformedJobs.value[i]
-            const jobLocations = job.locations
-
-            if (jobLocations && jobLocations.length > 0) {
-                for (let j = 0; j < jobLocations.length; j++) {
-                    const loc = jobLocations[j]
-                    const key = loc.id ?? loc.location_id ?? loc.location_reference ?? loc.reference
-                    if (key !== undefined && key !== null) {
-                        usedLocationIds.add(key)
-                    }
-                }
-            }
-        }
-
-        cachedUsedLocationIds = usedLocationIds
-
-        // Filtrer les locations non utilisées (optimisé avec for loop)
-        const available: any[] = []
-        for (let i = 0; i < mappedLocations.value.length; i++) {
-            const loc = mappedLocations.value[i]
-            const key = loc.id ?? loc.location_id ?? loc.location_reference ?? loc.reference
-
-            if (key === undefined || key === null || !usedLocationIds.has(key)) {
-                available.push(loc)
-            }
-        }
-
-        availableLocations.value = available
-        logPerformance('updateAvailableLocations', startTime)
-    }
-
-    /**
-     * Met à jour toutes les données transformées en une seule fois (optimisé)
-     * Utilise requestAnimationFrame pour ne pas bloquer le thread principal
-     */
-    let updateScheduled = false
-    const updateAllTransformedData = () => {
-        if (updateScheduled) return
-
-        updateScheduled = true
-        requestAnimationFrame(() => {
-            updateTransformedJobs()
-            updateMappedLocations()
-            updateAvailableLocations()
-            updateScheduled = false
-        })
-    }
-
-    /**
-     * Version synchrone pour les cas où on a besoin des données immédiatement
-     */
-    const updateAllTransformedDataSync = () => {
-        updateTransformedJobs()
-        updateMappedLocations()
-        updateAvailableLocations()
-    }
-
     /**
      * Indicateur de sélection de locations
      */
@@ -962,7 +618,6 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
                         await jobStore.validateJob([job.id])
                         await alertService.success({ text: 'Job validé avec succès' })
                         // Invalider le cache pour ce job car son statut a changé
-                        invalidateJobCache(Number(job.id))
                         resetAllSelections()
                         // Rafraîchir les données complètes (jobs + locations)
                         await refreshData()
@@ -988,7 +643,6 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
                         await jobStore.deleteJob([job.id])
                         await alertService.success({ text: 'Job supprimé avec succès' })
                         // Invalider le cache pour ce job
-                        invalidateJobCache(Number(job.id))
                         resetAllSelections()
                         await refreshData()
                     }
@@ -1066,88 +720,12 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
     // ===== MÉTHODES DE CHARGEMENT DES DONNÉES =====
 
     /**
-     * Charger les jobs pour l'inventaire et l'entrepôt actuels
-     * En mode client-side : charge toutes les données sans pagination
-     */
-    const loadJobs = async (params?: QueryModel) => {
-        if (!inventoryId.value || !warehouseId.value) {
-            return
-        }
-
-        jobsLoading.value = true
-        try {
-            // Mode server-side : utiliser les paramètres par défaut ou ceux passés
-            const finalParams: QueryModel = params || {
-                page: 1,
-                pageSize: 20, // Taille de page normale comme dans useInventoryManagement.ts
-                sort: [],
-                filters: {},
-                search: '',
-                customParams: jobsCustomParams.value
-            }
-
-            await jobStore.fetchJobs(inventoryId.value, warehouseId.value, finalParams)
-            await nextTick()
-
-            // Mettre à jour les données transformées
-            updateTransformedJobs()
-            updateAvailableLocations()
-            jobsKey.value++
-        } catch (error) {
-            jobsError.value = 'Erreur lors du chargement des jobs'
-            await alertService.error({ text: jobsError.value })
-        } finally {
-            jobsLoading.value = false
-        }
-    }
-
-    /**
-     * Charger les locations disponibles pour l'entrepôt actuel
-     * En mode client-side : charge toutes les données sans pagination
-     */
-    const loadLocations = async (params?: QueryModel) => {
-        if (!accountId.value || !inventoryId.value || !warehouseId.value) {
-            return
-        }
-
-        locationsLoading.value = true
-        try {
-            // Mode server-side : utiliser les paramètres par défaut ou ceux passés
-            const finalParams: QueryModel = params || {
-                page: 1,
-                pageSize: 20, // Taille de page normale comme dans useInventoryManagement.ts
-                sort: [],
-                filters: {},
-                search: '',
-                customParams: locationsCustomParams.value
-            }
-
-            await locationStore.fetchUnassignedLocations(
-                accountId.value,
-                inventoryId.value,
-                warehouseId.value,
-                finalParams
-            )
-            await nextTick()
-
-            updateMappedLocations()
-            updateAvailableLocations()
-            selectFieldKey.value++
-        } catch (error) {
-            locationsError.value = 'Erreur lors du chargement des locations'
-            await alertService.error({ text: locationsError.value })
-        } finally {
-            locationsLoading.value = false
-        }
-    }
-
-    /**
      * Recharger toutes les données (jobs et locations)
      */
     const refreshData = async () => {
         await Promise.all([
-            loadJobs(),
-            loadLocations()
+            refreshJobs(),
+            refreshLocations()
         ])
     }
 
@@ -1212,7 +790,6 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
                 await jobStore.validateJob(jobIds)
 
                 // Invalider le cache pour tous les jobs validés
-                jobIds.forEach(jobId => invalidateJobCache(Number(jobId)))
 
                 await alertService.success({ text: `${jobIds.length} job(s) validé(s) avec succès` })
                 resetAllSelections()
@@ -1220,6 +797,47 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
             }
         } catch (error) {
             await alertService.error({ text: 'Erreur lors de la validation des jobs' })
+        }
+    }
+
+    /**
+     * Valider tous les jobs de l'inventaire
+     */
+    const validateAllJobs = async () => {
+        // Vérifier que les IDs requis sont disponibles
+        if (!inventoryId.value || !warehouseId.value) {
+            await alertService.warning({ text: 'Inventaire ou entrepôt non disponible' })
+            return
+        }
+
+        try {
+            // Confirmation avant validation
+            const result = await alertService.confirm({
+                title: 'Valider tous les jobs',
+                text: `Voulez-vous vraiment valider tous les jobs de cet inventaire ?`
+            })
+
+            if (!result.isConfirmed) {
+                return
+            }
+
+            // Appeler l'API de validation de tous les jobs
+            await jobStore.validateAllJobs(inventoryId.value, warehouseId.value)
+
+            // Afficher le succès
+            await alertService.success({ text: 'Tous les jobs ont été validés avec succès' })
+
+            // Rafraîchir les données
+            resetAllSelections()
+            await refreshData()
+
+        } catch (error: any) {
+            // Extraire le message d'erreur du backend
+            const errorMessage = error?.response?.data?.message ||
+                                error?.message ||
+                                'Erreur lors de la validation de tous les jobs'
+
+            await alertService.error({ text: errorMessage })
         }
     }
 
@@ -1243,7 +861,6 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
                 await jobStore.jobReset(jobIds)
 
                 // Invalider le cache pour tous les jobs remis à zéro
-                jobIds.forEach(jobId => invalidateJobCache(Number(jobId)))
 
                 await alertService.success({ text: `${jobIds.length} job(s) remis à zéro avec succès` })
                 resetAllSelections()
@@ -1274,7 +891,6 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
                 await jobStore.deleteJob(jobIds)
 
                 // Invalider le cache pour tous les jobs supprimés
-                jobIds.forEach(jobId => invalidateJobCache(Number(jobId)))
 
                 await alertService.success({ text: `${jobIds.length} job(s) supprimé(s) avec succès` })
                 resetAllSelections()
@@ -1324,36 +940,172 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
     let lastJobsQueryModel: QueryModel | null = null
     let lastLocationsQueryModel: QueryModel | null = null
 
+
     /**
-     * Handler unifié pour toutes les opérations de la DataTable Jobs
-     * Utilise la ref pour identifier l'instance et éviter les conflits
-     * Évite les appels API répétés avec le même QueryModel
+     * Traite un événement DataTable Jobs directement (sans vérification d'initialisation)
      */
-    const onJobsTableEvent = async (eventType: string, queryModel: QueryModel) => {
-        // Vérifier que les IDs requis sont disponibles avant de lancer l'API
-        if (!inventoryId.value || !warehouseId.value) {
-            console.warn('[usePlanning] Jobs API not called: missing inventoryId or warehouseId')
-            return
+    const processJobsEventDirectly = async (eventType: string, queryModel: QueryModel) => {
+        // S'assurer que le QueryModel a des valeurs par défaut valides
+        const sanitizedQueryModel: QueryModel = {
+            page: queryModel.page ?? 1,
+            pageSize: queryModel.pageSize ?? 20,
+            sort: queryModel.sort ?? [],
+            filters: queryModel.filters ?? {},
+            search: queryModel.search ?? '',
+            customParams: queryModel.customParams ?? {}
         }
 
-        // Vérifier si le QueryModel a changé depuis le dernier appel
-        const queryModelStr = JSON.stringify(queryModel)
+        // Toujours fusionner avec les customParams requis
+        const finalQueryModel = mergeQueryModelWithCustomParams(sanitizedQueryModel, jobsCustomParams.value)
+
+        // Éviter les appels API inutiles en comparant avec le dernier appel réussi
+        const queryModelStr = JSON.stringify(finalQueryModel)
         const lastQueryModelStr = lastJobsQueryModel ? JSON.stringify(lastJobsQueryModel) : null
 
         if (queryModelStr === lastQueryModelStr) {
             return
         }
 
+        // Éviter les appels API inutiles pour les événements de filtre/recherche vides
+        if (eventType === 'filter' || eventType === 'search') {
+            const hasFilters = Object.keys(finalQueryModel.filters || {}).length > 0
+            const hasSearch = !!finalQueryModel.search?.trim()
+            const hasSorting = (finalQueryModel.sort || []).length > 0
+
+            // Si c'est un événement filter/search complètement vide (pas de filtres, pas de recherche, pas de tri),
+            // et que c'est la page 1, éviter l'appel API inutile
+            if (!hasFilters && !hasSearch && !hasSorting && finalQueryModel.page === 1) {
+                return
+            }
+        }
+
         try {
-            // Vérifier que c'est bien la table jobs qui fait l'appel
-            if (jobsTableRef.value && typeof jobsTableRef.value === 'object') {
-                await jobStore.fetchJobs(inventoryId.value, warehouseId.value, queryModel)
-                lastJobsQueryModel = { ...queryModel } // Copier pour éviter les références
+            // Activer le loading pour les événements DataTable
+            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+                jobsLoadingLocal.value = true
+            }
+
+            // Mettre à jour le QueryModel local pour synchroniser avec la DataTable
+            jobsQueryModelRef.value = { ...finalQueryModel }
+
+            await jobStore.fetchJobs(inventoryId.value!, warehouseId.value!, finalQueryModel)
+
+            // Mettre à jour le cache après un appel réussi
+            lastJobsQueryModel = { ...finalQueryModel }
+
+            // Forcer le re-rendu de la DataTable pour tous les événements qui modifient les données
+            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+                jobsKey.value++
+                jobsLoadingLocal.value = false
             }
         } catch (error) {
-            console.error('[usePlanning] Error in jobStore.fetchJobs:', error)
+            console.error('[usePlanning] ❌ Error in jobStore.fetchJobs:', {
+                eventType,
+                error: error,
+                queryModel: finalQueryModel
+            })
             await alertService.error({ text: 'Erreur lors du chargement des jobs' })
+            // Désactiver le loading en cas d'erreur
+            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+                jobsLoadingLocal.value = false
+            }
         }
+    }
+
+    /**
+     * Traite un événement DataTable Locations directement (sans vérification d'initialisation)
+     */
+    const processLocationsEventDirectly = async (eventType: string, queryModel: QueryModel) => {
+        // S'assurer que le QueryModel a des valeurs par défaut valides
+        const sanitizedQueryModel: QueryModel = {
+            page: queryModel.page ?? 1,
+            pageSize: queryModel.pageSize ?? 20,
+            sort: queryModel.sort ?? [],
+            filters: queryModel.filters ?? {},
+            search: queryModel.search ?? '',
+            customParams: queryModel.customParams ?? {}
+        }
+
+        // Toujours fusionner avec les customParams requis
+        const finalQueryModel = mergeQueryModelWithCustomParams(sanitizedQueryModel, locationsCustomParams.value)
+
+        // Éviter les appels API inutiles en comparant avec le dernier appel réussi
+        const queryModelStr = JSON.stringify(finalQueryModel)
+        const lastQueryModelStr = lastLocationsQueryModel ? JSON.stringify(lastLocationsQueryModel) : null
+
+        if (queryModelStr === lastQueryModelStr) {
+            return
+        }
+
+        // Éviter les appels API inutiles pour les événements de filtre/recherche vides
+        if (eventType === 'filter' || eventType === 'search') {
+            const hasFilters = Object.keys(finalQueryModel.filters || {}).length > 0
+            const hasSearch = !!finalQueryModel.search?.trim()
+            const hasSorting = (finalQueryModel.sort || []).length > 0
+
+            // Si c'est un événement filter/search complètement vide (pas de filtres, pas de recherche, pas de tri),
+            // et que c'est la page 1, éviter l'appel API inutile
+            if (!hasFilters && !hasSearch && !hasSorting && finalQueryModel.page === 1) {
+                return
+            }
+        }
+
+        try {
+            // Activer le loading pour les événements DataTable
+            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+                locationsLoadingLocal.value = true
+            }
+
+            // Mettre à jour le QueryModel local pour synchroniser avec la DataTable
+            locationsQueryModelRef.value = { ...finalQueryModel }
+
+            await locationStore.fetchUnassignedLocations(
+                accountId.value!,
+                inventoryId.value!,
+                warehouseId.value!,
+                finalQueryModel
+            )
+
+            // Mettre à jour le cache après un appel réussi
+            lastLocationsQueryModel = { ...finalQueryModel }
+
+            // Forcer le re-rendu de la DataTable pour tous les événements qui modifient les données
+            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+                availableLocationsKey.value++
+                locationsLoadingLocal.value = false
+            }
+        } catch (error) {
+            console.error('[usePlanning] ❌ Error in locationStore.fetchUnassignedLocations:', {
+                eventType,
+                error: error,
+                queryModel: finalQueryModel
+            })
+            await alertService.error({ text: 'Erreur lors du chargement des locations' })
+            // Désactiver le loading en cas d'erreur
+            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+                locationsLoadingLocal.value = false
+            }
+        }
+    }
+
+    /**
+     * Handler unifié pour toutes les opérations de la DataTable Jobs
+     */
+    const onJobsTableEvent = async (eventType: string, queryModel: QueryModel) => {
+        // Si l'initialisation n'est pas terminée, mettre l'événement en file d'attente
+        if (!isInitialized.value) {
+            jobsPendingEventsQueue.push({ eventType, queryModel })
+            return
+        }
+
+        // Vérifier que les IDs requis sont disponibles avant de lancer l'API
+        if (!inventoryId.value || !warehouseId.value) {
+            console.warn('[usePlanning] Jobs API not called: missing inventoryId or warehouseId after initialization')
+            return
+        }
+
+        // Traiter l'événement directement
+        await processJobsEventDirectly(eventType, queryModel)
     }
 
     /**
@@ -1362,35 +1114,20 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
      * Évite les appels API répétés avec le même QueryModel
      */
     const onLocationsTableEvent = async (eventType: string, queryModel: QueryModel) => {
+        // Si l'initialisation n'est pas terminée, mettre l'événement en file d'attente
+        if (!isInitialized.value) {
+            locationsPendingEventsQueue.push({ eventType, queryModel })
+            return
+        }
+
         // Vérifier que les IDs requis sont disponibles avant de lancer l'API
         if (!accountId.value || !inventoryId.value || !warehouseId.value) {
-            console.warn('[usePlanning] Locations API not called: missing accountId, inventoryId or warehouseId')
+            console.warn('[usePlanning] Locations API not called: missing accountId, inventoryId or warehouseId after initialization')
             return
         }
 
-        // Vérifier si le QueryModel a changé depuis le dernier appel
-        const queryModelStr = JSON.stringify(queryModel)
-        const lastQueryModelStr = lastLocationsQueryModel ? JSON.stringify(lastLocationsQueryModel) : null
-
-        if (queryModelStr === lastQueryModelStr) {
-            return
-        }
-
-        try {
-            // Vérifier que c'est bien la table locations qui fait l'appel
-            if (availableLocationsTableRef.value && typeof availableLocationsTableRef.value === 'object') {
-                await locationStore.fetchUnassignedLocations(
-                    accountId.value,
-                    inventoryId.value,
-                    warehouseId.value,
-                    queryModel
-                )
-                lastLocationsQueryModel = { ...queryModel } // Copier pour éviter les références
-            }
-        } catch (error) {
-            console.error('[usePlanning] Error in locationStore.fetchUnassignedLocations:', error)
-            await alertService.error({ text: 'Erreur lors du chargement des locations' })
-        }
+        // Traiter l'événement directement
+        await processLocationsEventDirectly(eventType, queryModel)
     }
 
     /**
@@ -1420,7 +1157,6 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
     /** Clés pour forcer le re-render des tables */
     const availableLocationsKey = ref(0)
     const jobsKey = ref(0)
-    const selectFieldKey = ref(0)
 
     // ===== COMPUTED PROPERTIES =====
 
@@ -1449,6 +1185,112 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
     }))
 
     // ===== INITIALISATION =====
+
+    /**
+     * Traite les événements DataTable mis en file d'attente pendant l'initialisation
+     */
+    const processPendingEvents = async () => {
+        // Traiter les événements jobs en file d'attente
+        if (jobsPendingEventsQueue.length > 0) {
+            const jobsEvents = [...jobsPendingEventsQueue]
+            jobsPendingEventsQueue.length = 0
+
+            for (const event of jobsEvents) {
+                await processJobsEventDirectly(event.eventType, event.queryModel)
+            }
+        }
+
+        // Traiter les événements locations en file d'attente
+        if (locationsPendingEventsQueue.length > 0) {
+            const locationsEvents = [...locationsPendingEventsQueue]
+            locationsPendingEventsQueue.length = 0
+
+            for (const event of locationsEvents) {
+                await processLocationsEventDirectly(event.eventType, event.queryModel)
+            }
+        }
+    }
+
+    /**
+     * Charge les jobs avec des paramètres spécifiques
+     */
+    const loadJobs = async (params?: QueryModel) => {
+        if (!inventoryId.value || !warehouseId.value) {
+            return
+        }
+
+        jobsLoadingLocal.value = true
+
+        try {
+            const finalParams: QueryModel = params || mergeQueryModelWithCustomParams(
+                {
+                    page: 1,
+                    pageSize: 20
+                },
+                jobsCustomParams.value
+            )
+
+            await jobStore.fetchJobs(inventoryId.value, warehouseId.value, finalParams)
+            await nextTick()
+
+            lastJobsQueryModel = { ...finalParams }
+            jobsLoadingLocal.value = false
+        } catch (error) {
+            console.error('[usePlanning.loadJobs] ❌ Error during job load:', error)
+            await alertService.error({ text: 'Erreur lors du chargement des jobs' })
+            jobsLoadingLocal.value = false
+        }
+    }
+
+    /**
+     * Charge les locations avec des paramètres spécifiques
+     */
+    const loadLocations = async (params?: QueryModel) => {
+        if (!accountId.value || !inventoryId.value || !warehouseId.value) {
+            return
+        }
+
+        locationsLoadingLocal.value = true
+
+        try {
+            const finalParams: QueryModel = params || mergeQueryModelWithCustomParams(
+                {
+                    page: 1,
+                    pageSize: 20
+                },
+                locationsCustomParams.value
+            )
+
+            await locationStore.fetchUnassignedLocations(
+                accountId.value,
+                inventoryId.value,
+                warehouseId.value,
+                finalParams
+            )
+            await nextTick()
+
+            lastLocationsQueryModel = { ...finalParams }
+            locationsLoadingLocal.value = false
+        } catch (error) {
+            console.error('[usePlanning.loadLocations] ❌ Error during locations load:', error)
+            await alertService.error({ text: 'Erreur lors du chargement des locations' })
+            locationsLoadingLocal.value = false
+        }
+    }
+
+    /**
+     * Rafraîchir les jobs
+     */
+    const refreshJobs = async (params?: QueryModel) => {
+        await loadJobs(params)
+    }
+
+    /**
+     * Rafraîchir les locations
+     */
+    const refreshLocations = async (params?: QueryModel) => {
+        await loadLocations(params)
+    }
 
     /**
      * Initialiser le composable
@@ -1482,6 +1324,9 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
             // pour éviter les appels multiples et les conflits avec les DataTables
 
             isInitialized.value = true
+
+            // Traiter les événements DataTable mis en file d'attente
+            await processPendingEvents()
         } catch (error) {
             await alertService.error({ text: 'Erreur lors de l\'initialisation du planning' })
         } finally {
@@ -1534,13 +1379,13 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
     /**
      * Indicateur de disponibilité de jobs
      */
-    const hasAvailableJobs = computed(() => transformedJobs.value.length > 0)
+    const hasAvailableJobs = computed(() => jobs.value.length > 0)
 
     /**
      * Options pour le sélecteur de jobs
      */
     const jobSelectOptions = computed(() =>
-        transformedJobs.value.map(job => ({
+        jobs.value.map(job => ({
             value: job.id.toString(),
             label: job.reference || `Job ${job.id}`
         }))
@@ -1657,7 +1502,6 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
                 await jobStore.addLocationToJob(jobId, locationIds)
 
                 // Invalider le cache pour ce job car ses locations ont changé
-                invalidateJobCache(Number(jobId))
 
                 await alertService.success({ text: 'Emplacements ajoutés avec succès' })
                 resetAllSelections()
@@ -1843,9 +1687,6 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
         await loadJobs()
         await loadLocations()
 
-        // Initialiser les données transformées de manière synchrone
-        updateAllTransformedDataSync()
-
         // Marquer les données comme chargées
         isDataLoaded.value = true
 
@@ -1892,10 +1733,14 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
         locations,
         loadJobs,
         loadLocations,
+        refreshJobs,
+        refreshLocations,
 
         // États
         jobsLoading,
         locationsLoading,
+        jobsLoadingLocal,
+        locationsLoadingLocal,
         jobsError,
         locationsError,
 
@@ -1925,6 +1770,7 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
         // Actions principales
         createJobFromSelectedLocations,
         bulkValidateJobs,
+        validateAllJobs,
         bulkResetJobs,
         bulkDeleteJobs,
         bulkDeactivateLocations,
