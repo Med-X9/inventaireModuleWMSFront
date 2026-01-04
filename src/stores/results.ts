@@ -87,6 +87,7 @@ export const useResultsStore = defineStore('results', () => {
 
             const response = await InventoryResultsService.getResults(inventoryId, storeId, requestBody);
 
+
             // Stocker les données brutes
             results.value = response.data || [];
             currentInventoryId.value = inventoryId;

@@ -283,6 +283,14 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
     /** IDs des lignes sélectionnées */
     const selectedRows = ref<string[]>([])
 
+    // Watcher pour forcer le re-render des colonnes quand les données arrivent
+    watch(trackingRows, (newRows) => {
+        if (newRows && newRows.length > 0) {
+            // Incrémenter trackingKey pour forcer le re-render des colonnes dynamiques
+            trackingKey.value++
+        }
+    }, { immediate: false })
+
     /**
      * Traite un événement DataTable directement (sans vérification d'initialisation)
      * Utilisé pour traiter les événements mis en file d'attente
@@ -540,10 +548,14 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
     /** Colonnes du DataTable - définies comme computed pour la réactivité (comme useInventoryResults) */
     const columns = computed<DataTableColumn[]>(() => {
+        // Forcer la dépendance à trackingKey pour que les colonnes soient recalculées à chaque refresh
+        const _forceUpdate = trackingKey.value;
+
         const cols: DataTableColumn[] = []
 
         // Log pour déboguer la création des colonnes
         logger.debug('columns computed - création des colonnes', {
+            trackingKey: trackingKey.value,
             trackingRowsLength: trackingRows.value.length,
             availableOrders: getAvailableCountingOrders()
         })

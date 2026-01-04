@@ -459,6 +459,14 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
      */
     const { results, loading: resultsLoading } = storeToRefs(resultsStore)
 
+    // Watcher pour forcer le re-render des colonnes quand les données arrivent
+    watch(results, (newResults) => {
+        if (newResults && newResults.length > 0) {
+            // Incrémenter resultsKey pour forcer le re-render des colonnes dynamiques
+            resultsKey.value++
+        }
+    }, { immediate: false })
+
     /**
      * État de chargement global des résultats
      *
@@ -529,227 +537,29 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         __differenceLabels?: Record<string, string>;
     }
 
+
+
     /**
      * Colonnes du DataTable construites dynamiquement selon les champs présents dans les données
      *
      * Les colonnes sont détectées automatiquement :
      * - Colonnes fixes : JOB, Emplacement, Article, Résolu, Résultat final
-     * - Colonnes de comptage : contage_1, contage_2, contage_3, etc. (détectées dynamiquement)
-     * - Colonnes d'écart : ecart_1_2, ecart_2_3, etc. (détectées dynamiquement)
-     * - Colonnes de statut : statut_1er_comptage, statut_2eme_comptage, etc. (détectées dynamiquement)
+     * - Colonnes de comptage : 1er comptage, 2ème comptage, etc. (détectées dynamiquement)
+     * - Colonnes d'écart : Écart 1-2, Écart 3, etc. (détectées dynamiquement)
      *
-     * L'ordre d'affichage est : JOB, Emplacement, Article, Comptages/Écarts intercalés, Statuts, Résolu, Résultat final
+     * L'ordre d'affichage est : JOB, Emplacement, Article, Comptages/Écarts intercalés, Résolu, Résultat final
      *
      * @computed {DataTableColumn[]} columns - Colonnes configurées pour le DataTable
      */
 
     const columns = computed<DataTableColumn[]>(() => {
-        const inferCountingFields = () => {
-            // Si pas de données, retourner des colonnes par défaut (1er et 2ème comptage)
-            if (!results.value.length) return ['contage_1', 'contage_2'];
+        // Forcer la dépendance à resultsKey pour que les colonnes soient recalculées à chaque refresh
+        const _forceUpdate = resultsKey.value;
 
-            // Détecter les champs de comptage : "contage_1", "contage_2", "contage_3", etc.
-            const allKeys = Object.keys(results.value[0]);
-            const countingFields = allKeys
-                .filter(key => /^contage_\d+$/.test(key));
-            const sorted = countingFields.sort((a, b) => {
-                const numA = parseInt(a.replace('contage_', '')) || 0;
-                const numB = parseInt(b.replace('contage_', '')) || 0;
-                return numA - numB;
-            });
+        // Définir les colonnes statiques selon le schéma des données
 
-            // S'assurer qu'il y a au moins 2 comptages par défaut
-            if (sorted.length === 0) {
-                return ['contage_1', 'contage_2'];
-            }
-
-            return sorted;
-        };
-
-        const inferCountingLabel = (field: string, index: number) => {
-            // Si pas de données, utiliser un label par défaut
-            if (!results.value.length) {
-                const num = parseInt(field.replace('contage_', '')) || (index + 1);
-                return num === 1 ? '1er comptage' : `${num}ème comptage`;
-            }
-
-            for (const result of results.value as ResultWithLabels[]) {
-                const entries = Object.entries(result).filter(([key]) => key === field);
-                for (const [key, value] of entries) {
-                    if (key === field && result.__countingLabels?.[field]) {
-                        return result.__countingLabels[field];
-                    }
-                }
-            }
-
-            // Générer le label basé sur le numéro extrait du field
-            const match = field.match(/contage_(\d+)/);
-            if (match) {
-                const num = parseInt(match[1]);
-                if (num === 1) return '1er comptage';
-                if (num === 2) return '2ème comptage';
-                if (num === 3) return '3ème comptage';
-                return `${num}ème comptage`;
-            }
-
-            // Fallback
-            if (index === 0) return '1er comptage';
-            if (index === 1) return '2ème comptage';
-            if (index === 2) return '3ème comptage';
-            return `${index + 1}ème comptage`;
-        };
-
-        const inferDifferenceFields = () => {
-            // Si pas de données, retourner l'écart par défaut entre 1er et 2ème comptage
-            if (!results.value.length) return ['ecart_1_2'];
-            const allKeys = Object.keys(results.value[0]);
-
-            // Pattern modifié pour accepter tous les formats d'écart :
-            // - ecart_1_2 (deux nombres)
-            // - ecart_1_2_3 (trois nombres)
-            // - ecart_1_2_3_4 (quatre nombres ou plus)
-            // Pattern: ecart_ suivi d'au moins un chiffre, puis un ou plusieurs groupes de _chiffres
-            let differenceFields = allKeys
-                .filter(key => /^ecart_\d+(_\d+)+$/.test(key));
-
-            // Générer automatiquement les écarts manquants entre comptages successifs
-            const countingFields = inferCountingFields();
-            const maxCounting = Math.max(...countingFields.map(f => parseInt(f.replace('contage_', ''))), 0);
-
-            // Pour chaque paire de comptages successifs, s'assurer qu'il y a un écart
-            for (let i = 1; i < maxCounting; i++) {
-                const expectedEcart = `ecart_${i}_${i + 1}`;
-                if (!differenceFields.includes(expectedEcart)) {
-                    differenceFields.push(expectedEcart);
-                }
-            }
-
-            const sorted = differenceFields.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-            return sorted;
-        };
-
-        const inferDifferenceLabel = (field: string) => {
-            // Pattern modifié pour extraire tous les nombres de l'écart
-            // Exemples :
-            // - ecart_1_2 -> "Écart 1-2"
-            // - ecart_2_3 -> "Écart 3" (prendre le dernier nombre)
-            // - ecart_3_4 -> "Écart 4"
-            // - ecart_4_5 -> "Écart 5"
-            const match = field.match(/^ecart_((?:\d+_?)+)$/);
-            if (!match) return 'Écart';
-
-            // Extraire tous les nombres
-            const numbers = match[1].split('_').filter(n => n.length > 0);
-            if (numbers.length === 0) return 'Écart';
-
-            // Si c'est ecart_1_2, garder le format "Écart 1-2"
-            if (numbers.length === 2 && numbers[0] === '1' && numbers[1] === '2') {
-                return `Écart ${numbers[0]}-${numbers[1]}`;
-            }
-
-            // Pour les autres écarts, prendre le dernier nombre (ex: ecart_2_3 -> "Écart 3")
-            // Ignorer les labels du backend pour forcer notre format
-            const lastNumber = numbers[numbers.length - 1];
-            return `Écart ${lastNumber}`;
-        };
-
-        const sortedCountingFields = inferCountingFields();
-        const sortedDifferenceFields = inferDifferenceFields();
-
-        // Fonctions helper pour les cellRenderer
-        const createCountingCellRenderer = (fieldName: string) => {
-            return ((value: any, column?: any, row?: any) => {
-                let rowData: any = null;
-                if (column && row) {
-                    rowData = row;
-                } else if (value && typeof value === 'object' && value.data) {
-                    rowData = value.data;
-                } else if (value && typeof value === 'object') {
-                    rowData = value;
-                }
-
-                const comptageValue = value;
-                if (comptageValue === undefined || comptageValue === null || comptageValue === '') {
-                    return '-';
-                }
-
-                let statusField = '';
-                if (fieldName === 'contage_1') {
-                    statusField = 'statut_1er_comptage';
-                } else if (fieldName === 'contage_2') {
-                    statusField = 'statut_2er_comptage';
-                } else if (fieldName === 'contage_3') {
-                    statusField = 'statut_3er_comptage';
-                } else {
-                    const match = fieldName.match(/contage_(\d+)/);
-                    if (match) {
-                        const num = parseInt(match[1]);
-                        statusField = `statut_${num}er_comptage`;
-                    }
-                }
-
-                const statusValue = rowData?.[statusField] || '';
-                const badgeStyles = column?.badgeStyles as Array<{value: string, class: string}> | undefined;
-                const badgeDefaultClass = column?.badgeDefaultClass || 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset';
-
-                const badgeStyle = badgeStyles?.find((s: any) => s.value === statusValue.trim());
-                const badgeClass = badgeStyle?.class || badgeDefaultClass;
-
-                return `<span class="${badgeClass}">${comptageValue}</span>`;
-            }) as any;
-        };
-
-        const createDifferenceCellRenderer = (fieldName: string) => {
-            return ((value: any) => {
-                if (value === undefined || value === null || value === '') {
-                    return '-';
-                }
-
-                // Vérifier si c'est un écart boolean (tous les écarts sauf ecart_1_2 sont boolean)
-                const isBooleanEcart = fieldName !== 'ecart_1_2';
-
-                if (isBooleanEcart) {
-                    // Pour les écarts boolean (résultat de comptage : true/false)
-                    const boolValue = value === true || value === 'true' || value === 1 || value === '1';
-                    if (boolValue) {
-                        return `<span class="inline-flex items-center justify-center text-green-600">
-                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                            </svg>
-                        </span>`;
-                    } else {
-                        return `<span class="inline-flex items-center justify-center text-red-600">
-                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-                            </svg>
-                        </span>`;
-                    }
-                } else {
-                    // Pour ecart_1_2 : écart numérique entre deux comptages
-                    const numValue = Number(value);
-                    if (Number.isNaN(numValue)) {
-                        return '-';
-                    }
-                    const color = numValue === 0 ? 'text-green-600' : 'text-red-600';
-                    return `<span class="${color} font-semibold">${numValue}</span>`;
-                }
-            }) as any;
-        };
 
         const cols: DataTableColumn[] = [
-            // {
-            //     headerName: 'ID',
-            //     field: 'id',
-            //     sortable: true,
-            //     dataType: 'number' as ColumnDataType,
-            //     filterable: true,
-            //     width: 80,
-            //     editable: false,
-            //     hide: true,
-            //     draggable: true,
-            //     autoSize: true,
-            //     description: 'Identifiant unique'
-            // },
             // 1. JOB
             {
                 headerName: 'JOB',
@@ -801,14 +611,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 ],
                 badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
                 cellRenderer: ((value: any, column?: any, row?: any) => {
-                    let rowData: any = null;
-                    if (column && row) { rowData = row; }
-                    else if (value && typeof value === 'object' && value.data) { rowData = value.data; }
-                    else if (value && typeof value === 'object') { rowData = value; }
-
                     const jobReference = value;
                     if (jobReference === undefined || jobReference === null || jobReference === '') { return '-'; }
-                    const statusValue = rowData?.['job_status'] || '';
+
+                    const statusValue = row?.['job_status'] || '';
 
                     const badgeStyles = column?.badgeStyles as Array<{value: string, class: string}> | undefined;
                     const badgeDefaultClass = column?.badgeDefaultClass || 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset';
@@ -839,7 +645,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 description: 'Emplacement de l\'article',
                 priority: 9 // Priorité haute
             },
-            // 2. Article
+            // 3. Article
             {
                 headerName: 'Article',
                 field: 'article',
@@ -859,156 +665,237 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 description: 'Référence de l\'article',
                 priority: 8, // Priorité haute
                 flex: 2 // Plus d'espace pour cette colonne importante
-            }
-        ];
+            },
+            // 4. 1er comptage
+            // 4. 1er comptage
+            {
+                headerName: '1er comptage',
+                field: 'contage_1',
+                sortable: true,
+                dataType: 'number' as ColumnDataType,
+                filterable: true,
+                width: 140,
+                minWidth: 120,
+                editable: false,
+                visible: true,
+                draggable: true,
+                autoSize: true,
+                icon: 'icon-calculator',
+                description: 'Valeur du 1er comptage',
+                priority: 7,
+                badgeStyles: [
+                    {
+                        value: 'EN ATTENTE',
+                        class: 'inline-flex items-center rounded-md bg-slate-200 px-2 py-1 text-xs font-medium text-slate-900 ring-1 ring-slate-300/20 ring-inset'
+                    },
+                    {
+                        value: 'VALIDE',
+                        class: 'inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
+                    },
+                    {
+                        value: 'AFFECTE',
+                        class: 'inline-flex items-center rounded-md bg-teal-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-teal-600/20 ring-inset'
+                    },
+                    {
+                        value: 'PRET',
+                        class: 'inline-flex items-center rounded-md bg-purple-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-purple-600/20 ring-inset'
+                    },
+                    {
+                        value: 'TRANSFERT',
+                        class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
+                    },
+                    {
+                        value: 'TERMINE',
+                        class: 'inline-flex items-center rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-700/20 ring-inset'
+                    },
+                    {
+                        value: 'ENTAME',
+                        class: 'inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset'
+                    }
+                ],
+                badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
+                cellRenderer: ((value: any, column?: any, row?: any) => {
+                    // Utiliser row[column.field] au lieu de value directement
+                    const fieldName = column?.field || 'contage_1';
+                    const comptageValue = row ? row[fieldName] : value;
 
-        // Ajouter tous les comptages et écarts dans l'ordre demandé de manière entièrement dynamique :
-        // Emplacement, Article, 1er comptage, 2ème comptage, Écart 1-2, 3ème comptage, Écart 2-3, 4ème comptage, Écart 3-4, etc.
+                    if (comptageValue === undefined || comptageValue === null || comptageValue === '') {
+                        return '-'
+                    }
 
-        // Pour chaque comptage trouvé, ajouter le comptage puis son écart (sauf pour le premier)
-        sortedCountingFields.forEach((countingField, index) => {
-            const num = parseInt(countingField.replace('contage_', ''));
-            const differenceField = num > 1 ? `ecart_${num-1}_${num}` : null;
+                    // Récupérer le statut
+                    const statusValue = row?.['statut_1er_comptage'] || '';
 
-            // Ajouter le comptage
-            const isFirstTwoCountings = num <= 2;
-                cols.push({
-                headerName: num === 1 ? '1er comptage' : `${num}ème comptage`,
-                    field: countingField,
-                    sortable: true,
-                    dataType: 'number' as ColumnDataType,
-                    filterable: true,
-                    width: 140,
-                    minWidth: 120,
-                    editable: false,
-                    visible: true,
-                    draggable: true,
-                    autoSize: true,
-                    icon: 'icon-calculator',
-                description: `Valeur du ${num === 1 ? '1er' : num + 'ème'} comptage`,
-                    priority: isFirstTwoCountings ? 7 : 5,
-                    badgeStyles: [
-                        {
-                            value: 'EN ATTENTE',
-                            class: 'inline-flex items-center rounded-md bg-slate-200 px-2 py-1 text-xs font-medium text-slate-900 ring-1 ring-slate-300/20 ring-inset'
-                        },
-                        {
-                            value: 'VALIDE',
-                            class: 'inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
-                        },
-                        {
-                            value: 'AFFECTE',
-                            class: 'inline-flex items-center rounded-md bg-teal-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-teal-600/20 ring-inset'
-                        },
-                        {
-                            value: 'PRET',
-                            class: 'inline-flex items-center rounded-md bg-purple-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-purple-600/20 ring-inset'
-                        },
-                        {
-                            value: 'TRANSFERT',
-                            class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
-                        },
-                        {
-                            value: 'TERMINE',
-                            class: 'inline-flex items-center rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-700/20 ring-inset'
-                        },
-                        {
-                            value: 'ENTAME',
-                            class: 'inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset'
-                        }
-                    ],
-                    badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
-                    cellRenderer: createCountingCellRenderer(countingField)
-                });
+                    const badgeStyles = column?.badgeStyles as Array<{value: string, class: string}> | undefined
+                    const badgeDefaultClass = column?.badgeDefaultClass || 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
 
-            // Ajouter l'écart après le comptage (sauf pour le premier comptage)
-            if (differenceField && sortedDifferenceFields.includes(differenceField)) {
-                const isEcart1_2 = differenceField === 'ecart_1_2';
-                const isEcart2_3 = differenceField === 'ecart_2_3';
+                    const badgeStyle = badgeStyles?.find((s: any) => s.value === statusValue.trim())
+                    const badgeClass = badgeStyle?.class || badgeDefaultClass
 
-                cols.push({
-                    headerName: isEcart1_2 ? 'Écart 1-2' : `Écart ${num}`,
-                    field: differenceField,
-                    sortable: isEcart1_2,
-                    dataType: (isEcart2_3 ? 'boolean' : 'number') as ColumnDataType,
-                    filterable: isEcart1_2,
-                    width: 120,
-                    minWidth: 100,
-                    editable: false,
-                    visible: true,
-                    draggable: true,
-                    autoSize: true,
-                    icon: 'icon-trending-up',
-                    description: isEcart1_2 ? 'Écart entre le 1er et 2ème comptage' : `Écart entre le ${num-1}ème et ${num}ème comptage`,
-                    priority: 4,
-                    cellRenderer: createDifferenceCellRenderer(differenceField)
-                });
-            }
-        });
+                    return `<span class="${badgeClass}">${comptageValue}</span>`
+                }) as any
+            },
+            // 5. 2ème comptage
+            {
+                headerName: '2ème comptage',
+                field: '2e comptage',
+                sortable: true,
+                dataType: 'number' as ColumnDataType,
+                filterable: true,
+                width: 140,
+                minWidth: 120,
+                editable: false,
+                visible: true,
+                draggable: true,
+                autoSize: true,
+                icon: 'icon-calculator',
+                description: 'Valeur du 2ème comptage',
+                priority: 6,
+                badgeStyles: [
+                    {
+                        value: 'EN ATTENTE',
+                        class: 'inline-flex items-center rounded-md bg-slate-200 px-2 py-1 text-xs font-medium text-slate-900 ring-1 ring-slate-300/20 ring-inset'
+                    },
+                    {
+                        value: 'VALIDE',
+                        class: 'inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
+                    },
+                    {
+                        value: 'AFFECTE',
+                        class: 'inline-flex items-center rounded-md bg-teal-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-teal-600/20 ring-inset'
+                    },
+                    {
+                        value: 'PRET',
+                        class: 'inline-flex items-center rounded-md bg-purple-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-purple-600/20 ring-inset'
+                    },
+                    {
+                        value: 'TRANSFERT',
+                        class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
+                    },
+                    {
+                        value: 'TERMINE',
+                        class: 'inline-flex items-center rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-700/20 ring-inset'
+                    },
+                    {
+                        value: 'ENTAME',
+                        class: 'inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset'
+                    }
+                ],
+                badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
+                cellRenderer: ((value: any, column?: any, row?: any) => {
+                    // Utiliser row[column.field] au lieu de value directement
+                    const fieldName = column?.field || '2e comptage';
+                    const comptageValue = row ? row[fieldName] : value;
 
+                    if (comptageValue === undefined || comptageValue === null || comptageValue === '') {
+                        return '-'
+                    }
 
+                    // Récupérer le statut
+                    const statusValue = row?.['statut_2er_comptage'] || '';
 
-        // Colonne "Résolu" avec icône
-        cols.push({
-            headerName: 'Résolu',
-            field: 'resolved',
-            sortable: true,
-            dataType: 'boolean' as ColumnDataType,
-            filterable: true,
-            width: 120,
-            minWidth: 100,
-            editable: false,
-            visible: true,
-            draggable: true,
-            autoSize: true,
-            align: 'center',
-            description: 'Statut de résolution de l\'écart',
-            priority: 1, // Priorité très basse
-            cellRenderer: (value: any) => {
-                const isResolved = value === true || value === 'true' || value === 1 || value === '1'
-                if (isResolved) {
-                    return `<div class="flex items-center justify-center">
-                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                        </svg>
-                    </div>`
-                } else {
-                    return `<div class="flex items-center justify-center">
-                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-                        </svg>
-                    </div>`
+                    const badgeStyles = column?.badgeStyles as Array<{value: string, class: string}> | undefined
+                    const badgeDefaultClass = column?.badgeDefaultClass || 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+
+                    const badgeStyle = badgeStyles?.find((s: any) => s.value === statusValue.trim())
+                    const badgeClass = badgeStyle?.class || badgeDefaultClass
+
+                    return `<span class="${badgeClass}">${comptageValue}</span>`
+                }) as any
+            },
+            // 6. Écart 1-2
+            {
+                headerName: 'Écart 1-2',
+                field: 'ecart_1_2',
+                sortable: true,
+                dataType: 'number' as ColumnDataType,
+                filterable: true,
+                width: 120,
+                minWidth: 100,
+                editable: false,
+                visible: true,
+                draggable: true,
+                autoSize: true,
+                icon: 'icon-trending-up',
+                description: 'Écart entre le 1er et 2ème comptage',
+                priority: 5,
+                cellRenderer: ((value: any) => {
+                    // Comme job_reference : value contient directement la valeur du champ
+                    if (value === undefined || value === null || value === '') {
+                        return '-'
+                    }
+
+                    // Pour ecart_1_2 : écart numérique entre deux comptages
+                    const numValue = Number(value);
+                    if (Number.isNaN(numValue)) {
+                        return '-';
+                    }
+                    const color = numValue === 0 ? 'text-green-600' : 'text-red-600';
+                    return `<span class="${color} font-semibold">${numValue}</span>`;
+                }) as any
+            },
+            // 7. Résolu
+            {
+                headerName: 'Résolu',
+                field: 'resolved',
+                sortable: true,
+                dataType: 'boolean' as ColumnDataType,
+                filterable: true,
+                width: 120,
+                minWidth: 100,
+                editable: false,
+                visible: true,
+                draggable: true,
+                autoSize: true,
+                align: 'center',
+                description: 'Statut de résolution de l\'écart',
+                priority: 1, // Priorité très basse
+                cellRenderer: (value: any) => {
+                    const isResolved = value === true || value === 'true' || value === 1 || value === '1'
+                    if (isResolved) {
+                        return `<div class="flex items-center justify-center">
+                            <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>`
+                    } else {
+                        return `<div class="flex items-center justify-center">
+                            <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>`
+                    }
                 }
+            },
+            // 8. Résultat final
+            {
+                headerName: 'Résultat final',
+                field: 'resultats',
+                sortable: true,
+                dataType: 'number' as ColumnDataType,
+                filterable: true,
+                width: 140,
+                minWidth: 120,
+                editable: true,
+                visible: true,
+                draggable: true,
+                autoSize: true,
+                icon: 'icon-check-circle',
+                description: 'Résultat final validé',
+                priority: 7 // Priorité haute - important
             }
-        });
+        ]
 
-        cols.push({
-            headerName: 'Résultat final',
-            field: 'resultats',
-            sortable: true,
-            dataType: 'number' as ColumnDataType,
-            filterable: true,
-            width: 140,
-            minWidth: 120,
-            editable: true,
-            visible: true,
-            draggable: true,
-            autoSize: true,
-            icon: 'icon-check-circle',
-            description: 'Résultat final validé',
-            priority: 7 // Priorité haute - important
-        });
+        // Validation des colonnes
+        cols.forEach(column => {
+            const validation = dataTableService.validateColumnConfig(column)
+            if (!validation.isValid) {
+                // Configuration de colonne invalide
+            }
+        })
 
         return cols;
     });
-
-    // Validation des colonnes
-    columns.value.forEach(column => {
-        const validation = dataTableService.validateColumnConfig(column)
-        if (!validation.isValid) {
-            // Configuration de colonne invalide
-        }
-    })
 
     // ===== NOTE SUR QUERYMODEL =====
     // Le DataTable utilise enableAutoManagement avec fetchResultsAuto du store
