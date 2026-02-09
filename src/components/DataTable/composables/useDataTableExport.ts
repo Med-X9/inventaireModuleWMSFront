@@ -235,7 +235,6 @@ export function useDataTableExport(
             
             return true
         } catch (error: any) {
-            console.error('Erreur lors de l\'export CSV:', error)
             Swal.fire({
                 title: 'Erreur',
                 text: error.message || 'Une erreur est survenue lors de l\'export CSV.',

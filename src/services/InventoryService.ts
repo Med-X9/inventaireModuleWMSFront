@@ -342,7 +342,7 @@ export class InventoryService {
      */
     static async terminate(id: number | string): Promise<AxiosResponse<void>> {
         try {
-            return await axiosInstance.post<void>(`${API.endpoints.inventory.base}${id}/terminate/`);
+            return await axiosInstance.post<void>(`${API.endpoints.inventory.base}${id}/complete/`);
         } catch (error) {
             logger.error(`Erreur lors de la terminaison de l'inventaire ${id}`, error);
             throw error;

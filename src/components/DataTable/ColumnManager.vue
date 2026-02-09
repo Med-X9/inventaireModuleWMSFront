@@ -10,15 +10,74 @@
             <h3 class="manager-title">Gestion des colonnes</h3>
             <div class="header-actions">
                 <button @click="toggleMinimized" class="btn-minimize" :title="props.minimized ? 'Agrandir' : 'Réduire'">
-                    {{ props.minimized ? '⤢' : '⤡' }}
+                    <IconExpand v-if="props.minimized" class="w-4 h-4" />
+                    <IconMinimize v-else class="w-4 h-4" />
                 </button>
                 <button @click="resetColumns" class="btn-secondary">Réinitialiser</button>
-                <button @click="$emit('close')" class="btn-close">×</button>
+                <button @click="$emit('close')" class="btn-close" title="Fermer">
+                    <IconX class="w-4 h-4" />
+                </button>
             </div>
         </div>
 
         <!-- Options globales -->
         <div class="global-options">
+            <!-- Barre de recherche pour filtrer les colonnes -->
+            <div class="option-group search-group">
+                <div class="search-wrapper">
+                    <IconSearch class="search-icon" />
+                    <input
+                        type="text"
+                        v-model="searchQuery"
+                        placeholder="Rechercher une colonne..."
+                        class="search-input"
+                        @input="handleSearchInput"
+                    />
+                    <button
+                        v-if="searchQuery"
+                        @click="clearSearch"
+                        class="search-clear-btn"
+                        title="Effacer la recherche"
+                    >
+                        <IconX class="w-3 h-3" />
+                    </button>
+                </div>
+                <div v-if="searchQuery" class="search-results-info">
+                    {{ filteredColumnsCount }} colonne(s) trouvée(s)
+                </div>
+            </div>
+
+            <!-- Filtres rapides -->
+            <div class="option-group filter-group">
+                <div class="filter-buttons">
+                    <button
+                        @click="activeFilter = 'all'"
+                        :class="['filter-btn', { 'active': activeFilter === 'all' }]"
+                    >
+                        Toutes ({{ totalAvailableColumns }})
+                    </button>
+                    <button
+                        @click="activeFilter = 'visible'"
+                        :class="['filter-btn', { 'active': activeFilter === 'visible' }]"
+                    >
+                        Visibles ({{ visibleColumnsCount }})
+                    </button>
+                    <button
+                        @click="activeFilter = 'hidden'"
+                        :class="['filter-btn', { 'active': activeFilter === 'hidden' }]"
+                    >
+                        Masquées ({{ hiddenColumnsCount }})
+                    </button>
+                    <button
+                        v-if="enableColumnPinning"
+                        @click="activeFilter = 'pinned'"
+                        :class="['filter-btn', { 'active': activeFilter === 'pinned' }]"
+                    >
+                        Fixées ({{ pinnedColumnsCount }})
+                    </button>
+                </div>
+            </div>
+
             <!-- Contrôle du nombre de colonnes visibles par défaut -->
             <div class="option-group">
                 <label class="option-label">
@@ -40,7 +99,7 @@
 
             <!-- Option sticky header si pinning activé -->
             <div v-if="enableColumnPinning" class="option-group">
-                <label class="option-label">
+                <label class="option-label checkbox-label">
                     <input type="checkbox" :checked="stickyHeader" @change="toggleStickyHeader" />
                     <span>Fixer le header (sticky)</span>
                 </label>
@@ -79,7 +138,7 @@
                 <div class="column-info">
                     <div class="column-name">
                         {{ column?.headerName || column?.field || 'Colonne inconnue' }}
-                        <span v-if="column?.hide" class="hidden-indicator" title="Masquée par défaut">🔒</span>
+                        <IconLock v-if="column?.hide" class="hidden-indicator w-3.5 h-3.5 text-gray-500 dark:text-gray-400" title="Masquée par défaut" />
                     </div>
                     <div class="column-field">{{ column?.field || 'field' }}</div>
                 </div>
@@ -128,7 +187,7 @@
                     <div class="column-info">
                         <div class="column-name">
                             {{ column?.headerName || column?.field || 'Colonne inconnue' }}
-                            <span v-if="column?.hide" class="hidden-indicator" title="Masquée par défaut">🔒</span>
+                            <IconLock v-if="column?.hide" class="hidden-indicator w-3.5 h-3.5 text-gray-500 dark:text-gray-400" title="Masquée par défaut" />
                         </div>
                         <div class="column-field">{{ column?.field || 'field' }}</div>
                     </div>
@@ -154,6 +213,11 @@ import type { DataTableColumn } from '@/components/DataTable/types/dataTable'
 import IconDrag from '../icon/icon-drag.vue'
 import IconResize from '../icon/icon-resize.vue'
 import IconEye from '../icon/icon-eye.vue'
+import IconLock from '../icon/icon-lock.vue'
+import IconMinimize from '../icon/icon-minimize.vue'
+import IconExpand from '../icon/icon-expand.vue'
+import IconSearch from '../icon/icon-search.vue'
+import IconX from '../icon/icon-x.vue'
 
 /**
  * Props du composant ColumnManager
@@ -206,6 +270,16 @@ const draggedIndex = ref<number | null>(null)
  * Référence vers la liste des colonnes
  */
 const columnsList = ref<HTMLElement | null>(null)
+
+/**
+ * Requête de recherche pour filtrer les colonnes
+ */
+const searchQuery = ref<string>('')
+
+/**
+ * Filtre actif : 'all', 'visible', 'hidden', 'pinned'
+ */
+const activeFilter = ref<'all' | 'visible' | 'hidden' | 'pinned'>('all')
 
 // ===== COMPUTED PROPERTIES =====
 
@@ -323,7 +397,6 @@ const toggleColumnVisibility = (field: string) => {
         // Empêcher UNIQUEMENT de réactiver les colonnes avec hide: true (toujours masquées)
         // visible: false est autorisé car l'utilisateur peut l'afficher via ColumnManager
         if (columnDef.hide === true) {
-            console.warn(`🚫 [ColumnManager] Impossible de réactiver la colonne ${field} car elle a hide: true (toujours masquée)`)
             logger.warn(`Impossible de réactiver la colonne ${field} car elle a hide: true (toujours masquée)`)
             return
         }
@@ -336,7 +409,6 @@ const toggleColumnVisibility = (field: string) => {
         // Empêcher de masquer la dernière colonne visible
         const visibleCount = newVisibleColumns.length
         if (visibleCount <= 1) {
-            console.warn('🚫 [ColumnManager] Impossible de masquer la dernière colonne visible')
             logger.warn('Impossible de masquer la dernière colonne visible')
             return
         }

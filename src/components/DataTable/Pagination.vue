@@ -32,8 +32,8 @@
                 <Teleport to="body">
                     <Transition name="dropdown">
                         <div v-if="isOpen" ref="dropdownRef" :style="dropdownStyle" class="custom-select-dropdown-fixed">
-                            <div 
-                                v-for="option in pageSizeOptions" 
+                            <div
+                                v-for="option in pageSizeOptions"
                                 :key="option"
                                 class="select-option"
                                 :class="{ 'is-selected': option === displayPageSize }"
@@ -103,7 +103,7 @@ const dropdownStyle = computed(() => {
     if (!selectWrapperRef.value || !isOpen.value) {
         return {}
     }
-    
+
     const rect = selectWrapperRef.value.getBoundingClientRect()
     return {
         top: `${rect.bottom + 8}px`,
@@ -132,7 +132,7 @@ const vClickOutside = {
 const toggleDropdown = async () => {
     isOpen.value = !isOpen.value
     isFocused.value = isOpen.value
-    
+
     // Attendre que le DOM soit mis à jour pour calculer la position
     if (isOpen.value) {
         await nextTick()
@@ -146,15 +146,10 @@ const closeDropdown = () => {
 }
 
 const selectOption = (value: number) => {
-    console.log('[Pagination] selectOption:', { selectedValue: value, displayPageSize: displayPageSize.value })
     if (value !== displayPageSize.value) {
-        console.log('[Pagination] EMITTING page-size-changed:', value)
         emit('page-size-changed', value)
         // Forcer la mise à jour immédiate de currentPageSize
         currentPageSize.value = value
-        console.log('[Pagination] FORCED currentPageSize to:', currentPageSize.value)
-    } else {
-        console.log('[Pagination] NO EMIT: value same as current')
     }
     closeDropdown()
 }
@@ -214,35 +209,50 @@ onMounted(() => {
     gap: 0.5rem;
 }
 
+/* Style pagination avec couleurs du thème */
 .btn-pagination {
-    padding: 0.5rem 0.75rem;
-    background-color: #ffffff;
-    border: 1px solid #d1d5db;
-    border-radius: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    background-color: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 0.25rem;
     cursor: pointer;
     font-size: 0.875rem;
-    transition: all 0.2s;
+    color: var(--color-primary);
+    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    line-height: 1.5;
+    font-weight: 400;
 }
 
 .dark .btn-pagination {
-    background-color: #2d3748;
-    border-color: #4a5568;
-    color: #f7fafc;
+    background-color: var(--color-bg-card);
+    border-color: var(--color-border);
+    color: var(--color-primary-light);
 }
 
 .btn-pagination:hover:not(:disabled) {
-    background-color: #f9fafb;
-    border-color: #9ca3af;
+    color: var(--color-primary-dark);
+    background-color: var(--color-bg-hover);
+    border-color: var(--color-border);
 }
 
 .dark .btn-pagination:hover:not(:disabled) {
-    background-color: #374151;
-    border-color: #6b7280;
+    background-color: var(--color-bg-hover);
+    border-color: var(--color-border);
+    color: var(--color-primary);
 }
 
 .btn-pagination:disabled {
-    opacity: 0.5;
+    opacity: 0.65;
     cursor: not-allowed;
+    color: var(--color-text-muted);
+    background-color: var(--color-bg-card);
+    border-color: var(--color-border);
+}
+
+.dark .btn-pagination:disabled {
+    color: var(--color-text-muted);
+    background-color: var(--color-bg-card);
+    border-color: var(--color-border);
 }
 
 .page-info {

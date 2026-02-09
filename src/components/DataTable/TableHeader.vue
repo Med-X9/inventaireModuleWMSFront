@@ -1,20 +1,5 @@
 <template>
-    <!-- Skeleton loader pour le header pendant le chargement -->
-    <div v-if="loading" class="header-skeleton">
-        <div class="skeleton-header">
-            <div class="skeleton-search">
-                <div class="skeleton-search-input"></div>
-            </div>
-            <div class="skeleton-actions">
-                <div class="skeleton-button"></div>
-                <div class="skeleton-button"></div>
-                <div class="skeleton-button"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Header normal quand pas de chargement -->
-    <template v-else>
+    <!-- Header normal - toujours visible -->
         <div class="table-header">
             <div class="header-left">
                 <slot name="header-left" />
@@ -32,30 +17,34 @@
             <div class="search-container">
                 <div class="search-wrapper">
                     <IconSearch class="search-icon" />
-                    <input :value="globalSearchTerm" type="text" placeholder="Rechercher dans toutes les colonnes..."
-                        class="search-input" @input="onSearchInput" />
+                    <input
+                        ref="searchInputRef"
+                        :value="globalSearchTerm"
+                        type="text"
+                        placeholder="Rechercher dans toutes les colonnes..."
+                        class="search-input"
+                        @input="onSearchInput" />
                     <button v-if="globalSearchTerm" @click="clearSearch" class="search-clear" title="Effacer la recherche">
                         <IconX class="w-3 h-3" />
                     </button>
                 </div>
             </div>
 
-            <button 
-                v-if="hasActiveFilters" 
-                @click="clearAllFilters" 
-                class="filter-reset-button" 
+            <button
+                v-if="hasActiveFilters"
+                @click="clearAllFilters"
+                class="filter-reset-button"
                 :title="`${activeFiltersCount} filtre(s) actif(s) - Cliquer pour réinitialiser`">
                 <span class="filter-badge">{{ activeFiltersCount }}</span>
                 <IconTrash class="filter-icon" />
                 <span class="filter-text">Réinitialiser</span>
             </button>
         </div>
-    </template>
 </template>
 
 <script setup lang="ts">
 /* eslint-disable */
-import { computed } from 'vue'
+import { computed, ref, nextTick, onMounted, watch } from 'vue'
 import IconSearch from '../icon/icon-search.vue'
 import IconX from '../icon/icon-x.vue'
 import IconTrash from '../icon/icon-trash.vue'
@@ -77,15 +66,50 @@ const props = withDefaults(defineProps<Props>(), {
 })
 const emit = defineEmits<Emits>()
 
+// Référence à l'input de recherche pour préserver le focus
+const searchInputRef = ref<HTMLInputElement | null>(null)
+let lastFocusedElement: HTMLInputElement | null = null
+let shouldRestoreFocus = false
+
+// Préserver le focus lors des re-renders
+watch(() => props.globalSearchTerm, async () => {
+    if (shouldRestoreFocus && searchInputRef.value && document.activeElement === document.body) {
+        await nextTick()
+        searchInputRef.value.focus()
+        // Restaurer la position du curseur si possible
+        if (lastFocusedElement && searchInputRef.value === lastFocusedElement) {
+            const cursorPosition = (lastFocusedElement as any).__cursorPosition || searchInputRef.value.value.length
+            searchInputRef.value.setSelectionRange(cursorPosition, cursorPosition)
+        }
+        shouldRestoreFocus = false
+    }
+})
+
+onMounted(() => {
+    // Écouter les événements de focus pour sauvegarder la position du curseur
+    if (searchInputRef.value) {
+        searchInputRef.value.addEventListener('focus', () => {
+            lastFocusedElement = searchInputRef.value
+            shouldRestoreFocus = true
+        })
+        searchInputRef.value.addEventListener('input', (e) => {
+            const target = e.target as HTMLInputElement
+            if (target === searchInputRef.value) {
+                (target as any).__cursorPosition = target.selectionStart || target.value.length
+            }
+        })
+    }
+})
+
 // Fonction pour vérifier si un filtre est actif (a une valeur non vide)
 const isFilterActive = (filter: any): boolean => {
     if (!filter) return false
-    
+
     // Vérifier différents formats de filtres
     if (typeof filter === 'string') {
         return filter.trim() !== ''
     }
-    
+
     if (typeof filter === 'object') {
         // Format émis par FilterDropdown : { field, operator, dataType, value, values, value2 }
         // Vérifier d'abord si c'est un objet filtre complet (émis par FilterDropdown)
@@ -112,7 +136,7 @@ const isFilterActive = (filter: any): boolean => {
             }
             return false
         }
-        
+
         // Format { filter: value }
         if (filter.filter !== undefined && filter.filter !== null) {
             if (typeof filter.filter === 'string') {
@@ -120,7 +144,7 @@ const isFilterActive = (filter: any): boolean => {
             }
             return true
         }
-        
+
         // Format { value: value }
         if (filter.value !== undefined && filter.value !== null) {
             if (typeof filter.value === 'string') {
@@ -131,50 +155,55 @@ const isFilterActive = (filter: any): boolean => {
             }
             return true
         }
-        
+
         // Format { values: [] }
         if (filter.values !== undefined && Array.isArray(filter.values)) {
             return filter.values.length > 0
         }
-        
+
         // Format { value2: value } (pour les filtres de plage)
         if (filter.value2 !== undefined && filter.value2 !== null) {
             return true
         }
     }
-    
+
     return false
 }
 
 const hasActiveFilters = computed(() => {
     // Compter les filtres actifs dans filterState
-    const activeFilterStateCount = Object.keys(props.filterState || {}).filter(key => 
+    const activeFilterStateCount = Object.keys(props.filterState || {}).filter(key =>
         isFilterActive(props.filterState[key])
     ).length
-    
+
     // Compter les filtres actifs dans advancedFilters
-    const activeAdvancedFiltersCount = Object.keys(props.advancedFilters || {}).filter(key => 
+    const activeAdvancedFiltersCount = Object.keys(props.advancedFilters || {}).filter(key =>
         isFilterActive(props.advancedFilters[key])
     ).length
-    
+
     return activeFilterStateCount > 0 || activeAdvancedFiltersCount > 0
 })
 
 const activeFiltersCount = computed(() => {
     // Compter uniquement les filtres qui ont une valeur active
-    const activeFilterStateCount = Object.keys(props.filterState || {}).filter(key => 
+    const activeFilterStateCount = Object.keys(props.filterState || {}).filter(key =>
         isFilterActive(props.filterState[key])
     ).length
-    
-    const activeAdvancedFiltersCount = Object.keys(props.advancedFilters || {}).filter(key => 
+
+    const activeAdvancedFiltersCount = Object.keys(props.advancedFilters || {}).filter(key =>
         isFilterActive(props.advancedFilters[key])
     ).length
-    
+
     return activeFilterStateCount + activeAdvancedFiltersCount
 })
 
 const onSearchInput = (event: Event) => {
     const target = event.target as HTMLInputElement
+    // Sauvegarder la position du curseur
+    if (target === searchInputRef.value) {
+        (target as any).__cursorPosition = target.selectionStart || target.value.length
+        shouldRestoreFocus = true
+    }
     emit('update:globalSearchTerm', target.value)
 }
 
@@ -231,33 +260,36 @@ const clearAllFilters = () => {
     align-items: center;
 }
 
+/* Style DataTables avec couleurs du thème pour la recherche */
 .search-input {
     width: 100%;
-    padding: 0.75rem 2.5rem 0.75rem 2.5rem;
-    border: 2px solid #e5e7eb;
-    border-radius: 0.5rem;
+    padding: 0.5rem 2.5rem 0.5rem 2.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.25rem;
     font-size: 0.875rem;
-    background-color: #f9fafb;
-    transition: all 0.2s ease;
+    background-color: var(--color-bg-card);
+    color: var(--color-text);
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 
 .dark .search-input {
-    background-color: #2d3748;
-    border-color: #4a5568;
-    color: #f7fafc;
+    background-color: var(--color-bg-card);
+    border-color: var(--color-border);
+    color: var(--color-text);
 }
 
+/* Focus style avec couleurs du thème */
 .search-input:focus {
-    outline: none;
-    border-color: #3b82f6;
-    background-color: #ffffff;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: 0;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 0.2rem rgba(79, 70, 229, 0.25);
+    background-color: var(--color-bg-card);
 }
 
 .dark .search-input:focus {
-    background-color: #1a202c;
-    border-color: #60a5fa;
-    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+    border-color: var(--color-primary-light);
+    box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+    background-color: var(--color-bg-card);
 }
 
 .search-icon {

@@ -110,7 +110,7 @@
                                         <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                                     </svg>
                                 </div>
-                                <span class="text-sm text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white transition-colors flex-1" 
+                                <span class="text-sm text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white transition-colors flex-1"
                                       :class="{
                                           'font-medium': isValueSelected(option.value),
                                           'font-normal': !isValueSelected(option.value)
@@ -121,7 +121,7 @@
                         </div>
                     </div>
                 </div>
-                
+
             </div>
         </div>
 
@@ -132,14 +132,14 @@
                 <span>Opérateur</span>
             </label>
             <div class="relative">
-                <select 
-                    v-model="selectedOperator" 
+                <select
+                    v-model="selectedOperator"
                     @change="onOperatorChange"
                     class="w-full px-4 py-2.5 pr-10 text-sm font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 cursor-pointer appearance-none transition-all duration-200 hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-20 focus:border-primary shadow-sm hover:shadow-md"
                 >
-                    <option 
-                        v-for="op in availableOperators" 
-                        :key="op.value" 
+                    <option
+                        v-for="op in availableOperators"
+                        :key="op.value"
                         :value="op.value"
                         class="py-2 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800"
                     >
@@ -276,8 +276,8 @@
             <!-- Filtre booléen -->
             <div v-else-if="isBooleanFilter" class="filter-input-group">
                 <div class="relative">
-                    <select 
-                        v-model="filterValue" 
+                    <select
+                        v-model="filterValue"
                         @change="applyFilter"
                         class="w-full px-4 py-2.5 pr-10 text-sm font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 cursor-pointer appearance-none transition-all duration-200 hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-20 focus:border-primary shadow-sm hover:shadow-md"
                     >
@@ -332,13 +332,13 @@ import type { DataTableColumn, FilterOperator, ColumnDataType } from '@/componen
 interface Props {
     column: DataTableColumn
     isVisible: boolean
-    currentFilter?: any
+    currentFilter?: import('@/components/DataTable/types/composables').FilterConfig
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
     close: []
-    apply: [filter: any]
+    apply: [filter: import('@/components/DataTable/types/composables').FilterConfig]
     clear: []
 }>()
 
@@ -497,12 +497,12 @@ const columnOptions = computed(() => {
     if (props.column.filterConfig?.options && Array.isArray(props.column.filterConfig.options) && props.column.filterConfig.options.length > 0) {
         return props.column.filterConfig.options
     }
-    
+
     // Sinon, si c'est un type select, retourner un tableau vide
     if (props.column.dataType === 'select') {
         return []
     }
-    
+
     return []
 })
 
@@ -511,7 +511,7 @@ const filteredOptions = computed(() => {
     if (!searchText.value.trim()) {
         return columnOptions.value
     }
-    
+
     const searchLower = searchText.value.toLowerCase().trim()
     return columnOptions.value.filter(option => {
         const label = String(option.label || option.value || '').toLowerCase()
@@ -535,7 +535,7 @@ const isSomeFilteredSelected = computed(() => {
 // Fonction pour sélectionner/désélectionner toutes les options filtrées
 const toggleSelectAllFiltered = () => {
     const newSet = new Set(selectedSelectValues.value)
-    
+
     if (isAllFilteredSelected.value) {
         // Désélectionner toutes les options filtrées
         filteredOptions.value.forEach(option => {
@@ -553,7 +553,7 @@ const toggleSelectAllFiltered = () => {
             newSet.add(option.value)
         })
     }
-    
+
     selectedSelectValues.value = newSet
 }
 
@@ -611,10 +611,10 @@ const isSelectFilter = computed(() => {
     // Vérifier si c'est un filtre select basé sur le dataType OU si filterConfig.options est défini
     const column = props.column
     if (!column) return false
-    
+
     const hasSelectDataType = column.dataType === 'select'
     const hasFilterConfigOptions = column.filterConfig?.options && Array.isArray(column.filterConfig.options) && column.filterConfig.options.length > 0
-    
+
     return hasSelectDataType || hasFilterConfigOptions
 })
 
@@ -690,7 +690,7 @@ const getPlaceholder = (): string => {
 }
 
 // Fonction pour comparer deux valeurs (gère les objets)
-const areValuesEqual = (val1: any, val2: any): boolean => {
+const areValuesEqual = (val1: unknown, val2: unknown): boolean => {
     if (val1 === val2) return true
     if (val1 === null || val1 === undefined || val2 === null || val2 === undefined) return false
     if (typeof val1 === 'object' && typeof val2 === 'object') {
@@ -704,11 +704,11 @@ const areValuesEqual = (val1: any, val2: any): boolean => {
 }
 
 // Toggle une valeur dans le filtre select
-const toggleSelectValue = (value: any) => {
+const toggleSelectValue = (value: unknown) => {
     // Chercher si la valeur existe déjà (avec comparaison robuste)
     let found = false
-    let foundValue: any = null
-    
+    let foundValue: unknown = null
+
     for (const existingValue of selectedSelectValues.value) {
         if (areValuesEqual(existingValue, value)) {
             found = true
@@ -716,24 +716,21 @@ const toggleSelectValue = (value: any) => {
             break
         }
     }
-    
+
     // Créer un nouveau Set pour forcer la réactivité Vue
     const newSet = new Set(selectedSelectValues.value)
-    
+
     if (found && foundValue !== null) {
         newSet.delete(foundValue)
     } else {
         newSet.add(value)
     }
-    
+
     selectedSelectValues.value = newSet
-    
-    // Debug temporaire
-    console.log('toggleSelectValue - Nouvelle taille:', selectedSelectValues.value.size, 'canApply:', canApplyFilter.value)
 }
 
 // Vérifier si une valeur est sélectionnée (pour les checkboxes)
-const isValueSelected = (value: any): boolean => {
+const isValueSelected = (value: unknown): boolean => {
     for (const selectedValue of selectedSelectValues.value) {
         if (areValuesEqual(selectedValue, value)) {
             return true
@@ -750,7 +747,7 @@ const canApplyFilter = computed(() => {
         const size = selectedSelectValues.value.size
         return size > 0
     }
-    
+
     if (isNullFilter.value) return true
     if (isBetweenFilter.value) return filterValue.value && filterValue2.value
     if (isListFilter.value) return listValues.value.some(v => v.trim() !== '')
@@ -784,7 +781,7 @@ const onOperatorChange = () => {
 
 // Application du filtre
 const applyFilter = () => {
-    const filter: any = {
+    const filter: import('@/components/DataTable/types/composables').FilterConfig = {
         field: props.column.field,
         operator: selectedOperator.value,
         dataType: props.column.dataType || 'text'
@@ -824,15 +821,15 @@ const clearFilter = () => {
 // Initialisation avec le filtre existant
 watch(() => props.currentFilter, (newFilter) => {
     if (newFilter) {
-        selectedOperator.value = newFilter.operator || 'equals'
-        filterValue.value = newFilter.value || ''
-        filterValue2.value = newFilter.value2 || ''
+        selectedOperator.value = (newFilter.operator as FilterOperator) || 'equals'
+        filterValue.value = (newFilter.value as string) || ''
+        filterValue2.value = (newFilter.value2 as string) || ''
         if (newFilter.values) {
             if (isSelectFilter.value) {
                 // Pour les filtres select, utiliser les valeurs pour les checkboxes
                 selectedSelectValues.value = new Set(newFilter.values)
             } else {
-                listValues.value = [...newFilter.values, '']
+                listValues.value = [...(newFilter.values as string[]), '']
             }
         }
     } else {

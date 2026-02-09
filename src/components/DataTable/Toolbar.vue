@@ -1,22 +1,15 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
-    <!-- Skeleton loader pour la toolbar pendant le chargement -->
-    <div v-if="loading" class="toolbar-skeleton">
-        <div class="skeleton-toolbar">
-            <div class="skeleton-action-group">
-                <div class="skeleton-action-btn"></div>
-                <div class="skeleton-action-btn"></div>
-            </div>
-            <div class="skeleton-action-group">
-                <div class="skeleton-action-btn"></div>
-                <div class="skeleton-action-btn"></div>
-                <div class="skeleton-action-btn"></div>
-            </div>
-        </div>
-    </div>
+    <!-- Toolbar normale - toujours visible -->
+    <div class="actions-container flex items-center justify-end">
 
-    <!-- Toolbar normale quand pas de chargement -->
-    <div v-else class="actions-container flex items-center justify-end">
+        <!-- Bouton de gestion des colonnes -->
+        <div class="action-group" v-if="showColumnSelector">
+            <button @click="toggleColumnManager" class="action-btn" title="Gérer les colonnes">
+                <IconLayout class="w-3.5 h-3.5" />
+                <span>Colonnes</span>
+            </button>
+        </div>
 
         <!-- Export avec dropdown amélioré en second -->
         <div class="action-group">
@@ -114,6 +107,8 @@ interface Props {
     enableColumnPinning?: boolean
     columnPinning?: any
     stickyHeader?: boolean
+    defaultVisibleColumnsCount?: number
+    showColumnSelector?: boolean
 }
 
 interface Emits {
@@ -123,14 +118,20 @@ interface Emits {
     (e: 'export-selected-csv'): void
     (e: 'export-selected-spreadsheet'): void
     (e: 'deselect-all'): void
+    (e: 'open-column-manager'): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
-    loading: false
+    loading: false,
+    showColumnSelector: true
 })
 const emit = defineEmits<Emits>()
 
 const showExportDropdown = ref(false)
+
+const toggleColumnManager = () => {
+    emit('open-column-manager')
+}
 
 const toggleExportDropdown = () => {
     showExportDropdown.value = !showExportDropdown.value
@@ -182,68 +183,77 @@ const deselectAll = () => {
 }
 
 /* Boutons d'action améliorés */
+/* Style boutons d'action avec couleurs du thème */
 .action-btn {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    background-color: #ffffff;
-    border: 2px solid #e5e7eb;
-    border-radius: 0.5rem;
+    padding: 0.375rem 0.75rem;
+    background-color: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 0.25rem;
+    color: var(--color-primary);
     font-size: 0.875rem;
-    font-weight: 500;
-    color: #374151;
+    font-weight: 400;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    line-height: 1.5;
     white-space: nowrap;
 }
 
 .dark .action-btn {
-    background-color: #2d3748;
-    border-color: #4a5568;
-    color: #f7fafc;
+    background-color: var(--color-bg-card);
+    border-color: var(--color-border);
+    color: var(--color-primary-light);
 }
 
 .action-btn:hover {
-    background-color: #f9fafb;
-    border-color: #d1d5db;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    color: var(--color-primary-dark);
+    background-color: var(--color-bg-hover);
+    border-color: var(--color-border);
 }
 
 .dark .action-btn:hover {
-    background-color: #374151;
-    border-color: #6b7280;
+    background-color: var(--color-bg-hover);
+    border-color: var(--color-border);
+    color: var(--color-primary);
 }
 
 .action-btn:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+    color: var(--color-primary-dark);
+    background-color: var(--color-bg-hover);
+    border-color: var(--color-border);
+    box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
 }
 
-/* Bouton d'export spécial */
+.dark .action-btn:active {
+    background-color: var(--color-bg-hover);
+    border-color: var(--color-border);
+}
+
+/* Bouton d'export avec couleurs du thème */
 .export-btn {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    background-color: var(--color-primary);
     border-color: var(--color-primary);
-    color: #ffffff;
+    color: #fff;
 }
 
 .dark .export-btn {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    background-color: var(--color-primary);
     border-color: var(--color-primary);
-    color: #ffffff;
+    color: #fff;
 }
 
 .export-btn:hover {
-    background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%);
+    background-color: var(--color-primary-dark);
     border-color: var(--color-primary-dark);
-    color: #ffffff;
+    color: #fff;
 }
 
 .dark .export-btn:hover {
-    background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%);
+    background-color: var(--color-primary-dark);
     border-color: var(--color-primary-dark);
-    color: #ffffff;
+    color: #fff;
 }
 
 /* Dropdown d'export amélioré */
@@ -432,7 +442,7 @@ const deselectAll = () => {
     .column-manager-popup-overlay {
         padding: 0.5rem;
     }
-    
+
     .column-manager-popup {
         max-width: 100vw;
         max-height: 100vh;

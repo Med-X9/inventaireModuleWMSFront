@@ -8,30 +8,17 @@
 
 import { ref, computed } from 'vue'
 import type { DataTableColumn } from '../types/dataTable'
+import type { UseDataTableEditingConfig as BaseUseDataTableEditingConfig, EditingCellState } from '../types/composables'
 
 /**
  * Configuration pour useDataTableEditing
  */
-export interface UseDataTableEditingConfig {
-  /** Colonnes éditables */
-  columns: DataTableColumn[]
-  /** Données de la table */
-  rowData: any[]
-  /** Callback lors de la sauvegarde */
-  onSave?: (row: any, field: string, value: any) => Promise<void>
-  /** Callback lors de l'annulation */
-  onCancel?: (row: any, field: string) => void
-}
+export type UseDataTableEditingConfig = BaseUseDataTableEditingConfig
 
 /**
  * État d'édition d'une cellule
  */
-export interface EditingCell {
-  rowId: string | number
-  field: string
-  value: any
-  originalValue: any
-}
+export type EditingCell = EditingCellState
 
 /**
  * Composable pour l'édition inline
@@ -63,7 +50,7 @@ export function useDataTableEditing(config: UseDataTableEditingConfig) {
   /**
    * Démarre l'édition d'une cellule
    */
-  const startEditing = (rowId: string | number, field: string, initialValue?: any) => {
+  const startEditing = (rowId: string | number, field: string, initialValue?: unknown) => {
     const row = rowData.find(r => r.id === rowId || r.reference === rowId)
     if (!row) return
 
@@ -83,7 +70,7 @@ export function useDataTableEditing(config: UseDataTableEditingConfig) {
   /**
    * Met à jour la valeur d'une cellule en cours d'édition
    */
-  const updateEditingValue = (rowId: string | number, field: string, value: any) => {
+  const updateEditingValue = (rowId: string | number, field: string, value: unknown) => {
     const key = getCellKey(rowId, field)
     const cell = editingCells.value.get(key)
     if (cell) {
@@ -102,11 +89,10 @@ export function useDataTableEditing(config: UseDataTableEditingConfig) {
     try {
       // Appeler le callback de sauvegarde si fourni
       if (onSave) {
-        await onSave(
-          rowData.find(r => r.id === rowId || r.reference === rowId),
-          field,
-          cell.value
-        )
+        const row = rowData.find(r => r.id === rowId || r.reference === rowId)
+        if (row) {
+          await onSave(row, field, cell.value)
+        }
       }
 
       // Mettre à jour les données locales
@@ -119,7 +105,6 @@ export function useDataTableEditing(config: UseDataTableEditingConfig) {
       editingCells.value.delete(key)
       focusedCell.value = null
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde:', error)
       // En cas d'erreur, restaurer la valeur originale
       cancelEditing(rowId, field)
     }
@@ -133,10 +118,10 @@ export function useDataTableEditing(config: UseDataTableEditingConfig) {
     const cell = editingCells.value.get(key)
 
     if (cell && onCancel) {
-      onCancel(
-        rowData.find(r => r.id === rowId || r.reference === rowId),
-        field
-      )
+      const row = rowData.find(r => r.id === rowId || r.reference === rowId)
+      if (row) {
+        onCancel(row, field)
+      }
     }
 
     editingCells.value.delete(key)
@@ -148,7 +133,7 @@ export function useDataTableEditing(config: UseDataTableEditingConfig) {
   /**
    * Obtient la valeur actuelle d'une cellule (éditée ou originale)
    */
-  const getCellValue = (rowId: string | number, field: string): any => {
+  const getCellValue = (rowId: string | number, field: string): unknown => {
     const key = getCellKey(rowId, field)
     const cell = editingCells.value.get(key)
 

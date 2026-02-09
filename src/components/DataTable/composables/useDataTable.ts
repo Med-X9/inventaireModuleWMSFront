@@ -11,13 +11,13 @@
  * @param emit - Fonction d'émission d'événements
  * @returns État et actions de la table
  */
-import { ref, computed, watch, unref } from 'vue'
+import { ref, computed, watch, watchEffect, unref } from 'vue'
 import type { DataTableProps } from '@/components/DataTable/types/dataTable'
 import { useDataTableCore } from './useDataTableCore'
 import { useDataTableExport } from './useDataTableExport'
 import { useDataTableSelection } from './useDataTableSelection'
 
-export function useDataTable(props: DataTableProps, emit: any) {
+export function useDataTable(props: DataTableProps, emit: import('../types/composables').EmitFunction) {
     // Utiliser les composables spécialisés (SOLID - Single Responsibility)
     const core = useDataTableCore({
         columns: props.columns,
@@ -178,20 +178,16 @@ export function useDataTable(props: DataTableProps, emit: any) {
         }
     }, { immediate: true })
 
-    // Synchroniser effectivePageSize avec pageSizeProp quand il change (uniquement si pas de pagination serveur)
-    // Pour la pagination serveur, c'est géré par le watcher spécifique plus bas
+    // ⚡ SERVER-SIDE ONLY : Synchroniser effectivePageSize avec pageSizeProp
+    // En server-side, la pagination est gérée par le serveur, on synchronise juste la taille de page
     watch(() => props.pageSizeProp, (newPageSize) => {
-        if (!props.serverSidePagination) {
         if (newPageSize !== undefined && newPageSize !== null && newPageSize !== effectivePageSize.value) {
             effectivePageSize.value = newPageSize
-            // Recalculer les pages totales
-            effectiveTotalPages.value = Math.ceil(effectiveTotalItems.value / effectivePageSize.value)
             // Réinitialiser à la page 1 si nécessaire
             if (effectiveCurrentPage.value > effectiveTotalPages.value) {
                 effectiveCurrentPage.value = 1
             }
             updatePaginationInfo()
-            }
         }
     }, { immediate: true })
 
@@ -210,42 +206,35 @@ export function useDataTable(props: DataTableProps, emit: any) {
         if (rowData && Array.isArray(rowData)) {
             paginatedData.value = [...rowData]
 
-            // Utiliser totalItemsProp si disponible, sinon la longueur des données
+            // ⚡ SERVER-SIDE ONLY : Utiliser totalItemsProp depuis le serveur
             effectiveTotalItems.value = props.totalItemsProp ?? rowData.length
 
-            // ⚠️ Pour pagination serveur : ne pas calculer totalPages, utiliser uniquement totalPagesProp
-            if (!props.serverSidePagination && effectiveTotalItems.value > 0 && effectivePageSize.value > 0) {
-                // Pagination côté client : calculer totalPages
-            effectiveTotalPages.value = Math.ceil(effectiveTotalItems.value / effectivePageSize.value)
+            // ⚡ SERVER-SIDE ONLY : Utiliser totalPagesProp depuis le serveur (ne pas calculer)
+            // Le serveur fournit totalPagesProp dans la réponse
+            if (props.totalPagesProp !== undefined) {
+                effectiveTotalPages.value = props.totalPagesProp
             }
             updatePaginationInfo()
         }
     }
 
-    // Fonction pour mettre à jour les informations de pagination
+    // ⚡ SERVER-SIDE ONLY : Fonction pour mettre à jour les informations de pagination
     const updatePaginationInfo = () => {
         const startIndex = (effectiveCurrentPage.value - 1) * effectivePageSize.value
 
-        if (props.serverSidePagination) {
-            // En pagination côté serveur, utiliser le nombre réel d'éléments dans rowDataProp
-            // pour calculer l'end correct
-            if (Array.isArray(props.rowDataProp) && props.rowDataProp.length > 0) {
-                // Le nombre réel d'éléments sur la page actuelle
+        // En pagination côté serveur, utiliser le nombre réel d'éléments dans rowDataProp
+        // pour calculer l'end correct
+        if (Array.isArray(props.rowDataProp) && props.rowDataProp.length > 0) {
+            // Le nombre réel d'éléments sur la page actuelle
             const actualDataCount = props.rowDataProp.length
-                // L'index de fin est l'index de début + le nombre réel d'éléments
-                const endIndex = startIndex + actualDataCount
-                start.value = startIndex + 1
-                end.value = Math.min(endIndex, effectiveTotalItems.value)
-            } else {
-                // Si pas de données, utiliser pageSize
-                start.value = startIndex + 1
-                end.value = Math.min(startIndex + effectivePageSize.value, effectiveTotalItems.value)
-        }
+            // L'index de fin est l'index de début + le nombre réel d'éléments
+            const endIndex = startIndex + actualDataCount
+            start.value = startIndex + 1
+            end.value = Math.min(endIndex, effectiveTotalItems.value)
         } else {
-            // Pagination côté client : utiliser pageSize
-            const endIndex = Math.min(startIndex + effectivePageSize.value, effectiveTotalItems.value)
-        start.value = startIndex + 1
-        end.value = endIndex
+            // Si pas de données, utiliser pageSize
+            start.value = startIndex + 1
+            end.value = Math.min(startIndex + effectivePageSize.value, effectiveTotalItems.value)
         }
     }
 
@@ -375,7 +364,7 @@ export function useDataTable(props: DataTableProps, emit: any) {
         selection.deselectAllRows()
         // Mettre à jour aussi l'état local selectedRows
         selectedRows.value = new Set()
-        emit('selection-changed', new Set())
+        emit('selection-changed', new Set<string>())
     }
 
     const setSelectedRows = (newSelection: Set<string>) => {
@@ -426,158 +415,59 @@ export function useDataTable(props: DataTableProps, emit: any) {
     // S'assurer que les sélections sont vides à l'initialisation
     selectedRows.value = new Set()
 
-    // Watcher pour les changements de données
-    watch([() => props.rowDataProp, () => props.totalItemsProp, () => props.totalPagesProp], ([newData, newTotalItems, newTotalPages]) => {
-        // Déballer newData si c'est un ref/computed
-        let unwrappedData = newData
-        if (newData) {
+    // ⚡ OPTIMISATION : Watcher unique optimisé pour toutes les props de pagination
+    // Utilise watchEffect avec flush: 'post' pour batch les mises à jour et éviter les cascades
+    watchEffect(() => {
+        // Déballer rowDataProp si c'est un ref/computed
+        let unwrappedData = props.rowDataProp
+        if (unwrappedData) {
             try {
-                unwrappedData = unref(newData) || newData
+                unwrappedData = unref(unwrappedData) || unwrappedData
             } catch (e) {
-                unwrappedData = newData
+                unwrappedData = props.rowDataProp
             }
         }
-        
-        // Pour la pagination côté serveur, ne pas modifier paginatedData
-        // Les données viennent directement du serveur via rowDataProp
-        if (props.serverSidePagination) {
-            // Mettre à jour seulement les totaux pour la pagination
-            // Utiliser totalItemsProp si fourni, sinon calculer depuis les données
-            if (newTotalItems !== undefined && newTotalItems !== null) {
-                effectiveTotalItems.value = newTotalItems
-            } else if (Array.isArray(unwrappedData)) {
-                effectiveTotalItems.value = unwrappedData.length
-            } else {
-                effectiveTotalItems.value = 0
-            }
 
-            // ⚠️ Pour pagination serveur : utiliser UNIQUEMENT totalPagesProp du backend (calculé par le backend)
-            // Le backend calcule totalPages et le fournit dans chaque réponse
-            // Utiliser cette valeur même si c'est 0 (le backend sait mieux)
-            if (props.serverSidePagination) {
-                if (newTotalPages !== undefined && newTotalPages !== null) {
-                    // Utiliser directement la valeur du backend (même si c'est 0)
-                    effectiveTotalPages.value = newTotalPages
-                } else {
-                    // Fallback uniquement si totalPagesProp n'est vraiment pas fourni (undefined/null)
-                    // Dans ce cas, calculer au minimum 1 pour éviter "Page 1 sur 0"
-                    if (effectiveTotalItems.value > 0 && effectivePageSize.value > 0) {
-                        effectiveTotalPages.value = Math.max(1, Math.ceil(effectiveTotalItems.value / effectivePageSize.value))
-                    } else {
-                        effectiveTotalPages.value = 1 // Au minimum 1 page
-                    }
-                }
-            } else if (effectiveTotalItems.value > 0 && effectivePageSize.value > 0) {
-                // Pagination côté client : calculer totalPages
-                effectiveTotalPages.value = Math.ceil(effectiveTotalItems.value / effectivePageSize.value)
-            }
+        // ⚡ SERVER-SIDE ONLY : Mettre à jour les totaux depuis les props du backend
+        const newTotalItems = props.totalItemsProp
+        const newTotalPages = props.totalPagesProp
+        const newPage = props.currentPageProp
+        const newPageSize = props.pageSizeProp
 
-            // Toujours mettre à jour les infos de pagination après un changement de données
-            updatePaginationInfo()
-            return
-        }
-
-        // Pour la pagination côté client, mettre à jour paginatedData
-        if (unwrappedData && Array.isArray(unwrappedData) && unwrappedData.length > 0) {
-            // Créer une nouvelle référence pour forcer la mise à jour
-            paginatedData.value = [...unwrappedData]
-
-            // Utiliser totalItemsProp si disponible, sinon la longueur des données
-            effectiveTotalItems.value = newTotalItems ?? unwrappedData.length
-
-            // ⚠️ Pour pagination serveur : ne pas calculer totalPages, utiliser uniquement totalPagesProp
-            if (!props.serverSidePagination && effectiveTotalItems.value > 0 && effectivePageSize.value > 0) {
-                // Pagination côté client : calculer totalPages
-            effectiveTotalPages.value = Math.ceil(effectiveTotalItems.value / effectivePageSize.value)
-            }
-            updatePaginationInfo()
-
-            // S'assurer que les sélections restent vides lors du chargement de nouvelles données
-            // Ne pas sélectionner automatiquement toutes les lignes
+        // Mettre à jour effectiveTotalItems
+        if (newTotalItems !== undefined && newTotalItems !== null) {
+            effectiveTotalItems.value = newTotalItems
+        } else if (Array.isArray(unwrappedData)) {
+            effectiveTotalItems.value = unwrappedData.length
         } else {
-            // Si les données sont vides ou non définies, vider aussi paginatedData
-            paginatedData.value = []
-            effectiveTotalItems.value = newTotalItems ?? 0
-            // ⚠️ Pour pagination serveur : ne pas calculer totalPages, utiliser uniquement totalPagesProp
-            if (!props.serverSidePagination && effectiveTotalItems.value > 0 && effectivePageSize.value > 0) {
-                // Pagination côté client : calculer totalPages
-            effectiveTotalPages.value = Math.ceil(effectiveTotalItems.value / effectivePageSize.value)
-            }
-            updatePaginationInfo()
+            effectiveTotalItems.value = 0
         }
-    }, { immediate: true, deep: true, flush: 'post' })
 
-    // Watcher spécifique pour totalItemsProp et totalPagesProp (pagination côté serveur)
-    // ⚠️ Le backend calcule et fournit totalPages selon FORMAT_ACTUEL.md : { rows, page, pageSize, total, totalPages }
-    // Utiliser UNIQUEMENT la valeur du backend - aucun calcul côté frontend
-    watch([() => props.totalItemsProp, () => props.totalPagesProp], ([newTotalItems, newTotalPages]) => {
-        if (props.serverSidePagination) {
-            if (newTotalItems !== undefined && newTotalItems !== null) {
-                effectiveTotalItems.value = newTotalItems
-            }
-
-            // ⚠️ UTILISER DIRECTEMENT totalPagesProp du backend (calculé par le backend)
-            // Le backend calcule totalPages et le fournit dans chaque réponse
-            // Utiliser cette valeur même si c'est 0 (le backend sait mieux)
-            if (newTotalPages !== undefined && newTotalPages !== null) {
-                // Utiliser directement la valeur du backend (même si c'est 0)
-                effectiveTotalPages.value = newTotalPages
+        // ⚡ SERVER-SIDE ONLY : Utiliser UNIQUEMENT totalPagesProp du backend
+        if (newTotalPages !== undefined && newTotalPages !== null) {
+            effectiveTotalPages.value = newTotalPages
+        } else {
+            // Fallback uniquement si totalPagesProp n'est pas fourni
+            if (effectiveTotalItems.value > 0 && effectivePageSize.value > 0) {
+                effectiveTotalPages.value = Math.max(1, Math.ceil(effectiveTotalItems.value / effectivePageSize.value))
             } else {
-                // Fallback uniquement si totalPagesProp n'est vraiment pas fourni (undefined/null)
-                // Dans ce cas, calculer au minimum 1 pour éviter "Page 1 sur 0"
-                if (newTotalItems !== undefined && newTotalItems !== null && effectivePageSize.value > 0) {
-                    effectiveTotalPages.value = Math.max(1, Math.ceil(newTotalItems / effectivePageSize.value))
-                } else {
-                    effectiveTotalPages.value = 1 // Au minimum 1 page si aucune donnée
-                }
+                effectiveTotalPages.value = 1
             }
-            updatePaginationInfo()
         }
-    }, { immediate: true })
 
-    // Watcher pour les props de pagination côté serveur
-    watch([() => props.currentPageProp, () => props.pageSizeProp, () => props.totalPagesProp], ([newPage, newPageSize, newTotalPages]) => {
-        if (props.serverSidePagination) {
-            let shouldUpdate = false
-
-            if (newPage !== undefined && newPage !== null && newPage !== effectiveCurrentPage.value) {
+        // Mettre à jour la page actuelle
+        if (newPage !== undefined && newPage !== null && newPage !== effectiveCurrentPage.value) {
             effectiveCurrentPage.value = newPage
-                shouldUpdate = true
         }
 
-            if (newPageSize !== undefined && newPageSize !== null && newPageSize !== effectivePageSize.value) {
+        // Mettre à jour la taille de page
+        if (newPageSize !== undefined && newPageSize !== null && newPageSize !== effectivePageSize.value) {
             effectivePageSize.value = newPageSize
-                shouldUpdate = true
-                // ⚠️ Pour pagination serveur : ne pas calculer totalPages, utiliser uniquement totalPagesProp
-                // Le calcul est géré par le else plus bas pour la pagination côté client
-            }
-
-            // ⚠️ Pour pagination serveur : utiliser UNIQUEMENT totalPagesProp du backend (selon FORMAT_ACTUEL.md)
-            // Le backend calcule et fournit : { rows, page, pageSize, total, totalPages }
-            // Utiliser cette valeur même si c'est 0 (le backend sait mieux)
-            if (newTotalPages !== undefined && newTotalPages !== null) {
-                // Utiliser directement la valeur du backend (même si c'est 0)
-                effectiveTotalPages.value = newTotalPages
-            } else if (!props.serverSidePagination) {
-                // Pagination côté client uniquement : calculer totalPages si nécessaire
-                if (effectiveTotalItems.value > 0 && newPageSize !== undefined && newPageSize !== null && newPageSize > 0) {
-                    effectiveTotalPages.value = Math.max(1, Math.ceil(effectiveTotalItems.value / newPageSize))
-                } else {
-                    effectiveTotalPages.value = 1 // Au minimum 1 page
-                }
-            } else if (props.serverSidePagination) {
-                // Pour pagination serveur, si totalPagesProp n'est vraiment pas fourni (undefined/null), calculer au minimum 1
-                if (effectiveTotalItems.value > 0 && effectivePageSize.value > 0) {
-                    effectiveTotalPages.value = Math.max(1, Math.ceil(effectiveTotalItems.value / effectivePageSize.value))
-                } else {
-                    effectiveTotalPages.value = 1 // Au minimum 1 page
-                }
-            }
-
-            // Toujours mettre à jour les infos de pagination
-        updatePaginationInfo()
         }
-    }, { immediate: true, flush: 'post' })
+
+        // Toujours mettre à jour les infos de pagination
+        updatePaginationInfo()
+    }, { flush: 'post' })
 
     // Watcher pour l'état de chargement
     watch(() => props.loading, (newLoading) => {
@@ -594,27 +484,27 @@ export function useDataTable(props: DataTableProps, emit: any) {
     }, { immediate: true, deep: true })
 
     return {
-        // États - retourner les valeurs au lieu des refs
-        get globalSearchTerm() { return globalSearchTerm.value },
-        get filterState() { return filterState.value },
-        get advancedFilters() { return advancedFilters.value },
-        get columns() { return columns.value },
+        // États - utiliser computed pour la réactivité standard Vue 3
+        globalSearchTerm: computed(() => globalSearchTerm.value),
+        filterState: computed(() => filterState.value),
+        advancedFilters: computed(() => advancedFilters.value),
+        columns: computed(() => columns.value),
         // Méthode pour mettre à jour le filterState
         setFilterState,
-        get visibleColumns() { return visibleColumns.value },
-        get columnWidths() { return columnWidths.value },
-        get rowSelection() { return rowSelection.value },
-        get selectedRows() { return selectedRows.value },
-        get exportLoading() { return exportLoading.value },
-        get paginatedData() { return paginatedData.value },
-        get effectiveCurrentPage() { return effectiveCurrentPage.value },
-        get effectiveTotalPages() { return effectiveTotalPages.value },
-        get effectiveTotalItems() { return effectiveTotalItems.value },
-        get effectivePageSize() { return effectivePageSize.value },
-        get start() { return start.value },
-        get end() { return end.value },
-        get actions() { return actions.value },
-        get loading() { return isLoading.value },
+        visibleColumns: computed(() => visibleColumns.value),
+        columnWidths: computed(() => columnWidths.value),
+        rowSelection: computed(() => rowSelection.value),
+        selectedRows: computed(() => selectedRows.value),
+        exportLoading: computed(() => exportLoading.value),
+        paginatedData: computed(() => paginatedData.value),
+        effectiveCurrentPage: computed(() => effectiveCurrentPage.value),
+        effectiveTotalPages: computed(() => effectiveTotalPages.value),
+        effectiveTotalItems: computed(() => effectiveTotalItems.value),
+        effectivePageSize: computed(() => effectivePageSize.value),
+        start: computed(() => start.value),
+        end: computed(() => end.value),
+        actions: computed(() => actions.value),
+        loading: computed(() => isLoading.value),
 
         // Méthodes
         clearAllFilters,

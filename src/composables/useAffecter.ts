@@ -133,6 +133,20 @@ export interface RowAction {
 
 // ===== FONCTIONS UTILITAIRES =====
 
+/**
+ * Extrait l'ID numérique d'un ID qui peut contenir le suffixe -idxX du DataTable
+ * Le DataTable génère des IDs avec suffixe (ex: "132-idx0") pour garantir l'unicité
+ * Cette fonction extrait la partie numérique avant le suffixe
+ *
+ * @param idWithSuffix - ID avec ou sans suffixe -idxX
+ * @returns ID numérique sans suffixe
+ */
+const extractJobId = (idWithSuffix: string): string => {
+    if (idWithSuffix.includes('-idx')) {
+        return idWithSuffix.split('-idx')[0];
+    }
+    return idWithSuffix;
+};
 
 /**
  * Récupère l'ID de l'inventaire par sa référence
@@ -268,12 +282,21 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
     /**
      * Fonction helper pour obtenir les RowNode sélectionnés à partir des IDs
+     * ⚠️ IMPORTANT : Les IDs sélectionnés peuvent contenir le suffixe -idxX du DataTable
+     * Il faut extraire l'ID numérique avant la comparaison
      */
     const getSelectedRowNodes = (): RowNode[] => {
         const selectedIds = selectedJobs.value
         if (selectedIds.length === 0) return []
 
-        return displayData.value.filter(row => selectedIds.includes(row.id) && !row.isChild)
+        // Nettoyer tous les IDs sélectionnés (enlever le suffixe -idxX)
+        const cleanSelectedIds = selectedIds.map(extractJobId);
+
+        // Filtrer les rows en comparant avec les IDs nettoyés
+        return displayData.value.filter(row => {
+            const rowId = row.id?.toString() || '';
+            return cleanSelectedIds.includes(rowId) && !row.isChild;
+        })
     }
 
     /** Modifications en attente de sauvegarde (Map<jobId, Map<field, value>>) */
@@ -939,12 +962,18 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
      * Vérifie si un job est éligible au transfert basé sur son statut
      * Puisque nous n'avons pas les assignments détaillés, on se base sur le statut du job
      *
-     * @param jobId - ID du job
+     * @param jobId - ID du job (peut contenir le suffixe -idxX du DataTable)
      * @returns true si le job est éligible au transfert
      */
     const hasTransferableAssignment = (jobId: string): boolean => {
+        // ⚠️ IMPORTANT : Extraire l'ID numérique si le jobId contient le suffixe -idxX
+        const cleanJobId = extractJobId(jobId);
+
         // Récupérer les données du job depuis displayData (RowNode)
-        const job = displayData.value.find(j => j.id === jobId)
+        const job = displayData.value.find(j => {
+            const rowId = j.id?.toString() || '';
+            return rowId === cleanJobId;
+        });
         if (!job) return false
 
         // Les jobs avec statut TRANSFERT, PRET ou ENTAME sont éligibles
@@ -2013,14 +2042,19 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
      */
     async function onRowClicked(jobId: string) {
         try {
-            // Trouver le job correspondant à l'ID
+            // ⚠️ IMPORTANT : Le DataTable génère des IDs avec suffixe -idxX (ex: "132-idx0")
+            // Il faut extraire l'ID numérique avant la comparaison
+            const cleanJobId = extractJobId(jobId);
+
+            // Trouver le job correspondant à l'ID (comparer avec l'ID nettoyé)
             const selectedJob: any = jobs.value.find((job: any) => {
                 const jobRowId = job.id?.toString() || job.reference || `job-${job.id}`;
-                return jobRowId === jobId;
+                // Comparer avec l'ID nettoyé (sans suffixe -idxX)
+                return jobRowId === cleanJobId;
             });
 
             if (!selectedJob) {
-                logger.warn('Job non trouvé pour l\'ID:', jobId);
+                logger.warn(`Job non trouvé pour l'ID: ${jobId} (ID nettoyé: ${cleanJobId})`);
                 alertService.error({ text: 'Job introuvable' });
                 return;
             }

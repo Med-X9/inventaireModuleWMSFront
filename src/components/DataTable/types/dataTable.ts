@@ -342,8 +342,6 @@ export interface DataTableProps<T = Record<string, unknown>> {
     totalItemsProp?: number
     /** Taille de page par défaut */
     pageSizeProp?: number
-    /** Active la pagination côté serveur */
-    serverSidePagination?: boolean
     /** Map d'icônes pour les actions */
     iconMap?: Record<string, any>
     /** État de chargement pour afficher le skeleton */
@@ -351,8 +349,16 @@ export interface DataTableProps<T = Record<string, unknown>> {
     /** État forbidden (permissions insuffisantes) */
     forbidden?: boolean
 
-    /** Active le double-clic sur les lignes (désactivé par défaut) */
+    /** Active le clic sur les lignes (désactivé par défaut) */
     enableRowClick?: boolean
+
+    /**
+     * Mode de clic pour l'événement row-clicked
+     * - 'single' : clic simple
+     * - 'double' : double-clic (comportement historique par défaut)
+     * - 'both' : les deux déclenchent l'événement
+     */
+    rowClickMode?: 'single' | 'double' | 'both'
 
     /** Configuration de l'empty state personnalisé */
     emptyStateConfig?: {
@@ -376,15 +382,26 @@ export interface DataTableProps<T = Record<string, unknown>> {
 
     // === FONCTIONNALITÉS AVANCÉES ===
 
-    /** Active le virtual scrolling */
-    enableVirtualScrolling?: boolean
-    /** Configuration du virtual scrolling */
-    virtualScrollingConfig?: {
-        itemHeight: number
-        containerHeight: number
-        overscan?: number
-        threshold?: number
+    /** Active la détection automatique des colonnes dynamiques basées sur les données */
+    enableDynamicColumns?: boolean
+
+    /** Configuration pour la détection des colonnes dynamiques */
+    dynamicColumnsConfig?: {
+        /** Fonction personnalisée pour détecter et créer des colonnes dynamiques */
+        customDetector?: (data: Record<string, unknown>[], existingColumns: DataTableColumn[]) => DataTableColumn[]
+
+        /** Champs à exclure de la détection automatique (ex: __metadata__, __rowNumber__) */
+        excludeFields?: string[] | ((field: string) => boolean)
+
+        /** Fonction pour déterminer le type de données d'un champ */
+        fieldTypeDetector?: (field: string, value: unknown) => ColumnDataType
+
+        /** Configuration par défaut pour les colonnes détectées */
+        defaultColumnConfig?: Partial<DataTableColumn>
     }
+
+    /** ⚡ SUPPRIMÉ : enableVirtualScrolling - Inutile en server-side uniquement */
+    /** ⚡ SUPPRIMÉ : virtualScrollingConfig - Inutile en server-side uniquement */
 
     /** Active le groupement de lignes */
     enableGrouping?: boolean
@@ -428,10 +445,6 @@ export interface DataTableProps<T = Record<string, unknown>> {
         cacheDetails?: boolean
     }
 
-    /** Active le tri côté serveur */
-    serverSideSorting?: boolean
-    /** Active le filtrage côté serveur */
-    serverSideFiltering?: boolean
     /** Délai de debounce pour les filtres */
     debounceFilter?: number
     /** Paramètres personnalisés à ajouter aux paramètres DataTable standard */

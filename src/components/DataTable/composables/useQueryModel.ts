@@ -7,6 +7,8 @@
 
 import { ref, computed, watch, type Ref } from 'vue'
 import type { QueryModel, SortModel, FilterModel } from '../types/QueryModel'
+import type { DataTableColumn } from '../types/dataTable'
+import { DATA_TABLE_CONSTANTS } from '../constants'
 import {
   createEmptyQueryModel,
   updatePagination,
@@ -22,7 +24,7 @@ import {
 
 export interface UseQueryModelConfig {
   /** Colonnes pour validation */
-  columns?: any[]
+  columns?: DataTableColumn[]
   /** QueryModel initial */
   initialQueryModel?: Partial<QueryModel>
   /** Délai de debounce pour les updates */
@@ -73,7 +75,7 @@ export function useQueryModel(config: UseQueryModelConfig = {}) {
   const {
     columns = [],
     initialQueryModel = {},
-    debounceDelay = 300,
+    debounceDelay = DATA_TABLE_CONSTANTS.DEBOUNCE_FILTER_DELAY,
     onChange
   } = config
 

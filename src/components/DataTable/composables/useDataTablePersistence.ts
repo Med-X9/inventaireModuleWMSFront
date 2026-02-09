@@ -5,7 +5,41 @@
  */
 
 import { ref, watch, onMounted } from 'vue'
-import type { PersistenceConfig } from '../types/serverTable'
+import { DATA_TABLE_CONSTANTS } from '../constants'
+
+/**
+ * Configuration de persistance pour DataTable
+ */
+export interface PersistenceConfig {
+  /** Colonnes visibles (clés) */
+  visibleColumns?: string[]
+  /** Largeurs des colonnes */
+  columnWidths?: Record<string, number>
+  /** Tri actif */
+  sort?: Array<{
+    colId: string
+    sort: 'asc' | 'desc'
+  }>
+  /** Filtres actifs */
+  filters?: Record<string, any>
+  /** Recherche globale */
+  search?: string
+  /** Taille de page */
+  pageSize?: number
+  /** Page actuelle */
+  currentPage?: number
+  /** Colonnes épinglées */
+  pinnedColumns?: {
+    left?: string[]
+    right?: string[]
+  }
+  /** Ordre des colonnes */
+  columnOrder?: string[]
+  /** État des groupes/agrégations */
+  groupingState?: any
+  /** État du pivot */
+  pivotState?: any
+}
 
 export interface UseDataTablePersistenceConfig {
   /** Clé de stockage LocalStorage */
@@ -46,7 +80,7 @@ export interface PersistenceActions {
 export function useDataTablePersistence(config: UseDataTablePersistenceConfig) {
   const {
     storageKey,
-    saveDelay = 500,
+    saveDelay = DATA_TABLE_CONSTANTS.PERSISTENCE_SAVE_DELAY,
     onRestore,
     onSave
   } = config
@@ -72,7 +106,7 @@ export function useDataTablePersistence(config: UseDataTablePersistenceConfig) {
         onSave(config)
       }
     } catch (error) {
-      console.warn('[DataTablePersistence] Erreur lors de la sauvegarde:', error)
+      // Erreur lors de la sauvegarde ignorée
     } finally {
       isSaving.value = false
     }
@@ -87,13 +121,11 @@ export function useDataTablePersistence(config: UseDataTablePersistenceConfig) {
 
       // Validation basique
       if (typeof parsed !== 'object' || parsed === null) {
-        console.warn('[DataTablePersistence] Données invalides dans le stockage')
         return null
       }
 
       return parsed as PersistenceConfig
     } catch (error) {
-      console.warn('[DataTablePersistence] Erreur lors du chargement:', error)
       return null
     }
   }
@@ -135,7 +167,7 @@ export function useDataTablePersistence(config: UseDataTablePersistenceConfig) {
       currentConfig.value = {}
       lastSaved.value = null
     } catch (error) {
-      console.warn('[DataTablePersistence] Erreur lors de la suppression:', error)
+      // Erreur lors de la suppression ignorée
     }
   }
 

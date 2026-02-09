@@ -7,24 +7,25 @@
  * @module useDataTableComponent
  */
 
-import { computed, ref, watch, onMounted, nextTick, unref, reactive, readonly, type Ref, markRaw } from 'vue'
+import { computed, ref, watch, watchEffect, onMounted, nextTick, unref, reactive, readonly, type Ref, markRaw } from 'vue'
 import { useMemoize } from '@vueuse/core'
-import type { DataTableProps } from '../types/dataTable'
+import type { DataTableProps, DataTableColumn } from '../types/dataTable'
 import type { QueryModel } from '../types/QueryModel'
 import { logger } from '@/services/loggerService'
+import { DATA_TABLE_CONSTANTS } from '../constants'
+import type { EmitFunction, FilterState, RowDataArray, LoadedData, AutoDataTableInstance } from '../types/composables'
 
 // Composables principaux
 import { useDataTable } from './useDataTable'
 import { useQueryModel } from './useQueryModel'
-import { useDataTableHandlers } from './useDataTableHandlers'
+import { useDataTableServerSide } from './useDataTableServerSide'
 import { useDataTableColumns } from './useDataTableColumns'
-import { useDataTableConfig } from './useDataTableConfig'
+import { useDataTableFeatures } from './useDataTableFeatures'
+import { useDataTableState } from './useDataTableState'
 import { useDataTableModes } from './useDataTableModes'
-import { useDataTablePersistence } from './useDataTablePersistence'
+import { useDataTableOptimizations } from './useDataTableOptimizations'
 
 // Fonctionnalités avancées
-import { useVirtualScrolling } from './useVirtualScrolling'
-// import { useDataTableGrouping } from './useDataTableGrouping'
 import { useDataTableEditing } from './useDataTableEditing'
 import { useDataTableMasterDetail } from './useDataTableMasterDetail'
 import { useMultiSort } from './useMultiSort'
@@ -36,7 +37,7 @@ import { useColumnResize } from './useColumnResize'
  */
 export interface UseDataTableComponentConfig {
     props: DataTableProps
-    emit?: (...args: any[]) => void
+    emit?: EmitFunction
 }
 
 /**
@@ -45,10 +46,10 @@ export interface UseDataTableComponentConfig {
 export function useDataTableComponent(config: UseDataTableComponentConfig) {
     const { props, emit } = config
 
-    // Fonction emit sécurisée
-    const safeEmit = (...args: any[]) => {
+    // Fonction emit sécurisée avec typage strict
+    const safeEmit: EmitFunction = (event, ...args) => {
         if (emit && typeof emit === 'function') {
-            emit(...args)
+            (emit as EmitFunction)(event, ...args)
         }
     }
 
@@ -62,58 +63,7 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
         defaultVisibleColumnsCount: props.defaultVisibleColumnsCount ?? 50
     }
 
-    /**
-     * ✅ CACHE POUR ÉVITER LES ÉMISSIONS D'ÉVÉNEMENTS RÉPÉTÉS
-     * Stocke le dernier QueryModel émis pour chaque type d'événement
-     */
-    let lastEmittedPaginationQueryModel: QueryModel | null = null
-    let lastEmittedSortQueryModel: QueryModel | null = null
-    let lastEmittedFilterQueryModel: QueryModel | null = null
-    let lastEmittedSearchQueryModel: QueryModel | null = null
-
-    /**
-     * ✅ FONCTIONS WRAPPER POUR ÉVITER LES ÉMISSIONS RÉPÉTÉES
-     * Vérifie si le QueryModel a changé avant d'émettre l'événement
-     */
-    const emitPaginationChanged = (queryModel: QueryModel) => {
-        const currentStr = JSON.stringify(queryModel)
-        const lastStr = lastEmittedPaginationQueryModel ? JSON.stringify(lastEmittedPaginationQueryModel) : null
-
-        if (currentStr !== lastStr) {
-            lastEmittedPaginationQueryModel = { ...queryModel }
-            safeEmit('pagination-changed', queryModel)
-        }
-    }
-
-    const emitSortChanged = (queryModel: QueryModel) => {
-        const currentStr = JSON.stringify(queryModel)
-        const lastStr = lastEmittedSortQueryModel ? JSON.stringify(lastEmittedSortQueryModel) : null
-
-        if (currentStr !== lastStr) {
-            lastEmittedSortQueryModel = { ...queryModel }
-            safeEmit('sort-changed', queryModel)
-        }
-    }
-
-    const emitFilterChanged = (queryModel: QueryModel) => {
-        const currentStr = JSON.stringify(queryModel)
-        const lastStr = lastEmittedFilterQueryModel ? JSON.stringify(lastEmittedFilterQueryModel) : null
-
-        if (currentStr !== lastStr) {
-            lastEmittedFilterQueryModel = { ...queryModel }
-            safeEmit('filter-changed', queryModel)
-        }
-    }
-
-    const emitGlobalSearchChanged = (queryModel: QueryModel) => {
-        const currentStr = JSON.stringify(queryModel)
-        const lastStr = lastEmittedSearchQueryModel ? JSON.stringify(lastEmittedSearchQueryModel) : null
-
-        if (currentStr !== lastStr) {
-            lastEmittedSearchQueryModel = { ...queryModel }
-            safeEmit('global-search-changed', queryModel)
-        }
-    }
+    // ⚡ OPTIMISATION : Les fonctions wrapper d'émission sont maintenant dans useDataTableServerSide
 
     /**
      * ✅ NOUVELLE FONCTIONNALITÉ : Gestion automatique des modes d'usage
@@ -122,18 +72,24 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
     const modes = useDataTableModes(safeProps)
 
     /**
-     * ✅ NOUVELLE FONCTIONNALITÉ : Persistance automatique des préférences utilisateur
+     * Sauvegarde de configuration dans localStorage
+     * Restaure automatiquement l'état de la table (colonnes visibles, largeurs, etc.)
      */
-    const persistence = safeProps.storageKey ? useDataTablePersistence({
-        storageKey: safeProps.storageKey,
-        onRestore: (config) => {
-            // Restaurer les préférences utilisateur depuis le stockage
-            console.log('[DataTable] Configuration restaurée:', config)
-        },
-        onSave: (config) => {
-            console.log('[DataTable] Configuration sauvegardée:', config)
+    const tableConfig = safeProps.storageKey ? useDataTableConfig(
+        safeProps.storageKey,
+        {
+            visibleColumns: [],
+            columnOrder: [],
+            columnWidths: {},
+            pinnedColumns: [],
+            stickyHeader: false,
+            pageSize: safeProps.pageSizeProp || 20,
+            page: 1,
+            filters: {},
+            sort: [],
+            search: undefined
         }
-    }) : null
+    ) : null
 
     /**
      * Composable principal du DataTable
@@ -141,64 +97,109 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
      */
     const dataTableComposable = useDataTable(props, safeEmit)
 
-    // Pré-déclaration de handlePageSizeChanged pour éviter les erreurs de référence
-    let handlePageSizeChanged: (size: number) => void = () => {}
-
 
     /**
-     * Objet dataTable pour compatibilité avec le code existant
-     * Pas de markRaw pour éviter les problèmes de réactivité
+     * ⚡ OPTIMISATION : Wrapper dataTable simplifié
+     * Expose directement les computed sans try/catch inutiles
+     * Vue gère automatiquement la réactivité, pas besoin de wrapper complexe
      */
     const dataTable = {
-        // États de base (références directes au composable)
-        get globalSearchTerm() { return dataTableComposable.globalSearchTerm },
-        get filterState() { return dataTableComposable.filterState },
-        get visibleColumns() { return dataTableComposable.visibleColumns },
-        get columnWidths() { return dataTableComposable.columnWidths },
-        get selectedRows() { return dataTableComposable.selectedRows },
-        get paginatedData() { return dataTableComposable.paginatedData },
+        // ⚡ États de base : Exposer directement les computed (Vue gère la réactivité)
+        globalSearchTerm: computed(() => unref(dataTableComposable.globalSearchTerm)),
+        filterState: computed(() => unref(dataTableComposable.filterState)),
+        advancedFilters: computed(() => props.advancedFilters || {}),
+        columns: computed(() => props.columns || []),
+        exportLoading: computed(() => false),
+        actions: computed(() => props.actions || []),
+        handleVisibleColumnsChanged: featuresHandleVisibleColumnsChanged || ((columns: string[]) => {
+            visibleColumnNames.value = columns
+        }),
+        visibleColumns: computed(() => {
+            const value = dataTableComposable.visibleColumns
+            const unwrapped = unref(value)
+            return Array.isArray(unwrapped) ? unwrapped : []
+        }),
+        columnWidths: computed(() => {
+            const value = dataTableComposable.columnWidths
+            return unref(value) || {}
+        }),
+        selectedRows: computed(() => {
+            const value = dataTableComposable.selectedRows
+            const unwrapped = unref(value)
+            if (unwrapped instanceof Set) {
+                return new Set<string>(Array.from(unwrapped).map(v => String(v)))
+            }
+            return new Set<string>()
+        }),
+        paginatedData: computed(() => {
+            const value = dataTableComposable.paginatedData
+            return unref(value) || []
+        }),
 
         // Méthodes (références stables)
         setFilterState: dataTableComposable.setFilterState,
         updateGlobalSearchTerm: dataTableComposable.updateGlobalSearchTerm,
         goToPage: dataTableComposable.goToPage,
-        changePageSize: handlePageSizeChanged,
+        changePageSize: (() => {
+            // ⚡ OPTIMISATION : Fonction qui sera mise à jour après useDataTableServerSide
+            let handler: ((size: number) => void) | null = null
+            const fn = (size: number) => {
+                if (handler) {
+                    handler(size)
+                } else {
+                    // Fallback temporaire
+                    dataTableComposable.changePageSize(size)
+                }
+            }
+            // Exposer une méthode pour mettre à jour le handler
+            ;(fn as any).__updateHandler = (newHandler: (size: number) => void) => {
+                handler = newHandler
+            }
+            return fn
+        })(),
         clearAllFilters: dataTableComposable.clearAllFilters,
-        reorderColumns: dataTableComposable.reorderColumns,
-        exportToCsv: dataTableComposable.exportToCsv,
-        exportToSpreadsheet: dataTableComposable.exportToSpreadsheet,
-        exportToPdf: dataTableComposable.exportToPdf,
-        exportSelectedToCsv: dataTableComposable.exportSelectedToCsv,
-        exportSelectedToSpreadsheet: dataTableComposable.exportSelectedToSpreadsheet,
+        reorderColumns: featuresReorderColumns || ((fromIndex: number, toIndex: number) => {
+            // Fallback simple si featuresReorderColumns n'est pas disponible
+            const newOrder = [...visibleColumnNames.value]
+            const [moved] = newOrder.splice(fromIndex, 1)
+            newOrder.splice(toIndex, 0, moved)
+            visibleColumnNames.value = newOrder
+        }),
+        exportToCsv: featuresExportToCsv || dataTableComposable.exportToCsv,
+        exportToSpreadsheet: featuresExportToSpreadsheet || dataTableComposable.exportToSpreadsheet,
+        exportToPdf: featuresExportToPdf || dataTableComposable.exportToPdf,
+        exportSelectedToCsv: featuresExportSelectedToCsv || dataTableComposable.exportSelectedToCsv,
+        exportSelectedToSpreadsheet: featuresExportSelectedToSpreadsheet || dataTableComposable.exportSelectedToSpreadsheet,
         setSelectedRows: dataTableComposable.setSelectedRows,
         deselectAll: dataTableComposable.deselectAll,
         createRowNumberColumn: dataTableComposable.createRowNumberColumn,
 
-        // Pagination properties
-        get effectiveCurrentPage() { return dataTableComposable.effectiveCurrentPage },
-        get effectivePageSize() { return dataTableComposable.effectivePageSize },
-        get effectiveTotalPages() { return dataTableComposable.effectiveTotalPages },
-        get effectiveTotalItems() { return dataTableComposable.effectiveTotalItems },
-        get start() { return dataTableComposable.start },
-        get end() { return dataTableComposable.end },
-        get loading() { return dataTableComposable.loading }
-    }
-
-    /**
-     * Sauvegarde de configuration dans localStorage
-     * Restaure automatiquement l'état de la table (colonnes visibles, largeurs, etc.)
-     */
-    const tableConfig = safeProps.storageKey ? useDataTableConfig(
-        safeProps.storageKey,
-        {
-            visibleColumns: dataTable?.visibleColumns || [],
-            columnOrder: dataTable?.visibleColumns || [],
-            columnWidths: dataTable?.columnWidths || {},
-            pinnedColumns: [],
-            stickyHeader: false,
-            pageSize: safeProps.pageSizeProp || 20
+        // ⚡ Pagination : exposer des valeurs simples (pas de ComputedRef) pour simplifier l'utilisation dans le template
+        get effectiveCurrentPage() {
+            return unref(dataTableComposable.effectiveCurrentPage) || 1
+        },
+        get effectivePageSize() {
+            return unref(dataTableComposable.effectivePageSize) || 20
+        },
+        get effectiveTotalPages() {
+            return unref(dataTableComposable.effectiveTotalPages) || 1
+        },
+        get effectiveTotalItems() {
+            return unref(dataTableComposable.effectiveTotalItems) || 0
+        },
+        get start() {
+            return unref(dataTableComposable.start) || 0
+        },
+        get end() {
+            return unref(dataTableComposable.end) || 0
+        },
+        get loading() {
+            return unref(dataTableComposable.loading) || false
+        },
+        get rowSelection() {
+            return unref(dataTableComposable.rowSelection) || false
         }
-    ) : null
+    }
 
     /**
      * QueryModel - Format de communication unifié
@@ -220,7 +221,7 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
     const shouldEnableAutoManagement = safeProps.enableAutoManagement !== false &&
         (safeProps.autoManagementConfig?.piniaStore && safeProps.autoManagementConfig?.storeAction)
 
-    const autoDataTable = null as any // shouldEnableAutoManagement ? useAutoDataTable({...}) : null
+    const autoDataTable: AutoDataTableInstance | undefined = undefined // shouldEnableAutoManagement ? useAutoDataTable({...}) : undefined
 
     /**
      * Détermine si les handlers automatiques doivent être utilisés
@@ -231,11 +232,9 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
     const autoPaginationConfig = computed(() => {
         const dataLength = Array.isArray(safeProps.rowDataProp) ? safeProps.rowDataProp.length : 0
 
-        // Seuils intelligents pour la pagination automatique
+        // ⚡ SERVER-SIDE ONLY : Seuils intelligents pour la pagination automatique
         const thresholds = {
             enablePagination: 100,    // Activer pagination dès 100 lignes
-            enableVirtualScrolling: 50, // Activer virtual scrolling dès 50 lignes (évite les plants)
-            forceServerSide: 500,     // Forcer côté serveur dès 500 lignes
             recommendedPageSize: 50   // Taille de page recommandée
         }
 
@@ -252,8 +251,6 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
 
         return {
             shouldEnablePagination: dataLength >= thresholds.enablePagination,
-            shouldEnableVirtualScrolling: dataLength >= thresholds.enableVirtualScrolling,
-            shouldForceServerSide: dataLength >= thresholds.forceServerSide,
             optimalPageSize,
             dataLength,
             thresholds
@@ -261,79 +258,11 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
     })
 
     /**
-     * Initialisation des fonctionnalités avancées - OPTIMISÉ AVEC PAGINATION INTELLIGENTE
-     *
-     * 🚀 VIRTUAL SCROLLING AUTOMATIQUE :
-     * - S'active automatiquement dès 50+ lignes pour éviter les plants
-     * - Peut être forcé via props.enableVirtualScrolling
-     * - Hauteur du conteneur ajustée automatiquement selon le volume
+     * ⚡ SERVER-SIDE ONLY : Virtual scrolling supprimé
+     * 
+     * En mode server-side, le serveur gère la pagination et ne renvoie que les données de la page actuelle.
+     * Le virtual scrolling n'est donc pas nécessaire car on n'a jamais plus de ~20-50 lignes à afficher.
      */
-    const shouldEnableVirtualScrolling = computed(() => {
-        // Si configuré explicitement à false, forcer la désactivation
-        if (safeProps.enableVirtualScrolling === false) {
-            return false
-        }
-        // Si configuré explicitement à true, forcer l'activation
-        if (safeProps.enableVirtualScrolling === true) {
-            return true
-        }
-        // Sinon, activation automatique intelligente pour éviter les plants
-        return autoPaginationConfig.value.shouldEnableVirtualScrolling
-    })
-
-    // Indicateur pour savoir si le virtual scrolling est activé automatiquement
-    const isVirtualScrollingAutoEnabled = computed(() => {
-        return safeProps.enableVirtualScrolling === undefined &&
-               autoPaginationConfig.value.shouldEnableVirtualScrolling
-    })
-
-    // Configuration effective du virtual scrolling avec optimisation automatique
-    const effectiveVirtualScrollingConfig = computed(() => {
-        const dataLength = Array.isArray(safeProps.rowDataProp) ? safeProps.rowDataProp.length : 0
-
-        // Calculer automatiquement la hauteur optimale du conteneur
-        const calculateOptimalHeight = () => {
-            if (dataLength >= 10000) return 800  // Très gros volumes
-            if (dataLength >= 5000) return 600   // Gros volumes
-            if (dataLength >= 2000) return 500   // Volumes moyens
-            if (dataLength >= 1000) return 450   // Volumes importants
-            if (dataLength >= 500) return 400    // Volumes modérés
-            return 500 // Petits volumes - Afficher 10 lignes (50px * 10)
-        }
-
-        const baseConfig = safeProps.virtualScrollingConfig || {
-            itemHeight: 50,
-            containerHeight: calculateOptimalHeight(),
-            overscan: 5,
-            threshold: 100
-        }
-
-        // Optimisations automatiques selon la taille des données
-        if (dataLength >= 1000) {
-            return {
-                ...baseConfig,
-                overscan: Math.max(baseConfig.overscan || 5, 15),
-                containerHeight: baseConfig.containerHeight || 600,
-                threshold: Math.max(baseConfig.threshold || 100, 200)
-            }
-        } else if (dataLength >= 500) {
-            return {
-                ...baseConfig,
-                overscan: Math.max(baseConfig.overscan || 5, 10),
-                containerHeight: baseConfig.containerHeight || 500
-            }
-        }
-
-        return baseConfig
-    })
-
-    const virtualScrolling = shouldEnableVirtualScrolling ? useVirtualScrolling(
-        computed(() => {
-            const data = unref(props.rowDataProp)
-            return Array.isArray(data) ? data : []
-        }),
-        effectiveVirtualScrollingConfig
-    ) : null
 
     const shouldEnableGrouping = props.enableGrouping !== false
     const grouping = null // shouldEnableGrouping ? useDataTableGrouping(...) : null
@@ -352,7 +281,7 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
             })
         },
         onCancel: (row, field) => {
-            console.log('Edition annulée:', { row, field })
+            // Edition annulée
         }
     }) : null
 
@@ -366,7 +295,7 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
     ) : null
 
     const shouldEnableMultiSort = props.enableMultiSort !== false
-    const multiSort = shouldEnableMultiSort ? useMultiSort() : null
+    const multiSort = shouldEnableMultiSort ? useMultiSort() : undefined
 
     const shouldEnableColumnPinning = props.enableColumnPinning !== false
     const columnPinning = shouldEnableColumnPinning ? useColumnPinning(
@@ -380,6 +309,11 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
         props.columnResizeConfig || {}
     ) : null
 
+    // État du sticky header (déclaré avant les watchers qui l'utilisent)
+    const stickyHeaderState = ref(false)
+
+    // État du nombre de colonnes visibles par défaut
+    const defaultVisibleColumnsCountState = ref<number>(props.defaultVisibleColumnsCount ?? 50)
 
     // Référence au TableBody
     const tableBodyRef = ref()
@@ -389,32 +323,25 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
     const currentSortDirection = ref<'asc' | 'desc'>('asc')
     const currentSortModel = ref<Array<{ colId: string; sort: 'asc' | 'desc' }>>([])
 
-    // === HANDLERS ===
+    // === HANDLERS SERVER-SIDE ===
     /**
-     * Composable pour gérer tous les handlers du DataTable
+     * ⚡ OPTIMISATION : Utiliser useDataTableServerSide pour centraliser toute la logique server-side
+     * Remplace useDataTableHandlers avec sauvegarde automatique dans tableConfig
      */
     const {
         createQueryModelFromCurrentState,
-        handleGlobalSearchUpdate: originalHandleGlobalSearchUpdate,
+        handleGlobalSearchUpdate,
         handlePaginationChanged,
-        handlePageSizeChanged: originalHandlePageSizeChanged,
-        handleSortChanged: originalHandleSortChanged,
-        handleClearAllFilters: originalHandleClearAllFilters,
-        handleFilterChanged: originalHandleFilterChanged,
-        handleSelectionChanged,
+        handlePageSizeChanged,
+        handleSortChanged,
+        handleClearAllFilters,
+        handleFilterChanged,
+        currentSortModel: serverSideSortModel,
         isSearching
-    } = useDataTableHandlers({
+    } = useDataTableServerSide({
         props,
-        emit: {
-            'pagination-changed': emitPaginationChanged,
-            'sort-changed': emitSortChanged,
-            'filter-changed': emitFilterChanged,
-            'global-search-changed': emitGlobalSearchChanged,
-            'selection-changed': (selectedRows: Set<string>) => {
-                safeEmit('selection-changed', selectedRows)
-            }
-        },
-        dataTable,
+        emit: safeEmit,
+        dataTable: dataTable as unknown as import('../types/composables').DataTableInstance,
         queryModel: {
             ...queryModel,
             updateSort: updateQuerySort,
@@ -423,85 +350,37 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
             updateGlobalSearch: updateQueryGlobalSearch
         } as any,
         autoDataTable,
-        currentSortModel,
-        multiSort,
-        debounceDelay: props.debounceFilter || 500
+        multiSort: multiSort as import('../types/composables').MultiSortInstance | undefined,
+        tableConfig: tableConfig || undefined
     })
 
-    // Assignation de la fonction handlePageSizeChanged
-    handlePageSizeChanged = (size: number) => {
+    // ⚡ OPTIMISATION : Synchroniser currentSortModel avec serverSideSortModel
+    currentSortModel.value = serverSideSortModel.value
+    watch(() => serverSideSortModel.value, (newValue) => {
+        currentSortModel.value = newValue
+    })
+
+    // ⚡ OPTIMISATION : Wrappers pour intégration avec dataTableComposable
+    // Note: handlePageSizeChanged vient de useDataTableServerSide (ligne 335)
+    const handlePageSizeChangedWrapper = (size: number) => {
         dataTableComposable.changePageSize(size)
-        if (tableConfig) {
-            savePageSizeToConfig(size)
-        }
-
-        // ✅ Créer un QueryModel avec la nouvelle taille de page
-        // Utiliser l'état actuel mais forcer la nouvelle pageSize et réinitialiser à la page 1
-        const currentState = createQueryModelFromCurrentState()
-        const queryModel: QueryModel = {
-            ...currentState,
-            page: 1,           // Toujours revenir à la page 1 lors du changement de taille
-            pageSize: size,    // Utiliser la nouvelle taille de page
-        }
-
-        safeEmit('page-size-changed', queryModel)
+        handlePageSizeChanged(size)
     }
-
-    // Fonction helper pour sauvegarder les filtres
-    const saveFiltersToConfig = (filters: Record<string, any>) => {
-        if (tableConfig && filters !== undefined && filters !== null) {
-            tableConfig.updateFilters(filters)
+    
+    // ⚡ OPTIMISATION : Mettre à jour dataTable.changePageSize avec le wrapper
+    if (dataTable && typeof dataTable === 'object' && 'changePageSize' in dataTable) {
+        const changePageSizeFn = (dataTable as any).changePageSize
+        if (changePageSizeFn && typeof changePageSizeFn.__updateHandler === 'function') {
+            changePageSizeFn.__updateHandler(handlePageSizeChangedWrapper)
+        } else {
+            (dataTable as any).changePageSize = handlePageSizeChangedWrapper
         }
     }
 
-    // Fonction helper pour sauvegarder la taille de page
-    const savePageSizeToConfig = (pageSize: number) => {
-        if (tableConfig && pageSize !== undefined && pageSize !== null && pageSize > 0) {
-            tableConfig.updatePageSize(pageSize)
-        }
-    }
-
-    // Fonction helper pour sauvegarder la recherche
-    const saveSearchToConfig = (search: string | undefined) => {
-        if (tableConfig) {
-            tableConfig.updateSearch(search || undefined)
-        }
-    }
-
-    // Fonction helper pour sauvegarder le tri
-    const saveSortToConfig = (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }>) => {
-        if (tableConfig && sortModel !== undefined && sortModel !== null && Array.isArray(sortModel)) {
-            const sortToSave = sortModel.map(s => ({
-                field: s.colId,
-                direction: s.sort
-            }))
-            tableConfig.updateSort(sortToSave)
-        }
-    }
-
-    // Wrappers des handlers avec sauvegarde automatique dans tableConfig
-    const handleFilterChanged = async (filters: Record<string, any>) => {
-        // En mode côté serveur, utiliser les handlers QueryModel
-        if (props.serverSideFiltering) {
-            await originalHandleFilterChanged(filters)
-        }
-        if (tableConfig) {
-            saveFiltersToConfig(filters)
-        }
-
-        // ✅ Émettre les événements appropriés
-        const queryModel = createQueryModelFromCurrentState()
-        safeEmit('filter-changed', queryModel)
-        safeEmit('query-model-changed', queryModel)
-    }
-
-    const handleSortChanged = async (sortData: { field: string; direction: 'asc' | 'desc'; isActive: boolean }) => {
-        // En mode côté serveur, utiliser les handlers QueryModel
-        if (props.serverSideSorting) {
-            await originalHandleSortChanged(sortData)
-        }
-
-        // Mise à jour de l'état local du composant (toujours nécessaire)
+    const handleSortChangedWrapper = async (sortData: { field: string; direction: 'asc' | 'desc'; isActive: boolean }) => {
+        await handleSortChanged(sortData)
+        
+        // Mise à jour de l'état local du composant
         await nextTick()
         if (currentSortModel.value && currentSortModel.value.length > 0) {
             const firstSort = currentSortModel.value[0]
@@ -511,40 +390,34 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
             currentSortField.value = ''
             currentSortDirection.value = 'asc'
         }
-
-        if (tableConfig && currentSortModel.value) {
-            saveSortToConfig(currentSortModel.value)
-        }
-
-        // ✅ Émettre les événements appropriés
-        const queryModel = createQueryModelFromCurrentState()
-        safeEmit('sort-changed', queryModel)
-        safeEmit('query-model-changed', queryModel)
     }
 
-    const handleGlobalSearchUpdate = async (searchTerm: string | QueryModel) => {
+    // ⚡ OPTIMISATION : handleFilterChanged doit gérer QueryModel | FilterState
+    const handleFilterChangedWrapper = async (queryModelOrFilters: QueryModel | FilterState) => {
+        const queryModel = ('page' in queryModelOrFilters && 'pageSize' in queryModelOrFilters)
+            ? queryModelOrFilters as QueryModel
+            : (() => {
+                const qm = createQueryModelFromCurrentState()
+                qm.filters = queryModelOrFilters as FilterState
+                return qm
+            })()
+        await handleFilterChanged(queryModel)
+    }
+
+    // ⚡ OPTIMISATION : handleGlobalSearchUpdate doit gérer string | QueryModel
+    const handleGlobalSearchUpdateWrapper = async (searchTerm: string | QueryModel) => {
         const searchString = typeof searchTerm === 'string' ? searchTerm : searchTerm.search || ''
-        await originalHandleGlobalSearchUpdate(searchString)
-        if (tableConfig && dataTable) {
-            saveSearchToConfig(searchString || undefined)
-        }
-
-        // ✅ NOUVELLE FONCTIONNALITÉ : Émettre QueryModel obligatoire
-        const queryModel = createQueryModelFromCurrentState()
-        safeEmit('query-model-changed', queryModel)
+        await handleGlobalSearchUpdate(searchString)
     }
 
-    const handleClearAllFilters = () => {
-        originalHandleClearAllFilters()
-        if (tableConfig) {
-            // Effacer les filtres de la config
-            tableConfig.updateFilters({})
-        }
-
-        // ✅ NOUVELLE FONCTIONNALITÉ : Émettre QueryModel obligatoire
-        const queryModel = createQueryModelFromCurrentState()
-        safeEmit('query-model-changed', queryModel)
+    // ⚡ OPTIMISATION : handleSelectionChanged depuis useDataTable
+    const handleSelectionChanged = (selectedRows: Set<string>) => {
+        dataTableComposable.setSelectedRows(selectedRows)
+        safeEmit('selection-changed', selectedRows)
     }
+
+    // ⚡ OPTIMISATION : handleClearAllFilters est déjà géré par useDataTableServerSide
+    // Pas besoin de wrapper supplémentaire
 
     // === GESTION DES COLONNES - SIMPLIFIÉE ===
 
@@ -556,17 +429,27 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
         return `${rowId}-${field}`
     }
 
-    const getRowKey = (row: any, index: number): string => {
-        return row?.id || row?.reference || `row-${index}`
+    const getRowKey = (row: Record<string, unknown>, index: number): string => {
+        const id = row?.id
+        const reference = row?.reference
+        if (id !== undefined && id !== null) {
+            return String(id)
+        }
+        if (reference !== undefined && reference !== null) {
+            return String(reference)
+        }
+        return `row-${index}`
     }
 
     /**
      * Cache pour les valeurs de cellules calculées (évite les recalculs coûteux)
      */
-    const cellValueCache = new Map<string, { value: any; timestamp: number }>()
+    // Cache des valeurs de cellules avec TTL
+    const cellValueCache = new Map<string, { value: unknown; timestamp: number }>()
     const CELL_CACHE_TTL = 1000 // 1 seconde TTL pour les valeurs calculées
+    const CELL_CACHE_MAX_SIZE = 1000 // Taille maximale du cache
 
-    const getCachedCellValue = (row: any, column: any, key: string): any => {
+    const getCachedCellValue = (row: Record<string, unknown>, column: DataTableColumn, key: string): unknown => {
         const now = Date.now()
         const cached = cellValueCache.get(key)
 
@@ -575,39 +458,39 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
         }
 
         // Calculer la valeur (avec logique optimisée)
-        let value: any = row[column.field]
+        let cellValue: unknown = row[column.field]
 
         // Appliquer les formatters seulement si nécessaire
         if (column.valueFormatter && typeof column.valueFormatter === 'function') {
             try {
-                value = column.valueFormatter({ value, data: row, column })
-            } catch (error) {
-                console.warn(`Error formatting cell value for ${column.field}:`, error)
+                cellValue = column.valueFormatter({ value: cellValue, data: row, column })
+            } catch (formatError) {
+                // Erreur de formatage ignorée
             }
         }
 
         // Cache la valeur
-        cellValueCache.set(key, { value, timestamp: now })
+        cellValueCache.set(key, { value: cellValue, timestamp: now })
 
         // Nettoyer le cache périodiquement (éviter la fuite mémoire)
-        if (cellValueCache.size > 1000) {
-            const cutoff = now - CELL_CACHE_TTL
+        if (cellValueCache.size > CELL_CACHE_MAX_SIZE) {
+            const cutoffTime = now - CELL_CACHE_TTL
             for (const [cacheKey, cacheItem] of cellValueCache) {
-                if (cacheItem.timestamp < cutoff) {
+                if (cacheItem.timestamp < cutoffTime) {
                     cellValueCache.delete(cacheKey)
                 }
             }
         }
 
-        return value
+        return cellValue
     }
 
     /**
      * Fonction utilitaire pour filtrer les colonnes selon les règles métier
      * Simplifie la logique complexe de filtrage des colonnes
      */
-    const filterColumns = (columns: any[], visibleColumnNames: string[]): any[] => {
-        return columns.filter(col => {
+    const filterColumns = (allColumns: DataTableColumn[], visibleColumnNames: string[]): DataTableColumn[] => {
+        return allColumns.filter(col => {
             if (col.field === '__rowNumber__') return true
 
             const columnDef = props.columns.find(c => c.field === col.field)
@@ -628,7 +511,18 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
 
     // Initialiser visibleColumnNames avec les colonnes visibles (exclut visible: false)
     // Filtrer les colonnes avec visible: false lors de l'initialisation
-    const initialVisibleColumns = (dataTable?.visibleColumns || []).filter(col => {
+    // ⚡ OPTIMISATION : dataTable.visibleColumns est maintenant un computed, utiliser .value
+    const getVisibleColumnsArray = (): string[] => {
+        if (!dataTable) return []
+        try {
+            // ⚡ OPTIMISATION : dataTable.visibleColumns est un computed, utiliser .value
+            const visibleColumnsValue = dataTable.visibleColumns.value
+            return Array.isArray(visibleColumnsValue) ? visibleColumnsValue : []
+        } catch (error) {
+            return []
+        }
+    }
+    const initialVisibleColumns = getVisibleColumnsArray().filter((col: string) => {
         if (col === '__rowNumber__') return true
         const columnDef = props.columns.find(c => c.field === col)
         // Exclure les colonnes avec visible: false lors de l'initialisation
@@ -642,29 +536,8 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
 
     // Flag pour éviter les boucles infinies entre watch et wrapper
 
-    // Watch pour synchroniser depuis dataTable.visibleColumns (uniquement si pas de mise à jour depuis wrapper)
-    watch(() => dataTable?.visibleColumns, (newCols) => {
-        if (newCols) {
-            // Filtrer les colonnes avec visible: false qui ne sont pas dans newCols
-            // (pour éviter d'afficher des colonnes avec visible: false par défaut)
-            const filtered = newCols.filter(col => {
-                if (col === '__rowNumber__') return true
-                const columnDef = props.columns.find(c => c.field === col)
-                if (columnDef && columnDef.visible === false) {
-                    // Si visible: false, ne l'inclure que si elle est déjà dans visibleColumnNames
-                    // (c'est-à-dire qu'elle a été explicitement ajoutée)
-                    const shouldInclude = visibleColumnNames.value.includes(col)
-                    return shouldInclude
-                }
-                return true
-            })
-
-            if (filtered.length !== visibleColumnNames.value.length ||
-                filtered.some((v, i) => v !== visibleColumnNames.value[i])) {
-                visibleColumnNames.value = filtered
-            }
-        }
-    }, { immediate: true, deep: true })
+    // ⚡ OPTIMISATION : Watcher unique optimisé pour synchroniser visibleColumns
+    // Fusionné avec le watcher de sauvegarde pour éviter les cascades
 
 
     /**
@@ -681,183 +554,112 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
         visibleColumnNames
     })
 
-    // Initialiser exportLoading avec les propriétés requises
-    const exportLoadingState = {
-        csv: false,
-        spreadsheet: false,
-        pdf: false,
-        csvSelection: false,
-        spreadsheetSelection: false
-    }
+    // ⚡ OPTIMISATION : exportLoadingState vient maintenant de useDataTableFeatures
 
     // Convertir selectedRows en Set<string>
     const selectedRowsSet = computed(() => {
-        if (autoDataTable) {
-            return autoDataTable.selectedRows.value
-        }
-        if (!dataTable?.selectedRows) return new Set<string>()
-        return new Set<string>(Array.from(dataTable.selectedRows).map(row => String(row)))
-    })
-
-    // Watcher optimisé pour les changements de colonnes visibles (avec batching)
-    let columnChangeTimeout: number | null = null
-    watch(() => {
-        const cols = dataTable?.visibleColumns
-        return cols ? cols.join(',') : ''
-    }, (newKey, oldKey) => {
-        if (newKey !== oldKey && dataTable?.visibleColumns) {
-            // Batch les changements pour éviter les appels répétés
-            if (columnChangeTimeout) {
-                clearTimeout(columnChangeTimeout)
-            }
-
-            columnChangeTimeout = window.setTimeout(() => {
-                const newVisibleColumns = dataTable.visibleColumns
-
-
-                if (columnPinning && columnPinning.getPinDirection('__rowNumber__') !== 'left') {
-                    columnPinning.pinColumn('__rowNumber__', 'left')
+        if (autoDataTable && 'selectedRows' in autoDataTable) {
+            const selectedRows = (autoDataTable as any).selectedRows
+            if (selectedRows && typeof selectedRows.value !== 'undefined') {
+                const value = selectedRows.value
+                if (value instanceof Set) {
+                    return new Set<string>(Array.from(value).map(v => String(v)))
                 }
-
-                if (tableConfig) {
-                    tableConfig.updateVisibleColumns(newVisibleColumns)
-                    tableConfig.updateColumnOrder(newVisibleColumns)
-                }
-            }, 16) // ~60fps
-        }
-    }, { immediate: false }) // Ne pas déclencher au montage
-
-    // Watcher optimisé pour les changements de largeurs de colonnes (avec shallow watch)
-    let widthChangeTimeout: number | null = null
-    watch(() => dataTable?.columnWidths, (newWidths) => {
-        if (newWidths && tableConfig) {
-            // Batch les changements de largeur
-            if (widthChangeTimeout) {
-                clearTimeout(widthChangeTimeout)
             }
-
-            widthChangeTimeout = window.setTimeout(() => {
-                tableConfig.updateColumnWidths(newWidths)
-            }, 100) // Debounce pour éviter les sauvegardes trop fréquentes
         }
-    }, { deep: false }) // Shallow watch pour éviter les triggers inutiles
-
-    // État du sticky header
-    const stickyHeaderState = ref(false)
-
-    // État du nombre de colonnes visibles par défaut
-    const defaultVisibleColumnsCountState = ref<number>(props.defaultVisibleColumnsCount ?? 50)
-
-
-    // === LAZY LOADING POUR GROS DATASETS ===
-    const lazyLoadingState = reactive({
-        isEnabled: false,
-        isLoading: false,
-        loadedChunks: new Set<number>(),
-        totalChunks: 0,
-        chunkSize: 100,
-        loadedData: [] as any[]
-    })
-
-    // Fonction pour activer le lazy loading automatiquement
-    const shouldEnableLazyLoading = computed(() => {
-        const dataLength = Array.isArray(safeProps.rowDataProp) ? safeProps.rowDataProp.length : 0
-        return dataLength > 2000 // Activer dès 2000 lignes
-    })
-
-    // Initialiser le lazy loading si nécessaire
-    const initializeLazyLoading = () => {
-        if (!shouldEnableLazyLoading.value) return
-
-        const fullData = Array.isArray(props.rowDataProp) ? props.rowDataProp : []
-        lazyLoadingState.isEnabled = true
-        lazyLoadingState.totalChunks = Math.ceil(fullData.length / lazyLoadingState.chunkSize)
-        lazyLoadingState.loadedData = []
-        lazyLoadingState.loadedChunks.clear()
-
-        // Charger le premier chunk immédiatement
-        loadChunk(0)
-    }
-
-    // Charger un chunk spécifique
-    const loadChunk = async (chunkIndex: number) => {
-        if (lazyLoadingState.loadedChunks.has(chunkIndex)) return
-
-        lazyLoadingState.isLoading = true
         try {
-            const fullData = Array.isArray(props.rowDataProp) ? props.rowDataProp : []
-            const start = chunkIndex * lazyLoadingState.chunkSize
-            const end = Math.min(start + lazyLoadingState.chunkSize, fullData.length)
-            const chunk = fullData.slice(start, end)
-
-            // Simuler un délai pour les gros chunks (optionnel)
-            if (chunk.length > 50) {
-                await new Promise(resolve => setTimeout(resolve, 10))
+            // ⚡ OPTIMISATION : dataTable.selectedRows est un computed, utiliser .value
+            const selectedRows = dataTable.selectedRows.value
+            if (!selectedRows) return new Set<string>()
+            // selectedRows est un Set, donc on peut directement l'utiliser
+            if (selectedRows instanceof Set) {
+                return new Set<string>(Array.from(selectedRows).map(row => String(row)))
             }
-
-            lazyLoadingState.loadedData.splice(start, 0, ...chunk)
-            lazyLoadingState.loadedChunks.add(chunkIndex)
-        } finally {
-            lazyLoadingState.isLoading = false
+            return new Set<string>()
+        } catch {
+            return new Set<string>()
         }
-    }
-
-    // Charger les chunks visibles (prédictif)
-    const loadVisibleChunks = (startIndex: number, endIndex: number) => {
-        if (!lazyLoadingState.isEnabled) return
-
-        const startChunk = Math.floor(startIndex / lazyLoadingState.chunkSize)
-        const endChunk = Math.floor(endIndex / lazyLoadingState.chunkSize)
-
-        // Charger le chunk actuel et les adjacents
-        const chunksToLoad = [startChunk, startChunk + 1, endChunk - 1, endChunk].filter(
-            chunk => chunk >= 0 && chunk < lazyLoadingState.totalChunks
-        )
-
-        chunksToLoad.forEach(chunk => {
-            if (!lazyLoadingState.loadedChunks.has(chunk)) {
-                loadChunk(chunk)
-            }
-        })
-    }
-
-    // Données finales avec lazy loading
-    const lazyLoadedData = computed(() => {
-        if (lazyLoadingState.isEnabled) {
-            return lazyLoadingState.loadedData
-        }
-        return props.rowDataProp || []
     })
 
-    // === GESTION DES ERREURS ET ÉTATS ===
-    const errorState = ref<string | null>(null)
-    const retryFunction = ref<(() => void) | null>(null)
+    // ⚡ OPTIMISATION : Utiliser useDataTableFeatures pour column management, export et persistence
+    // Note: tableConfig est déjà initialisé plus haut, useDataTableFeatures le réutilisera si storageKey est fourni
+    const {
+        tableConfig: featuresTableConfig,
+        persistence: featuresPersistence,
+        handleVisibleColumnsChanged: featuresHandleVisibleColumnsChanged,
+        reorderColumns: featuresReorderColumns,
+        exportToCsv: featuresExportToCsv,
+        exportToSpreadsheet: featuresExportToSpreadsheet,
+        exportToPdf: featuresExportToPdf,
+        exportSelectedToCsv: featuresExportSelectedToCsv,
+        exportSelectedToSpreadsheet: featuresExportSelectedToSpreadsheet,
+        exportLoadingState: featuresExportLoadingState
+    } = useDataTableFeatures({
+        props,
+        emit: safeEmit,
+        dataTable: dataTable as unknown as import('../types/composables').DataTableInstance,
+        visibleColumnNames,
+        updateVisibleColumns: (columns: string[]) => {
+            visibleColumnNames.value = columns
+        },
+        formattedColumns: computed(() => formattedColumns.value)
+    })
 
-    /**
-     * Définit un état d'erreur avec une fonction de retry
-     */
-    const setError = (message: string, retryFn?: () => void) => {
-        errorState.value = message
-        retryFunction.value = retryFn || null
-    }
+    // ⚡ OPTIMISATION : Utiliser tableConfig depuis features si disponible, sinon celui existant
+    const effectiveTableConfig = featuresTableConfig || tableConfig
 
-    /**
-     * Efface l'état d'erreur
-     */
-    const clearError = () => {
-        errorState.value = null
-        retryFunction.value = null
-    }
-
-    /**
-     * Retry la dernière action qui a échoué
-     */
-    const retryLastAction = () => {
-        if (retryFunction.value) {
-            retryFunction.value()
-            clearError()
+    // ⚡ OPTIMISATION : Watcher pour sauvegarder les colonnes épinglées
+    watch(() => {
+        if (!columnPinning) return null
+        try {
+            const pinnedMap = columnPinning.pinnedColumns.value
+            return pinnedMap instanceof Map ? pinnedMap : null
+        } catch {
+            return null
         }
-    }
+    }, (pinnedMap) => {
+        if (pinnedMap && effectiveTableConfig) {
+            try {
+                const pinnedState = Array.from(pinnedMap.entries()).map(([field, pinned]) => ({
+                    field,
+                    pinned
+                }))
+                effectiveTableConfig.updatePinnedColumns(pinnedState)
+            } catch (error) {
+                // Ignorer les erreurs
+            }
+        }
+    }, { deep: true })
+
+    // ⚡ OPTIMISATION : Watcher pour sauvegarder le sticky header
+    watch(() => stickyHeaderState.value, (newValue) => {
+        if (effectiveTableConfig) {
+            effectiveTableConfig.updateStickyHeader(newValue)
+        }
+    })
+
+    // ⚡ SERVER-SIDE ONLY : Lazy loading supprimé (inutile en server-side)
+    // Le serveur ne renvoie que les données de la page actuelle (~20-50 lignes)
+
+    // ⚡ OPTIMISATION : Utiliser useDataTableState pour l'état global
+    // Note: isSearching et masterDetail sont déclarés plus haut dans useDataTableServerSide
+    const {
+        isLoading: stateIsLoading,
+        isSearching: stateIsSearching,
+        hasActiveFilters: stateHasActiveFilters,
+        hasActiveSearch: stateHasActiveSearch,
+        errorState: stateErrorState,
+        retryFunction: stateRetryFunction,
+        setError: stateSetError,
+        clearError: stateClearError,
+        retryLastAction: stateRetryLastAction
+    } = useDataTableState({
+        props,
+        emit: safeEmit,
+        dataTable: dataTable as unknown as import('../types/composables').DataTableInstance,
+        isSearching,
+        masterDetail: masterDetail || undefined
+    })
 
     // Handlers pour les fonctionnalités avancées
 
@@ -865,7 +667,14 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
     onMounted(async () => {
 
         if (tableConfig && props.storageKey) {
-            tableConfig.loadConfig()
+            // ⚡ VÉRIFICATION : Charger la configuration et vérifier si elle existe vraiment
+            const configLoaded = await tableConfig.loadConfig()
+
+            // Si aucune configuration valide n'a été trouvée, ne rien restaurer
+            if (!configLoaded) {
+                // Aucune configuration sauvegardée, utiliser les valeurs par défaut
+                return
+            }
 
             if (tableConfig.visibleColumns.value.length > 0) {
                 const savedColumns = tableConfig.visibleColumns.value.filter(col => {
@@ -906,8 +715,12 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
 
             if (Object.keys(tableConfig.columnWidths.value).length > 0) {
                 Object.entries(tableConfig.columnWidths.value).forEach(([field, width]) => {
-                    if (dataTable) {
-                        dataTable.columnWidths[field] = width
+                    // ⚡ OPTIMISATION : Accéder directement au ref dans dataTableComposable
+                    if (dataTableComposable.columnWidths && typeof dataTableComposable.columnWidths === 'object') {
+                        const widths = unref(dataTableComposable.columnWidths)
+                        if (widths && typeof widths === 'object') {
+                            widths[field] = width as number
+                        }
                     }
                 })
             }
@@ -926,25 +739,86 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
 
             stickyHeaderState.value = tableConfig.stickyHeader.value
 
-            const hasSavedFilters = tableConfig.filters.value && Object.keys(tableConfig.filters.value).length > 0
-            const hasSavedSort = tableConfig.sort.value && tableConfig.sort.value.length > 0
-            const hasSavedSearch = tableConfig.search.value && tableConfig.search.value.trim() !== ''
-            const defaultPageSize = props.pageSizeProp || 20
-            const hasSavedPageSize = tableConfig.pageSize.value && tableConfig.pageSize.value !== defaultPageSize
-            const hasSavedState = hasSavedFilters || hasSavedSort || hasSavedSearch || hasSavedPageSize
+            // ⚡ VÉRIFICATION COMPLÈTE : Vérifier tous les états sauvegardés individuellement
+            // ⚡ IMPORTANT : Après loadConfig(), les valeurs sont chargées dans les refs
+            // On vérifie si les valeurs existent et sont valides (même si ce sont des valeurs "par défaut")
+
+            // ⚡ DEBUG : Vérifier les valeurs chargées
+            // console.log('[useDataTableComponent] Valeurs chargées:', {
+            //     pageSize: tableConfig.pageSize.value,
+            //     page: tableConfig.page.value,
+            //     search: tableConfig.search.value,
+            //     filters: tableConfig.filters.value
+            // })
+
+            const hasSavedFilters = tableConfig.filters.value !== undefined &&
+                tableConfig.filters.value !== null &&
+                typeof tableConfig.filters.value === 'object'
+                // ⚡ NOTE : On accepte même un objet vide car cela signifie que l'utilisateur a explicitement effacé les filtres
+
+            const hasSavedSort = tableConfig.sort.value !== undefined &&
+                tableConfig.sort.value !== null &&
+                Array.isArray(tableConfig.sort.value) &&
+                tableConfig.sort.value.length > 0
+
+            // ⚡ IMPORTANT : Vérifier si search existe dans la config (même si c'est une chaîne vide)
+            // Car l'utilisateur peut avoir explicitement effacé la recherche
+            const hasSavedSearch = tableConfig.search.value !== undefined &&
+                tableConfig.search.value !== null &&
+                typeof tableConfig.search.value === 'string'
+                // ⚡ NOTE : On accepte même une chaîne vide car cela signifie que l'utilisateur a explicitement effacé la recherche
+
+            // ⚡ IMPORTANT : Vérifier si pageSize existe dans la config (même si c'est la valeur par défaut)
+            // Car l'utilisateur peut avoir explicitement choisi cette valeur
+            // ⚡ CRITIQUE : Ne pas comparer avec defaultPageSize car l'utilisateur peut avoir choisi 20 explicitement
+            const hasSavedPageSize = tableConfig.pageSize.value !== undefined &&
+                tableConfig.pageSize.value !== null &&
+                typeof tableConfig.pageSize.value === 'number' &&
+                tableConfig.pageSize.value > 0
+
+            // ⚡ IMPORTANT : Vérifier si page existe dans la config (même si c'est 1)
+            // Car l'utilisateur peut être sur la page 1
+            const hasSavedPage = tableConfig.page.value !== undefined &&
+                tableConfig.page.value !== null &&
+                typeof tableConfig.page.value === 'number' &&
+                tableConfig.page.value > 0
+
+            // ⚡ VÉRIFICATION : Vérifier si au moins un état est sauvegardé
+            // ⚡ IMPORTANT : Inclure pageSize et page même si ce sont les valeurs par défaut
+            // car elles ont été explicitement sauvegardées dans localStorage
+            const hasSavedState = hasSavedFilters || hasSavedSort || hasSavedSearch || hasSavedPageSize || hasSavedPage
+
+            // ⚡ DEBUG : Log pour vérifier les états détectés
+            // console.log('[useDataTableComponent] États détectés:', {
+            //     hasSavedFilters,
+            //     hasSavedSort,
+            //     hasSavedSearch,
+            //     hasSavedPageSize,
+            //     hasSavedPage,
+            //     hasSavedState,
+            //     pageSizeValue: tableConfig.pageSize.value,
+            //     searchValue: tableConfig.search.value
+            // })
 
             if (hasSavedState) {
+                // ⚡ ORDRE CRITIQUE : Restaurer pageSize AVANT la page
+                // car changePageSize() réinitialise la page à 1
                 if (hasSavedPageSize && dataTable) {
-                    // Appel direct pour éviter les problèmes avec handlePageSizeChanged dans onMounted
-                    dataTableComposable.changePageSize(tableConfig.pageSize.value)
+                    // ⚡ SERVER-SIDE ONLY : Pour la pagination serveur, on ne modifie pas directement effectivePageSize
+                    // car c'est un computed readonly qui se synchronise avec pageSizeProp
+                    // On attend que le QueryModel soit émis et que le backend réponde avec la bonne pageSize
+                    // Le watcher dans useDataTable.ts synchronisera effectivePageSize avec pageSizeProp
+                    // Pas besoin de modifier directement ici
                 }
 
+                // Restaurer les filtres si sauvegardés
                 if (hasSavedFilters && dataTable) {
                     if ('setFilterState' in dataTable && typeof dataTable.setFilterState === 'function') {
                         dataTable.setFilterState(tableConfig.filters.value)
                     }
                 }
 
+                // Restaurer le tri si sauvegardé
                 if (hasSavedSort) {
                     const savedSort = tableConfig.sort.value.map(s => ({
                         colId: s.field,
@@ -961,33 +835,84 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
                         currentSortField.value = ''
                         currentSortDirection.value = 'asc'
                     }
-
-                    // if (queryModel && queryModel.value && queryModel.value.updateSort) {
-                    //     const sortModels = savedSort.map((s, index) => ({
-                    //         field: s.colId,
-                    //         direction: s.sort,
-                    //         priority: index + 1
-                    //     }))
-                    //     queryModel.value.updateSort(sortModels)
-                    // }
                 }
 
+                // ⚡ Restaurer la recherche si sauvegardée (même si c'est une chaîne vide)
+                // Car cela signifie que l'utilisateur a explicitement effacé la recherche
                 if (hasSavedSearch && dataTable) {
                     if ('updateGlobalSearchTerm' in dataTable && typeof dataTable.updateGlobalSearchTerm === 'function') {
-                        dataTable.updateGlobalSearchTerm(tableConfig.search.value || '')
+                        // ⚡ IMPORTANT : Toujours restaurer la recherche, même si c'est une chaîne vide
+                        dataTable.updateGlobalSearchTerm(typeof tableConfig.search.value === 'string' ? tableConfig.search.value : '')
                     }
+                }
+
+                // ⚡ SERVER-SIDE ONLY : Restaurer la page APRÈS la pageSize
+                // Pour la pagination serveur, on ne modifie pas directement effectiveCurrentPage
+                // car c'est un computed readonly qui se synchronise avec currentPageProp
+                // On attend que le QueryModel soit émis et que le backend réponde avec la bonne page
+                // Le watcher dans useDataTable.ts synchronisera effectiveCurrentPage avec currentPageProp
+                // Pas besoin de modifier directement ici
+                if (hasSavedPage && dataTable) {
+                    // ⚡ SERVER-SIDE ONLY : La page sera restaurée via le QueryModel émis
                 }
 
                 await nextTick()
 
+                // ⚡ CRITIQUE : Créer un QueryModel complet avec TOUS les états restaurés
+                // Utiliser les valeurs EXACTES de la config sauvegardée (même si ce sont les valeurs par défaut)
+                // ⚡ IMPORTANT : Toujours utiliser les valeurs de tableConfig car elles ont été chargées depuis localStorage
+                // ⚡ CRITIQUE : Ne pas se fier uniquement aux flags hasSaved* car ils peuvent être false même si les valeurs existent
+                // Utiliser directement les valeurs de tableConfig si elles existent
+
+                // ⚡ DEBUG : Vérifier les valeurs avant de construire le QueryModel
+                console.log('[useDataTableComponent] Valeurs de tableConfig avant construction QueryModel:', {
+                    pageSize: tableConfig.pageSize.value,
+                    page: tableConfig.page.value,
+                    search: tableConfig.search.value,
+                    filters: tableConfig.filters.value,
+                    hasSavedPageSize,
+                    hasSavedSearch,
+                    hasSavedFilters
+                })
+
                 const restoredQueryModel: QueryModel = {
-                    page: 1,
-                    pageSize: tableConfig.pageSize.value || props.pageSizeProp || 20,
-                    filters: tableConfig.filters.value || {},
-                    search: tableConfig.search.value || undefined,
+                    // ⚡ Utiliser la page sauvegardée si elle existe, sinon 1
+                    page: (tableConfig.page.value !== undefined &&
+                           tableConfig.page.value !== null &&
+                           typeof tableConfig.page.value === 'number' &&
+                           tableConfig.page.value > 0)
+                        ? tableConfig.page.value
+                        : 1,
+                    // ⚡ CRITIQUE : Toujours utiliser tableConfig.pageSize.value si elle existe (chargée depuis localStorage)
+                    // Ne pas utiliser props.pageSizeProp car cela pourrait être différent de la valeur sauvegardée
+                    pageSize: (tableConfig.pageSize.value !== undefined &&
+                               tableConfig.pageSize.value !== null &&
+                               typeof tableConfig.pageSize.value === 'number' &&
+                               tableConfig.pageSize.value > 0)
+                        ? tableConfig.pageSize.value
+                        : (props.pageSizeProp || 20),
+                    // ⚡ IMPORTANT : Utiliser les filtres sauvegardés (même si c'est un objet vide)
+                    filters: (tableConfig.filters.value !== undefined &&
+                              tableConfig.filters.value !== null &&
+                              typeof tableConfig.filters.value === 'object')
+                        ? tableConfig.filters.value
+                        : {},
+                    // ⚡ CRITIQUE : Utiliser la recherche sauvegardée (même si c'est une chaîne vide)
+                    // ⚡ IMPORTANT : Ne pas utiliser trim() car on veut préserver la valeur exacte
+                    search: (tableConfig.search.value !== undefined &&
+                             tableConfig.search.value !== null &&
+                             typeof tableConfig.search.value === 'string')
+                        ? tableConfig.search.value
+                        : undefined,
                     customParams: props.customDataTableParams || {}
                 }
 
+                // ⚡ DEBUG : Log uniquement en développement
+                if (process.env.NODE_ENV === 'development') {
+                    logger.debug('[useDataTableComponent] QueryModel restauré qui sera émis', restoredQueryModel)
+                }
+
+                // Ajouter le tri si sauvegardé
                 if (hasSavedSort) {
                     restoredQueryModel.sort = tableConfig.sort.value.map(s => ({
                         colId: s.field,
@@ -995,139 +920,98 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
                     }))
                 }
 
+                // ⚡ IMPORTANT : Émettre query-model-changed pour que le parent soit informé de la restauration
+                // C'est l'événement principal qui permet au parent (comme useInventoryResults) de charger les données
+                safeEmit('query-model-changed', restoredQueryModel)
+
+                // Émettre aussi les événements spécifiques pour compatibilité
+                if (hasSavedFilters) {
                 safeEmit('filter-changed', restoredQueryModel)
+                }
+                if (hasSavedSort) {
+                    safeEmit('sort-changed', restoredQueryModel)
+                }
+                if (hasSavedSearch) {
+                    safeEmit('global-search-changed', restoredQueryModel)
+                }
+                if (hasSavedPageSize) {
+                    safeEmit('page-size-changed', restoredQueryModel)
+                }
+                if (hasSavedPage) {
+                    safeEmit('pagination-changed', restoredQueryModel)
+                }
             } else {
-                if (hasSavedPageSize && dataTable) {
-                    dataTable.changePageSize(tableConfig.pageSize.value)
+                // ⚡ SERVER-SIDE ONLY : Aucun état sauvegardé, mais on peut avoir une pageSize ou page sauvegardée
+                // La restauration se fera via le QueryModel émis ci-dessous
+                if (hasSavedPageSize || hasSavedPage) {
+                    const defaultQueryModel: QueryModel = {
+                        page: hasSavedPage && tableConfig.page.value ? tableConfig.page.value : 1,
+                        pageSize: hasSavedPageSize && tableConfig.pageSize.value ? tableConfig.pageSize.value : (props.pageSizeProp || 20),
+                        filters: {},
+                        sort: [],
+                        search: undefined,
+                        customParams: props.customDataTableParams || {}
+                    }
+                    safeEmit('query-model-changed', defaultQueryModel)
                 }
 
                 await nextTick()
+
+                // ⚡ IMPORTANT : Créer un QueryModel avec les valeurs sauvegardées (pageSize, page) si elles existent
+                // Utiliser les valeurs EXACTES de la config sauvegardée
                 const defaultQueryModel: QueryModel = {
-                    page: 1,
-                    pageSize: tableConfig.pageSize.value || props.pageSizeProp || 20,
-                    filters: {},
-                    search: undefined,
+                    page: hasSavedPage ? tableConfig.page.value : 1,
+                    // ⚡ IMPORTANT : Utiliser la pageSize sauvegardée si elle existe, même si c'est la valeur par défaut
+                    pageSize: hasSavedPageSize ? tableConfig.pageSize.value : (props.pageSizeProp || 20),
+                    // ⚡ IMPORTANT : Utiliser les filtres sauvegardés s'ils existent (même si c'est un objet vide)
+                    filters: tableConfig.filters.value && typeof tableConfig.filters.value === 'object'
+                        ? tableConfig.filters.value
+                        : {},
+                    // ⚡ IMPORTANT : Utiliser la recherche sauvegardée si elle existe (même si c'est une chaîne vide)
+                    search: tableConfig.search.value !== undefined && tableConfig.search.value !== null
+                        ? (typeof tableConfig.search.value === 'string' ? tableConfig.search.value : undefined)
+                        : undefined,
                     customParams: props.customDataTableParams || {}
                 }
-                safeEmit('filter-changed', defaultQueryModel)
+
+                // ⚡ VÉRIFICATION : Émettre query-model-changed seulement si on a au moins pageSize ou page sauvegardée
+                // Sinon, ne rien émettre (le DataTable chargera avec les valeurs par défaut)
+                if (hasSavedPageSize || hasSavedPage) {
+                    // Émettre query-model-changed pour que le parent charge les données avec les valeurs sauvegardées
+                    safeEmit('query-model-changed', defaultQueryModel)
+
+                    // Émettre aussi les événements spécifiques si les valeurs sont sauvegardées
+                    if (hasSavedPageSize) {
+                        safeEmit('page-size-changed', defaultQueryModel)
+                    }
+                    if (hasSavedPage) {
+                        safeEmit('pagination-changed', defaultQueryModel)
+                    }
+                }
+                // Si aucune valeur n'est sauvegardée, ne rien émettre (le DataTable utilisera les valeurs par défaut)
             }
         }
     })
 
-    // === OPTIMISATIONS DE PERFORMANCE ===
-
-    // Cache des données pour éviter les recalculs coûteux
-    const memoizedRowData = (rowDataProp: any[]) => {
-        if (!Array.isArray(rowDataProp)) return []
-        return rowDataProp.slice() // Créer une copie pour éviter les mutations
-    }
-
-    // Données finales à afficher - OPTIMISÉ AVEC LAZY LOADING
+    // ⚡ SERVER-SIDE ONLY : Données finales simplifiées
+    // Le serveur renvoie directement les données de la page actuelle
     const finalRowData = computed(() => {
-        let data: any[] = []
-
-        // Utiliser lazy loading si activé, sinon le cache normal
-        let rowData = lazyLoadingState.isEnabled ? lazyLoadedData.value : memoizedRowData(props.rowDataProp || [])
-
-        // Vérifier que c'est bien un tableau (après cache)
-        if (!Array.isArray(rowData)) {
-            logger.debug('finalRowData - rowDataProp n\'est pas un tableau', {
-                type: typeof rowData,
-                isArray: Array.isArray(rowData),
-                value: rowData
-            })
-            rowData = []
-        }
-
-        // Si pagination est désactivée OU serverSidePagination est activé, utiliser directement rowDataProp
-        // Sinon, utiliser paginatedData pour la pagination côté client
-        if (!props.pagination || props.serverSidePagination) {
-            // Pas de pagination ou pagination serveur : utiliser directement rowDataProp
-            data = rowData.length > 0 ? rowData : []
-            // Mode server-side : données utilisées directement depuis rowDataProp
-        } else {
-            // Pagination côté client : utiliser paginatedData si disponible, sinon rowDataProp
-            if (Array.isArray(dataTable?.paginatedData) && dataTable.paginatedData.length > 0) {
-                data = dataTable.paginatedData
-            } else {
-                data = rowData.length > 0 ? rowData : []
-            }
-        }
-
-        // if (grouping && grouping.groupedData.value) {
-        //     data = grouping.groupedData.value
-        // }
-
-        // if (pivot && pivot.pivotData.value) {
-        //     data = pivot.pivotData.value
-        // }
-
-        if (shouldEnableVirtualScrolling.value && virtualScrolling && virtualScrolling.visibleItems.value) {
-            data = virtualScrolling.visibleItems.value
-        }
-
-        // Pagination serveur : utiliser directement rowDataProp
-
-
-        return data
+        const rowData = unref(props.rowDataProp) || props.rowDataProp
+        return Array.isArray(rowData) ? rowData : []
     })
 
     // Hash optimisé pour la key du TableBody
     const tableDataHash = computed(() => {
-        const data = finalRowData.value
-        if (!Array.isArray(data) || data.length === 0) {
+        const tableData = finalRowData.value
+        if (!Array.isArray(tableData) || tableData.length === 0) {
             return 'empty'
         }
-        const firstId = data[0]?.id || data[0]?.reference || '0'
-        const lastId = data[data.length - 1]?.id || data[data.length - 1]?.reference || '0'
-        return `${firstId}-${lastId}-${data.length}`
+        const firstRowId = tableData[0]?.id || tableData[0]?.reference || '0'
+        const lastRowId = tableData[tableData.length - 1]?.id || tableData[tableData.length - 1]?.reference || '0'
+        return `${firstRowId}-${lastRowId}-${tableData.length}`
     })
 
-    // Watcher optimisé pour les changements de données (hash efficace pour gros datasets)
-    const dataHashCache = new Map<string, string>()
-    const getDataHash = (data: any[]): string => {
-        if (!Array.isArray(data) || data.length === 0) return 'empty'
-
-        // Pour les gros datasets (>1000), utiliser un échantillonnage
-        const sampleSize = data.length > 1000 ? Math.min(10, Math.floor(data.length / 100)) : 5
-        const step = Math.max(1, Math.floor(data.length / sampleSize))
-
-        const sampledIds: string[] = []
-        for (let i = 0; i < data.length && sampledIds.length < sampleSize; i += step) {
-            const item = data[i]
-            sampledIds.push(item?.id || item?.reference || `item-${i}`)
-        }
-
-        const hash = `${data.length}-${sampledIds.join(',')}`
-        return hash
-    }
-
-    watch(() => {
-        const data = unref(props.rowDataProp) || props.rowDataProp
-        if (!Array.isArray(data)) return 'not-array'
-        return getDataHash(data)
-    }, (newHash, oldHash) => {
-        if (newHash !== oldHash && newHash !== 'not-array') {
-            // Log optimisé pour éviter la surcharge en production
-            if (process.env.NODE_ENV === 'development') {
-                logger.debug('DataTable - rowDataProp changed', { hash: newHash })
-            }
-        }
-    }, { immediate: true, deep: false }) // Deep: false pour les gros tableaux
-
-    // Watcher pour initialiser le lazy loading
-    watch(shouldEnableLazyLoading, (shouldEnable) => {
-        if (shouldEnable && !lazyLoadingState.isEnabled) {
-            initializeLazyLoading()
-        }
-    }, { immediate: true })
-
-    // Watcher pour charger les chunks visibles dans le virtual scrolling
-    watch([() => virtualScrolling?.startIndex?.value, () => virtualScrolling?.endIndex?.value], ([startIndex, endIndex]) => {
-        if (startIndex !== undefined && endIndex !== undefined) {
-            loadVisibleChunks(startIndex, endIndex)
-        }
-    }, { immediate: false })
+    // ⚡ SERVER-SIDE ONLY : Watchers simplifiés (pas besoin de lazy loading ou virtual scrolling)
 
     // Colonnes finales (avec colonnes de groupement si nécessaire) - SIMPLIFIÉ
     const finalColumns = computed(() => {
@@ -1148,22 +1032,6 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
         }
 
         // Ajouter les colonnes de groupement si activé
-        // if (grouping && grouping.isGrouped.value) {
-        //     const groupColumns = grouping.activeGroupings.value.map(config => ({
-        //         field: config.field,
-        //         headerName: config.label,
-        //         sortable: config.sortable || false,
-        //         filterable: false,
-        //         width: 200,
-        //         editable: false,
-        //         visible: true,
-        //         draggable: false,
-        //         autoSize: true,
-        //         dataType: 'text' as const,
-        //         _isGroupColumn: true
-        //     }))
-        //     columns = [...groupColumns, ...columns]
-        // }
 
         // Appliquer l'ordre des colonnes avec pinning si activé
         if (columnPinning && props.enableColumnPinning) {
@@ -1191,29 +1059,7 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
         return columns
     })
 
-    // État de chargement combiné - UTILISE isLoadingCombined OPTIMISÉ
-
-    // États calculés optimisés - MEMOIZÉS
-    const hasActiveFilters = computed(() => {
-        const filterState = dataTable?.filterState || {}
-        const keyCount = Object.keys(filterState).length
-        return keyCount > 0
-    })
-
-    const hasActiveSearch = computed(() => {
-        const searchTerm = dataTable?.globalSearchTerm || ''
-        return searchTerm.trim().length > 0
-    })
-
-    // État de chargement combiné - OPTIMISÉ
-    const isLoadingCombined = computed(() => {
-        return props.loading ||
-            (isSearching?.value || false) ||
-            (virtualScrolling?.isLoadingMore?.value || false) ||
-            (masterDetail?.detailStates?.value &&
-                masterDetail.detailStates.value.size > 0 &&
-                Array.from(masterDetail.detailStates.value.values()).some(state => state.isLoading))
-    })
+    // ⚡ OPTIMISATION : États calculés et chargement viennent maintenant de useDataTableState
 
     // Méthode pour vider toutes les sélections
     const clearAllSelections = () => {
@@ -1228,12 +1074,10 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
         // État de base
         dataTable,
         queryModel,
-        tableConfig,
+        tableConfig: effectiveTableConfig,
         autoDataTable,
 
         // Fonctionnalités avancées
-        virtualScrolling,
-        effectiveVirtualScrollingConfig,
         grouping: grouping || null,
         editing,
         pivot: pivot || null,
@@ -1253,10 +1097,10 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
 
         // Handlers
         handlePaginationChanged,
-        handlePageSizeChanged,
-        handleSortChanged,
-        handleFilterChanged,
-        handleGlobalSearchUpdate,
+        handlePageSizeChanged: handlePageSizeChangedWrapper,
+        handleSortChanged: handleSortChangedWrapper,
+        handleFilterChanged: handleFilterChangedWrapper,
+        handleGlobalSearchUpdate: handleGlobalSearchUpdateWrapper,
         handleClearAllFilters,
         handleSelectionChanged,
         createQueryModelFromCurrentState,
@@ -1275,34 +1119,33 @@ export function useDataTableComponent(config: UseDataTableComponentConfig) {
         selectedRowsSet,
 
         // État de chargement
-        isLoading: isLoadingCombined,
-        isSearching,
-        exportLoadingState,
+        isLoading: stateIsLoading,
+        isSearching: stateIsSearching,
+        exportLoadingState: featuresExportLoadingState,
 
         // États calculés
-        hasActiveFilters,
-        hasActiveSearch,
+        hasActiveFilters: stateHasActiveFilters,
+        hasActiveSearch: stateHasActiveSearch,
         stickyHeaderState,
         defaultVisibleColumnsCountState,
 
         // États d'erreur
-        errorState,
-        retryFunction,
+        errorState: stateErrorState,
+        retryFunction: stateRetryFunction,
 
         // Pagination automatique intelligente
         autoPaginationConfig,
 
-        // Lazy loading
-        lazyLoadingState: readonly(lazyLoadingState),
+        // ⚡ SERVER-SIDE ONLY : Lazy loading supprimé
 
         // Flags des fonctionnalités avancées
         shouldEnableColumnPinning,
 
         // Méthodes utilitaires
         clearAllSelections,
-        setError,
-        clearError,
-        retryLastAction,
+        setError: stateSetError,
+        clearError: stateClearError,
+        retryLastAction: stateRetryLastAction,
 
         // Utilitaires d'optimisation du rendu
         getCellKey,

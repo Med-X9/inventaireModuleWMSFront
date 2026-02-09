@@ -19,49 +19,220 @@ export class DataTableService {
     }
 
     /**
-     * Calcule la largeur optimale d'une colonne
-     * Single Responsibility: Seulement la logique de calcul de largeur
+     * Calcule la largeur optimale d'une colonne de manière intelligente
+     *
+     * Prend en compte :
+     * - La longueur du headerName
+     * - Le type de données et son contenu typique
+     * - Les badges, cellRenderer personnalisés
+     * - Les icônes et contrôles (tri, filtre)
+     * - Les contraintes minWidth/maxWidth
+     *
+     * @param column - Configuration de la colonne
+     * @param sampleData - Données d'échantillon pour analyser le contenu réel (optionnel)
+     * @returns Largeur optimale en pixels
      */
-    calculateOptimalColumnWidth(column: DataTableColumn): number {
+    calculateOptimalColumnWidth(column: DataTableColumn, sampleData?: Record<string, unknown>[]): number {
         const headerText = column.headerName || column.field || ''
-        const headerWidth = headerText.length * 10 // ~10px par caractère
-        const controlsWidth = 80
 
-        // Largeur minimale selon le type de données
+        // 1. Calculer la largeur du header
+        // ~8-9px par caractère pour les polices standards, + padding
+        const headerCharWidth = 9
+        const headerPadding = 24 // padding left + right
+        const headerWidth = headerText.length * headerCharWidth + headerPadding
+
+        // 2. Largeur des contrôles (tri, filtre, icône)
+        let controlsWidth = 0
+        if (column.sortable !== false) controlsWidth += 24 // Bouton tri
+        if (column.filterable !== false) controlsWidth += 24 // Bouton filtre
+        if (column.icon) controlsWidth += 20 // Icône
+        // Minimum pour les contrôles même si pas de tri/filtre
+        if (controlsWidth === 0) controlsWidth = 16
+
+        // 3. Largeur minimale selon le type de données
         let minWidth = 120
-        if (column.dataType === 'boolean') minWidth = 80
-        else if (column.dataType === 'date' || column.dataType === 'datetime') minWidth = 120
-        else if (column.dataType === 'number') minWidth = 100
+        switch (column.dataType) {
+            case 'boolean':
+                minWidth = 90 // Checkbox ou icône
+                break
+            case 'date':
+                minWidth = 130 // Format date complet
+                break
+            case 'datetime':
+                minWidth = 180 // Format datetime complet
+                break
+            case 'number':
+                minWidth = 110 // Nombres avec séparateurs
+                break
+            case 'text':
+                minWidth = 120 // Texte standard
+                break
+            case 'email':
+                minWidth = 200 // Emails peuvent être longs
+                break
+            case 'url':
+                minWidth = 200 // URLs peuvent être longues
+                break
+            default:
+                minWidth = 120
+        }
 
-        const maxWidth = 500
-        const optimalWidth = Math.max(minWidth, Math.min(maxWidth, headerWidth + controlsWidth))
+        // 4. Analyser le contenu réel si des données sont fournies
+        let contentWidth = 0
+        if (sampleData && sampleData.length > 0 && column.field) {
+            // Échantillonner jusqu'à 20 lignes pour performance
+            const sampleSize = Math.min(sampleData.length, 20)
+            const sample = sampleData.slice(0, sampleSize)
 
-        logger.debug(`Calcul de largeur optimale pour "${column.field}": ${optimalWidth}px`)
+            // Calculer la largeur moyenne du contenu
+            const contentWidths: number[] = []
+
+            sample.forEach(row => {
+                const value = row[column.field]
+                if (value !== null && value !== undefined) {
+                    let valueStr = String(value)
+
+                    // Si la colonne a un cellRenderer, estimer la largeur du badge/HTML
+                    if (column.cellRenderer || column.badgeStyles) {
+                        // Les badges ajoutent ~40-60px de padding
+                        valueStr = valueStr + ' [BADGE]'
+                    }
+
+                    // Calculer la largeur approximative
+                    const charWidth = column.dataType === 'number' ? 8 : 9
+                    const valueWidth = valueStr.length * charWidth + 16 // padding
+                    contentWidths.push(valueWidth)
+                }
+            })
+
+            if (contentWidths.length > 0) {
+                // Utiliser la moyenne + 20% de marge pour les valeurs exceptionnelles
+                const avgContentWidth = contentWidths.reduce((a, b) => a + b, 0) / contentWidths.length
+                const maxContentWidth = Math.max(...contentWidths)
+                // Prendre la moyenne pondérée (70% moyenne, 30% max) pour éviter les colonnes trop larges
+                contentWidth = avgContentWidth * 0.7 + maxContentWidth * 0.3
+            }
+        }
+
+        // 5. Ajustements spéciaux
+        // Colonnes avec badges nécessitent plus d'espace
+        if (column.badgeStyles || column.cellRenderer) {
+            minWidth = Math.max(minWidth, 140) // Minimum pour badges
+            if (contentWidth > 0) {
+                contentWidth += 40 // Espace supplémentaire pour badges
+            }
+        }
+
+        // Colonnes avec flex ne doivent pas avoir de width fixe trop grande
+        if (column.flex) {
+            minWidth = Math.min(minWidth, 200) // Limiter pour les colonnes flex
+        }
+
+        // 6. Calculer la largeur optimale
+        // Prendre le maximum entre : header + contrôles, contenu réel, largeur minimale
+        let optimalWidth = Math.max(
+            headerWidth + controlsWidth,
+            contentWidth,
+            minWidth
+        )
+
+        // 7. Appliquer les contraintes minWidth/maxWidth
+        if (column.minWidth) {
+            optimalWidth = Math.max(optimalWidth, column.minWidth)
+        }
+        if (column.maxWidth) {
+            optimalWidth = Math.min(optimalWidth, column.maxWidth)
+        }
+
+        // 8. Limite globale raisonnable (éviter les colonnes trop larges)
+        const maxReasonableWidth = column.maxWidth || 600
+        optimalWidth = Math.min(optimalWidth, maxReasonableWidth)
+
+        // 9. Arrondir à un multiple de 5 pour un rendu plus propre
+        optimalWidth = Math.ceil(optimalWidth / 5) * 5
+
+        logger.debug(`Calcul de largeur optimale pour "${column.field}": ${optimalWidth}px`, {
+            headerWidth,
+            controlsWidth,
+            contentWidth,
+            minWidth,
+            dataType: column.dataType,
+            hasBadge: !!column.badgeStyles,
+            hasCellRenderer: !!column.cellRenderer
+        })
+
         return optimalWidth
     }
 
     /**
      * Valide la configuration d'une colonne
      * Single Responsibility: Seulement la validation
+     *
+     * Détecte les problèmes courants :
+     * - Champs obligatoires manquants
+     * - Conflits entre width et flex
+     * - Largeurs invalides
+     * - Types de données incohérents
      */
-    validateColumnConfig(column: DataTableColumn): { isValid: boolean; errors: string[] } {
+    validateColumnConfig(column: DataTableColumn): { isValid: boolean; errors: string[]; warnings: string[] } {
         const errors: string[] = []
+        const warnings: string[] = []
 
+        // Erreurs critiques
         if (!column.field) {
             errors.push('Le champ "field" est obligatoire')
         }
 
+        // Warnings (non bloquants)
         if (!column.headerName) {
-            errors.push('Le champ "headerName" est obligatoire')
+            warnings.push(`Colonne "${column.field}" : "headerName" manquant, utilisation de "field" comme fallback`)
         }
 
-        if (column.width && (column.width < 50 || column.width > 1000)) {
-            errors.push('La largeur doit être entre 50 et 1000 pixels')
+        // Validation des largeurs
+        if (column.width !== undefined) {
+            if (column.width < 50) {
+                errors.push(`Largeur trop petite (${column.width}px) : minimum 50px`)
+            }
+            if (column.width > 2000) {
+                errors.push(`Largeur trop grande (${column.width}px) : maximum 2000px`)
+            }
+        }
+
+        if (column.minWidth !== undefined) {
+            if (column.minWidth < 50) {
+                errors.push(`minWidth trop petit (${column.minWidth}px) : minimum 50px`)
+            }
+            if (column.width && column.minWidth > column.width) {
+                errors.push(`minWidth (${column.minWidth}px) ne peut pas être supérieur à width (${column.width}px)`)
+            }
+        }
+
+        if (column.maxWidth !== undefined) {
+            if (column.maxWidth < 50) {
+                errors.push(`maxWidth trop petit (${column.maxWidth}px) : minimum 50px`)
+            }
+            if (column.width && column.maxWidth < column.width) {
+                errors.push(`maxWidth (${column.maxWidth}px) ne peut pas être inférieur à width (${column.width}px)`)
+            }
+            if (column.minWidth && column.maxWidth < column.minWidth) {
+                errors.push(`maxWidth (${column.maxWidth}px) ne peut pas être inférieur à minWidth (${column.minWidth}px)`)
+            }
+        }
+
+        // Conflit width/flex
+        if (column.width && column.flex) {
+            warnings.push(`Colonne "${column.field}" : width et flex sont définis simultanément. flex sera prioritaire.`)
+        }
+
+        // Validation du type de données
+        if (column.dataType && !['text', 'number', 'date', 'datetime', 'boolean', 'select', 'email', 'url', 'phone', 'currency', 'percentage', 'file', 'image', 'color', 'json', 'array', 'object', 'textarea'].includes(column.dataType)) {
+            warnings.push(`Type de données "${column.dataType}" non reconnu pour la colonne "${column.field}"`)
         }
 
         return {
             isValid: errors.length === 0,
-            errors
+            errors,
+            warnings
         }
     }
 

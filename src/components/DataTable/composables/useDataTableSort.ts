@@ -48,14 +48,10 @@ export function useDataTableSort(config: UseDataTableSortConfig) {
     /**
      * Crée un QueryModel avec le tri actuel
      */
+    // ⚡ SERVER-SIDE ONLY : Créer un QueryModel avec le tri
     const createSortQueryModel = (sortModel: Array<{ colId: string; sort: 'asc' | 'desc' }>): QueryModel => {
-        const currentPage = props.serverSidePagination 
-            ? (props.currentPageProp ?? dataTable?.effectiveCurrentPage ?? 1)
-            : (dataTable?.effectiveCurrentPage || 1)
-        
-        const currentPageSize = props.serverSidePagination
-            ? (props.pageSizeProp ?? dataTable?.effectivePageSize ?? 20)
-            : (dataTable?.effectivePageSize || 20)
+        const currentPage = props.currentPageProp ?? dataTable?.effectiveCurrentPage ?? 1
+        const currentPageSize = props.pageSizeProp ?? dataTable?.effectivePageSize ?? 20
         
         return createQueryModelFromDataTableParams({
             page: currentPage,
@@ -91,24 +87,17 @@ export function useDataTableSort(config: UseDataTableSortConfig) {
             const sortModel = multiSort.dataTablesSortModel.value
             currentSortModel.value = sortModel
 
-            // Ne mettre à jour le QueryModel que si on est en mode côté serveur
-            if (props.serverSideSorting) {
-                const sortModels = sortModel.map((s, index) => ({
-                    field: s.colId,
-                    direction: s.sort,
-                    priority: index + 1
-                }))
-                updateQuerySort(sortModels)
+            // ⚡ SERVER-SIDE ONLY : Mettre à jour le QueryModel et émettre
+            const sortModels = sortModel.map((s, index) => ({
+                field: s.colId,
+                direction: s.sort,
+                priority: index + 1
+            }))
+            updateQuerySort(sortModels)
 
-                // Émettre directement le QueryModel
-                const queryModel = createSortQueryModel(sortModel)
-                console.log('[DataTable] 📤 SORT - Emitting sort-changed:', {
-                    sort: queryModel.sort,
-                    page: queryModel.page,
-                    timestamp: new Date().toISOString()
-                })
-                emit(queryModel)
-            }
+            // Émettre directement le QueryModel
+            const queryModel = createSortQueryModel(sortModel)
+            emit(queryModel)
         } else {
             // Tri simple
             const sortModel = sortData.isActive ? [{
@@ -118,17 +107,9 @@ export function useDataTableSort(config: UseDataTableSortConfig) {
 
             currentSortModel.value = sortModel
 
-            // Ne mettre à jour le QueryModel que si on est en mode côté serveur
-            if (props.serverSideSorting) {
-                // Émettre directement le QueryModel
-                const queryModel = createSortQueryModel(sortModel)
-                console.log('[DataTable] 📤 SORT - Emitting sort-changed:', {
-                    sort: queryModel.sort,
-                    page: queryModel.page,
-                    timestamp: new Date().toISOString()
-                })
-                emit(queryModel)
-            }
+            // ⚡ SERVER-SIDE ONLY : Émettre directement le QueryModel
+            const queryModel = createSortQueryModel(sortModel)
+            emit(queryModel)
         }
     }
 

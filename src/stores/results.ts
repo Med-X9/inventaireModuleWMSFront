@@ -75,36 +75,35 @@ export const useResultsStore = defineStore('results', () => {
             // Convertir QueryModel en paramètres de requête
             const urlSearchParams = params ? convertQueryModelToQueryParams(params) : new URLSearchParams();
             const requestParams = Object.fromEntries(urlSearchParams.entries());
-            console.log('[resultsStore.fetchResults] 🔄 Converted query params:', requestParams);
 
-            // Créer le body de la requête (comme dans jobStore)
-            const requestBody = {
-                inventory_id: inventoryId,
-                store_id: storeId,
-                ...requestParams
-            };
-            console.log('[resultsStore.fetchResults] 📤 Final request body:', requestBody);
+            // ⚡ IMPORTANT : Ne pas inclure inventory_id et store_id dans requestParams
+            // car ils sont déjà dans l'URL de l'endpoint
+            // Les retirer de requestParams s'ils y sont (via customParams)
+            const { inventory_id, store_id, ...cleanParams } = requestParams;
+
+            // Créer le body de la requête
+            // ⚡ NOTE : inventory_id et store_id sont dans l'URL, pas besoin de les mettre dans params
+            const requestBody = cleanParams;
 
             const response = await InventoryResultsService.getResults(inventoryId, storeId, requestBody);
 
-
-            // Stocker les données brutes
-            results.value = response.data || [];
+            // Stocker les données brutes (rows selon FORMAT_ACTUEL.md)
+            // La normalisation des résultats sera faite dans le composable
+            results.value = (response.rows as InventoryResult[]) || [];
             currentInventoryId.value = inventoryId;
 
-            // Stocker les métadonnées de pagination brutes du backend (sans calcul)
+            // Stocker les métadonnées de pagination brutes du backend (selon FORMAT_ACTUEL.md)
             paginationMetadata.value = {
-                page: response.page ?? 1,
-                totalPages: response.totalPages ?? 1,
-                pageSize: response.pageSize ?? 20,
-                total: response.total ?? response.recordsFiltered ?? response.recordsTotal ?? 0
+                page: response.page,
+                totalPages: response.totalPages,
+                pageSize: response.pageSize,
+                total: response.total
             };
 
             // Retourner la réponse complète
             return response;
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erreur lors de la récupération des résultats';
-            logger.error('Store: Erreur lors de la récupération des résultats', err);
             throw err;
         } finally {
             loading.value = false;
@@ -164,7 +163,6 @@ export const useResultsStore = defineStore('results', () => {
 
             // Ne pas forcer resolved: true - laisser l'API décider du statut réel
             // Le rechargement des données mettra à jour les statuts correctement
-            logger.debug('Écarts résolus en masse', response.data);
             return response;
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erreur lors de la résolution en masse des écarts';

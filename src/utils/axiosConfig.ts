@@ -121,7 +121,9 @@ axiosInstance.interceptors.response.use(
                     break;
 
                 case 403:
-                    alertService.error({ text: 'Accès refusé. Vous n\'avez pas les permissions nécessaires.' });
+                    // Rediriger vers la page 403
+                    const router403 = (await import('@/router')).default;
+                    router403.push({ name: 'error-403' });
                     break;
 
                 case 404:

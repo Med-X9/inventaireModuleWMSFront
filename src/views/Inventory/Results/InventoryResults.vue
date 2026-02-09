@@ -57,23 +57,22 @@
         <!-- DataTable harmonisée avec Affecter.vue -->
         <div v-if="selectedStore" class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
             <DataTable
-                :key="resultsKey"
                 :columns="columns"
                 :rowDataProp="results"
                 :actions="actions as any"
-                :enableVirtualScrolling="false"
+                :enableVirtualScrolling="undefined"
                 :currentPageProp="pagination.current_page"
                 :totalPagesProp="pagination.total_pages"
                 :totalItemsProp="pagination.total"
                 :pageSizeProp="pagination.page_size"
-                @pagination-changed="(queryModel) => onResultsTableEvent('pagination', queryModel)"
-                @page-size-changed="(queryModel) => onResultsTableEvent('page-size-changed', queryModel)"
-                @sort-changed="(queryModel) => onResultsTableEvent('sort', queryModel)"
-                @filter-changed="(queryModel) => onResultsTableEvent('filter', queryModel)"
-                @global-search-changed="(queryModel) => onResultsTableEvent('search', queryModel)"
+                :customDataTableParams="resultsCustomParams"
+                @query-model-changed="(queryModel) => onResultsTableEvent('query-model-changed', queryModel)"
                 storageKey="inventory_results_table"
                 ref="resultsTableRef"
-                :loading="loading">
+                :loading="loading"
+                :enableDynamicColumns="false"
+                :debounceFilter="300"
+                :debounceSearch="300">
             </DataTable>
         </div>
 
@@ -204,6 +203,7 @@ const {
     reinitialize,
     reloadResults,
     showLaunchCountingModal,
+    resultsCustomParams,
     onResultsTableEvent,
     // Pour la vue
     actionButtons,

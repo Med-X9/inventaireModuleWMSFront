@@ -5,7 +5,7 @@
  * - Mapping frontend/backend (champs, opérateurs)
  * - Construction de paramètres URL
  * - Transformation de filtres
- * - Filtrage et tri côté client
+ * - Transformation de filtres (server-side uniquement)
  * - Mise à jour de pagination depuis les réponses backend
  * 
  * @module dataTableHelpers
@@ -185,60 +185,13 @@ export function transformDataTableFilters(filters: Record<string, any>): Record<
 }
 
 /**
- * Filtre et trie les données côté client
+ * ⚡ SUPPRIMÉ : filterAndSortData
  * 
- * Applique successivement :
- * 1. Recherche globale (sur toutes les colonnes)
- * 2. Filtres par colonne (tous doivent correspondre, opérateur AND)
- * 3. Tri multi-colonnes selon les priorités
+ * Cette fonction était utilisée pour le filtrage et tri côté client.
+ * En mode server-side uniquement, toutes les opérations sont gérées par le serveur.
  * 
- * @param data - Données à filtrer et trier
- * @param filters - Filtres par colonne (optionnel)
- * @param sortRules - Règles de tri (optionnel)
- * @param globalSearch - Recherche globale (optionnel)
- * @returns Nouveau tableau filtré et trié (ne modifie pas l'original)
- * 
- * @example
- * ```typescript
- * const data = [
- *   { name: 'John', age: 30, status: 'active' },
- *   { name: 'Jane', age: 25, status: 'inactive' },
- *   { name: 'Bob', age: 35, status: 'active' }
- * ]
- * 
- * filterAndSortData(data, 
- *   { status: { operator: 'equals', value: 'active' } },
- *   [{ field: 'age', direction: 'desc', priority: 1 }],
- *   'john'
- * )
- * // Résultat : [{ name: 'John', age: 30, status: 'active' }]
- * ```
+ * @deprecated Supprimé - Utiliser le serveur pour toutes les opérations de filtrage/tri
  */
-export function filterAndSortData<T extends Record<string, any>>(
-    data: T[],
-    filters: Record<string, FilterValue> = {},
-    sortRules: SortRule[] = [],
-    globalSearch: string = ''
-): T[] {
-    let result = [...data]
-    
-    // Appliquer la recherche globale
-    if (globalSearch) {
-        result = result.filter(row => applyGlobalSearch(row, globalSearch))
-    }
-    
-    // Appliquer les filtres
-    if (Object.keys(filters).length > 0) {
-        result = result.filter(row => applyFilters(row, filters))
-    }
-    
-    // Appliquer le tri
-    if (sortRules.length > 0) {
-        result = sortData(result, sortRules)
-    }
-    
-    return result
-}
 
 /**
  * Met à jour la pagination depuis une réponse backend

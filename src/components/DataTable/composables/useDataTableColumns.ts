@@ -10,6 +10,7 @@ import { computed, ref, watch, type Ref, type ComputedRef } from 'vue'
 import type { DataTableProps, DataTableColumn } from '../types/dataTable'
 import { cellRenderersService } from '../services/cellRenderers'
 import { formatDateOnly } from '../utils/formatUtils'
+import { detectDynamicColumns, mergeColumns } from '../utils/dynamicColumnsDetector'
 
 /**
  * Configuration pour useDataTableColumns
@@ -59,15 +60,76 @@ export function useDataTableColumns(config: UseDataTableColumnsConfig) {
     const { props, dataTable, visibleColumnNames } = config
 
     /**
+     * Colonnes dynamiques détectées (si enableDynamicColumns est activé)
+     * 
+     * ⚡ OPTIMISÉ : Désactivé automatiquement pour 500+ lignes pour éviter les lenteurs
+     * Utilise un cache et n'analyse qu'un échantillon pour de meilleures performances
+     */
+    const dynamicColumns = computed<DataTableColumn[]>(() => {
+        if (!props.enableDynamicColumns) {
+            return []
+        }
+
+        // Récupérer les données depuis dataTable
+        const rowData = dataTable?.paginatedData || dataTable?.rowData || props.rowDataProp || []
+        
+        if (!rowData || rowData.length === 0) {
+            return []
+        }
+
+        const dataArray = rowData as Record<string, unknown>[]
+        
+        // ⚡ OPTIMISATION CRITIQUE : Pour 500+ lignes, désactiver la détection dynamique
+        // La détection dynamique est très coûteuse avec de grandes quantités de données
+        // et cause des blocages de 2 minutes. Les colonnes doivent être définies statiquement.
+        if (dataArray.length >= 500) {
+            // Retourner un tableau vide pour éviter les blocages
+            // Les colonnes doivent être définies dans props.columns pour les grandes quantités
+            return []
+        }
+
+        // Pour moins de 500 lignes, la détection est acceptable
+        // La fonction detectDynamicColumns utilise déjà un cache et un échantillon limité
+        const detectedColumns = detectDynamicColumns(
+            dataArray,
+            props.columns,
+            props.dynamicColumnsConfig || {}
+        )
+
+        return detectedColumns
+    })
+
+    /**
+     * Colonnes fusionnées (statiques + dynamiques)
+     */
+    const mergedColumns = computed<DataTableColumn[]>(() => {
+        const dynamicCols = dynamicColumns.value
+        
+        if (dynamicCols.length === 0) {
+            return props.columns
+        }
+
+        // Fusionner les colonnes statiques avec les colonnes dynamiques
+        return mergeColumns(
+            props.columns,
+            dynamicCols,
+            props.dynamicColumnsConfig?.customDetector ? 'end' : 'end'
+        )
+    })
+
+    /**
      * Colonnes formatées avec les renderers appliqués
      */
     const formattedColumns = computed<DataTableColumn[]>(() => {
         // Créer la colonne de numéro de ligne
         const rowNumberColumn = createRowNumberColumn(dataTable, props)
 
+        // Utiliser les colonnes fusionnées (statiques + dynamiques)
+        const allColumns = mergedColumns.value
+
         // Filtrer les colonnes pour éviter les doublons de __rowNumber__
         // ET exclure les colonnes avec visible: false par défaut (sauf si elles sont dans visibleColumnNames)
-        const otherColumns = props.columns.filter(col => {
+        const otherColumns = allColumns.filter(col => {
             if (col.field === '__rowNumber__') return false
             
             // Exclure les colonnes avec hide: true (toujours masquées)
@@ -215,12 +277,14 @@ export function useDataTableColumns(config: UseDataTableColumnsConfig) {
      * pour que l'utilisateur puisse les activer via ColumnManager
      */
     const columnsForManager = computed<DataTableColumn[]>(() => {
-        // Utiliser props.columns directement (toutes les colonnes définies)
+        // Utiliser les colonnes fusionnées (statiques + dynamiques)
+        const allColumns = mergedColumns.value
+        
         // et appliquer les renderers comme dans formattedColumns
         const rowNumberColumn = createRowNumberColumn(dataTable, props)
         
         // Filtrer les colonnes pour exclure uniquement hide: true
-        const otherColumns = props.columns
+        const otherColumns = allColumns
             .filter(col => col.field !== '__rowNumber__' && col.hide !== true)
             .map(column => {
                 // Appliquer les renderers comme dans formattedColumns

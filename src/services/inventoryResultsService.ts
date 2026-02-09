@@ -2,9 +2,21 @@ import axiosInstance from '@/utils/axiosConfig';
 import type { StoreOption, InventoryResult } from '../interfaces/inventoryResults';
 import type { AxiosResponse } from 'axios';
 import API from '@/api';
-import { logger } from '@/services/loggerService';
-import { normalizeDataTableResponse, convertUnifiedToStandardDataTable } from '@/utils/dataTableResponseNormalizer';
+import { normalizeDataTableResponse } from '@/utils/dataTableResponseNormalizer';
 import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter';
+import type { UnifiedDataTableResponse } from '@/utils/dataTableResponseNormalizer';
+
+/**
+ * Réponse typée selon FORMAT_ACTUEL.md
+ * Format : { rows: [...], page: number, pageSize: number, total: number, totalPages: number }
+ */
+export interface InventoryResultsResponse {
+    rows: Record<string, unknown>[];
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+}
 
 /**
  * Service pour la gestion des résultats d'inventaire
@@ -26,225 +38,47 @@ export class InventoryResultsService {
     private static baseUrl2 = API.endpoints.ecartComptage?.base;
 
     /**
-     * Récupérer les résultats d'inventaire pour un inventaire et un magasin donnés
+     * Récupère les résultats d'inventaire pour un inventaire et un magasin donnés
      *
      * Architecture : composable -> store -> service
      * Le service reçoit les paramètres déjà convertis au format FORMAT_ACTUEL.md par le store
-     * et fait uniquement l'appel API
+     * et fait uniquement l'appel API et retourne la réponse brute normalisée selon FORMAT_ACTUEL.md
+     *
+     * Format de réponse selon FORMAT_ACTUEL.md :
+     * { rows: [...], page: number, pageSize: number, total: number, totalPages: number }
      *
      * @param inventoryId - ID de l'inventaire
      * @param storeId - ID du magasin (warehouse)
      * @param params - Paramètres au format FORMAT_ACTUEL.md (déjà convertis par le store)
-     * @returns Objet contenant les résultats et les informations de pagination
+     * @returns Réponse brute normalisée selon FORMAT_ACTUEL.md (sans normalisation des résultats)
      */
     static async getResults(
         inventoryId: number,
         storeId: string | number,
-        params?: Record<string, any>
-    ): Promise<{
-        data: InventoryResult[];
-        recordsFiltered?: number;
-        recordsTotal?: number;
-        draw?: number;
-        page?: number;
-        totalPages?: number;
-        pageSize?: number;
-        total?: number;
-    }> {
-        try {
-            logger.debug('Service: Appel API pour récupérer les résultats', {
-                inventoryId,
-                storeId,
-                params
-            });
-
-            console.log('[InventoryResultsService.getResults] 📤 Sending request params:', params || {});
-
-            // ⚠️ Changement : Utiliser GET avec query params au lieu de POST avec body JSON
-            // pour être cohérent avec JobService.getAllValidated qui utilise GET avec params
-            const response = await axiosInstance.get(
-                `${this.baseUrl}${inventoryId}/warehouses/${storeId}/results/`,
-                {
-                    params: params || {},
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
+        params?: Record<string, unknown>
+    ): Promise<InventoryResultsResponse> {
+        const response = await axiosInstance.get<UnifiedDataTableResponse<Record<string, unknown>>>(
+            `${this.baseUrl}${inventoryId}/warehouses/${storeId}/results/`,
+            {
+                params: params || {},
+                headers: {
+                    'Content-Type': 'application/json'
                 }
-            );
-            const payload = response.data;
+            }
+        );
 
-            console.log('[InventoryResultsService.getResults] 📥 API Response:', {
-                status: response.status,
-                dataKeys: Object.keys(payload),
-                page: payload.page,
-                pageSize: payload.pageSize,
-                total: payload.total,
-                totalPages: payload.totalPages,
-                rowsCount: payload.rows?.length || 0
-            });
+        // Normaliser uniquement la structure de pagination vers FORMAT_ACTUEL.md
+        // La normalisation des résultats individuels est faite dans le composable
+        const unifiedResponse = normalizeDataTableResponse<Record<string, unknown>>(response.data);
 
-            // Normaliser la réponse backend vers le format FORMAT_ACTUEL.md
-            // Format attendu : { rows: [...], page: 2, pageSize: 10, total: 28, totalPages: 3 }
-
-            // Normaliser la réponse backend vers le format unifié
-            // Format attendu : { rows: [...], page: 2, pageSize: 10, total: 28, totalPages: 3 }
-            const unifiedResponse = normalizeDataTableResponse<Record<string, any>>(payload);
-
-            // Convertir vers le format DataTable standard pour compatibilité
-            const normalizedResponse = convertUnifiedToStandardDataTable(unifiedResponse);
-
-            const rawResults = normalizedResponse.data;
-            const recordsFiltered = normalizedResponse.recordsFiltered;
-            const recordsTotal = normalizedResponse.recordsTotal;
-            const draw = normalizedResponse.draw;
-
-            // Optimiser la normalisation avec moins d'itérations
-            const normalizedResults = rawResults.map((item, index) => {
-                const jobId = item.jobId ?? item.job_id ?? item.id ?? `${inventoryId}-${storeId}-${index + 1}`;
-                const emplacement = item.emplacement ?? item.location ?? '';
-                const article = item.article ?? item.product ?? '';
-                const finalResultRaw = item.final_result ?? item.resultats ?? null;
-                const finalResult = finalResultRaw === null || finalResultRaw === undefined
-                    ? null
-                    : Number(finalResultRaw);
-
-                // Créer l'objet de base directement (plus rapide)
-                const normalizedItem: Record<string, any> = {
-                    id: jobId,
-                    jobId,
-                    emplacement,
-                    article,
-                    product: item.product ?? item.article ?? '',
-                    final_result: finalResult,
-                    resultats: finalResult
-                };
-
-                const countingLabels: Record<string, string> = {};
-                const differenceLabels: Record<string, string> = {};
-
-                // Optimiser : itérer une seule fois sur les clés
-                const entries = Object.entries(item);
-                for (let i = 0; i < entries.length; i++) {
-                    const [rawKey, value] = entries[i];
-
-                    // Ignorer undefined
-                    if (value === undefined) continue;
-
-                    // Vérifier d'abord les formats standards (plus rapide)
-                    const keyLower = rawKey.toLowerCase();
-
-                    // Comptage : format standard contage_X
-                    if (keyLower.startsWith('contage_')) {
-                        normalizedItem[rawKey] = value;
-                        continue;
-                    }
-
-                    // Écart : format standard ecart_X_Y
-                    if (keyLower.startsWith('ecart_')) {
-                        normalizedItem[rawKey] = value;
-                        differenceLabels[rawKey] = rawKey;
-                        continue;
-                    }
-
-                    // Sinon, normaliser seulement si nécessaire (lent, donc en dernier)
-                    const keyNormalized = rawKey
-                        .normalize('NFD')
-                        .replace(/[\u0300-\u036f]/g, '')
-                        .trim()
-                        .toLowerCase();
-
-                    const countingMatch = keyNormalized.match(/^(\d+)(?:er|eme)?\s*comptage$/i);
-                    if (countingMatch) {
-                        const order = countingMatch[1];
-                        const fieldKey = `contage_${order}`;
-                        normalizedItem[fieldKey] = value;
-                        countingLabels[fieldKey] = rawKey;
-                        continue;
-                    }
-
-                    const differenceMatch = keyNormalized.match(/^ecart_((?:\d+_?)+)$/i);
-                    if (differenceMatch) {
-                        const numbers = differenceMatch[1].split('_').filter(n => n.length > 0);
-                        if (numbers.length >= 2) {
-                            const fieldKey = `ecart_${numbers.join('_')}`;
-                            normalizedItem[fieldKey] = value;
-                            differenceLabels[fieldKey] = rawKey;
-                            continue;
-                        }
-                    }
-
-                    // Traitement des champs standards (switch optimisé)
-                    switch (keyNormalized) {
-                        case 'location':
-                        case 'emplacement':
-                            if (!normalizedItem.emplacement) normalizedItem.emplacement = value;
-                            break;
-                        case 'product':
-                        case 'article':
-                            if (!normalizedItem.article) {
-                                normalizedItem.article = value;
-                                normalizedItem.product = value;
-                            }
-                            break;
-                        case 'final_result':
-                        case 'resultats':
-                            if (normalizedItem.final_result === null) {
-                                normalizedItem.final_result = value === null || value === undefined ? null : Number(value);
-                                normalizedItem.resultats = normalizedItem.final_result;
-                            }
-                            break;
-                        case 'jobid':
-                        case 'job_id':
-                            if (!normalizedItem.jobId) {
-                                normalizedItem.jobId = value;
-                                normalizedItem.id = value;
-                            }
-                            break;
-                        default:
-                            // Copier seulement si pas déjà présent
-                            if (!(rawKey in normalizedItem)) {
-                                normalizedItem[rawKey] = value;
-                            }
-                            break;
-                    }
-                }
-
-                // Ajouter les labels seulement si nécessaire
-                if (Object.keys(countingLabels).length > 0) {
-                    normalizedItem.__countingLabels = countingLabels;
-                }
-                if (Object.keys(differenceLabels).length > 0) {
-                    normalizedItem.__differenceLabels = differenceLabels;
-                }
-
-                return normalizedItem as InventoryResult;
-            });
-
-            // Les informations de pagination ont déjà été extraites plus haut
-            // Utiliser les valeurs déjà calculées
-
-            // Extraire page et totalPages de la réponse normalisée
-            // ⚠️ Utiliser UNIQUEMENT les valeurs du backend - aucun calcul
-            // Le backend retourne { rows, page, pageSize, total, totalPages }
-            // unifiedResponse contient ces valeurs directement
-            const page = unifiedResponse.page ?? 1
-            const totalPages = unifiedResponse.totalPages ?? 0 // ⚠️ Utiliser uniquement la valeur du backend (pas de || qui masque 0)
-
-            return {
-                data: normalizedResults,
-                recordsFiltered,
-                recordsTotal,
-                draw,
-                // Ajouter page et totalPages pour que useBackendDataTable puisse les utiliser
-                page,
-                totalPages,
-                pageSize: unifiedResponse.pageSize,
-                total: unifiedResponse.total
-            } as any; // Type assertion car le type de retour standard ne contient pas ces champs
-        } catch (error) {
-            logger.error('Erreur lors de la récupération des résultats', error);
-            throw error;
-        }
+        // Retourner directement le format FORMAT_ACTUEL.md
+        return {
+            rows: unifiedResponse.rows,
+            page: unifiedResponse.page ?? 1,
+            pageSize: unifiedResponse.pageSize ?? 20,
+            total: unifiedResponse.total ?? 0,
+            totalPages: unifiedResponse.totalPages ?? 0
+        };
     }
 
     /**
@@ -252,28 +86,19 @@ export class InventoryResultsService {
      * @param id - ID du résultat
      * @param data - Données à modifier (valeur du résultat, etc.)
      */
-    static async updateValue(id: number | string, data: Partial<InventoryResult>): Promise<AxiosResponse<any>> {
-        try {
-            const response = await axiosInstance.put(`${this.baseUrl2}${id}/final-result/`, data);
-            return response;
-        } catch (error) {
-            logger.error('Erreur lors de la modification du résultat', error);
-            throw error;
-        }
+    static async updateValue(
+        id: number | string,
+        data: Partial<InventoryResult>
+    ): Promise<AxiosResponse<InventoryResult>> {
+        return await axiosInstance.put(`${this.baseUrl2}${id}/final-result/`, data);
     }
 
     /**
      * Valider un ou plusieurs résultats d'inventaire
      * @param ids - IDs des résultats à valider
      */
-    static async validateResults(ids: number): Promise<AxiosResponse<any>> {
-        try {
-            const response = await axiosInstance.post(`${this.baseUrl2}/${ids}/resolve/`);
-            return response;
-        } catch (error) {
-            logger.error('Erreur lors de la validation des résultats', error);
-            throw error;
-        }
+    static async validateResults(ids: number): Promise<AxiosResponse<{ success: boolean }>> {
+        return await axiosInstance.post(`${this.baseUrl2}/${ids}/resolve/`);
     }
 
     /**
@@ -285,15 +110,10 @@ export class InventoryResultsService {
      * @param inventoryId - ID de l'inventaire
      */
     static async getStoreOptions(inventoryId: number): Promise<StoreOption[]> {
-        try {
-            const response = await axiosInstance.get<StoreOption[]>(
-                `${API.endpoints.inventory?.base}${inventoryId}/warehouses/`
-            );
-            return response.data;
-        } catch (error) {
-            logger.error('Erreur lors de la récupération des magasins', error);
-            throw error;
-        }
+        const response = await axiosInstance.get<StoreOption[]>(
+            `${API.endpoints.inventory?.base}${inventoryId}/warehouses/`
+        );
+        return response.data;
     }
 
     /**
@@ -308,40 +128,20 @@ export class InventoryResultsService {
         inventoryId: number,
         storeId: string | number,
         format: 'csv' | 'excel' = 'excel',
-        params?: StandardDataTableParams | Record<string, any>
+        params?: StandardDataTableParams | Record<string, unknown>
     ): Promise<AxiosResponse<Blob>> {
-        try {
-            logger.debug('Export des résultats d\'inventaire', {
-                inventoryId,
-                storeId,
-                format,
-                params
-            });
+        const exportParams = {
+            ...params,
+            export: format
+        };
 
-            // Construire les paramètres avec le format d'export
-            const exportParams = {
-                ...params,
-                export: format
-            };
-
-            const response = await axiosInstance.get(
-                `${this.baseUrl}${inventoryId}/warehouses/${storeId}/results/`,
-                {
-                    params: exportParams,
-                    responseType: 'blob'
-                }
-            );
-
-            logger.debug('Export réussi', {
-                format,
-                blobSize: response.data.size
-            });
-
-            return response;
-        } catch (error) {
-            logger.error('Erreur lors de l\'export des résultats', error);
-            throw error;
-        }
+        return await axiosInstance.get(
+            `${this.baseUrl}${inventoryId}/warehouses/${storeId}/results/`,
+            {
+                params: exportParams,
+                responseType: 'blob'
+            }
+        );
     }
 
     /**
@@ -355,33 +155,12 @@ export class InventoryResultsService {
         inventoryId: number,
         warehouseId: number
     ): Promise<AxiosResponse<Blob>> {
-        try {
-            logger.debug('Export des données de résultats via endpoint dédié', {
-                inventoryId,
-                warehouseId,
-                endpoint: `${this.baseUrl}${inventoryId}/warehouses/${warehouseId}/results/export/`
-            });
-
-            const response = await axiosInstance.get(
-                `${this.baseUrl}${inventoryId}/warehouses/${warehouseId}/results/export/`,
-                {
-                    responseType: 'blob'
-                }
-            );
-
-            logger.debug('Export des données de résultats réussi', {
-                inventoryId,
-                warehouseId,
-                contentType: response.headers['content-type'],
-                contentDisposition: response.headers['content-disposition'],
-                contentLength: response.headers['content-length']
-            });
-
-            return response;
-        } catch (error) {
-            logger.error('Erreur lors de l\'export des données de résultats', error);
-            throw error;
-        }
+        return await axiosInstance.get(
+            `${this.baseUrl}${inventoryId}/warehouses/${warehouseId}/results/export/`,
+            {
+                responseType: 'blob'
+            }
+        );
     }
 
     /**
@@ -390,25 +169,12 @@ export class InventoryResultsService {
      * @returns Promise avec la réponse contenant le blob du fichier Excel
      */
     static async exportConsolidatedArticles(inventoryId: number): Promise<AxiosResponse<Blob>> {
-        try {
-            logger.debug('Export des articles consolidés', { inventoryId });
-
-            const response = await axiosInstance.get(
-                `${this.baseUrl}${inventoryId}/articles-consolides/export/`,
-                {
-                    responseType: 'blob'
-                }
-            );
-
-            logger.debug('Export des articles consolidés réussi', {
-                blobSize: response.data.size
-            });
-
-            return response;
-        } catch (error) {
-            logger.error('Erreur lors de l\'export des articles consolidés', error);
-            throw error;
-        }
+        return await axiosInstance.get(
+            `${this.baseUrl}${inventoryId}/articles-consolides/export/`,
+            {
+                responseType: 'blob'
+            }
+        );
     }
 }
 

@@ -1,11 +1,6 @@
 <template>
-    <div class="data-table" :class="{ 'data-table--virtual-scrolling': virtualScrolling }">
-        <!-- Skeleton loader pendant le chargement -->
-        <DataTableSkeleton v-if="isLoading" :columnsCount="finalColumns?.length || 5" :rowsCount="pageSizeProp || 20"
-            :showActions="props.actions?.length > 0" />
-
-        <!-- Contenu normal quand pas de chargement -->
-        <template v-else>
+    <div class="data-table">
+        <!-- Contenu normal - toolbar et header toujours visibles -->
             <!-- Toolbar avec contrôles des fonctionnalités avancées -->
             <!-- Toolbar avec contrôles des fonctionnalités avancées -->
             <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
@@ -59,98 +54,58 @@
                 </div>
             </div>
 
-            <TableHeader :globalSearchTerm="dataTable?.globalSearchTerm" :filterState="dataTable?.filterState"
-                :advancedFilters="advancedFilters" :loading="dataTable?.loading"
+            <TableHeader :globalSearchTerm="(dataTable as any)?.globalSearchTerm ?? ''" :filterState="(dataTable as any)?.filterState || {}"
+                :advancedFilters="advancedFilters" :loading="(dataTable as any)?.loading || false"
                 @update:globalSearchTerm="handleGlobalSearchUpdate"
                 @clear-all-filters="handleClearAllFilters" />
 
             <Toolbar :columns="columnsForManager" :visibleColumns="visibleColumnNames"
-                :columnWidths="dataTable?.columnWidths" :rowSelection="props.rowSelection ?? false"
-                :selectedRows="selectedRowsSet" :exportLoading="exportLoadingState" :loading="dataTable?.loading"
+                :columnWidths="(dataTable as any)?.columnWidths || {}" :rowSelection="(dataTable as any)?.rowSelection ?? props.rowSelection ?? false"
+                :selectedRows="selectedRowsSet" :exportLoading="exportLoadingState" :loading="(dataTable as any)?.loading || false"
                 :enableColumnPinning="props.enableColumnPinning || false"
                 :columnPinning="columnPinning"
                 :stickyHeader="stickyHeaderState"
                 :defaultVisibleColumnsCount="defaultVisibleColumnsCountState"
+                :showColumnSelector="props.showColumnSelector"
                 @export-csv="emit('export-csv')"
                 @export-spreadsheet="emit('export-spreadsheet')"
                 @export-pdf="emit('export-pdf')"
                 @export-selected-csv="emit('export-selected-csv')"
                 @export-selected-spreadsheet="emit('export-selected-spreadsheet')"
-                @deselect-all="dataTable?.deselectAll()" />
+                @deselect-all="dataTable?.deselectAll()"
+                @open-column-manager="showColumnManager = true" />
 
             <!-- Pagination dans le header -->
             <Pagination
-                :key="`pagination-${dataTable?.effectivePageSize}`"
-                :currentPage="props.currentPageProp ?? dataTable?.effectiveCurrentPage ?? 1"
-                :totalPages="props.totalPagesProp ?? dataTable?.effectiveTotalPages ?? 1"
-                :totalItems="dataTable?.effectiveTotalItems || 0"
-                :pageSize="dataTable?.effectivePageSize || 20" :total="dataTable?.effectiveTotalItems || 0"
-                :start="dataTable?.start || 0" :end="dataTable?.end || 0" :loading="dataTable?.loading || false"
+                :key="`pagination-${(dataTable as any)?.effectivePageSize || 20}`"
+                :currentPage="props.currentPageProp ?? (dataTable as any)?.effectiveCurrentPage ?? 1"
+                :totalPages="props.totalPagesProp ?? (dataTable as any)?.effectiveTotalPages ?? 1"
+                :totalItems="(dataTable as any)?.effectiveTotalItems || 0"
+                :pageSize="(dataTable as any)?.effectivePageSize || 20"
+                :total="(dataTable as any)?.effectiveTotalItems || 0"
+                :start="(dataTable as any)?.start || 0"
+                :end="(dataTable as any)?.end || 0"
+                :loading="(dataTable as any)?.loading || false"
                 @page-changed="handlePaginationChanged"
                 @page-size-changed="handlePageSizeChanged" />
 
-            <!-- Container avec virtual scrolling si activé -->
-            <div v-if="virtualScrolling" :ref="virtualScrolling.containerRef" class="overflow-auto relative virtual-scroll-container"
-                :style="{
-                  height: effectiveVirtualScrollingConfig?.containerHeight + 'px',
-                  '--virtual-scroll-height': effectiveVirtualScrollingConfig?.containerHeight + 'px'
-                }">
-                <div class="relative" :style="{ height: virtualScrolling.totalHeight + 'px' }">
-                    <div class="absolute top-0 left-0 right-0"
-                        :style="{ transform: `translateY(${virtualScrolling.transformY}px)` }">
-                        <TableBody ref="tableBodyRef" :columns="finalColumns" :paginatedData="finalRowData" :key="`virtual-${finalRowData.length}`"
-                            :actions="actions" :loading="isLoading" :skeletonRowsCount="pageSizeProp || 20"
-                            :currentSortField="currentSortField" :currentSortDirection="currentSortDirection"
-                            :rowSelection="props.rowSelection ?? false" :selectedRows="selectedRowsSet"
-                            :inlineEditing="props.inlineEditing" :editingState="(editing as any)?.state?.value"
-                            :masterDetailState="masterDetail?.detailStates"
-                            :currentPage="dataTable?.effectiveCurrentPage"
-                            :pageSize="dataTable?.effectivePageSize"
-                            :globalStartIndex="((dataTable?.effectiveCurrentPage - 1) * dataTable?.effectivePageSize)"
-                            :defaultVisibleColumnsCount="defaultVisibleColumnsCountState"
-                            :visibleColumnNames="visibleColumnNames"
-                            :enableRowClick="props.enableRowClick || false"
-                            :empty-state-title="props.emptyStateConfig?.title"
-                            :empty-state-description="props.emptyStateConfig?.description"
-                            :empty-state-icon="props.emptyStateConfig?.icon"
-                            :empty-state-actions="props.emptyStateConfig?.actions"
-                            :forbidden-state-title="props.forbiddenStateConfig?.title"
-                            :forbidden-state-description="props.forbiddenStateConfig?.description"
-                            :forbidden-state-icon="props.forbiddenStateConfig?.icon"
-                            :forbidden-state-actions="props.forbiddenStateConfig?.actions"
-                            :forbidden="props.forbidden"
-                            :has-active-filters="hasActiveFilters"
-                            :has-active-search="hasActiveSearch"
-                            @sort-changed="handleSortChanged"
-                            @filter-changed="handleFilterChangedWrapper"
-                            @selection-changed="handleSelectionChanged"
-                            @cell-value-changed="(event) => emit('cell-value-changed', event)"
-                            @row-clicked="(row: any) => emit('row-clicked', row)"
-                            @group-toggle="(groupKey: any) => (grouping as any)?.toggleGroup?.(groupKey)"
-                            @detail-toggle="(rowId: any) => (masterDetail as any)?.toggleDetail?.(rowId)"
-                            @edit-start="(row: any, field: any) => (editing as any)?.startEditing?.(row, field)"
-                            @edit-stop="(save: any) => (editing as any)?.stopEditing?.(save, undefined, undefined)"
-                            @edit-value-update="(value: any) => (editing as any)?.updateEditingValue?.(value)" />
-                    </div>
-                </div>
-            </div>
-
-            <!-- TableBody normal si pas de virtual scrolling -->
+            <!-- ⚡ SERVER-SIDE ONLY : TableBody normal (pas de virtual scrolling en server-side) -->
             <!-- Key optimisée : utiliser un hash simple au lieu de JSON.stringify -->
-            <TableBody v-if="!virtualScrolling" :key="`table-${dataTable?.effectivePageSize}-${dataTable?.effectiveCurrentPage}-${finalRowData.length}-${tableDataHash}`" ref="tableBodyRef" :columns="finalColumns" :paginatedData="finalRowData"
+            <TableBody :key="`table-${(dataTable as any)?.effectivePageSize}-${(dataTable as any)?.effectiveCurrentPage}-${finalRowData.length}-${tableDataHash}`" ref="tableBodyRef" :columns="finalColumns" :paginatedData="finalRowData"
                     :actions="actions" :loading="isLoading" :skeletonRowsCount="pageSizeProp || 20"
                     :currentSortField="currentSortField" :currentSortDirection="currentSortDirection"
                     :rowSelection="props.rowSelection ?? false" :selectedRows="selectedRowsSet"
                     :inlineEditing="props.inlineEditing" :editingState="(editing as any)?.state?.value"
-                    :masterDetailState="masterDetail?.detailStates" :currentPage="dataTable?.effectiveCurrentPage || 1"
-                    :pageSize="dataTable?.effectivePageSize"
-                    :globalStartIndex="((dataTable?.effectiveCurrentPage - 1) * dataTable?.effectivePageSize)"
+                    :masterDetailState="masterDetail?.detailStates" :currentPage="(dataTable as any)?.effectiveCurrentPage || 1"
+                    :pageSize="(dataTable as any)?.effectivePageSize || 20"
+                    :globalStartIndex="(((dataTable as any)?.effectiveCurrentPage || 1) - 1) * ((dataTable as any)?.effectivePageSize || 20)"
                     :columnPinning="columnPinning"
                     :enableColumnPinning="shouldEnableColumnPinning"
                     :stickyHeader="stickyHeaderState"
                     :defaultVisibleColumnsCount="defaultVisibleColumnsCountState"
                     :visibleColumnNames="visibleColumnNames"
                     :enableRowClick="props.enableRowClick || false"
+                    :rowClickMode="props.rowClickMode || 'double'"
                     :empty-state-title="props.emptyStateConfig?.title"
                     :empty-state-description="props.emptyStateConfig?.description"
                     :empty-state-icon="props.emptyStateConfig?.icon"
@@ -172,12 +127,38 @@
                     @edit-start="(row: any, field: any) => (editing as any)?.startEditing?.(row, field)"
                     @edit-stop="(save: any) => (editing as any)?.stopEditing?.(save, undefined, undefined)"
                     @edit-value-update="(value: any) => (editing as any)?.updateEditingValue?.(value)" />
-        </template>
+
+            <!-- ColumnManager Modal -->
+            <Teleport to="body">
+                <Transition name="popup-fade">
+                    <div v-if="showColumnManager" class="column-manager-popup-overlay" @click.self="showColumnManager = false">
+                        <div class="column-manager-popup">
+                            <ColumnManager
+                                :columns="columnsForManager"
+                                :visibleColumns="visibleColumnNames"
+                                :columnWidths="(dataTable as any)?.columnWidths || {}"
+                                :enableColumnPinning="props.enableColumnPinning || false"
+                                :columnPinning="columnPinning"
+                                :stickyHeader="stickyHeaderState"
+                                :defaultVisibleColumnsCount="defaultVisibleColumnsCountState"
+                                :minimized="columnManagerMinimized"
+                                @columns-changed="handleColumnsChanged"
+                                @reorder-columns="handleReorderColumns"
+                                @pin-column="handlePinColumn"
+                                @sticky-header-changed="handleStickyHeaderChanged"
+                                @default-visible-columns-changed="handleDefaultVisibleColumnsChanged"
+                                @close="showColumnManager = false"
+                                @toggle-minimized="columnManagerMinimized = !columnManagerMinimized"
+                            />
+                        </div>
+                    </div>
+                </Transition>
+            </Teleport>
     </div>
 </template>
 
 <script setup lang="ts">
-import { watch } from 'vue'
+import { watch, ref, Teleport, Transition } from 'vue'
 
 /**
  * DataTable - Composant de table de données avancé
@@ -211,17 +192,15 @@ import TableHeader from './TableHeader.vue'
 import Toolbar from './Toolbar.vue'
 import TableBody from './TableBody.vue'
 import Pagination from './Pagination.vue'
-import DataTableSkeleton from './DataTableSkeleton.vue'
+import ColumnManager from './ColumnManager.vue'
 
 // Composable principal qui contient toute la logique
 import { useDataTableComponent } from './composables/useDataTableComponent'
 
 // Props et emits avec valeurs par défaut pour activer toutes les fonctionnalités
+// ⚡ SERVER-SIDE ONLY : Toutes les opérations sont côté serveur par défaut
 const props = withDefaults(defineProps<DataTableProps<Record<string, unknown>>>(), {
     // Fonctionnalités core activées par défaut (server-side DataTable)
-    serverSidePagination: true,     // Pagination côté serveur ACTIVÉE
-    serverSideFiltering: true,      // Filtrage côté serveur ACTIVÉ
-    serverSideSorting: true,        // Tri côté serveur ACTIVÉ
     enableFiltering: true,          // Filtres de colonnes ACTIVÉS
     enableGlobalSearch: true,       // Recherche globale ACTIVÉE
     pagination: true,               // Pagination ACTIVÉE
@@ -238,7 +217,6 @@ const props = withDefaults(defineProps<DataTableProps<Record<string, unknown>>>(
     // Fonctionnalités optionnelles avec valeurs par défaut sûres
     rowSelection: false,             // Sélection multiple DÉSACTIVÉE
     inlineEditing: false,            // Édition inline DÉSACTIVÉE
-    enableVirtualScrolling: false,   // Virtual scrolling DÉSACTIVÉ
     enableGrouping: false,           // Groupement DÉSACTIVÉ
     enableAdvancedEditing: false,    // Édition avancée DÉSACTIVÉE
     enablePivot: false,              // Pivot DÉSACTIVÉ
@@ -281,8 +259,6 @@ const {
     autoDataTable,
 
     // Fonctionnalités avancées
-    virtualScrolling,
-    effectiveVirtualScrollingConfig,
     grouping,
     editing,
     pivot,
@@ -323,10 +299,47 @@ const {
     clearAllSelections,
     pageSizeProp,
     actions,
-    advancedFilters,
+    advancedFilters
 
 } = useDataTableComponent({ props, emit })
 
+// ===== GESTION DU COLUMN MANAGER =====
+const showColumnManager = ref(false)
+const columnManagerMinimized = ref(false)
+
+const handleColumnsChanged = (newVisibleColumns: string[], newColumnWidths: Record<string, number>) => {
+    // Mettre à jour les colonnes visibles via le composable
+    if (dataTable) {
+        // Mettre à jour les colonnes visibles
+        visibleColumnNames.value = newVisibleColumns
+        // Mettre à jour les largeurs
+        if (dataTable.columnWidths && typeof dataTable.columnWidths === 'object') {
+            Object.assign(dataTable.columnWidths, newColumnWidths)
+        }
+    }
+}
+
+const handleReorderColumns = (fromIndex: number, toIndex: number) => {
+    // Réorganiser les colonnes visibles
+    const newVisibleColumns = [...visibleColumnNames.value]
+    const [movedColumn] = newVisibleColumns.splice(fromIndex, 1)
+    newVisibleColumns.splice(toIndex, 0, movedColumn)
+    visibleColumnNames.value = newVisibleColumns
+}
+
+const handlePinColumn = (field: string, direction: 'left' | 'right' | null) => {
+    if (columnPinning) {
+        columnPinning.pinColumn(field, direction)
+    }
+}
+
+const handleStickyHeaderChanged = (enabled: boolean) => {
+    stickyHeaderState.value = enabled
+}
+
+const handleDefaultVisibleColumnsChanged = (count: number) => {
+    defaultVisibleColumnsCountState.value = count
+}
 
 // ===== WRAPPER POUR CONVERTIR LES FILTRES EN QUERYMODEL =====
 
@@ -341,13 +354,10 @@ const {
  * @param filters - Filtres bruts depuis TableBody (Proxy réactif) ou QueryModel depuis d'autres sources
  */
 const handleFilterChangedWrapper = async (filters: Record<string, any> | QueryModel) => {
-    console.log('[DataTable] handleFilterChangedWrapper - Paramètres reçus:', filters)
-
     // Simplifier : traiter toujours comme des filtres bruts depuis TableBody
     // La logique complexe de détection créait des problèmes de double sérialisation
 
     if (!filters || typeof filters !== 'object') {
-        console.warn('[DataTable] handleFilterChangedWrapper - Paramètres invalides')
         return
     }
 
@@ -356,7 +366,6 @@ const handleFilterChangedWrapper = async (filters: Record<string, any> | QueryMo
         try {
         filtersPlain = JSON.parse(JSON.stringify(filters))
                         } catch (e) {
-        console.warn('[DataTable] handleFilterChangedWrapper - Erreur de conversion, utilisation directe')
         filtersPlain = { ...filters } as Record<string, any>
         }
 
@@ -366,12 +375,9 @@ const handleFilterChangedWrapper = async (filters: Record<string, any> | QueryMo
             const hasQueryModelKeys = filterKeys.some(key => ['page', 'pageSize', 'filters', 'sort', 'search', 'customParams'].includes(key))
 
             if (hasQueryModelKeys && 'filters' in filtersPlain && typeof filtersPlain.filters === 'object') {
-            console.warn('[DataTable] handleFilterChangedWrapper - QueryModel imbriqué détecté, extraction des filtres')
                 filtersPlain = filtersPlain.filters || {}
             }
         }
-
-    console.log('[DataTable] handleFilterChangedWrapper - Filtres convertis:', filtersPlain)
 
     // Convertir vers le format attendu par le backend
         const filtersConverted: Record<string, any> = {}
@@ -381,17 +387,19 @@ const handleFilterChangedWrapper = async (filters: Record<string, any> | QueryMo
                 if (filterData.operator === 'in' && filterData.values && Array.isArray(filterData.values)) {
                     filtersConverted[fieldName] = filterData.values
                 } else if (filterData.operator && filterData.value !== undefined) {
-                // Format backend: { type: operator, filter: value }
+                // Format backend selon FORMAT_ACTUEL.md: { type: "text", operator: "equals", value: "value" }
                     filtersConverted[fieldName] = {
-                    type: filterData.operator,  // 'equals', 'contains', etc.
-                    filter: filterData.value    // la valeur du filtre
+                    type: filterData.dataType || 'text',  // 'text', 'number', 'date', etc.
+                    operator: filterData.operator,  // 'equals', 'contains', etc.
+                    value: filterData.value    // la valeur du filtre
                     }
                 // Support pour les ranges (si nécessaire)
                 if (filterData.value2 !== undefined && filterData.operator === 'between') {
                         filtersConverted[fieldName].from = filterData.value
                         filtersConverted[fieldName].to = filterData.value2
-                    filtersConverted[fieldName].type = 'range'
-                    delete filtersConverted[fieldName].filter
+                    filtersConverted[fieldName].type = 'date'
+                    filtersConverted[fieldName].operator = 'range'
+                    delete filtersConverted[fieldName].value
                     }
                 } else {
                 // Fallback
@@ -404,17 +412,12 @@ const handleFilterChangedWrapper = async (filters: Record<string, any> | QueryMo
     const currentQueryModel = createQueryModelFromCurrentState()
     const queryModelWithFilters: QueryModel = {
         page: 1, // Reset to page 1 on filter change
-        pageSize: currentQueryModel.pageSize ?? (props.serverSidePagination
-            ? (props.pageSizeProp ?? dataTable?.effectivePageSize ?? 20)
-            : (dataTable?.effectivePageSize || 20)),
+        pageSize: currentQueryModel.pageSize ?? (props.pageSizeProp ?? dataTable?.effectivePageSize ?? 20),
         sort: currentQueryModel.sort,
         filters: filtersConverted,
         search: currentQueryModel.search,
         customParams: currentQueryModel.customParams
     }
-
-    console.log('[DataTable] handleFilterChangedWrapper - QueryModel final:', queryModelWithFilters)
-    console.log('[DataTable] handleFilterChangedWrapper - Filters final:', queryModelWithFilters.filters)
 
     await handleFilterChanged(queryModelWithFilters)
 }
@@ -432,3 +435,74 @@ defineExpose({
     createQueryModelFromCurrentState
 })
 </script>
+
+<style scoped>
+/* ===== AMÉLIORATION DU SCROLL POUR VIRTUAL SCROLLING ===== */
+
+/* ⚡ SERVER-SIDE ONLY : Virtual scrolling supprimé - Styles CSS supprimés */
+
+/* Popup du gestionnaire de colonnes */
+.column-manager-popup-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.column-manager-popup {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+    width: 100%;
+    animation: popup-scale 0.2s ease-out;
+    overflow: auto;
+}
+
+@media (max-width: 640px) {
+    .column-manager-popup-overlay {
+        padding: 0.5rem;
+    }
+
+    .column-manager-popup {
+        max-width: 100vw;
+        max-height: 100vh;
+    }
+}
+
+@keyframes popup-scale {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Transitions pour le popup */
+.popup-fade-enter-active,
+.popup-fade-leave-active {
+    transition: opacity 0.2s ease;
+}
+
+.popup-fade-enter-active .column-manager-popup,
+.popup-fade-leave-active .column-manager-popup {
+    transition: transform 0.2s ease;
+}
+
+.popup-fade-enter-from,
+.popup-fade-leave-to {
+    opacity: 0;
+}
+
+.popup-fade-enter-from .column-manager-popup,
+.popup-fade-leave-to .column-manager-popup {
+    transform: scale(0.95);
+}
+</style>

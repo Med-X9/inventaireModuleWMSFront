@@ -139,6 +139,20 @@ export function useMultiSort(
         }))
     })
 
+    /**
+     * Toggle le tri d'une colonne (asc -> desc -> aucun)
+     */
+    const toggleSort = (field: string) => {
+        const currentDirection = getSortDirection(field)
+        if (currentDirection === 'asc') {
+            addSort(field, 'desc')
+        } else if (currentDirection === 'desc') {
+            removeSort(field)
+        } else {
+            addSort(field, 'asc')
+        }
+    }
+
     return {
         // État
         sortModel: computed(() => sortModel.value),
@@ -147,6 +161,7 @@ export function useMultiSort(
         addSort,
         removeSort,
         clearSort,
+        toggleSort,
         getSortDirection,
         getSortPriority,
         isSorted,

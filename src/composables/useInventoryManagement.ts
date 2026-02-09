@@ -644,35 +644,50 @@ export function useInventoryManagement() {
     // ===== HANDLERS DATATABLE =====
 
     /**
-     * Handler commun pour les opérations DataTable (pagination, tri, filtrage, recherche)
+     * ⚡ PATTERN UNIFIÉ : Handler unique pour toutes les opérations DataTable
+     *
+     * Le DataTable émet maintenant `query-model-changed` avec TOUS les états préservés.
+     * Ce handler utilise le QueryModel reçu sans modifier la configuration du DataTable.
+     *
+     * ⚠️ IMPORTANT : Ne jamais manipuler directement la configuration du DataTable.
+     * Le DataTable gère sa propre configuration et l'émet via les événements.
+     *
+     * Voir DATATABLE_COMPOSABLE_PATTERN.md pour le pattern complet.
+     *
+     * @param queryModel - QueryModel complet avec tous les états (pagination, tri, filtres, recherche)
      */
     const handleInventoryOperation = async (queryModel: QueryModel) => {
-        console.log('[useInventoryManagement] handleInventoryOperation called with:', queryModel)
         try {
-            console.log('[useInventoryManagement] Calling inventoryStore.fetchInventories...')
             await inventoryStore.fetchInventories(queryModel)
-            console.log('[useInventoryManagement] inventoryStore.fetchInventories completed')
         } catch (error) {
-            console.error('[useInventoryManagement] Error in inventoryStore.fetchInventories:', error)
             alertService.error({ text: 'Erreur lors du chargement des inventaires' })
         }
     }
 
-    // Handlers spécialisés
+    /**
+     * Handler unifié pour l'événement query-model-changed
+     *
+     * ⚡ RECOMMANDÉ : Utiliser ce handler unique au lieu des handlers individuels.
+     * Le DataTable émet query-model-changed avec tous les états préservés.
+     *
+     * @param queryModel - QueryModel complet du DataTable
+     */
+    const onInventoryTableEvent = async (eventType: string, queryModel: QueryModel) => {
+        await handleInventoryOperation(queryModel)
+    }
+
+    // Handlers spécialisés (pour compatibilité avec les anciennes vues)
+    // ⚠️ DÉPRÉCIÉ : Utiliser @query-model-changed avec onInventoryTableEvent à la place
     const handlePaginationChanged = (queryModel: QueryModel) => {
-        console.log('[useInventoryManagement] handlePaginationChanged called with:', queryModel)
         return handleInventoryOperation(queryModel)
     }
     const handleSortChanged = (queryModel: QueryModel) => {
-        console.log('[useInventoryManagement] handleSortChanged called with:', queryModel)
         return handleInventoryOperation(queryModel)
     }
     const handleFilterChanged = (queryModel: QueryModel) => {
-        console.log('[useInventoryManagement] handleFilterChanged called with:', queryModel)
         return handleInventoryOperation(queryModel)
     }
     const handleGlobalSearchChanged = (queryModel: QueryModel) => {
-        console.log('[useInventoryManagement] handleGlobalSearchChanged called with:', queryModel)
         return handleInventoryOperation(queryModel)
     }
 
@@ -743,6 +758,9 @@ export function useInventoryManagement() {
         redirectToAdd,
 
         // ===== HANDLERS DATATABLE =====
+        // ⚡ RECOMMANDÉ : Utiliser onInventoryTableEvent avec @query-model-changed
+        onInventoryTableEvent,
+        // Handlers individuels (dépréciés, pour compatibilité)
         handlePaginationChanged,
         handleSortChanged,
         handleFilterChanged,

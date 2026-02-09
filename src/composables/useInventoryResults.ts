@@ -42,7 +42,29 @@ import type { JobResult } from '@/models/Job'
 import type { QueryModel } from '@/components/DataTable/types/QueryModel'
 import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
 // ===== IMPORTS UTILS =====
-import { mergeQueryModelWithCustomParams } from '@/components/DataTable/utils/queryModelConverter'
+import { normalizeInventoryResults, type NormalizedInventoryResult } from '@/utils/inventoryResultNormalizer'
+import {
+    INITIALIZATION_DELAY_MS,
+    MODAL_CLOSE_DELAY_MS,
+    STORES_FETCH_TIMEOUT_MS,
+    DEFAULT_PAGE,
+    DEFAULT_PAGE_SIZE,
+    DEFAULT_MAX_PENDING_EVENTS,
+    DEFAULT_KEEP_PENDING_EVENTS,
+    ERROR_MESSAGES
+} from './useInventoryResults.constants'
+
+// ===== IMPORTS HELPERS =====
+import {
+    getAvailableCountingOrders,
+    getCountingOrderLabel,
+    getCountingFieldName,
+    getCountingStatusFieldName,
+    extractEcartComptageId,
+    showSessionSelectModal,
+    downloadBlob,
+    generateExportFilename
+} from './helpers/useInventoryResults.helpers'
 
 // ===== IMPORTS EXTERNES =====
 import Swal from 'sweetalert2'
@@ -87,111 +109,7 @@ export interface UseInventoryResultsConfig {
     router?: any
 }
 
-/**
- * Fonction helper pour afficher une modal avec SelectField pour sélectionner une session
- *
- * @param options - Options pour le select
- * @param title - Titre de la modal
- * @param description - Description à afficher
- * @returns Promise qui se résout avec la valeur sélectionnée ou null si annulé
- */
-function showSessionSelectModal(
-    options: SelectOption[],
-    title: string = 'Sélectionner une session',
-    description: string = 'Choisissez la session pour lancer le comptage'
-): Promise<string | number | null> {
-    return new Promise((resolve) => {
-        // Créer un conteneur pour la modal
-        const container = document.createElement('div')
-        document.body.appendChild(container)
-
-        // Créer l'application Vue
-        const app = createApp({
-            setup() {
-                const showModal = ref<boolean>(true)
-                const selectedValue = ref<string | number | null>(null)
-
-                const handleConfirm = () => {
-                    showModal.value = false
-                    setTimeout(() => {
-                        app.unmount()
-                        container.remove()
-                        resolve(selectedValue.value)
-                    }, 300)
-                }
-
-                const handleCancel = () => {
-                    showModal.value = false
-                    setTimeout(() => {
-                        app.unmount()
-                        container.remove()
-                        resolve(null)
-                    }, 300)
-                }
-
-                const handleSelectChange = (value: string | number | string[] | number[] | null) => {
-                    if (value !== null && !Array.isArray(value)) {
-                        selectedValue.value = value
-                    } else {
-                        selectedValue.value = null
-                    }
-                }
-
-                return () => h(Modal, {
-                    modelValue: showModal.value,
-                    'onUpdate:modelValue': (value: boolean) => {
-                        showModal.value = value
-                        if (!value) {
-                            handleCancel()
-                        }
-                    },
-                    title,
-                    size: 'md'
-                }, {
-                    default: () => [
-                        h('div', { class: 'space-y-6' }, [
-                            h('p', {
-                                class: 'text-sm text-slate-600 dark:text-slate-400 text-center mb-4'
-                            }, description),
-                            h(SelectField, {
-                                modelValue: selectedValue.value,
-                                options,
-                                searchable: true,
-                                clearable: false,
-                                placeholder: 'Rechercher une session...',
-                                searchPlaceholder: 'Tapez pour rechercher...',
-                                'onUpdate:modelValue': handleSelectChange,
-                                class: 'w-full',
-                                maxVisibleOptions: 3,
-                                dropdownClass: 'max-h-48 overflow-y-auto'
-                            }),
-                            h('div', { class: 'flex justify-end gap-3 mt-6' }, [
-                                h('button', {
-                                    class: 'px-6 py-3 bg-transparent border-2 border-primary text-primary rounded-xl font-semibold text-sm transition-all duration-300 hover:bg-primary hover:text-white',
-                                    onClick: handleCancel
-                                }, 'Annuler'),
-                                h('button', {
-                                    class: 'px-6 py-3 bg-gradient-to-r from-primary to-primary-light text-white rounded-xl font-semibold text-sm transition-all duration-300 hover:from-primary-dark hover:to-primary disabled:opacity-50 disabled:cursor-not-allowed',
-                                    disabled: selectedValue.value === null,
-                                    onClick: handleConfirm
-                                }, 'Suivant')
-                            ])
-                        ])
-                    ]
-                })
-            }
-        })
-
-        // Utiliser les plugins nécessaires
-        const pinia = createPinia()
-        pinia.use(piniaPluginPersistedstate)
-        app.use(pinia)
-        app.use(i18n)
-
-        // Monter l'application
-        app.mount(container)
-    })
-}
+// showSessionSelectModal est maintenant importé depuis useInventoryResults.helpers.ts
 
 /**
  * Composable pour la gestion des résultats d'inventaire
@@ -259,7 +177,25 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     /** Clé pour forcer le re-render des tables (harmonisé avec useAffecter.ts) */
     const resultsKey = ref(0)
 
-    /** Référence au composant DataTable des résultats */
+    /**
+     * Référence au composant DataTable des résultats
+     *
+     * ⚠️ IMPORTANT : Cette référence est exportée pour la vue mais NE DOIT PAS être utilisée
+     * pour manipuler la configuration du DataTable (page, filtres, tri, recherche).
+     *
+     * Le DataTable gère sa propre configuration et l'émet via @query-model-changed.
+     *
+     * ✅ UTILISATION AUTORISÉE :
+     * - Accès en lecture seule pour des informations non-configurationnelles
+     * - Méthodes d'export si nécessaire
+     *
+     * ❌ UTILISATION INTERDITE :
+     * - resultsTableRef.value?.changePage() ❌
+     * - resultsTableRef.value?.setFilterState() ❌
+     * - resultsTableRef.value?.updateGlobalSearchTerm() ❌
+     *
+     * Voir DATATABLE_COMPOSABLE_PATTERN.md pour le pattern correct.
+     */
     const resultsTableRef = ref<any>(null)
 
     // ===== QUERYMODEL POUR RESULTS =====
@@ -290,109 +226,134 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     const usesWarehouseFallback = ref(false)
 
     // ===== HANDLERS DATATABLE =====
+    /**
+     * ⚡ ARCHITECTURE SIMPLIFIÉE : Gestion automatique des événements
+     *
+     * Le DataTable gère maintenant automatiquement :
+     * - La fusion des customParams via `customDataTableParams` réactif
+     * - La préservation de tous les états (pagination, tri, filtres, recherche)
+     * - L'émission d'un seul événement `query-model-changed` pour tous les changements
+     *
+     * Ce handler est très simple :
+     * 1. Vérifie que les IDs requis sont disponibles
+     * 2. Évite les appels API inutiles (comparaison avec le dernier appel)
+     * 3. Appelle le store avec le QueryModel (customParams déjà fusionnés)
+     * 4. Gère la file d'attente avant l'initialisation
+     * 5. Invalide les caches de normalisation
+     *
+     * Voir SIMPLIFIED_EVENT_HANDLING.md pour le pattern à suivre dans d'autres composables.
+     */
 
-    // Cache des derniers appels pour éviter les appels répétés
-    let lastExecutedQueryModel: QueryModel | null = null
+    // ⚡ ÉTAT RÉACTIF : Cache des derniers appels pour éviter les appels répétés
+    // Utiliser ref() pour éviter les fuites mémoire et permettre la réactivité
+    const lastExecutedQueryModel = ref<QueryModel | null>(null)
 
-    // File d'attente pour les événements DataTable qui arrivent avant l'initialisation
-    const pendingEventsQueue: Array<{ eventType: string; queryModel: QueryModel }> = []
+    // ⚡ ÉTAT RÉACTIF : File d'attente pour les événements DataTable qui arrivent avant l'initialisation
+    // Utiliser ref() pour éviter les fuites mémoire
+    const pendingEventsQueue = ref<Array<{ eventType: string; queryModel: QueryModel }>>([])
 
     /**
      * Traite un événement DataTable directement (sans vérification d'initialisation)
-     * Utilisé pour traiter les événements mis en file d'attente
+     *
+     * ⚡ SIMPLIFIÉ : Le DataTable gère déjà la validation et la fusion des customParams.
+     * Ce handler appelle simplement le store avec le QueryModel fourni.
+     *
+     * @param eventType - Type d'événement (pour logging, mais non utilisé pour la logique)
+     * @param queryModel - QueryModel complet avec customParams déjà fusionnés par le DataTable
      */
     const processEventDirectly = async (eventType: string, queryModel: QueryModel) => {
-        // S'assurer que le QueryModel a des valeurs par défaut valides
-        const sanitizedQueryModel: QueryModel = {
-            page: queryModel.page ?? 1,
-            pageSize: queryModel.pageSize ?? 20,
-            sort: queryModel.sort ?? [],
-            filters: queryModel.filters ?? {},
-            search: queryModel.search ?? '',
-            customParams: queryModel.customParams ?? {}
-        }
-
-        // Toujours fusionner avec les customParams requis (inventory_id, store_id)
-        const finalQueryModel = mergeQueryModelWithCustomParams(sanitizedQueryModel, resultsCustomParams.value)
-
-        // Éviter les appels API inutiles en comparant avec le dernier appel réussi
-        const queryModelStr = JSON.stringify(finalQueryModel)
-        const lastQueryModelStr = lastExecutedQueryModel ? JSON.stringify(lastExecutedQueryModel) : null
-
-        if (queryModelStr === lastQueryModelStr) {
+        // ⚡ GARDE : Vérifier que queryModel est valide
+        if (!queryModel || typeof queryModel !== 'object') {
             return
         }
 
-        // Éviter les appels API inutiles pour les événements de filtre/recherche vides
-        if (eventType === 'filter' || eventType === 'search') {
-            const hasFilters = Object.keys(finalQueryModel.filters || {}).length > 0
-            const hasSearch = !!finalQueryModel.search?.trim()
-            const hasSorting = (finalQueryModel.sort || []).length > 0
+        // ⚡ DEBUG : Vérifier le QueryModel reçu
+        console.log('[useInventoryResults] processEventDirectly - QueryModel reçu:', {
+            eventType,
+            page: queryModel.page,
+            pageSize: queryModel.pageSize,
+            search: queryModel.search,
+            filters: queryModel.filters,
+            customParams: queryModel.customParams
+        })
 
-            // Si c'est un événement filter/search complètement vide (pas de filtres, pas de recherche, pas de tri),
-            // et que c'est la page 1, éviter l'appel API inutile
-            if (!hasFilters && !hasSearch && !hasSorting && finalQueryModel.page === 1) {
+        // ⚡ GARDE : Vérifier que les IDs requis sont disponibles
+        if (!inventoryId.value || !selectedStore.value) {
+            console.warn('[useInventoryResults] IDs manquants:', {
+                inventoryId: inventoryId.value,
+                selectedStore: selectedStore.value
+            })
+            return
+        }
+
+        // ⚡ OPTIMISATION : Éviter les appels API inutiles en comparant avec le dernier appel réussi
+        const queryModelStr = JSON.stringify(queryModel)
+        const lastQueryModelStr = lastExecutedQueryModel.value ? JSON.stringify(lastExecutedQueryModel.value) : null
+
+        if (queryModelStr === lastQueryModelStr) {
                 return
-            }
         }
 
         try {
-            // Activer le loading pour les événements DataTable
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+            // Activer le loading
                 resultsLoadingLocal.value = true
-            }
 
-            // Mettre à jour le QueryModel local pour synchroniser avec la DataTable (harmonisé avec useAffecter.ts)
-            resultsQueryModelRef.value = { ...finalQueryModel }
+            // Mettre à jour le QueryModel local pour synchroniser avec la DataTable
+            resultsQueryModelRef.value = { ...queryModel }
 
-            await resultsStore.fetchResultsAuto(finalQueryModel)
+            // ⚡ SIMPLIFIÉ : Appeler directement le store (customParams déjà fusionnés par le DataTable)
+            await resultsStore.fetchResultsAuto(queryModel)
 
             // Mettre à jour le cache après un appel réussi
-            lastExecutedQueryModel = { ...finalQueryModel }
+            lastExecutedQueryModel.value = { ...queryModel }
 
-            // Forcer le re-rendu de la DataTable pour tous les événements qui modifient les données
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
-                resultsKey.value++
+            // Invalider les caches pour forcer la re-normalisation des nouvelles données
+                normalizedResultsCache.value = null
+                columnsCache.value = null
                 resultsLoadingLocal.value = false
-            }
         } catch (error) {
-            console.error('[useInventoryResults] ❌ Error in resultsStore.fetchResultsAuto:', {
-                eventType,
-                error: error,
-                queryModel: finalQueryModel
-            })
-            await alertService.error({ text: 'Erreur lors du chargement des résultats' })
-            // Désactiver le loading en cas d'erreur
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+            // Erreur gérée silencieusement
+            await alertService.error({ text: ERROR_MESSAGES.LOAD_RESULTS })
                 resultsLoadingLocal.value = false
-            }
         }
     }
 
     /**
      * Handler unifié pour toutes les opérations de la DataTable Results
+     *
+     * ⚡ SIMPLIFIÉ : Un seul handler pour tous les événements.
+     * Le DataTable émet maintenant uniquement `query-model-changed` avec tous les états préservés.
+     *
+     * @param eventType - Type d'événement (pour compatibilité, mais non utilisé)
+     * @param queryModel - QueryModel complet avec customParams déjà fusionnés par le DataTable
      */
     const onResultsTableEvent = async (eventType: string, queryModel: QueryModel) => {
-        console.log('[useInventoryResults.onResultsTableEvent] Event received:', eventType, 'initialized:', isInitialized.value, 'queue length:', pendingEventsQueue.length)
-
-        // Vérifier que les IDs requis sont disponibles avant de lancer l'API
-        if (!inventoryId.value || !selectedStore.value) {
-            console.warn('[useInventoryResults] Results API not called: missing inventoryId or selectedStore')
+        // ⚡ GARDE : Valider que queryModel est un objet valide
+        if (!queryModel || typeof queryModel !== 'object') {
             return
+        }
+
+        // ⚡ GARDE : Limiter la taille de la file d'attente pour éviter les fuites mémoire
+        if (pendingEventsQueue.value.length > DEFAULT_MAX_PENDING_EVENTS) {
+            // Garder seulement les N derniers événements
+            pendingEventsQueue.value.splice(0, pendingEventsQueue.value.length - DEFAULT_KEEP_PENDING_EVENTS)
         }
 
         // Si l'initialisation n'est pas terminée, mettre l'événement en file d'attente
         // Ces événements sont souvent déclenchés automatiquement par le DataTable au montage
         // quand il restaure son état sauvegardé
         if (!isInitialized.value) {
-            console.log('[useInventoryResults.onResultsTableEvent] Queueing event:', eventType)
-            pendingEventsQueue.push({ eventType, queryModel })
+            pendingEventsQueue.value.push({ eventType, queryModel })
             return
         }
 
-        // Traiter l'événement directement
-        console.log('[useInventoryResults.onResultsTableEvent] Processing event directly:', eventType)
-        await processEventDirectly(eventType, queryModel)
+        // Traiter l'événement directement avec gestion d'erreur
+        try {
+            await processEventDirectly(eventType, queryModel)
+        } catch (error) {
+            // Erreur déjà gérée dans processEventDirectly, mais on évite la propagation
+            // pour ne pas casser le DataTable
+        }
     }
 
     const mapWarehouseToOption = (warehouse: Warehouse): StoreOption => ({
@@ -456,16 +417,82 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
      * Les données et l'état sont gérés directement par le store Pinia.
      * Le DataTable utilise enableAutoManagement avec fetchResultsAuto du store pour charger
      * automatiquement les données selon la pagination, tri, filtrage et recherche.
+     *
+     * La normalisation des résultats bruts est faite dans le composable pour respecter
+     * l'architecture : service (données brutes) -> composable (normalisation).
      */
-    const { results, loading: resultsLoading } = storeToRefs(resultsStore)
+    const { results: rawResults, loading: resultsLoading } = storeToRefs(resultsStore)
 
-    // Watcher pour forcer le re-render des colonnes quand les données arrivent
-    watch(results, (newResults) => {
-        if (newResults && newResults.length > 0) {
-            // Incrémenter resultsKey pour forcer le re-render des colonnes dynamiques
-            resultsKey.value++
+    /**
+     * Résultats normalisés depuis les données brutes du store
+     * ⚡ OPTIMISÉ : Mémoization pour éviter les recalculs inutiles
+     *
+     * La normalisation est effectuée ici dans le composable pour séparer les responsabilités :
+     * - Service : appel API et retour format FORMAT_ACTUEL.md
+     * - Composable : normalisation des résultats individuels
+     */
+
+    // Cache pour la normalisation (évite de re-normaliser si les données n'ont pas changé)
+    const normalizedResultsCache = ref<{
+        data: NormalizedInventoryResult[]
+        rawResultsHash: string
+        inventoryId: number | null
+        storeId: string | null
+    } | null>(null)
+
+    // Fonction helper pour créer un hash rapide des données brutes
+    const createRawResultsHash = (data: Record<string, unknown>[]): string => {
+        if (!data || data.length === 0) return 'empty'
+        // Utiliser seulement les IDs et quelques champs clés pour le hash (plus rapide que JSON.stringify complet)
+        const sampleSize = Math.min(data.length, 10) // Échantillonner pour performance
+        const sample = data.slice(0, sampleSize)
+        const ids = sample.map((item, idx) => item.id || item.jobId || item.job_id || idx).join(',')
+        const keys = sample.length > 0 ? Object.keys(sample[0] || {}).slice(0, 20).join(',') : ''
+        return `${data.length}-${ids}-${keys}`
+    }
+
+    const results = computed<NormalizedInventoryResult[]>(() => {
+        if (!rawResults.value || rawResults.value.length === 0) {
+            normalizedResultsCache.value = null
+            return []
         }
-    }, { immediate: false })
+
+        if (!inventoryId.value || !selectedStore.value) {
+            normalizedResultsCache.value = null
+            return []
+        }
+
+        // ⚡ OPTIMISATION : Utiliser le cache si les données n'ont pas changé
+        const rawResultsHash = createRawResultsHash(rawResults.value as Record<string, unknown>[])
+
+        if (normalizedResultsCache.value &&
+            normalizedResultsCache.value.rawResultsHash === rawResultsHash &&
+            normalizedResultsCache.value.inventoryId === inventoryId.value &&
+            normalizedResultsCache.value.storeId === selectedStore.value) {
+            return normalizedResultsCache.value.data
+        }
+
+        // Normaliser seulement si nécessaire
+        const normalized = normalizeInventoryResults(
+            rawResults.value as Record<string, unknown>[],
+            inventoryId.value,
+            selectedStore.value
+        )
+
+        // Mettre en cache
+        normalizedResultsCache.value = {
+            data: normalized,
+            rawResultsHash,
+            inventoryId: inventoryId.value,
+            storeId: selectedStore.value
+        }
+
+        return normalized
+    })
+
+    // ⚡ OPTIMISATION : Supprimé le watcher qui forçait le re-render à chaque changement
+    // Ce watcher était très coûteux et causait des re-renders inutiles du DataTable entier
+    // Le DataTable détecte automatiquement les changements de données via la réactivité Vue
 
     /**
      * État de chargement global des résultats
@@ -537,10 +564,15 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         __differenceLabels?: Record<string, string>;
     }
 
+    // Helpers de colonnes importés depuis useInventoryResults.helpers.ts
+    // getAvailableCountingOrders, getCountingOrderLabel, getCountingFieldName, getCountingStatusFieldName
+
 
 
     /**
      * Colonnes du DataTable construites dynamiquement selon les champs présents dans les données
+     *
+     * ⚡ OPTIMISÉ : Mémoization pour éviter les recalculs inutiles
      *
      * Les colonnes sont détectées automatiquement :
      * - Colonnes fixes : JOB, Emplacement, Article, Résolu, Résultat final
@@ -552,13 +584,30 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
      * @computed {DataTableColumn[]} columns - Colonnes configurées pour le DataTable
      */
 
+    // Cache pour les colonnes (évite de recalculer si les résultats n'ont pas changé)
+    const columnsCache = ref<{
+        columns: DataTableColumn[]
+        resultsLength: number
+        resultsHash: string
+    } | null>(null)
+
     const columns = computed<DataTableColumn[]>(() => {
-        // Forcer la dépendance à resultsKey pour que les colonnes soient recalculées à chaque refresh
-        const _forceUpdate = resultsKey.value;
+        // ⚡ OPTIMISATION : Utiliser le cache si les résultats n'ont pas changé
+        const currentResults = results.value
+        const resultsHash = currentResults.length > 0
+            ? `${currentResults.length}-${currentResults[0]?.id || ''}-${currentResults[currentResults.length - 1]?.id || ''}`
+            : 'empty'
+
+        if (columnsCache.value &&
+            columnsCache.value.resultsLength === currentResults.length &&
+            columnsCache.value.resultsHash === resultsHash) {
+            return columnsCache.value.columns
+        }
+
+        // ⚡ STYLE DATATABLES.JS : Pas de calcul de largeur, autoSize gère automatiquement
 
         // Définir les colonnes statiques selon le schéma des données
-
-
+        // Style DataTables.js : colonnes auto-ajustées sans largeur fixe
         const cols: DataTableColumn[] = [
             // 1. JOB
             {
@@ -567,11 +616,8 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 sortable: true,
                 dataType: 'text' as ColumnDataType,
                 filterable: true,
-                width: dataTableService.calculateOptimalColumnWidth({
-                    field: 'job_reference',
-                    headerName: 'JOB',
-                    dataType: 'text'
-                }),
+                // Pas de width fixe - autoSize gère automatiquement comme DataTables.js
+                minWidth: 120,
                 editable: false,
                 visible: true,
                 draggable: true,
@@ -632,11 +678,8 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 sortable: true,
                 dataType: 'text' as ColumnDataType,
                 filterable: true,
-                width: dataTableService.calculateOptimalColumnWidth({
-                    field: 'emplacement',
-                    headerName: 'Emplacement',
-                    dataType: 'text'
-                }),
+                // Pas de width fixe - autoSize gère automatiquement
+                minWidth: 120,
                 editable: false,
                 visible: true,
                 draggable: true,
@@ -652,11 +695,8 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 sortable: true,
                 dataType: 'text' as ColumnDataType,
                 filterable: true,
-                width: dataTableService.calculateOptimalColumnWidth({
-                    field: 'article',
-                    headerName: 'Article',
-                    dataType: 'text'
-                }),
+                // Pas de width fixe - flex gère l'espace disponible
+                minWidth: 150,
                 editable: false,
                 visible: true,
                 draggable: true,
@@ -666,24 +706,85 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 priority: 8, // Priorité haute
                 flex: 2 // Plus d'espace pour cette colonne importante
             },
-            // 4. 1er comptage
-            // 4. 1er comptage
+            // 4. Code interne produit
             {
-                headerName: '1er comptage',
-                field: 'contage_1',
+                headerName: 'Code interne',
+                field: 'product_internal_code',
                 sortable: true,
-                dataType: 'number' as ColumnDataType,
+                dataType: 'text' as ColumnDataType,
                 filterable: true,
-                width: 140,
+                // Pas de width fixe - autoSize gère automatiquement
                 minWidth: 120,
                 editable: false,
                 visible: true,
                 draggable: true,
                 autoSize: true,
-                icon: 'icon-calculator',
-                description: 'Valeur du 1er comptage',
-                priority: 7,
-                badgeStyles: [
+                icon: 'icon-hash',
+                description: 'Code interne du produit',
+                priority: 7, // Priorité haute
+                valueFormatter: (params: any) => {
+                    if (!params || params.value === undefined || params.value === null) return '-'
+                    return String(params.value)
+                }
+            },
+            // 5. Description produit
+            {
+                headerName: 'Description',
+                field: 'product_description',
+                sortable: true,
+                dataType: 'text' as ColumnDataType,
+                filterable: true,
+                // Pas de width fixe - flex gère l'espace disponible
+                minWidth: 200,
+                maxWidth: 600,
+                editable: false,
+                visible: true,
+                draggable: true,
+                autoSize: true,
+                icon: 'icon-file-text',
+                description: 'Description du produit',
+                priority: 6, // Priorité haute
+                flex: 3, // Plus d'espace pour la description (peut être longue)
+                allowWrap: true, // Permet le retour à la ligne
+                cellStyle: () => ({ whiteSpace: 'normal', wordBreak: 'break-word' }),
+                tooltip: 'Description complète du produit',
+                valueFormatter: (params: any) => {
+                    if (!params || params.value === undefined || params.value === null) return '-'
+                    return String(params.value)
+                },
+                cellRenderer: ((value: any, column?: any, row?: any) => {
+                    const description = row?.product_description ?? value ?? ''
+                    if (!description || description === '-') return '-'
+                    // Afficher la description complète avec tooltip
+                    return `<span title="${String(description).replace(/"/g, '&quot;')}" style="white-space: normal; word-break: break-word; display: block;">${String(description)}</span>`
+                }) as any
+            },
+            // 6. Famille produit
+            {
+                headerName: 'Famille',
+                field: 'product_family',
+                sortable: true,
+                dataType: 'text' as ColumnDataType,
+                filterable: true,
+                // Pas de width fixe - autoSize gère automatiquement
+                minWidth: 150,
+                editable: false,
+                visible: true,
+                draggable: true,
+                autoSize: true,
+                icon: 'icon-folder',
+                description: 'Famille du produit',
+                priority: 5, // Priorité haute
+                valueFormatter: (params: any) => {
+                    if (!params || params.value === undefined || params.value === null) return '-'
+                    return String(params.value)
+                }
+            }
+        ]
+
+        // 4-5. Colonnes dynamiques de comptage et écarts intercalés
+        const availableOrders = getAvailableCountingOrders(results.value)
+        const badgeStylesCommon = [
                     {
                         value: 'EN ATTENTE',
                         class: 'inline-flex items-center rounded-md bg-slate-200 px-2 py-1 text-xs font-medium text-slate-900 ring-1 ring-slate-300/20 ring-inset'
@@ -712,187 +813,168 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                         value: 'ENTAME',
                         class: 'inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset'
                     }
-                ],
-                badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
+            ]
+            const badgeDefaultClassCommon = 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+
+            // Générer les colonnes de comptage et écarts intercalés
+            availableOrders.forEach((order, index) => {
+                // Colonne de comptage
+                const fieldName = getCountingFieldName(order)
+                const statusFieldName = getCountingStatusFieldName(order)
+                const priority = 10 - order // Priorité décroissante avec l'ordre
+
+                cols.push({
+                    headerName: getCountingOrderLabel(order),
+                    field: fieldName,
+                    sortable: true,
+                    dataType: 'number' as ColumnDataType,
+                    filterable: true,
+                    // Pas de width fixe - autoSize gère automatiquement comme DataTables.js
+                    minWidth: 120,
+                    editable: false,
+                    visible: true,
+                    draggable: true,
+                    autoSize: true,
+                    icon: 'icon-calculator',
+                    description: `Valeur du ${getCountingOrderLabel(order)}`,
+                    priority: priority,
+                    badgeStyles: badgeStylesCommon,
+                    badgeDefaultClass: badgeDefaultClassCommon,
                 cellRenderer: ((value: any, column?: any, row?: any) => {
-                    // Utiliser row[column.field] au lieu de value directement
-                    const fieldName = column?.field || 'contage_1';
-                    const comptageValue = row ? row[fieldName] : value;
+                        const currentFieldName = column?.field || fieldName
+                        // Essayer d'abord le champ spécifique, puis les variantes
+                        let comptageValue = row ? row[currentFieldName] : value
+                        if (comptageValue === undefined || comptageValue === null || comptageValue === '') {
+                            // Fallback: essayer contage_X si fieldName était "2e comptage"
+                            if (currentFieldName === '2e comptage') {
+                                comptageValue = row ? row['contage_2'] : undefined
+                            }
+                        }
 
                     if (comptageValue === undefined || comptageValue === null || comptageValue === '') {
                         return '-'
                     }
 
                     // Récupérer le statut
-                    const statusValue = row?.['statut_1er_comptage'] || '';
+                        const statusValue = row ? (row[statusFieldName] || '') : ''
 
                     const badgeStyles = column?.badgeStyles as Array<{value: string, class: string}> | undefined
-                    const badgeDefaultClass = column?.badgeDefaultClass || 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+                        const badgeDefaultClass = column?.badgeDefaultClass || badgeDefaultClassCommon
 
                     const badgeStyle = badgeStyles?.find((s: any) => s.value === statusValue.trim())
                     const badgeClass = badgeStyle?.class || badgeDefaultClass
 
                     return `<span class="${badgeClass}">${comptageValue}</span>`
                 }) as any
-            },
-            // 5. 2ème comptage
-            {
-                headerName: '2ème comptage',
-                field: '2e comptage',
+                })
+
+                // Colonne d'écart après chaque comptage (sauf le dernier)
+                if (index < availableOrders.length - 1) {
+                    const nextOrder = availableOrders[index + 1]
+                    const ecartFieldName = `ecart_${order}_${nextOrder}`
+                    const ecartPriority = priority - 0.5 // Priorité entre les deux comptages
+
+                    cols.push({
+                        headerName: `Écart ${order}-${nextOrder}`,
+                        field: ecartFieldName,
                 sortable: true,
                 dataType: 'number' as ColumnDataType,
                 filterable: true,
-                width: 140,
-                minWidth: 120,
-                editable: false,
-                visible: true,
-                draggable: true,
-                autoSize: true,
-                icon: 'icon-calculator',
-                description: 'Valeur du 2ème comptage',
-                priority: 6,
-                badgeStyles: [
-                    {
-                        value: 'EN ATTENTE',
-                        class: 'inline-flex items-center rounded-md bg-slate-200 px-2 py-1 text-xs font-medium text-slate-900 ring-1 ring-slate-300/20 ring-inset'
-                    },
-                    {
-                        value: 'VALIDE',
-                        class: 'inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
-                    },
-                    {
-                        value: 'AFFECTE',
-                        class: 'inline-flex items-center rounded-md bg-teal-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-teal-600/20 ring-inset'
-                    },
-                    {
-                        value: 'PRET',
-                        class: 'inline-flex items-center rounded-md bg-purple-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-purple-600/20 ring-inset'
-                    },
-                    {
-                        value: 'TRANSFERT',
-                        class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
-                    },
-                    {
-                        value: 'TERMINE',
-                        class: 'inline-flex items-center rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-700/20 ring-inset'
-                    },
-                    {
-                        value: 'ENTAME',
-                        class: 'inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset'
-                    }
-                ],
-                badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
-                cellRenderer: ((value: any, column?: any, row?: any) => {
-                    // Utiliser row[column.field] au lieu de value directement
-                    const fieldName = column?.field || '2e comptage';
-                    const comptageValue = row ? row[fieldName] : value;
-
-                    if (comptageValue === undefined || comptageValue === null || comptageValue === '') {
-                        return '-'
-                    }
-
-                    // Récupérer le statut
-                    const statusValue = row?.['statut_2er_comptage'] || '';
-
-                    const badgeStyles = column?.badgeStyles as Array<{value: string, class: string}> | undefined
-                    const badgeDefaultClass = column?.badgeDefaultClass || 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
-
-                    const badgeStyle = badgeStyles?.find((s: any) => s.value === statusValue.trim())
-                    const badgeClass = badgeStyle?.class || badgeDefaultClass
-
-                    return `<span class="${badgeClass}">${comptageValue}</span>`
-                }) as any
-            },
-            // 6. Écart 1-2
-            {
-                headerName: 'Écart 1-2',
-                field: 'ecart_1_2',
-                sortable: true,
-                dataType: 'number' as ColumnDataType,
-                filterable: true,
-                width: 120,
-                minWidth: 100,
-                editable: false,
-                visible: true,
-                draggable: true,
-                autoSize: true,
-                icon: 'icon-trending-up',
-                description: 'Écart entre le 1er et 2ème comptage',
-                priority: 5,
+                    // Pas de width fixe - autoSize gère automatiquement comme DataTables.js
+                    minWidth: 100,
+                    editable: false,
+                    visible: true,
+                    draggable: true,
+                    autoSize: true,
+                    icon: 'icon-trending-up',
+                        description: `Écart entre le ${getCountingOrderLabel(order)} et le ${getCountingOrderLabel(nextOrder)}`,
+                        priority: ecartPriority,
                 cellRenderer: ((value: any) => {
-                    // Comme job_reference : value contient directement la valeur du champ
                     if (value === undefined || value === null || value === '') {
                         return '-'
                     }
 
-                    // Pour ecart_1_2 : écart numérique entre deux comptages
-                    const numValue = Number(value);
+                            const numValue = Number(value)
                     if (Number.isNaN(numValue)) {
-                        return '-';
+                                return '-'
                     }
-                    const color = numValue === 0 ? 'text-green-600' : 'text-red-600';
-                    return `<span class="${color} font-semibold">${numValue}</span>`;
+                            const color = numValue === 0 ? 'text-green-600' : 'text-red-600'
+                            return `<span class="${color} font-semibold">${numValue}</span>`
                 }) as any
-            },
-            // 7. Résolu
-            {
-                headerName: 'Résolu',
-                field: 'resolved',
-                sortable: true,
-                dataType: 'boolean' as ColumnDataType,
-                filterable: true,
-                width: 120,
-                minWidth: 100,
-                editable: false,
-                visible: true,
-                draggable: true,
-                autoSize: true,
-                align: 'center',
-                description: 'Statut de résolution de l\'écart',
-                priority: 1, // Priorité très basse
-                cellRenderer: (value: any) => {
-                    const isResolved = value === true || value === 'true' || value === 1 || value === '1'
-                    if (isResolved) {
-                        return `<div class="flex items-center justify-center">
-                            <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                            </svg>
-                        </div>`
-                    } else {
-                        return `<div class="flex items-center justify-center">
-                            <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-                            </svg>
-                        </div>`
-                    }
+                    })
                 }
-            },
-            // 8. Résultat final
-            {
-                headerName: 'Résultat final',
-                field: 'resultats',
-                sortable: true,
-                dataType: 'number' as ColumnDataType,
-                filterable: true,
-                width: 140,
-                minWidth: 120,
-                editable: true,
-                visible: true,
-                draggable: true,
-                autoSize: true,
-                icon: 'icon-check-circle',
-                description: 'Résultat final validé',
-                priority: 7 // Priorité haute - important
-            }
-        ]
+            })
 
-        // Validation des colonnes
-        cols.forEach(column => {
-            const validation = dataTableService.validateColumnConfig(column)
-            if (!validation.isValid) {
-                // Configuration de colonne invalide
+        // 6. Résolu
+        cols.push({
+            headerName: 'Résolu',
+            field: 'resolved',
+            sortable: true,
+            dataType: 'boolean' as ColumnDataType,
+            filterable: true,
+            // Pas de width fixe - autoSize gère automatiquement comme DataTables.js
+            minWidth: 100,
+            editable: false,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            align: 'center',
+            description: 'Statut de résolution de l\'écart',
+            priority: 1, // Priorité très basse
+            cellRenderer: (value: any) => {
+                const isResolved = value === true || value === 'true' || value === 1 || value === '1'
+                if (isResolved) {
+                    return `<div class="flex items-center justify-center">
+                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>`
+                } else {
+                    return `<div class="flex items-center justify-center">
+                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>`
+                }
             }
         })
+
+        // 7. Résultat final
+        cols.push({
+            headerName: 'Résultat final',
+            field: 'resultats',
+            sortable: true,
+            dataType: 'number' as ColumnDataType,
+            filterable: true,
+            // Pas de width fixe - autoSize gère automatiquement comme DataTables.js
+            minWidth: 120,
+            editable: true,
+            visible: true,
+            draggable: true,
+            autoSize: true,
+            icon: 'icon-check-circle',
+            description: 'Résultat final validé',
+            priority: 7 // Priorité haute - important
+        })
+
+    // Validation des colonnes (seulement si nécessaire, pas bloquant)
+        cols.forEach(column => {
+        try {
+            const validation = dataTableService.validateColumnConfig(column)
+            if (!validation.isValid) {
+                // Configuration de colonne invalide - log silencieux en production
+            }
+        } catch (error) {
+            // Erreur de validation - ignorer pour ne pas bloquer le rendu
+        }
+    })
+
+        // Mettre en cache
+        columnsCache.value = {
+            columns: cols,
+            resultsLength: currentResults.length,
+            resultsHash
+        }
 
         return cols;
     });
@@ -904,95 +986,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
 
     // ===== ACTIONS =====
 
-    /**
-     * Fonction helper pour extraire l'ID de l'écart de comptage depuis le résultat
-     *
-     * Recherche l'ID dans l'ordre de priorité suivant :
-     * 1. ecart_comptage_id directement dans le résultat
-     * 2. ecart_comptage_id dans le job (si job est un objet)
-     * 3. ecart_comptage_id dans les assignments
-     * 4. ecart_id dans le résultat (fallback pour compatibilité)
-     * 5. ecart_id dans le job ou assignments (fallback)
-     *
-     * @param {InventoryResult} result - Résultat d'inventaire
-     * @returns {number | string | null} ID de l'écart de comptage ou null si non trouvé
-     *
-     * @example
-     * ```typescript
-     * const ecartId = extractEcartComptageId(result)
-     * if (ecartId) {
-     *   await EcartComptageService.updateFinalResult(ecartId, { final_result: 100 })
-     * }
-     * ```
-     */
-    const extractEcartComptageId = (result: InventoryResult): number | string | null => {
-        // Priorité 1 : ecart_comptage_id directement dans le résultat
-        if ((result as any).ecart_comptage_id !== undefined && (result as any).ecart_comptage_id !== null && (result as any).ecart_comptage_id !== '') {
-            return (result as any).ecart_comptage_id
-        }
-
-        // Priorité 2 : ecart_comptage_id dans le job (si le job est un objet)
-        const job = (result as any).job
-        if (job && typeof job === 'object') {
-            if (job.ecart_comptage_id !== undefined && job.ecart_comptage_id !== null && job.ecart_comptage_id !== '') {
-                return job.ecart_comptage_id
-            }
-            // Chercher aussi dans job_id si c'est un objet
-            if (job.job_id && typeof job.job_id === 'object' && job.job_id.ecart_comptage_id) {
-                return job.job_id.ecart_comptage_id
-            }
-        }
-
-        // Priorité 3 : ecart_comptage_id dans les assignments
-        const assignments = (result as any).assignments || (result as any).assignment
-        if (assignments) {
-            // Si c'est un tableau
-            if (Array.isArray(assignments)) {
-                for (const assignment of assignments) {
-                    if (assignment && typeof assignment === 'object') {
-                        if (assignment.ecart_comptage_id !== undefined && assignment.ecart_comptage_id !== null && assignment.ecart_comptage_id !== '') {
-                            return assignment.ecart_comptage_id
-                        }
-                    }
-                }
-            }
-            // Si c'est un objet unique
-            else if (typeof assignments === 'object') {
-                if (assignments.ecart_comptage_id !== undefined && assignments.ecart_comptage_id !== null && assignments.ecart_comptage_id !== '') {
-                    return assignments.ecart_comptage_id
-                }
-            }
-        }
-
-        // Priorité 4 : Fallback vers ecart_id pour compatibilité (si ecart_comptage_id n'est pas trouvé)
-        if (result.ecart_id !== undefined && result.ecart_id !== null && result.ecart_id !== '') {
-            return result.ecart_id
-        }
-
-        // Priorité 5 : ecart_id dans le job (fallback)
-        const jobFallback = (result as any).job
-        if (jobFallback && typeof jobFallback === 'object') {
-            if (jobFallback.ecart_id !== undefined && jobFallback.ecart_id !== null && jobFallback.ecart_id !== '') {
-                return jobFallback.ecart_id
-            }
-        }
-
-        // Priorité 6 : ecart_id dans les assignments (fallback)
-        const assignmentsFallback = (result as any).assignments || (result as any).assignment
-        if (assignmentsFallback) {
-            if (Array.isArray(assignmentsFallback)) {
-                for (const assignment of assignmentsFallback) {
-                    if (assignment && typeof assignment === 'object' && assignment.ecart_id !== undefined && assignment.ecart_id !== null && assignment.ecart_id !== '') {
-                        return assignment.ecart_id
-                    }
-                }
-            } else if (typeof assignmentsFallback === 'object' && assignmentsFallback.ecart_id !== undefined && assignmentsFallback.ecart_id !== null && assignmentsFallback.ecart_id !== '') {
-                return assignmentsFallback.ecart_id
-            }
-        }
-
-        return null
-    }
+    // extractEcartComptageId est maintenant importé depuis useInventoryResults.helpers.ts
 
     /**
      * Actions disponibles pour chaque ligne de résultat
@@ -1255,7 +1249,6 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 syncStoreOptions(storeList)
                 storesCache.value = storeList
                 storesLoadingState.value = false
-                logger.debug('Magasins chargés depuis l\'inventaire (instantané)', { count: storeList.length })
                 return
             }
 
@@ -1268,7 +1261,6 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                         syncStoreOptions(null) // Utiliser les warehouses du store
                         storesCache.value = storeOptions.value
                         storesLoadingState.value = false
-                        logger.debug('Magasins utilisés depuis le store (déjà chargés)', { count: storeOptions.value.length })
                         return
                     }
 
@@ -1279,12 +1271,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                     if (storeOptions.value.length > 0) {
                         storesCache.value = storeOptions.value
                         storesLoadingState.value = false
-                        logger.debug('Magasins chargés via account_id', { count: storeOptions.value.length })
                         return
                     }
                 } catch (error) {
                     // En cas d'erreur, continuer avec le fallback
-                    logger.warn('Erreur lors du chargement des magasins par account_id', error)
                 }
             }
 
@@ -1295,7 +1285,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 const inventoryStores = await Promise.race([
                     resultsStore.fetchStores(inventoryId.value),
                     new Promise<StoreOption[] | null>((_, reject) =>
-                        setTimeout(() => reject(new Error('Timeout après 500ms')), 500)
+                        setTimeout(() => reject(new Error(`Timeout après ${STORES_FETCH_TIMEOUT_MS}ms`)), STORES_FETCH_TIMEOUT_MS)
                     )
                 ]) as StoreOption[]
 
@@ -1303,12 +1293,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                     syncStoreOptions(inventoryStores)
                     storesCache.value = inventoryStores
                     storesLoadingState.value = false
-                    logger.debug('Magasins chargés via inventaire (API)', { count: inventoryStores.length })
                     return
                 }
             } catch (error) {
                 // Timeout ou erreur - ignorer silencieusement (pas bloquant)
-                logger.debug('Timeout ou erreur lors du chargement des magasins depuis l\'inventaire', error)
             }
 
             // OPTIMISATION 3 : Dernier recours - utiliser les magasins déjà dans le store
@@ -1316,11 +1304,9 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             if (storeOptionsFromStore.value.length > 0) {
                 syncStoreOptions(storeOptionsFromStore.value)
                 storesCache.value = storeOptionsFromStore.value
-                logger.debug('Magasins utilisés depuis le store', { count: storeOptionsFromStore.value.length })
             }
         } catch (error) {
             // Ne pas afficher d'erreur bloquante, utiliser ce qu'on a
-            logger.warn('Erreur lors du chargement des magasins', error)
         } finally {
             storesLoadingState.value = false
         }
@@ -1340,26 +1326,23 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         resultsLoadingLocal.value = true
 
         try {
-            // Si params est fourni, utiliser directement (déjà fusionné avec customParams par mergeQueryModelWithCustomParams)
-            // Sinon, construire un QueryModel par défaut (le DataTable restaurera son état automatiquement)
-            const finalParams: QueryModel = params || mergeQueryModelWithCustomParams(
-                {
+            // Si params est fourni, utiliser directement (customParams déjà fusionnés par le DataTable)
+            // Sinon, construire un QueryModel par défaut avec customParams
+            const finalParams: QueryModel = params || {
                     page: 1,
-                    pageSize: 20
-                },
-                resultsCustomParams.value
-            )
+                pageSize: 20,
+                customParams: resultsCustomParams.value
+            }
 
             await resultsStore.fetchResultsAuto(finalParams)
             await nextTick()
 
             // Mettre à jour le cache après un appel réussi
-            lastExecutedQueryModel = { ...finalParams }
+            lastExecutedQueryModel.value = { ...finalParams }
 
             // Désactiver le loading
             resultsLoadingLocal.value = false
         } catch (error) {
-            console.error('[useInventoryResults.loadResults] ❌ Error during results load:', error)
             await alertService.error({ text: 'Erreur lors du chargement des résultats' })
             // Désactiver le loading même en cas d'erreur
             resultsLoadingLocal.value = false
@@ -1464,8 +1447,11 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             // Le DataTable détectera le changement via customDataTableParams et rechargera automatiquement
             resultsStore.setSelectedStore(storeId)
 
-            // Invalider le cache des magasins
+            // ⚡ OPTIMISATION : Invalider tous les caches lors du changement de magasin
             storesCache.value = null
+            normalizedResultsCache.value = null
+            columnsCache.value = null
+            lastExecutedQueryModel.value = null
         } catch (error) {
             await alertService.error({ text: 'Erreur lors de la sélection du magasin' })
         }
@@ -1518,7 +1504,6 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                         await resultsStore.validateResults(id)
                     } catch (error) {
                         // Continuer avec les autres même si une validation échoue
-                        logger.error('Erreur lors de la validation d\'un résultat', { id, error })
                     }
                 }
 
@@ -1536,10 +1521,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
      * Traite les événements DataTable mis en file d'attente pendant l'initialisation
      */
     const processPendingEvents = async () => {
-        if (pendingEventsQueue.length === 0) return
+        if (pendingEventsQueue.value.length === 0) return
 
-        const events = [...pendingEventsQueue]
-        pendingEventsQueue.length = 0 // Vider la file
+        const events = [...pendingEventsQueue.value]
+        pendingEventsQueue.value.length = 0 // Vider la file
 
         for (const event of events) {
             await processEventDirectly(event.eventType, event.queryModel)
@@ -1588,80 +1573,62 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             // fetchStores vérifie d'abord inventory.value.warehouses (instantané)
             await fetchStores()
 
-            // Sélectionner le premier magasin par défaut
+            // ⚡ IMPORTANT : Ne sélectionner le premier magasin que si aucun n'est déjà sélectionné
+            // Cela préserve la sélection sauvegardée lors d'un refresh
             // Le DataTable avec enableAutoManagement chargera automatiquement les données
-            if (storeOptions.value.length > 0) {
+            if (storeOptions.value.length > 0 && !selectedStore.value) {
                 const defaultStoreId = storeOptions.value[0].value
                 resultsStore.setSelectedStore(defaultStoreId)
-                logger.debug('Premier magasin sélectionné par défaut', { storeId: defaultStoreId })
-            } else {
-                logger.warn('Aucun magasin disponible pour la sélection automatique')
             }
 
             // Attendre que le DataTable ait fini de s'initialiser et de restaurer son état
             await nextTick()
-            // Ajouter un petit délai supplémentaire pour être sûr que tous les événements sont capturés
-            await new Promise(resolve => setTimeout(resolve, 50))
-            console.log('[useInventoryResults.initialize] After nextTick + delay, queue length:', pendingEventsQueue.length)
+            // Ajouter un délai pour être sûr que tous les événements sont capturés
+            // Le DataTable peut émettre query-model-changed après son onMounted
+            await new Promise(resolve => setTimeout(resolve, INITIALIZATION_DELAY_MS))
 
+            // ⚡ IMPORTANT : Marquer comme initialisé APRÈS avoir attendu que le DataTable émette ses événements
+            // Cela permet de capturer les événements de restauration dans la file d'attente
             isInitialized.value = true
 
             // Traiter les événements DataTable mis en file d'attente
             // ⚠️ Logique harmonisée avec useAffecter.ts
-            console.log('[useInventoryResults.initialize] Processing pending events, queue length:', pendingEventsQueue.length)
-
-            if (pendingEventsQueue.length > 0) {
-                // Si des événements sont en file d'attente (DataTable a restauré son état),
-                // traiter le premier événement pour charger avec les bonnes données
-                const firstEvent = pendingEventsQueue[0]
-                console.log('[useInventoryResults.initialize] Processing first queued event:', firstEvent.eventType, firstEvent.queryModel)
+            // Le DataTable émet automatiquement query-model-changed au montage avec l'état restauré
+            // Ces événements sont capturés dans pendingEventsQueue car isInitialized était false
+            if (pendingEventsQueue.value.length > 0) {
+                // Traiter le premier événement (celui de la restauration du DataTable)
+                const firstEvent = pendingEventsQueue.value[0]
                 await processEventDirectly(firstEvent.eventType, firstEvent.queryModel)
-                pendingEventsQueue.shift() // Retirer le premier événement traité
-            }
+                pendingEventsQueue.value.shift() // Retirer le premier événement traité
 
             // Traiter les événements restants en file d'attente (s'il y en a)
-            if (pendingEventsQueue.length > 0) {
-                console.log('[useInventoryResults.initialize] Processing remaining queued events:', pendingEventsQueue.length)
-                for (const queuedEvent of pendingEventsQueue) {
+                if (pendingEventsQueue.value.length > 0) {
+                    for (const queuedEvent of pendingEventsQueue.value) {
                     await processEventDirectly(queuedEvent.eventType, queuedEvent.queryModel)
                 }
-                pendingEventsQueue.length = 0 // Vider la file d'attente
+                    pendingEventsQueue.value.length = 0 // Vider la file d'attente
             }
-
-            // Si aucun événement en file d'attente, vérifier si le DataTable a un état sauvegardé
-            if (pendingEventsQueue.length === 0) {
-                console.log('[useInventoryResults.initialize] No queued events, checking for saved DataTable state')
-
-                // Essayer de récupérer l'état sauvegardé du DataTable depuis localStorage
-                const savedState = localStorage.getItem('inventory_results_table')
-                if (savedState) {
-                    try {
-                        const parsedState = JSON.parse(savedState)
-                        console.log('[useInventoryResults.initialize] Found saved DataTable state:', parsedState)
-
-                        // Créer un QueryModel depuis l'état sauvegardé
-                        const savedQueryModel: QueryModel = {
-                            page: parsedState.page || 1,
-                            pageSize: parsedState.pageSize || 20,
-                            sort: parsedState.sort || [],
-                            filters: parsedState.filters || {},
-                            search: parsedState.search || ''
-                        }
-
-                        console.log('[useInventoryResults.initialize] Loading data with saved state:', savedQueryModel)
-                        await loadResults(savedQueryModel)
-                        return
-                    } catch (error) {
-                        console.warn('[useInventoryResults.initialize] Error parsing saved state:', error)
-                    }
+            } else {
+                // ⚡ CAS RARE : Aucun événement en file d'attente
+                // Cela peut arriver si :
+                // 1. Le DataTable n'a pas encore été monté (timing)
+                // 2. Le DataTable n'a pas d'état sauvegardé et n'émet pas d'événement par défaut
+                //
+                // Dans ce cas, charger avec les valeurs par défaut
+                // Si le DataTable émet un événement plus tard, il sera traité normalement
+                // (mais cela ne devrait pas arriver car le DataTable émet toujours query-model-changed au montage)
+                const defaultQueryModel: QueryModel = {
+                    page: DEFAULT_PAGE,
+                    pageSize: DEFAULT_PAGE_SIZE,
+                    sort: undefined,
+                    filters: {},
+                    search: undefined,
+                    customParams: resultsCustomParams.value
                 }
-
-                // Aucun état sauvegardé, chargement par défaut
-                console.log('[useInventoryResults.initialize] No saved state, loading default data')
-                await loadResults()
+                await loadResults(defaultQueryModel)
             }
         } catch (error) {
-            await alertService.error({ text: 'Erreur lors de l\'initialisation des résultats' })
+            await alertService.error({ text: ERROR_MESSAGES.INITIALIZATION })
         }
     }
 
@@ -1690,9 +1657,12 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             storeOptions.value = []
             usesWarehouseFallback.value = false
 
-            // Réinitialiser le cache des requêtes
-            lastExecutedQueryModel = null
-            pendingEventsQueue.length = 0 // Vider la file d'attente
+            // ⚡ OPTIMISATION : Réinitialiser tous les caches lors de la réinitialisation
+            lastExecutedQueryModel.value = null
+            pendingEventsQueue.value.length = 0 // Vider la file d'attente
+            normalizedResultsCache.value = null
+            columnsCache.value = null
+            storesCache.value = null
 
             inventoryReference.value = reference
             await initialize()
@@ -1720,20 +1690,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
      * ```
      */
     const analyserJobsPourComptageSuivant = async (): Promise<Map<number, JobResult[]>> => {
-        logger.debug('analyserJobsPourComptageSuivant: Fonction appelée')
-
-        logger.debug('analyserJobsPourComptageSuivant: Vérification des IDs', {
-            inventoryId: inventoryId.value,
-            inventoryIdType: typeof inventoryId.value,
-            selectedStore: selectedStore.value,
-            selectedStoreType: typeof selectedStore.value
-        })
-
         if (!inventoryId.value || !selectedStore.value) {
-            logger.warn('analyserJobsPourComptageSuivant: IDs manquants', {
-                inventoryId: inventoryId.value,
-                selectedStore: selectedStore.value
-            })
             return new Map()
         }
 
@@ -1743,21 +1700,9 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 ? parseInt(selectedStore.value)
                 : selectedStore.value
 
-            logger.debug('analyserJobsPourComptageSuivant: Conversion warehouseId', {
-                selectedStoreValue: selectedStore.value,
-                warehouseId,
-                isNaN: isNaN(warehouseId)
-            })
-
             if (!warehouseId || isNaN(warehouseId)) {
-                logger.warn('Warehouse ID invalide', { selectedStore: selectedStore.value })
                 return new Map()
             }
-
-            logger.debug('Appel API getJobsDiscrepanciesByCounting', {
-                inventoryId: inventoryId.value,
-                warehouseId: warehouseId
-            })
 
             // Appeler l'API pour récupérer les jobs avec écarts regroupés par comptage
             const apiResponse = await JobService.getJobsDiscrepanciesByCounting(
@@ -1765,37 +1710,17 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 warehouseId
             )
 
-            logger.debug('Réponse API getJobsDiscrepanciesByCounting', {
-                apiResponse,
-                apiResponseType: typeof apiResponse,
-                isArray: Array.isArray(apiResponse),
-                apiResponseKeys: apiResponse && typeof apiResponse === 'object' ? Object.keys(apiResponse) : 'N/A'
-            })
-
             // Convertir la réponse de l'API en Map<number, JobResult[]>
             const jobsParComptage = new Map<number, JobResult[]>()
 
             // La réponse peut être soit un tableau (ancien format) soit un tableau avec un objet (nouveau format)
             if (!apiResponse || !Array.isArray(apiResponse) || apiResponse.length === 0) {
-                logger.warn('Réponse API invalide, vide ou pas un tableau', {
-                    apiResponse,
-                    isArray: Array.isArray(apiResponse),
-                    length: apiResponse?.length
-                })
                 return jobsParComptage
             }
 
-            logger.debug('Traitement des données API', {
-                itemsCount: apiResponse.length,
-                items: apiResponse
-            })
-
             // Parcourir les éléments de la réponse
             for (const item of apiResponse) {
-                logger.debug('Traitement item', { item })
-
                 if (!item || typeof item !== 'object') {
-                    logger.debug('Item invalide ignoré', { item })
                     continue
                 }
 
@@ -1804,13 +1729,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                     const nextCountingOrder = item.next_counting_order
                     const jobs = item.jobs || []
 
-                    logger.debug('Format nouveau détecté', {
-                        nextCountingOrder,
-                        jobsCount: jobs.length
-                    })
-
                     if (!jobs || jobs.length === 0) {
-                        logger.debug('Aucun job dans le nouveau format', { nextCountingOrder })
                         continue
                     }
 
@@ -1835,24 +1754,13 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                     )
 
                     jobsParComptage.set(nextCountingOrder, jobResults)
-
-                    logger.debug('Jobs ajoutés pour comptage (nouveau format)', {
-                        countingOrder: nextCountingOrder,
-                        jobsCount: jobResults.length
-                    })
                 }
                 // Ancien format : objet avec counting_order
                 else if ('counting_order' in item && item.counting_order) {
                 const countingOrder = item.counting_order
                 const jobs = item.jobs || []
 
-                    logger.debug('Format ancien détecté', {
-                        countingOrder,
-                        jobsCount: jobs.length
-                    })
-
                     if (!jobs || jobs.length === 0) {
-                        logger.debug('Aucun job dans l\'ancien format', { countingOrder })
                     continue
                 }
 
@@ -1877,30 +1785,11 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 )
 
                 jobsParComptage.set(countingOrder, jobResults)
-
-                    logger.debug('Jobs ajoutés pour comptage (ancien format)', {
-                        countingOrder,
-                        jobsCount: jobResults.length
-                    })
-                }
-                else {
-                    logger.debug('Format d\'item non reconnu', { item })
                 }
             }
 
-            logger.debug('Jobs par comptage trouvés', {
-                totalComptages: jobsParComptage.size,
-                comptages: Array.from(jobsParComptage.keys()),
-                totalJobs: Array.from(jobsParComptage.values()).reduce((sum, jobs) => sum + jobs.length, 0)
-            })
-
-            logger.debug('analyserJobsPourComptageSuivant: Fin de traitement, retour de la Map', {
-                mapSize: jobsParComptage.size
-            })
-
             return jobsParComptage
         } catch (error: any) {
-            logger.error('Erreur lors de la récupération des jobs avec écarts', error)
 
             // Gérer les erreurs spécifiques
             const errorMessage = error?.response?.data?.message || error?.message || ''
@@ -1959,7 +1848,6 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             })
 
             if (jobsParComptage.size === 0) {
-                logger.warn('showLaunchCountingModal: Aucun job trouvé pour comptage suivant')
                 await alertService.info({ text: 'Aucun job ne nécessite un comptage suivant' })
                 return
             }
@@ -2065,8 +1953,6 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                                 })
 
                                 await alertService.success({ text: 'Comptage(s) lancé(s) avec succès' })
-                                // Le DataTable avec enableAutoManagement rechargera automatiquement les données
-                                logger.debug('Comptage lancé - le DataTable rechargera automatiquement les données')
                             } catch (error: any) {
                                 const errorMessage = error?.userMessage ||
                                                     error?.response?.data?.message ||
@@ -2089,7 +1975,6 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                                     // Charger les sessions
                                     const loadSessions = async () => {
                                         if (!selectedCountingOrder) {
-                                            console.warn('selectedCountingOrder non défini, impossible de charger les sessions')
                                             return
                                         }
 
@@ -2098,7 +1983,6 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                                         } catch (error) {
                                             logger.error('Erreur lors du chargement des sessions dans la modal', error)
                                             // Ne pas afficher d'alerte ici car ça peut casser le rendu de la modal
-                                            console.warn('Impossible de charger les sessions:', error)
                                         }
                                     }
 
@@ -2443,8 +2327,11 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             link.href = url
 
             // Générer le nom du fichier avec timestamp
-            const timestamp = new Date().toISOString().split('T')[0]
-            const filename = `Resultats_Inventaire_${inventoryReference.value || inventoryId.value}_${warehouse.reference || warehouse.id}_${timestamp}.xlsx`
+            const filename = generateExportFilename(
+                'Resultats_Inventaire',
+                `${inventoryReference.value || inventoryId.value}_${warehouse.reference || warehouse.id}`,
+                'xlsx'
+            )
             link.setAttribute('download', filename)
 
             document.body.appendChild(link)
@@ -2513,18 +2400,14 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             const contentType = response.headers['content-type'] || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
             // Générer le nom du fichier
-            const timestamp = new Date().toISOString().split('T')[0]
-            const filename = `Articles_Consolides_${inventoryReference.value || inventoryId.value}_${timestamp}.xlsx`
+            const filename = generateExportFilename(
+                'Articles_Consolides',
+                String(inventoryReference.value || inventoryId.value),
+                'xlsx'
+            )
 
             // Télécharger le fichier
-            const downloadUrl = window.URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = downloadUrl
-            link.setAttribute('download', filename)
-            document.body.appendChild(link)
-            link.click()
-            link.remove()
-            window.URL.revokeObjectURL(downloadUrl)
+            downloadBlob(blob, filename)
 
             // Fermer le loader et afficher le succès
             await Swal.close()
@@ -2565,7 +2448,6 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
      */
     const handleGoToJobTracking = () => {
         if (!routerInstance) {
-            console.warn('[useInventoryResults] Router not available for navigation')
             return
         }
 
@@ -2742,6 +2624,8 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         resultsLoadingLocal: computed(() => resultsLoadingLocal.value),
         resultsKey,
         resultsTableRef,
-        resultsQueryModel: resultsQueryModelRef
+        resultsQueryModel: resultsQueryModelRef,
+        // Export customParams pour utilisation dans la vue avec customDataTableParams
+        resultsCustomParams
     }
 }

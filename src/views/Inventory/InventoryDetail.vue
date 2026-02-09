@@ -12,214 +12,129 @@
 
         <!-- Container principal -->
         <div v-if="inventory" class="space-y-6">
-            <!-- Informations générales -->
+            <!-- Paramètres de comptage -->
             <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div class="px-6 py-4 flex flex-col sm:flex-row justify-between items-center border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
-                    <div class="flex items-center gap-3 mb-2 sm:mb-0">
-                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
-                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        </div>
-                        <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                            Informations générales
-                        </h2>
-                    </div>
+                <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-primary/10 to-primary-light/10 dark:from-primary/20 dark:to-primary-light/20">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                            Paramètres de comptage
+                        </h3>
                     <span :class="[
-                        'px-3 py-1 rounded-full text-sm font-semibold',
+                            'px-3 py-1 rounded-md text-xs font-semibold',
                         getStatusClass(inventory?.status)
                     ]">
                         {{ inventory.status }}
                     </span>
                 </div>
-                <div class="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <!-- Référence -->
-                    <div class="group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 hover:-translate-y-1">
-                        <div class="flex items-start gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
-                                </svg>
                             </div>
-                            <div class="flex-1 min-w-0">
-                                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+                <div class="px-6 py-4">
+                    <!-- Informations générales -->
+                    <div class="mb-6">
+                        <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4 uppercase tracking-wide">
+                            Informations générales
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                            <!-- Référence -->
+                            <div class="relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60">
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-2">
                                     Référence
                                 </span>
-                                <span class="text-base font-semibold text-slate-800 dark:text-slate-100 block truncate">
+                                <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate block">
                                     {{ inventory.reference || 'Non défini' }}
                                 </span>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Libellé -->
-                    <div class="group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60 hover:shadow-lg hover:border-indigo-300 dark:hover:border-indigo-600 transition-all duration-300 hover:-translate-y-1">
-                        <div class="flex items-start gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                                </svg>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+                            <div class="relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60">
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-2">
                                     Libellé
                                 </span>
-                                <span class="text-base font-semibold text-slate-800 dark:text-slate-100 block truncate">
+                                <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate block">
                                     {{ inventory.label || 'Non défini' }}
                                 </span>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Date d'inventaire -->
-                    <div class="group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60 hover:shadow-lg hover:border-green-300 dark:hover:border-green-600 transition-all duration-300 hover:-translate-y-1">
-                        <div class="flex items-start gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+                            <div class="relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60">
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-2">
                                     Date d'inventaire
                                 </span>
-                                <span class="text-base font-semibold text-slate-800 dark:text-slate-100 block">
+                                <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 block">
                                     {{ formatDate(inventory.date) }}
                                 </span>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Type -->
-                    <div class="group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60 hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-600 transition-all duration-300 hover:-translate-y-1">
-                        <div class="flex items-start gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                                </svg>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+                            <div class="relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60">
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-2">
                                     Type
                                 </span>
-                                <span class="text-base font-semibold text-slate-800 dark:text-slate-100 block truncate">
+                                <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate block">
                                     {{ inventory.inventory_type || 'Non défini' }}
                                 </span>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Compte -->
-                    <div class="group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60 hover:shadow-lg hover:border-amber-300 dark:hover:border-amber-600 transition-all duration-300 hover:-translate-y-1">
-                        <div class="flex items-start gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                </svg>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+                            <div class="relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60">
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-2">
                                     Compte
                                 </span>
-                                <span class="text-base font-semibold text-slate-800 dark:text-slate-100 block truncate">
+                                <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate block">
                                     {{ inventory.account_name || 'Non défini' }}
                                 </span>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- En préparation -->
-                    <div class="group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60 hover:shadow-lg hover:border-primary-300 dark:hover:border-primary-600 transition-all duration-300 hover:-translate-y-1">
-                        <div class="flex items-start gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center flex-shrink-0 shadow-md">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+                            <div class="relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60">
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-2">
                                     En préparation
                                 </span>
-                                <span class="text-base font-semibold text-slate-800 dark:text-slate-100 block">
+                                <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 block">
                                     {{ inventory.en_preparation_status_date ?
                                         formatDate(inventory.en_preparation_status_date) :
                                         'Non défini' }}
                                 </span>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- En réalisation -->
-                    <div class="group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 hover:-translate-y-1">
-                        <div class="flex items-start gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+                            <div class="relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60">
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-2">
                                     En réalisation
                                 </span>
-                                <span class="text-base font-semibold text-slate-800 dark:text-slate-100 block">
+                                <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 block">
                                     {{ inventory.en_realisation_status_date ?
                                         formatDate(inventory.en_realisation_status_date) :
                                         'Non défini' }}
                                 </span>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Terminé -->
-                    <div class="group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60 hover:shadow-lg hover:border-green-300 dark:hover:border-green-600 transition-all duration-300 hover:-translate-y-1">
-                        <div class="flex items-start gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+                            <div class="relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60">
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-2">
                                     Terminé
                                 </span>
-                                <span class="text-base font-semibold text-slate-800 dark:text-slate-100 block">
+                                <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 block">
                                     {{ inventory.termine_status_date ? formatDate(inventory.termine_status_date) : 'Non défini' }}
                                 </span>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Clôturé -->
-                    <div class="group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60 hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-300 hover:-translate-y-1">
-                        <div class="flex items-start gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-slate-500 to-slate-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                </svg>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">
+                            <div class="relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60">
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-2">
                                     Clôturé
                                 </span>
-                                <span class="text-base font-semibold text-slate-800 dark:text-slate-100 block">
+                                <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 block">
                                     {{ inventory.cloture_status_date ? formatDate(inventory.cloture_status_date) : 'Non défini' }}
                                 </span>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Paramètres de comptage -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-primary/10 to-primary-light/10 dark:from-primary/20 dark:to-primary-light/20">
-                    <div class="flex items-center gap-3">
-                        <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                            Paramètres de comptage
-                        </h3>
-                    </div>
-                </div>
-                <div class="px-6 py-4">
+                    <div>
+                        <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4 uppercase tracking-wide">
+                            Comptages
+                        </h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                         <div
                             v-for="(comptage, i) in inventory.comptages"
@@ -344,6 +259,7 @@
                                         Configuration de base
                                     </span>
                                 </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -352,92 +268,134 @@
 
             <!-- Magasins associés -->
             <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
-                                <IconBox class="w-4 h-4 text-white" />
+                            <div class="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
+                                <IconBox class="w-5 h-5 text-white" />
                             </div>
                             <div>
                                 <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">
                                     Magasins associés
                                 </h3>
                                 <p class="text-sm text-slate-500 dark:text-slate-400">
-                                    Magasins concernés par l'inventaire
+                                    Gérer les opérations pour chaque magasin
                                 </p>
                             </div>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-sm text-slate-500 dark:text-slate-400">
-                                {{ inventory.magasins.length }} magasin(s)
+                        <div class="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600">
+                            <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                {{ inventory.magasins.length }}
                             </span>
-                            <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span class="text-sm text-slate-500 dark:text-slate-400">
+                                magasin{{ inventory.magasins.length > 1 ? 's' : '' }}
+                            </span>
                         </div>
                     </div>
                 </div>
                 <div class="p-6">
                     <!-- Grille des magasins -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         <div
                             v-for="(magasin, index) in inventory.magasins"
                             :key="index"
-                            class="group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60 hover:shadow-lg hover:border-green-300 dark:hover:border-green-600 transition-all duration-300 hover:-translate-y-1">
+                            class="group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-5 border border-slate-200/60 dark:border-slate-600/60 hover:shadow-xl hover:border-green-300 dark:hover:border-green-600 transition-all duration-300 hover:-translate-y-1">
                             <!-- Badge de statut -->
-                            <div class="absolute top-3 right-3">
-                                <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <div class="absolute top-4 right-4">
+                                <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50"></div>
                             </div>
 
-                            <!-- Icône et informations principales -->
-                            <div class="flex items-start gap-3 mb-3">
+                            <!-- Header du magasin -->
+                            <div class="flex items-start gap-3 mb-4">
                                 <div class="relative">
-                                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-lg">
-                                        <IconBox class="w-6 h-6 text-white" />
+                                    <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow">
+                                        <IconBox class="w-7 h-7 text-white" />
                                     </div>
-                                    <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-slate-800"></div>
+                                    <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-slate-800 shadow-md"></div>
                                 </div>
 
                                 <div class="flex-1 min-w-0">
-                                    <h4 class="font-semibold text-slate-800 dark:text-slate-100 text-base truncate">
+                                    <h4 class="font-bold text-slate-800 dark:text-slate-100 text-lg truncate mb-1">
                                         {{ magasin.nom }}
                                     </h4>
-                                    <p class="text-sm text-slate-500 dark:text-slate-400 truncate">
-                                        Magasin {{ index + 1 }}
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium">
+                                        Magasin #{{ index + 1 }}
                                     </p>
                                 </div>
                             </div>
 
                             <!-- Date du magasin -->
-                            <div class="space-y-2 mb-3">
+                            <div class="mb-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
                                 <div class="flex items-center gap-2">
                                     <svg class="w-4 h-4 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
                                     </svg>
-                                    <span class="text-sm text-slate-600 dark:text-slate-300">
-                                        {{ magasin.date ? formatDate(magasin.date) : 'Non définie' }}
+                                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                        {{ magasin.date ? formatDate(magasin.date) : 'Date non définie' }}
                                     </span>
                                 </div>
                             </div>
 
-                            <!-- Bouton de lancement -->
+                            <!-- Actions du magasin - Boutons compacts avec icônes et tooltips (style ButtonGroup) -->
+                            <div class="inline-flex flex-wrap gap-0 rounded-lg overflow-hidden border border-primary dark:border-primary shadow-md">
+                                <!-- Planification -->
+                                <Tooltip text="Planification" position="top" :delay="300">
                             <button
                                 @click="goToWarehousePlanning(magasin.nom)"
-                                class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
-                                <IconLaunch class="w-4 h-4" />
-                                <span>Lancer</span>
+                                        class="flex items-center justify-center px-3 py-2 font-medium shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary bg-white text-primary border-r border-primary hover:bg-primary hover:text-white dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary dark:hover:text-white">
+                                        <IconCalendar class="w-4 h-4" />
                             </button>
+                                </Tooltip>
+
+                                <!-- Affectation -->
+                                <Tooltip text="Affectation" position="top" :delay="300">
+                                    <button
+                                        @click="goToWarehouseAffectation(magasin.nom)"
+                                        class="flex items-center justify-center px-3 py-2 font-medium shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary bg-white text-primary border-r border-primary hover:bg-primary hover:text-white dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary dark:hover:text-white">
+                                        <IconUsers class="w-4 h-4" />
+                                    </button>
+                                </Tooltip>
+
+                                <!-- Résultats -->
+                                <Tooltip text="Résultats" position="top" :delay="300">
+                                    <button
+                                        @click="goToWarehouseResults(magasin.nom)"
+                                        class="flex items-center justify-center px-3 py-2 font-medium shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary bg-white text-primary border-r border-primary hover:bg-primary hover:text-white dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary dark:hover:text-white">
+                                        <IconBarChart class="w-4 h-4" />
+                                    </button>
+                                </Tooltip>
+
+                                <!-- Suivi -->
+                                <Tooltip text="Suivi des jobs" position="top" :delay="300">
+                                    <button
+                                        @click="goToWarehouseTracking(magasin.nom)"
+                                        class="flex items-center justify-center px-3 py-2 font-medium shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary bg-white text-primary border-r border-primary hover:bg-primary hover:text-white dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary dark:hover:text-white">
+                                        <IconClipboardText class="w-4 h-4" />
+                                    </button>
+                                </Tooltip>
+
+                                <!-- Monitoring -->
+                                <Tooltip text="Monitoring" position="top" :delay="300">
+                                    <button
+                                        @click="goToWarehouseMonitoring(magasin.nom)"
+                                        class="flex items-center justify-center px-3 py-2 font-medium shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary bg-white text-primary hover:bg-primary hover:text-white dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary dark:hover:text-white">
+                                        <IconChartSquare class="w-4 h-4" />
+                                    </button>
+                                </Tooltip>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Message si aucun magasin -->
-                    <div v-if="inventory.magasins.length === 0" class="text-center py-8">
-                        <div class="w-16 h-16 mx-auto mb-4 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
-                            <IconBox class="w-8 h-8 text-slate-400" />
+                    <div v-if="inventory.magasins.length === 0" class="text-center py-12">
+                        <div class="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center shadow-lg">
+                            <IconBox class="w-10 h-10 text-slate-400" />
                         </div>
-                        <h4 class="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">
+                        <h4 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
                             Aucun magasin associé
                         </h4>
-                        <p class="text-slate-500 dark:text-slate-400">
-                            Aucun magasin n'a été associé à cet inventaire pour le moment.
+                        <p class="text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                            Aucun magasin n'a été associé à cet inventaire pour le moment. Ajoutez des magasins pour commencer.
                         </p>
                     </div>
                 </div>
@@ -809,6 +767,14 @@ import IconLock from '@/components/icon/icon-lock.vue'
 import IconBox from '@/components/icon/icon-box.vue'
 import IconLaunch from '@/components/icon/icon-launch.vue'
 import IconUpload from '@/components/icon/icon-upload.vue'
+import IconCalendar from '@/components/icon/icon-calendar.vue'
+import IconUsers from '@/components/icon/icon-users.vue'
+import IconBarChart from '@/components/icon/icon-bar-chart.vue'
+import IconClipboardText from '@/components/icon/icon-clipboard-text.vue'
+import IconChartSquare from '@/components/icon/icon-chart-square.vue'
+
+// ===== IMPORTS COMPOSANTS =====
+import Tooltip from '@/components/Tooltip.vue'
 
 // ===== ROUTE =====
 const route = useRoute()
@@ -1224,6 +1190,66 @@ const getTeamUserName = (team: any): string => {
 const goToWarehousePlanning = (warehouseName: string) => {
     router.push({
         name: 'inventory-planning',
+        params: {
+            reference: inventoryReference,
+            warehouse: warehouseName
+        }
+    })
+}
+
+/**
+ * Navigue vers la page d'affectation d'un warehouse
+ *
+ * @param warehouseName - Nom du warehouse
+ */
+const goToWarehouseAffectation = (warehouseName: string) => {
+    router.push({
+        name: 'inventory-affecter',
+        params: {
+            reference: inventoryReference,
+            warehouse: warehouseName
+        }
+    })
+}
+
+/**
+ * Navigue vers la page des résultats d'un inventaire
+ *
+ * @param warehouseName - Nom du warehouse (optionnel, pour filtrage)
+ */
+const goToWarehouseResults = (warehouseName?: string) => {
+    router.push({
+        name: 'inventory-results',
+        params: {
+            reference: inventoryReference
+        },
+        ...(warehouseName ? { query: { warehouse: warehouseName } } : {})
+    })
+}
+
+/**
+ * Navigue vers la page de suivi des jobs d'un inventaire
+ *
+ * @param warehouseName - Nom du warehouse (optionnel, pour filtrage)
+ */
+const goToWarehouseTracking = (warehouseName?: string) => {
+    router.push({
+        name: 'inventory-job-tracking',
+        params: {
+            reference: inventoryReference
+        },
+        ...(warehouseName ? { query: { warehouse: warehouseName } } : {})
+    })
+}
+
+/**
+ * Navigue vers la page de monitoring d'un warehouse
+ *
+ * @param warehouseName - Nom du warehouse
+ */
+const goToWarehouseMonitoring = (warehouseName: string) => {
+    router.push({
+        name: 'inventory-monitoring',
         params: {
             reference: inventoryReference,
             warehouse: warehouseName
