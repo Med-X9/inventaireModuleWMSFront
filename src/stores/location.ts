@@ -3,8 +3,8 @@ import { ref, computed } from 'vue';
 import { LocationService } from '@/services/LocationService';
 import { alertService } from '@/services/alertService';
 import type { DataTableResponse } from '@/utils/dataTableUtils';
-import type { QueryModel } from '@/components/DataTable/types/QueryModel';
-import { convertQueryModelToQueryParams } from '@/components/DataTable/utils/queryModelConverter';
+import type { QueryModel } from '@SMATCH-Digital-dev/vue-system-design';
+import { convertQueryModelToQueryParams } from '@SMATCH-Digital-dev/vue-system-design';
 import type {
     Location,
     CreateLocationRequest,

@@ -1,142 +1,421 @@
 <template>
     <div class="inventory-creation bg-gray-50 min-h-screen w-full">
-        <!-- Header avec navigation -->
-        <div class="bg-white shadow-sm border-b border-gray-200">
-            <div class="w-full px-6 py-4">
-                <div class="flex justify-between items-center">
+        <Container max-width="7xl" class="py-6">
+            <!-- Header avec navigation -->
+            <Card class="mb-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div class="flex items-center gap-4">
-                        <h1 class="text-3xl font-bold text-gray-900">
-                            <span class="border-b-4 border-primary pb-2">Création d'inventaire</span>
+                        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
+                            Création d'inventaire
                         </h1>
-                        <button
+                        <Button
                             @click="showBusinessRules"
-                            class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-colors duration-200 flex items-center gap-2"
-                            title="Afficher les règles métier"
+                            variant="primary"
+                            size="sm"
+                            class="flex items-center gap-2"
                         >
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
                             Règles métier
-                        </button>
+                        </Button>
                     </div>
-                    <button
+                    <Button
                         @click="resetForm"
-                        class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-colors duration-200 flex items-center gap-2"
-                        title="Réinitialiser le formulaire"
+                        variant="secondary"
+                        size="sm"
+                        class="flex items-center gap-2"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                         </svg>
                         Réinitialiser
-                    </button>
+                    </Button>
                 </div>
-            </div>
-        </div>
+            </Card>
 
-        <!-- Contenu principal -->
-        <div class="w-full px-6 py-8">
+            <!-- Contenu principal -->
+            <div class="space-y-6">
             <!-- Affichage en temps réel -->
             <InventoryCreationRecap
                 :header="state.header"
                 :comptages="state.comptages"
             />
 
-            <!-- Affichage des erreurs de validation du wizard -->
-            <AlertMessage
-                :show="!!wizardValidationError"
-                type="warning"
-                title="Validation requise"
-                subtitle="Veuillez corriger cette erreur avant de continuer :"
-                :message="wizardValidationError || ''"
-                primary-action-text="J'ai compris"
-                secondary-action-text="Recommencer"
-                :primary-action="() => wizardValidationError = null"
-                :secondary-action="resetForm"
-            />
-
-            <!-- Affichage d'erreur de création -->
-            <AlertMessage
-                :show="!!creationError"
-                type="error"
-                title="Erreur lors de la création"
-                subtitle="Une erreur s'est produite lors de la création de l'inventaire :"
-                :message="creationError || ''"
-                primary-action-text="Réessayer"
-                secondary-action-text="Fermer"
-                :primary-action="resetForm"
-                :secondary-action="() => creationError = null"
-            />
-
-            <!-- Affichage de succès de création -->
-            <AlertMessage
-                :show="!!creationSuccess"
-                type="success"
-                title="Inventaire créé avec succès !"
-                subtitle="Votre inventaire a été créé avec succès :"
-                :message="creationSuccess || ''"
-                primary-action-text="Créer un autre inventaire"
-                secondary-action-text="Fermer"
-                :primary-action="resetForm"
-                :secondary-action="() => creationSuccess = null"
-            />
-
-            <!-- Wizard avec meilleur espacement -->
-            <div class="mt-8 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-                <Wizard
-                    :steps="steps"
-                    :isValid="isValid"
-                    :onFinish="() => handleCreateInventory()"
-                    :validateStep="validateStep"
-                    @finish="handleFinish"
-                    @validationError="handleValidationError"
+                <!-- Affichage des erreurs de validation du wizard -->
+                <Alert
+                    v-if="wizardValidationError"
+                    type="warning"
+                    :title="'Validation requise'"
+                    :message="wizardValidationError"
+                    :dismissible="true"
+                    @dismiss="wizardValidationError = null"
                 >
-                    <template #step-0>
-                        <div class="p-4">
-                            <FormBuilder
-                                :key="JSON.stringify(headerFieldsValue)"
-                                :fields="headerFieldsValue"
-                                v-model="state.header"
-                                :columns="4"
-                                hide-submit
-                            />
-                        </div>
+                    <template #action>
+                        <Button variant="secondary" size="sm" @click="resetForm">
+                            Recommencer
+                        </Button>
                     </template>
-                    <template #step-1>
-                        <div class="p-4">
-                            <FormBuilder
-                                :key="state.comptages[0].mode"
-                                :fields="getFields(0)"
-                                v-model="state.comptages[0]"
-                                :columns="1"
-                                hide-submit
-                            />
-                        </div>
+                </Alert>
+
+                <!-- Affichage d'erreur de création -->
+                <Alert
+                    v-if="creationError"
+                    type="error"
+                    :title="'Erreur lors de la création'"
+                    :message="creationError"
+                    :dismissible="true"
+                    @dismiss="creationError = null"
+                >
+                    <template #action>
+                        <Button variant="primary" size="sm" @click="resetForm">
+                            Réessayer
+                        </Button>
                     </template>
-                    <template #step-2>
-                        <div class="p-4">
-                            <FormBuilder
-                                :key="state.comptages[1].mode"
-                                :fields="getFields(1)"
-                                v-model="state.comptages[1]"
-                                :columns="1"
-                                hide-submit
-                            />
-                        </div>
+                </Alert>
+
+                <!-- Affichage de succès de création -->
+                <Alert
+                    v-if="creationSuccess"
+                    type="success"
+                    :title="'Inventaire créé avec succès !'"
+                    :message="creationSuccess"
+                    :dismissible="true"
+                    @dismiss="creationSuccess = null"
+                >
+                    <template #action>
+                        <Button variant="primary" size="sm" @click="resetForm">
+                            Créer un autre inventaire
+                        </Button>
                     </template>
-                    <template #step-3>
-                        <div class="p-4">
-                            <FormBuilder
-                                :key="state.comptages[2].mode"
-                                :fields="getFields(2)"
-                                v-model="state.comptages[2]"
-                                :columns="1"
-                                hide-submit
-                            />
-                        </div>
+                </Alert>
+
+                <!-- Stepper avec composant Steps du package -->
+                <Card>
+                    <template #header>
+                        <Steps
+                            :steps="stepsData"
+                            size="md"
+                            @step-click="(step, index) => handleStepClick(index + 1)"
+                        />
                     </template>
-                </Wizard>
+
+                    <!-- Contenu des étapes -->
+                    <div class="p-6">
+                    <!-- Étape 1 : Informations générales -->
+                    <div v-if="currentStep === 1">
+                        <Form>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <FormGroup>
+                                    <FormLabel>Libellé <span class="text-red-500">*</span></FormLabel>
+                                    <Input
+                                        v-model="state.header.libelle"
+                                        type="text"
+                                        placeholder="Entrez le libellé"
+                                    />
+                                    <FormError v-if="!state.header.libelle && isValid">Le libellé est requis</FormError>
+                                </FormGroup>
+
+                                <FormGroup>
+                                    <FormLabel>Date <span class="text-red-500">*</span></FormLabel>
+                                    <Input
+                                        v-model="state.header.date"
+                                        type="date"
+                                        :error="!state.header.date && isValid ? 'La date est requise' : undefined"
+                                    />
+                                    <FormError v-if="!state.header.date && isValid">La date est requise</FormError>
+                                </FormGroup>
+
+                                <FormGroup>
+                                    <FormLabel>Type <span class="text-red-500">*</span></FormLabel>
+                                    <Autocomplete
+                                        :options="[
+                                            { label: 'Général', value: 'GENERAL' },
+                                            { label: 'Tournant', value: 'TOURNANT' }
+                                        ]"
+                                        v-model="state.header.inventory_type"
+                                        placeholder="Sélectionnez un type"
+                                        :disabled="false"
+                                        :error="!state.header.inventory_type && isValid ? 'Le type est requis' : undefined"
+                                    />
+                                    <FormError v-if="!state.header.inventory_type && isValid">Le type est requis</FormError>
+                                </FormGroup>
+
+                                <FormGroup>
+                                    <FormLabel>Compte <span class="text-red-500">*</span></FormLabel>
+                                    <Autocomplete
+                                        :options="accountOptions as AutocompleteOption[]"
+                                        v-model="state.header.compte"
+                                        placeholder="Sélectionnez un compte"
+                                        :disabled="false"
+                                        :error="!state.header.compte && isValid ? 'Le compte est requis' : undefined"
+                                    />
+                                    <FormError v-if="!state.header.compte && isValid">Le compte est requis</FormError>
+                                </FormGroup>
+                            </div>
+
+                            <FormGroup class="mt-4">
+                                <FormLabel>Magasin <span class="text-red-500">*</span></FormLabel>
+                                <MultiSelectWithDates
+                                    :field="{
+                                        key: 'magasin',
+                                        label: 'Magasin',
+                                        type: 'multi-select-with-dates',
+                                        options: warehouseOptions,
+                                        dateLabel: 'Dates par magasin'
+                                    }"
+                                    :value="state.header.magasin"
+                                    :error="false"
+                                    :disabled="false"
+                                    @update:value="(val) => {
+                                        if (Array.isArray(val)) {
+                                            (state.header.magasin as any) = val;
+                                        }
+                                    }"
+                                />
+                                <FormError v-if="(!state.header.magasin || state.header.magasin.length === 0) && isValid">
+                                    Au moins un magasin est requis
+                                </FormError>
+                            </FormGroup>
+                        </Form>
+                    </div>
+
+                    <!-- Étape 2 : Comptage 1 -->
+                    <div v-else-if="currentStep === 2">
+                        <Form>
+                            <FormGroup>
+                                <FormLabel>Mode de comptage <span class="text-red-500">*</span></FormLabel>
+                                <Autocomplete
+                                    :options="getStepConfig(0).modes.map(m => ({ label: m, value: m })) as AutocompleteOption[]"
+                                    v-model="state.comptages[0].mode"
+                                    placeholder="Sélectionnez un mode"
+                                    :disabled="false"
+                                    :error="!state.comptages[0].mode && isValid ? 'Le mode est requis' : undefined"
+                                />
+                                <FormError v-if="!state.comptages[0].mode && isValid">Le mode est requis</FormError>
+                            </FormGroup>
+
+                            <!-- Options pour mode "en vrac" -->
+                            <template v-if="state.comptages[0].mode === 'en vrac'">
+                                <FormGroup>
+                                    <FormLabel>Méthode opératoire <span class="text-red-500">*</span></FormLabel>
+                                    <div class="flex gap-6">
+                                        <Radio
+                                            v-model="state.comptages[0].inputMethod"
+                                            value="saisie"
+                                            label="Saisie quantité"
+                                            name="inputMethod-0"
+                                            :error="!state.comptages[0].inputMethod && isValid ? 'La méthode opératoire est requise' : undefined"
+                                        />
+                                        <Radio
+                                            v-model="state.comptages[0].inputMethod"
+                                            value="scanner"
+                                            label="Scanner unitaire"
+                                            name="inputMethod-0"
+                                            :error="!state.comptages[0].inputMethod && isValid ? 'La méthode opératoire est requise' : undefined"
+                                        />
+                                    </div>
+                                    <FormError v-if="!state.comptages[0].inputMethod && isValid">La méthode opératoire est requise</FormError>
+                                </FormGroup>
+
+                                <div v-if="getOptions(0).length > 0" class="mt-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <Checkbox
+                                            v-for="opt in getOptions(0).filter(opt => opt !== 'saisieQuantite' && opt !== 'scannerUnitaire')"
+                                            :key="opt"
+                                            v-model="(state.comptages[0] as any)[opt]"
+                                            :label="getOptionLabel(opt)"
+                                        />
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Options pour mode "par article" -->
+                            <template v-else-if="state.comptages[0].mode === 'par article'">
+                                <div v-if="getOptions(0).length > 0" class="mt-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <Checkbox
+                                            v-for="opt in getOptions(0)"
+                                            :key="opt"
+                                            v-model="(state.comptages[0] as any)[opt]"
+                                            :label="getOptionLabel(opt)"
+                                            :disabled="getOptionDisabled(0, opt)"
+                                        />
+                                    </div>
+                                </div>
+                            </template>
+                        </Form>
+                    </div>
+
+                    <!-- Étape 3 : Comptage 2 -->
+                    <div v-else-if="currentStep === 3">
+                        <Form>
+                            <FormGroup>
+                                <FormLabel>Mode de comptage <span class="text-red-500">*</span></FormLabel>
+                                <Autocomplete
+                                    :options="getStepConfig(1).modes.map(m => ({ label: m, value: m })) as AutocompleteOption[]"
+                                    v-model="state.comptages[1].mode"
+                                    placeholder="Sélectionnez un mode"
+                                    :disabled="false"
+                                    :error="!state.comptages[1].mode && isValid ? 'Le mode est requis' : undefined"
+                                />
+                                <FormError v-if="!state.comptages[1].mode && isValid">Le mode est requis</FormError>
+                            </FormGroup>
+
+                            <!-- Options pour mode "en vrac" -->
+                            <template v-if="state.comptages[1].mode === 'en vrac'">
+                                <FormGroup>
+                                    <FormLabel>Méthode opératoire <span class="text-red-500">*</span></FormLabel>
+                                    <div class="flex gap-6">
+                                        <Radio
+                                            v-model="state.comptages[1].inputMethod"
+                                            value="saisie"
+                                            label="Saisie quantité"
+                                            name="inputMethod-1"
+                                            :error="!state.comptages[1].inputMethod && isValid ? 'La méthode opératoire est requise' : undefined"
+                                        />
+                                        <Radio
+                                            v-model="state.comptages[1].inputMethod"
+                                            value="scanner"
+                                            label="Scanner unitaire"
+                                            name="inputMethod-1"
+                                            :error="!state.comptages[1].inputMethod && isValid ? 'La méthode opératoire est requise' : undefined"
+                                        />
+                                    </div>
+                                    <FormError v-if="!state.comptages[1].inputMethod && isValid">La méthode opératoire est requise</FormError>
+                                </FormGroup>
+
+                                <div v-if="getOptions(1).length > 0" class="mt-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <Checkbox
+                                            v-for="opt in getOptions(1).filter(opt => opt !== 'saisieQuantite' && opt !== 'scannerUnitaire')"
+                                            :key="opt"
+                                            v-model="(state.comptages[1] as any)[opt]"
+                                            :label="getOptionLabel(opt)"
+                                        />
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Options pour mode "par article" -->
+                            <template v-else-if="state.comptages[1].mode === 'par article'">
+                                <div v-if="getOptions(1).length > 0" class="mt-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <Checkbox
+                                            v-for="opt in getOptions(1)"
+                                            :key="opt"
+                                            v-model="(state.comptages[1] as any)[opt]"
+                                            :label="getOptionLabel(opt)"
+                                            :disabled="getOptionDisabled(1, opt)"
+                                        />
+                                    </div>
+                                </div>
+                            </template>
+                        </Form>
+                    </div>
+
+                    <!-- Étape 4 : Comptage 3 -->
+                    <div v-else-if="currentStep === 4">
+                        <Form>
+                            <FormGroup>
+                                <FormLabel>Mode de comptage <span class="text-red-500">*</span></FormLabel>
+                                <Autocomplete
+                                    :options="getStepConfig(2).modes.map(m => ({ label: m, value: m })) as AutocompleteOption[]"
+                                    v-model="state.comptages[2].mode"
+                                    placeholder="Sélectionnez un mode"
+                                    :disabled="false"
+                                    :error="!state.comptages[2].mode && isValid ? 'Le mode est requis' : undefined"
+                                />
+                                <FormError v-if="!state.comptages[2].mode && isValid">Le mode est requis</FormError>
+                            </FormGroup>
+
+                            <!-- Options pour mode "en vrac" -->
+                            <template v-if="state.comptages[2].mode === 'en vrac'">
+                                <FormGroup>
+                                    <FormLabel>Méthode opératoire <span class="text-red-500">*</span></FormLabel>
+                                    <div class="flex gap-6">
+                                        <Radio
+                                            v-model="state.comptages[2].inputMethod"
+                                            value="saisie"
+                                            label="Saisie quantité"
+                                            name="inputMethod-2"
+                                            :error="!state.comptages[2].inputMethod && isValid ? 'La méthode opératoire est requise' : undefined"
+                                        />
+                                        <Radio
+                                            v-model="state.comptages[2].inputMethod"
+                                            value="scanner"
+                                            label="Scanner unitaire"
+                                            name="inputMethod-2"
+                                            :error="!state.comptages[2].inputMethod && isValid ? 'La méthode opératoire est requise' : undefined"
+                                        />
+                                    </div>
+                                    <FormError v-if="!state.comptages[2].inputMethod && isValid">La méthode opératoire est requise</FormError>
+                                </FormGroup>
+
+                                <div v-if="getOptions(2).length > 0" class="mt-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <Checkbox
+                                            v-for="opt in getOptions(2).filter(opt => opt !== 'saisieQuantite' && opt !== 'scannerUnitaire')"
+                                            :key="opt"
+                                            v-model="(state.comptages[2] as any)[opt]"
+                                            :label="getOptionLabel(opt)"
+                                        />
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Options pour mode "par article" -->
+                            <template v-else-if="state.comptages[2].mode === 'par article'">
+                                <div v-if="getOptions(2).length > 0" class="mt-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <Checkbox
+                                            v-for="opt in getOptions(2)"
+                                            :key="opt"
+                                            v-model="(state.comptages[2] as any)[opt]"
+                                            :label="getOptionLabel(opt)"
+                                            :disabled="getOptionDisabled(2, opt)"
+                                        />
+                                    </div>
+                                </div>
+                            </template>
+                        </Form>
+                    </div>
+                </div>
+
+                    <!-- Actions du stepper -->
+                    <div class="border-t border-gray-200 bg-gray-50 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div class="text-sm text-gray-500">
+                            Étape {{ currentStep }} sur {{ steps.length }}
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <Button
+                                variant="secondary"
+                                :disabled="currentStep === 1"
+                                @click="goToPreviousStep"
+                            >
+                                Précédent
+                            </Button>
+                            <Button
+                                v-if="!isLastStep"
+                                variant="primary"
+                                :disabled="!isValid"
+                                @click="goToNextStep"
+                            >
+                                Suivant
+                            </Button>
+                            <Button
+                                v-else
+                                variant="primary"
+                                :disabled="!isValid"
+                                @click="finishStepper"
+                            >
+                                Terminer
+                            </Button>
+                        </div>
+                    </div>
+                </Card>
             </div>
-        </div>
+        </Container>
     </div>
 </template>
 
@@ -145,19 +424,18 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useInventoryCreation } from '@/composables/useInventoryCreation';
 import { inventoryCreationService } from '@/services/inventoryCreationService';
-import Wizard from '@/components/wizard/Wizard.vue';
-import FormBuilder from '@/components/Form/FormBuilder.vue';
-import type { FieldConfig } from '@/interfaces/form';
 import { useWarehouse } from '@/composables/useWarehouse';
 import { useAccount } from '@/composables/useAccount';
 import Swal from 'sweetalert2';
 import InventoryCreationRecap from './InventoryCreationRecap.vue';
-import AlertMessage from '@/components/AlertMessage.vue';
 import { Validators } from '@/utils/validators';
+import { Form, FormGroup, FormLabel, FormError, Button, Input, Autocomplete, Radio, Checkbox, Card, Alert, Steps, Container } from '@SMATCH-Digital-dev/vue-system-design';
+import type { AutocompleteOption, Step } from '@SMATCH-Digital-dev/vue-system-design';
+import MultiSelectWithDates from '@/components/Form/fields/MultiSelectWithDates.vue';
 
 const router = useRouter();
 
-const { state, headerFields, getFields, createInventory, updateInventory, loadInventory, resetForm, validateBusinessRules, validateComptage } = useInventoryCreation();
+const { state, headerFields, getFields, getOptions, getStepConfig, createInventory, updateInventory, loadInventory, resetForm, validateBusinessRules, validateComptage, accountOptions, warehouseOptions } = useInventoryCreation();
 const { fetchAccounts } = useAccount();
 
 onMounted(() => {
@@ -419,11 +697,43 @@ function showBusinessRules() {
 }
 
 const steps = [
-    { title: 'Informations générales' },
-    { title: 'Comptage 1' },
-    { title: 'Comptage 2' },
-    { title: 'Comptage 3' }
+    { id: 1, title: 'Informations générales' },
+    { id: 2, title: 'Comptage 1' },
+    { id: 3, title: 'Comptage 2' },
+    { id: 4, title: 'Comptage 3' }
 ];
+const currentStep = ref(1);
+const isLastStep = computed(() => currentStep.value === steps.length);
+
+// Données pour le composant Steps
+const stepsData = computed<Step[]>(() => {
+    return steps.map((step, index) => {
+        const stepNumber = index + 1;
+        let state: Step['state'] = 'pending';
+
+        if (stepNumber < currentStep.value) {
+            state = 'completed';
+        } else if (stepNumber === currentStep.value) {
+            state = 'current';
+        } else {
+            state = 'available';
+        }
+
+        return {
+            title: step.title,
+            state: state,
+            clickable: stepNumber < currentStep.value
+        };
+    });
+});
+
+// Gestion du clic sur une étape
+function handleStepClick(stepNumber: number) {
+    if (stepNumber < currentStep.value) {
+        currentStep.value = stepNumber;
+        wizardValidationError.value = null;
+    }
+}
 const finished = ref(false);
 const creationError = ref<string | null>(null);
 const wizardValidationError = ref<string | null>(null);
@@ -489,23 +799,15 @@ async function validateStep(step: number): Promise<boolean> {
             try {
                 const isValid = validateComptage(comptageIndex);
                 if (!isValid) {
-                    // Si validateComptage retourne false, on essaie de valider directement pour obtenir le message
                     try {
                         inventoryCreationService.validateComptage(comptage);
                     } catch (validationError) {
                         const errorMessage = validationError instanceof Error ? validationError.message : String(validationError);
-                        console.error('[validateStep] Message d\'erreur de validation:', errorMessage);
                         throw new Error(errorMessage || 'Configuration du comptage invalide selon les règles métier');
                     }
                     throw new Error('Configuration du comptage invalide selon les règles métier');
                 }
             } catch (error) {
-                console.error('[validateStep] Erreur de validation du comptage', {
-                    step,
-                    comptageIndex,
-                    comptage: state.comptages[comptageIndex],
-                    error: error instanceof Error ? error.message : String(error)
-                });
                 throw error;
             }
 
@@ -532,7 +834,46 @@ async function validateStep(step: number): Promise<boolean> {
     }
 }
 
-const headerFieldsValue = computed(() => headerFields.value);
+// Fonctions utilitaires pour les labels et états des options
+function getOptionLabel(opt: string): string {
+    const optionLabels: Record<string, string> = {
+        'dlc': 'Date limite de consommation (DLC)',
+        'numeroSerie': 'Numéro de série',
+        'numeroLot': 'Numéro de lot',
+        'guideQuantite': 'Guide quantité',
+        'guideArticle': 'Guide article',
+        'isVariante': 'Gestion des variantes',
+        'saisieQuantite': 'Saisie quantité',
+        'scannerUnitaire': 'Scanner unitaire'
+    };
+    return optionLabels[opt] || opt;
+}
+
+function getOptionDisabled(step: number, opt: string): boolean {
+    const comptage = state.comptages[step];
+    if (comptage.mode !== 'par article') return false;
+
+    const numeroSerieSelected = comptage.numeroSerie;
+    const numeroLotSelected = comptage.numeroLot;
+    const dlcSelected = comptage.dlc;
+
+    // Désactiver lot et DLC si numéro de série est sélectionné
+    if (numeroSerieSelected && (opt === 'numeroLot' || opt === 'dlc')) {
+        return true;
+    }
+
+    // Désactiver numéro de série si lot ou DLC sont sélectionnés
+    if (opt === 'numeroSerie' && (numeroLotSelected || dlcSelected)) {
+        return true;
+    }
+
+    // Les options guideQuantite et guideArticle ne sont jamais désactivées
+    if (opt === 'guideQuantite' || opt === 'guideArticle') {
+        return false;
+    }
+
+    return false;
+}
 
 const isValid = computed(() => {
     const h = state.header;
@@ -560,6 +901,39 @@ function handleFinish() {
     creationSuccess.value = null; // Reset success
     // Ne pas réinitialiser wizardValidationError ici car il peut contenir des erreurs à afficher
 }
+
+const goToPreviousStep = () => {
+    if (currentStep.value > 0) {
+        currentStep.value -= 1;
+    }
+};
+
+const goToNextStep = async () => {
+    try {
+        // validateStep attend un index 0‑based (0 = header, 1..3 = comptages)
+        const isValidStep = await validateStep(currentStep.value - 1);
+        if (!isValidStep) {
+            return;
+        }
+        // Réinitialiser l'erreur de validation du wizard si tout est OK
+        wizardValidationError.value = null;
+        if (currentStep.value < steps.length) {
+            currentStep.value += 1;
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        handleValidationError(message);
+    }
+};
+
+const finishStepper = async () => {
+    try {
+        await handleCreateInventory();
+        handleFinish();
+    } catch {
+        // L'erreur est déjà gérée dans handleCreateInventory
+    }
+};
 
 // Fonction pour créer un inventaire
 async function handleCreateInventory() {

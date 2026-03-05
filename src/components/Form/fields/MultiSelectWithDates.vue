@@ -1,17 +1,16 @@
 <template>
     <div class="space-y-3">
-        <SelectField
-            :key="`multi-select-${field.key}-${selectedItems.length || 0}`"
-            :selected="selectedItems"
+        <Autocomplete
+            :key="`multi-select-${field.key}`"
             :options="formattedOptions(field.options)"
+            v-model="selectedItemsModel"
             :multiple="true"
-            :searchable="field.searchable ?? true"
-            :clearable="field.clearable ?? true"
+            :enable-search="field.searchable ?? true"
             :placeholder="(field.props?.placeholder as string) || 'Sélectionnez des éléments'"
             :disabled="disabled"
-            :error="error"
-            :error-message="errorMessage"
-            @update:modelValue="onItemSelectionChange" />
+            :error="error && errorMessage ? errorMessage : undefined"
+            @update:modelValue="onItemSelectionChange"
+        />
 
         <!-- Date inputs for selected items -->
         <div v-if="selectedItems.length > 0" class="space-y-2 mt-3">
@@ -23,12 +22,12 @@
                     <span class="text-sm text-gray-600 dark:text-gray-400">
                         {{ getLabelForItem(itemValue) }} :
                     </span>
-                    <DateInput
-                        :field="{ ...field, key: `${field.key}-date-${itemValue}`, min: field.min }"
-                        :value="itemDates[itemValue]"
-                        :error="false"
+                    <Input
+                        v-model="itemDates[itemValue]"
+                        type="date"
+                        :min="field.min"
                         :disabled="disabled"
-                        @update:value="val => updateItemDate(itemValue, String(val))"
+                        @update:modelValue="val => updateItemDate(itemValue, String(val))"
                         @change="updateItemsWithDates"
                     />
                 </div>
@@ -43,9 +42,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue';
-import SelectField from '../SelectField.vue';
-import DateInput from './DateInput.vue';
+import { ref, reactive, watch, computed } from 'vue';
+import { Autocomplete, Input } from '@SMATCH-Digital-dev/vue-system-design';
+import type { AutocompleteOption } from '@SMATCH-Digital-dev/vue-system-design';
 import type { FieldConfig, SelectOption } from '@/interfaces/form';
 
 const props = defineProps<{
@@ -65,13 +64,21 @@ const emit = defineEmits<{
 const selectedItems = ref<string[]>([]);
 const itemDates = reactive<Record<string, string>>({});
 
+// Modèle pour Autocomplete : garder le même type que les options (string) pour que la sélection s'affiche
+const selectedItemsModel = computed({
+    get: () => selectedItems.value,
+    set: (val: string | number | (string | number)[] | null) => {
+        onItemSelectionChange(val);
+    }
+});
+
 // Initialiser les données
 const initializeData = () => {
     if (Array.isArray(props.value)) {
         const fieldData = props.value as Array<Record<string, string>>;
         const itemKey = props.field.itemKey || 'item';
-        // Convertir les valeurs en string pour la cohérence
-        selectedItems.value = fieldData.map(item => String(item[itemKey]));
+        const ids = fieldData.map(item => String(item[itemKey]));
+        selectedItems.value = [...new Set(ids)];
         fieldData.forEach(item => {
             itemDates[String(item[itemKey])] = item.date;
         });
@@ -84,20 +91,24 @@ initializeData();
 // Surveiller les changements de valeur
 watch(() => props.value, initializeData, { deep: true });
 
-const formattedOptions = (options: Array<string | SelectOption> = []): SelectOption[] => {
+const formattedOptions = (options: Array<string | SelectOption> = []): AutocompleteOption[] => {
     return options.map(opt => {
         if (typeof opt === 'string') {
             const numValue = parseInt(opt);
             return {
                 label: opt,
-                value: isNaN(numValue) ? opt : numValue
+                value: (isNaN(numValue) ? opt : String(numValue)) as string
             };
         }
-        return opt;
+        // Toujours utiliser string pour value afin de correspondre à selectedItems (évite erreur d'affichage)
+        return {
+            label: opt.label,
+            value: String(opt.value)
+        };
     });
 };
 
-const getFilteredOptions = (): SelectOption[] => {
+const getFilteredOptions = (): AutocompleteOption[] => {
     const allOptions = formattedOptions(props.field.options);
     return allOptions.filter(option => {
         // Comparer les valeurs converties en string
@@ -116,9 +127,11 @@ const getLabelForItem = (itemValue: string): string => {
     return option?.label || itemValue;
 };
 
-const onItemSelectionChange = (value: string | number | string[] | number[] | null) => {
+const onItemSelectionChange = (value: string | number | (string | number)[] | null) => {
     if (Array.isArray(value)) {
-        selectedItems.value = value.map(v => String(v));
+        selectedItems.value = [...new Set(value.map(v => String(v)))];
+    } else if (value !== null) {
+        selectedItems.value = [String(value)];
     } else {
         selectedItems.value = [];
     }

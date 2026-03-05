@@ -311,12 +311,12 @@ export class InventoryService {
      * @param id - ID de l'inventaire
      * @returns Promise avec la réponse de lancement
      */
-    static async launch(id: number | string): Promise<AxiosResponse<LaunchResponse>> {
+    static async launchByWarehause(idInentory: number, idWarehouse: number): Promise<AxiosResponse<LaunchResponse>> {
         try {
-            const response = await axiosInstance.post<LaunchResponse>(`${API.endpoints.inventory.base}${id}/launch/`);
+            const response = await axiosInstance.post<LaunchResponse>(`${API.endpoints.inventory.base}${idInentory}/warehouse/${idWarehouse}/launch/`);
             return response;
         } catch (error) {
-            logger.error(`Erreur lors du lancement de l'inventaire ${id}`, error);
+            logger.error(`Erreur lors du lancement de l'inventaire ${idInentory} pour le magasin ${idWarehouse}`, error);
             throw error;
         }
     }

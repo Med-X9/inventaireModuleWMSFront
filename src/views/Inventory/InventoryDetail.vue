@@ -6,25 +6,22 @@
         <!-- Contenu principal -->
         <template v-else-if="inventory">
         <!-- Header avec boutons d'action -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 mb-8 shadow-lg border border-slate-200 dark:border-slate-700 flex justify-end">
+        <Card class="mb-8 p-6 flex justify-end">
             <ButtonGroup :buttons="actionButtons" justify="end" />
-        </div>
+        </Card>
 
         <!-- Container principal -->
         <div v-if="inventory" class="space-y-6">
             <!-- Paramètres de comptage -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-primary/10 to-primary-light/10 dark:from-primary/20 dark:to-primary-light/20">
+            <Card class="overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 ">
                     <div class="flex items-center justify-between">
                         <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">
                             Paramètres de comptage
                         </h3>
-                    <span :class="[
-                            'px-3 py-1 rounded-md text-xs font-semibold',
-                        getStatusClass(inventory?.status)
-                    ]">
+                    <Badge :variant="getStatusBadgeVariant(inventory?.status)">
                         {{ inventory.status }}
-                    </span>
+                    </Badge>
                 </div>
                             </div>
                 <div class="px-6 py-4">
@@ -129,9 +126,12 @@
                     </div>
                 </div>
             </div>
+                </div>
+            </Card>
 
-            <!-- Paramètres de comptage -->
-                    <div>
+            <!-- Section Comptages -->
+            <Card class="overflow-hidden">
+                <div class="px-6 py-4">
                         <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4 uppercase tracking-wide">
                             Comptages
                         </h4>
@@ -263,12 +263,11 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
+            </Card>
 
             <!-- Magasins associés -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
+            <Card class="overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -336,53 +335,12 @@
                                 </div>
                             </div>
 
-                            <!-- Actions du magasin - Boutons compacts avec icônes et tooltips (style ButtonGroup) -->
-                            <div class="inline-flex flex-wrap gap-0 rounded-lg overflow-hidden border border-primary dark:border-primary shadow-md">
-                                <!-- Planification -->
-                                <Tooltip text="Planification" position="top" :delay="300">
-                            <button
-                                @click="goToWarehousePlanning(magasin.nom)"
-                                        class="flex items-center justify-center px-3 py-2 font-medium shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary bg-white text-primary border-r border-primary hover:bg-primary hover:text-white dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary dark:hover:text-white">
-                                        <IconCalendar class="w-4 h-4" />
-                            </button>
-                                </Tooltip>
-
-                                <!-- Affectation -->
-                                <Tooltip text="Affectation" position="top" :delay="300">
-                                    <button
-                                        @click="goToWarehouseAffectation(magasin.nom)"
-                                        class="flex items-center justify-center px-3 py-2 font-medium shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary bg-white text-primary border-r border-primary hover:bg-primary hover:text-white dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary dark:hover:text-white">
-                                        <IconUsers class="w-4 h-4" />
-                                    </button>
-                                </Tooltip>
-
-                                <!-- Résultats -->
-                                <Tooltip text="Résultats" position="top" :delay="300">
-                                    <button
-                                        @click="goToWarehouseResults(magasin.nom)"
-                                        class="flex items-center justify-center px-3 py-2 font-medium shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary bg-white text-primary border-r border-primary hover:bg-primary hover:text-white dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary dark:hover:text-white">
-                                        <IconBarChart class="w-4 h-4" />
-                                    </button>
-                                </Tooltip>
-
-                                <!-- Suivi -->
-                                <Tooltip text="Suivi des jobs" position="top" :delay="300">
-                                    <button
-                                        @click="goToWarehouseTracking(magasin.nom)"
-                                        class="flex items-center justify-center px-3 py-2 font-medium shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary bg-white text-primary border-r border-primary hover:bg-primary hover:text-white dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary dark:hover:text-white">
-                                        <IconClipboardText class="w-4 h-4" />
-                                    </button>
-                                </Tooltip>
-
-                                <!-- Monitoring -->
-                                <Tooltip text="Monitoring" position="top" :delay="300">
-                                    <button
-                                        @click="goToWarehouseMonitoring(magasin.nom)"
-                                        class="flex items-center justify-center px-3 py-2 font-medium shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary bg-white text-primary hover:bg-primary hover:text-white dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary dark:hover:text-white">
-                                        <IconChartSquare class="w-4 h-4" />
-                                    </button>
-                                </Tooltip>
-                            </div>
+                            <!-- Actions du magasin - Utilisation du composant ButtonGroup -->
+                            <ButtonGroup
+                                :buttons="getWarehouseButtons(magasin)"
+                                justify="start"
+                                class="gap-0"
+                            />
                         </div>
                     </div>
 
@@ -399,16 +357,16 @@
                         </p>
                     </div>
                 </div>
-            </div>
+            </Card>
 
             <!-- Équipes assignées -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <Card class="overflow-hidden">
                 <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                                <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+                            <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                                <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
                                 </svg>
                             </div>
                             <div>
@@ -420,41 +378,52 @@
                                 </p>
                             </div>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-sm text-slate-500 dark:text-slate-400">
+                        <div class="flex items-center gap-3">
+                            <Badge variant="info" class="px-3 py-1">
                                 {{ (inventory.equipe && Array.isArray(inventory.equipe) ? inventory.equipe.length : 0) }} équipe(s)
-                            </span>
-                            <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            </Badge>
                         </div>
                     </div>
                 </div>
                 <div class="p-6">
+                    <!-- Grille des équipes -->
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div
                             v-for="(team, index) in paginatedTeam"
                             :key="index"
-                            class="group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-slate-200/60 dark:border-slate-600/60 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 hover:-translate-y-1">
-                            <div class="absolute top-3 right-3">
-                                <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            class="group relative bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 rounded-xl p-5 border border-slate-200/60 dark:border-slate-600/60 hover:shadow-xl hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 hover:-translate-y-1">
+
+                            <!-- Badge de comptage (calme, sans animation) -->
+                            <div v-if="team.nombre_comptage" class="absolute top-4 right-4">
+                                <div class="px-2.5 py-1 bg-blue-100 dark:bg-blue-900/30 rounded-full shadow-sm border border-blue-200 dark:border-blue-700">
+                                    <span class="text-xs font-semibold text-blue-700 dark:text-blue-300">
+                                        {{ team.nombre_comptage }} comptage{{ team.nombre_comptage > 1 ? 's' : '' }}
+                                    </span>
+                                </div>
                             </div>
 
-                            <div class="flex items-start gap-3 mb-3">
-                                <div class="relative">
-                                    <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+                            <!-- Contenu principal -->
+                            <div class="flex items-start gap-4 pt-2">
+                                <div class="relative flex-shrink-0">
+                                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow duration-300">
+                                        <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
                                         </svg>
                                     </div>
-                                    <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-slate-800"></div>
+                                    <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-slate-800 shadow-md"></div>
                                 </div>
 
-                                <div class="flex-1 min-w-0">
-                                    <h4 class="font-semibold text-slate-800 dark:text-slate-100 text-base truncate">
+                                <div class="flex-1 min-w-0 pt-1">
+                                    <h4 class="font-semibold text-slate-800 dark:text-slate-100 text-base mb-1 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                                         {{ getTeamUserName(team) }}
                                     </h4>
-                                    <p class="text-sm text-slate-500 dark:text-slate-400 truncate">
-                                        {{ team.nombre_comptage ? `${team.nombre_comptage} comptage(s)` : `Équipe ${(teamCurrentPage - 1) * teamItemsPerPage + index + 1}` }}
-                                    </p>
+                                    <!-- Indicateur visuel supplémentaire -->
+                                    <div class="mt-2 flex items-center gap-2">
+                                        <div class="flex items-center gap-1.5">
+                                            <div class="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                            <span class="text-xs text-slate-600 dark:text-slate-400 font-medium">Actif</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -463,17 +432,20 @@
                     <!-- Pagination pour l'équipe -->
                     <div
                         v-if="inventory.equipe && Array.isArray(inventory.equipe) && inventory.equipe.length > teamItemsPerPage"
-                        class="flex items-center justify-between mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                        class="flex flex-col sm:flex-row items-center justify-between mt-8 pt-6 border-t border-slate-200 dark:border-slate-700 gap-4">
                         <div class="text-sm text-slate-500 dark:text-slate-400">
-                            Affichage de {{ (teamCurrentPage - 1) * teamItemsPerPage + 1 }} à
-                            {{ Math.min(teamCurrentPage * teamItemsPerPage, inventory.equipe.length) }}
-                            sur {{ inventory.equipe.length }} équipe(s)
+                            Affichage de <span class="font-semibold text-slate-700 dark:text-slate-300">{{ (teamCurrentPage - 1) * teamItemsPerPage + 1 }}</span> à
+                            <span class="font-semibold text-slate-700 dark:text-slate-300">{{ Math.min(teamCurrentPage * teamItemsPerPage, inventory.equipe.length) }}</span>
+                            sur <span class="font-semibold text-slate-700 dark:text-slate-300">{{ inventory.equipe.length }}</span> équipe(s)
                         </div>
                         <div class="flex items-center gap-2">
                             <button
                                 @click="teamCurrentPage = Math.max(1, teamCurrentPage - 1)"
                                 :disabled="teamCurrentPage === 1"
-                                class="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                                </svg>
                                 Précédent
                             </button>
                             <div class="flex items-center gap-1">
@@ -482,10 +454,10 @@
                                     :key="page"
                                     @click="teamCurrentPage = page"
                                     :class="[
-                                        'px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                                        'px-3.5 py-2 text-sm font-medium rounded-lg transition-all duration-200 min-w-[2.5rem]',
                                         teamCurrentPage === page
-                                            ? 'bg-blue-600 text-white'
-                                            : 'text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                            ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 scale-105'
+                                            : 'text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-600'
                                     ]">
                                     {{ page }}
                                 </button>
@@ -493,8 +465,11 @@
                             <button
                                 @click="teamCurrentPage = Math.min(teamTotalPages, teamCurrentPage + 1)"
                                 :disabled="teamCurrentPage === teamTotalPages"
-                                class="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2">
                                 Suivant
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                </svg>
                             </button>
                         </div>
                     </div>
@@ -502,24 +477,24 @@
                     <!-- Message si aucune équipe -->
                     <div
                         v-if="!inventory.equipe || !Array.isArray(inventory.equipe) || inventory.equipe.length === 0"
-                        class="text-center py-8">
-                        <div class="w-16 h-16 mx-auto mb-4 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
-                            <svg class="w-8 h-8 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+                        class="text-center py-12">
+                        <div class="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-900/20 dark:to-blue-800/20 rounded-2xl flex items-center justify-center shadow-inner">
+                            <svg class="w-10 h-10 text-blue-400 dark:text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
                             </svg>
                         </div>
-                        <h4 class="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">
+                        <h4 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
                             Aucune équipe assignée
                         </h4>
-                        <p class="text-slate-500 dark:text-slate-400">
-                            Aucune équipe n'a été assignée à cet inventaire pour le moment.
+                        <p class="text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                            Aucune équipe n'a été assignée à cet inventaire pour le moment. Les équipes peuvent être assignées depuis la page d'affectation.
                         </p>
                     </div>
                 </div>
-            </div>
+            </Card>
 
             <!-- Ressources -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <Card class="overflow-hidden">
                 <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3">
@@ -622,11 +597,11 @@
                         </p>
                     </div>
                 </div>
-            </div>
+            </Card>
         </div>
 
         <!-- Modal d'ajout de ressources -->
-        <Modal v-model="showAddResourceModal" title="Ajouter des ressources" size="lg">
+        <Dialog v-model="showAddResourceModal" title="Ajouter des ressources" size="lg">
             <div class="space-y-6">
                 <!-- Liste des lignes de ressources -->
                 <div class="space-y-4">
@@ -680,7 +655,7 @@
                     </button>
                 </div>
             </div>
-        </Modal>
+        </Dialog>
 
         <!-- Composant d'alerte de validation -->
         <ValidationAlert
@@ -695,7 +670,7 @@
         </template>
 
         <!-- Message d'erreur si aucun inventaire et erreur -->
-        <div v-else-if="error" class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-slate-200 dark:border-slate-700">
+        <Card v-else-if="error" class="p-6">
             <div class="text-center py-8">
                 <div class="w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
                     <svg class="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -709,7 +684,7 @@
                     {{ error }}
                 </p>
             </div>
-        </div>
+        </Card>
     </div>
 </template>
 
@@ -724,25 +699,27 @@
  * - Ajouter des ressources à l'inventaire
  * - Exporter l'inventaire en PDF
  *
+ * Toute la logique TypeScript est déléguée au composable useInventoryDetail.
+ *
  * @component InventoryDetail
  */
 
 // ===== IMPORTS VUE =====
-import { onMounted, ref, computed, toRaw } from 'vue'
+import { onMounted, computed, toRaw } from 'vue'
 
 // ===== IMPORTS ROUTER =====
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 // ===== IMPORTS SERVICES =====
-import { logger } from '@/services/loggerService'
 import { useValidationAlert } from '@/services/validationAlertService'
 
-// ===== IMPORTS COMPOSANTS =====
-import Modal from '@/components/Modal.vue'
+// ===== IMPORTS COMPOSANTS PACKAGE =====
+import { Dialog, Card, Badge } from '@SMATCH-Digital-dev/vue-system-design'
+
+// ===== IMPORTS COMPOSANTS LOCAUX =====
 import FormBuilder from '@/components/Form/FormBuilder.vue'
 import ValidationAlert from '@/components/ValidationAlert.vue'
 import ButtonGroup from '@/components/Form/ButtonGroup.vue'
-import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
 
 // ===== IMPORTS COMPOSABLES =====
 import { useInventoryDetail } from '@/composables/useInventoryDetail'
@@ -753,39 +730,14 @@ import InventoryDetailSkeleton from '@/components/InventoryDetailSkeleton.vue'
 // ===== IMPORTS STORES =====
 import { useResourceStore } from '@/stores/resource'
 
-// ===== IMPORTS TYPES =====
-import type { FieldConfig } from '@/interfaces/form'
-
-// ===== IMPORTS ICÔNES =====
-import IconDownload from '@/components/icon/icon-download.vue'
-import IconFile from '@/components/icon/icon-file.vue'
-import IconPlay from '@/components/icon/icon-play.vue'
-import IconEdit from '@/components/icon/icon-edit.vue'
-import IconCancel from '@/components/icon/icon-cancel.vue'
-import IconCheck from '@/components/icon/icon-check.vue'
-import IconLock from '@/components/icon/icon-lock.vue'
+// ===== IMPORTS ICÔNES (template uniquement) =====
 import IconBox from '@/components/icon/icon-box.vue'
-import IconLaunch from '@/components/icon/icon-launch.vue'
-import IconUpload from '@/components/icon/icon-upload.vue'
-import IconCalendar from '@/components/icon/icon-calendar.vue'
-import IconUsers from '@/components/icon/icon-users.vue'
-import IconBarChart from '@/components/icon/icon-bar-chart.vue'
-import IconClipboardText from '@/components/icon/icon-clipboard-text.vue'
-import IconChartSquare from '@/components/icon/icon-chart-square.vue'
-
-// ===== IMPORTS COMPOSANTS =====
-import Tooltip from '@/components/Tooltip.vue'
 
 // ===== ROUTE =====
 const route = useRoute()
-const router = useRouter()
 const inventoryReference = route.params.reference as string
 
 // ===== COMPOSABLE =====
-/**
- * Initialisation du composable useInventoryDetail
- * Gère toute la logique métier de la page
- */
 const {
     inventory,
     loading,
@@ -793,6 +745,7 @@ const {
     inventoryId,
     magasins,
     launchInventory,
+    launchInventoryByWarehouseName,
     editInventory,
     cancelInventory,
     terminateInventory,
@@ -805,469 +758,45 @@ const {
     assignResourceToInventory,
     getAvailableResources,
     exportToPDF,
-    exportJobsToPDF
+    exportJobsToPDF,
+    // Pagination équipe
+    teamCurrentPage,
+    teamItemsPerPage,
+    paginatedTeam,
+    teamTotalPages,
+    getTeamUserName,
+    // Boutons
+    actionButtons,
+    getWarehouseButtons,
+    getStatusBadgeVariant,
+    hasAnyOption,
+    getCountModeBadgeClass,
+    getCountModeLabel,
+    // Modal ressources
+    showAddResourceModal,
+    resourceLines,
+    addResourceLine,
+    removeResourceLine,
+    resourceFields,
+    onAddResources,
+    openAddResourceModal
 } = useInventoryDetail(inventoryReference)
 
 // ===== STORES =====
 const resourceStore = useResourceStore()
 
-// ===== ÉTAT LOCAL =====
-/**
- * État d'ouverture du modal d'ajout de ressources
- */
-const showAddResourceModal = ref(false)
-
-/**
- * Lignes de ressources dans le formulaire
- */
-const resourceLines = ref([{ resource: '', quantity: 1 }])
-
-/**
- * Ressources disponibles
- */
-const availableResources = ref<any[]>([])
-
-/**
- * Pagination pour l'équipe
- */
-const teamCurrentPage = ref(1)
-const teamItemsPerPage = ref(6)
-
 // ===== COMPOSABLES SERVICES =====
-/**
- * Service d'alerte de validation
- */
 const validationAlert = useValidationAlert()
 
 // ===== COMPUTED =====
-/**
- * Erreurs de validation
- */
 const validationErrors = computed(() => toRaw(validationAlert.alertData.value.errors || []))
-
-/**
- * Informations de validation
- */
 const validationInfos = computed(() => toRaw(validationAlert.alertData.value.infos || []))
 
-/**
- * Équipe paginée
- */
-const paginatedTeam = computed(() => {
-    const teamList = inventory.value?.equipe && Array.isArray(inventory.value.equipe)
-        ? inventory.value.equipe
-        : []
-
-    const start = (teamCurrentPage.value - 1) * teamItemsPerPage.value
-    const end = start + teamItemsPerPage.value
-    return teamList.slice(start, end)
-})
-
-/**
- * Nombre total de pages pour l'équipe
- */
-const teamTotalPages = computed(() => {
-    const teamList = inventory.value?.equipe && Array.isArray(inventory.value.equipe)
-        ? inventory.value.equipe
-        : []
-    return Math.ceil(teamList.length / teamItemsPerPage.value)
-})
-
-/**
- * Options de ressources pour les selects
- */
-const resourceOptions = computed(() => {
-    return resourceStore.getResources
-        .filter(resource => resource.id)
-        .map(resource => ({
-            value: resource.id!.toString(),
-            label: resource.ressource_nom || resource.libelle
-        }))
-})
-
-/**
- * Classe CSS commune pour les boutons d'action
- * Bordure primaire et fond blanc avec effet hover
- */
-const ACTION_BUTTON_CLASS =
-    'bg-white text-primary border border-primary hover:bg-primary hover:text-white ' +
-    'dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary ' +
-    'dark:hover:text-white transition-all duration-200'
-
-/**
- * Boutons d'action selon le statut de l'inventaire
- */
-const actionButtons = computed<ButtonGroupButton[]>(() => {
-    const buttons: ButtonGroupButton[] = []
-
-    // Boutons selon le statut
-    if (inventory.value?.status === 'EN PREPARATION') {
-        buttons.push(
-            {
-                id: 'launch',
-                label: 'Lancer',
-                icon: IconPlay,
-                onClick: async () => { await launchInventory() },
-                variant: 'default',
-                class: ACTION_BUTTON_CLASS
-            },
-            {
-                id: 'edit',
-                label: 'Modifier',
-                icon: IconEdit,
-                onClick: editInventory,
-                variant: 'default',
-                class: ACTION_BUTTON_CLASS
-            }
-        )
-    } else if (inventory.value?.status === 'EN REALISATION') {
-        buttons.push(
-            {
-                id: 'cancel',
-                label: 'Annuler',
-                icon: IconCancel,
-                onClick: async () => { await cancelInventory() },
-                variant: 'default',
-                class: ACTION_BUTTON_CLASS
-            },
-            {
-                id: 'terminate',
-                label: 'Terminer',
-                icon: IconCheck,
-                onClick: async () => { await terminateInventory() },
-                variant: 'default',
-                class: ACTION_BUTTON_CLASS
-            }
-        )
-    } else if (inventory.value?.status === 'TERMINE') {
-        buttons.push({
-            id: 'close',
-            label: 'Clôturer',
-            icon: IconLock,
-            onClick: async () => { await closeInventory() },
-            variant: 'default',
-            class: ACTION_BUTTON_CLASS
-        })
-    }
-
-    // Bouton Suivi Import
-    buttons.push({
-        id: 'import-tracking',
-        label: 'Suivi Import',
-        icon: IconUpload,
-        onClick: () => { handleGoToImportTracking() },
-        variant: 'default',
-        class: ACTION_BUTTON_CLASS
-    })
-
-    // Boutons d'export toujours visibles (sauf si statut CLOTURE)
-    if (inventory.value?.status !== 'CLOTURE' && inventory.value?.status !== 'CLOTUREE') {
-        buttons.push({
-            id: 'export-detail',
-            label: 'Exporter Détail',
-            icon: IconFile,
-            onClick: exportToPDF,
-            variant: 'default',
-            class: ACTION_BUTTON_CLASS
-        })
-
-        if (inventoryId.value) {
-            buttons.push({
-                id: 'export-jobs',
-                label: 'PDF Jobs',
-                icon: IconDownload,
-                onClick: exportJobsToPDF,
-                variant: 'default',
-                class: ACTION_BUTTON_CLASS
-            })
-        }
-    }
-
-    return buttons
-})
-
-// ===== MÉTHODES UTILITAIRES =====
-
-/**
- * Vérifie si un comptage a des options activées
- *
- * @param comptage - Objet comptage à vérifier
- * @returns true si au moins une option est activée
- */
-const hasAnyOption = (comptage: any): boolean => {
-    if (comptage.champs_actifs && Array.isArray(comptage.champs_actifs)) {
-        return comptage.champs_actifs.length > 0
-    }
-
-    return (comptage as any).isVariante ||
-        (comptage as any).guideArticle ||
-        (comptage as any).guideQuantite ||
-        (comptage as any).dlc ||
-        (comptage as any).numeroSerie ||
-        (comptage as any).numeroLot ||
-        (comptage as any).inputMethod === 'scanner' ||
-        (comptage as any).inputMethod === 'saisie' ||
-        (comptage as any).scannerUnitaire ||
-        (comptage as any).saisieQuantite ||
-        (comptage as any).is_variant ||
-        (comptage as any).show_product ||
-        (comptage as any).quantity_show ||
-        (comptage as any).unit_scanned ||
-        (comptage as any).entry_quantity
-}
-
-/**
- * Retourne la classe CSS pour le badge de mode de comptage
- *
- * @param countMode - Mode de comptage
- * @returns Classe CSS pour le badge
- */
-const getCountModeBadgeClass = (countMode: string): string => {
-    switch (countMode) {
-        case 'image de stock':
-            return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-700'
-        case 'en vrac':
-            return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border border-green-200 dark:border-green-700'
-        case 'par article':
-            return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-700'
-        default:
-            return 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
-    }
-}
-
-/**
- * Retourne le label affiché pour le mode de comptage
- *
- * @param countMode - Mode de comptage
- * @returns Label à afficher
- */
-const getCountModeLabel = (countMode: string): string => {
-    switch (countMode) {
-        case 'image de stock':
-            return 'Image de stock'
-        case 'en vrac':
-            return 'En vrac'
-        case 'par article':
-            return 'Par article'
-        default:
-            return countMode || 'Non défini'
-    }
-}
-
-// ===== GESTION DES RESSOURCES =====
-
-/**
- * Ajoute une ligne de ressource au formulaire
- */
-const addResourceLine = () => {
-    resourceLines.value.push({ resource: '', quantity: 1 })
-}
-
-/**
- * Supprime une ligne de ressource du formulaire
- *
- * @param index - Index de la ligne à supprimer
- */
-const removeResourceLine = (index: number) => {
-    if (resourceLines.value.length > 1) {
-        resourceLines.value.splice(index, 1)
-    }
-}
-
-/**
- * Filtre les options disponibles pour chaque ligne (éviter les doublons)
- *
- * @param currentIndex - Index de la ligne actuelle
- * @returns Options de ressources disponibles
- */
-const getAvailableResourceOptions = (currentIndex: number) => {
-    const selected = resourceLines.value
-        .map((line, idx) => idx !== currentIndex ? line.resource : null)
-        .filter((value): value is string => value !== null && value !== '')
-    return resourceOptions.value.filter(opt => !selected.includes(opt.value))
-}
-
-/**
- * Champs dynamiques pour FormBuilder (select + input number)
- *
- * @param index - Index de la ligne
- * @returns Configuration des champs
- */
-const resourceFields = (index: number): FieldConfig[] => [
-    {
-        key: 'resource',
-        label: 'Ressource',
-        type: 'select',
-        options: getAvailableResourceOptions(index),
-        required: true,
-        props: { placeholder: 'Choisissez une ressource' }
-    },
-    {
-        key: 'quantity',
-        label: 'Quantité',
-        type: 'number',
-        required: true,
-        props: { min: 1, type: 'number', inputmode: 'numeric', placeholder: 'Quantité' }
-    }
-]
-
-/**
- * Charge les ressources disponibles
- */
-const loadAvailableResources = async () => {
-    try {
-        const resources = await getAvailableResources()
-        availableResources.value = resources || []
-    } catch (error) {
-        logger.error('Erreur lors du chargement des ressources disponibles', error)
-        availableResources.value = []
-    }
-}
-
-/**
- * Gère l'ajout de ressources
- */
-const onAddResources = async () => {
-    try {
-        const validLines = resourceLines.value.filter(line => line.resource && line.quantity > 0)
-
-        if (validLines.length === 0) {
-            alert('Veuillez sélectionner au moins une ressource avec une quantité valide.')
-            return
-        }
-
-        const resourcesToAssign = validLines.map(line => ({
-            resource_id: parseInt(line.resource),
-            quantity: line.quantity
-        }))
-
-        await assignResourceToInventory(resourcesToAssign)
-
-        showAddResourceModal.value = false
-        resourceLines.value = [{ resource: '', quantity: 1 }]
-
-        await loadDetailData()
-    } catch (error) {
-        logger.error('Erreur lors de l\'ajout des ressources', error)
-    }
-}
-
-/**
- * Ouvre le modal d'ajout de ressources
- */
-const openAddResourceModal = async () => {
-    // Ne charger les ressources que si elles ne sont pas déjà chargées
-    if (resourceStore.getResources.length === 0) {
-        await resourceStore.fetchResources()
-    }
-    await loadAvailableResources()
-    resourceLines.value = [{ resource: '', quantity: 1 }]
-    showAddResourceModal.value = true
-}
-
-
-/**
- * Récupère le nom d'utilisateur d'une équipe
- *
- * @param team - Objet équipe
- * @returns Nom d'utilisateur
- */
-const getTeamUserName = (team: any): string => {
-    if (team.user) {
-        return team.user
-    }
-    if (team.userObject?.username) {
-        return team.userObject.username
-    }
-    return 'Utilisateur inconnu'
-}
-
-/**
- * Navigue vers la page de planning d'un warehouse
- *
- * @param warehouseName - Nom du warehouse
- */
-const goToWarehousePlanning = (warehouseName: string) => {
-    router.push({
-        name: 'inventory-planning',
-        params: {
-            reference: inventoryReference,
-            warehouse: warehouseName
-        }
-    })
-}
-
-/**
- * Navigue vers la page d'affectation d'un warehouse
- *
- * @param warehouseName - Nom du warehouse
- */
-const goToWarehouseAffectation = (warehouseName: string) => {
-    router.push({
-        name: 'inventory-affecter',
-        params: {
-            reference: inventoryReference,
-            warehouse: warehouseName
-        }
-    })
-}
-
-/**
- * Navigue vers la page des résultats d'un inventaire
- *
- * @param warehouseName - Nom du warehouse (optionnel, pour filtrage)
- */
-const goToWarehouseResults = (warehouseName?: string) => {
-    router.push({
-        name: 'inventory-results',
-        params: {
-            reference: inventoryReference
-        },
-        ...(warehouseName ? { query: { warehouse: warehouseName } } : {})
-    })
-}
-
-/**
- * Navigue vers la page de suivi des jobs d'un inventaire
- *
- * @param warehouseName - Nom du warehouse (optionnel, pour filtrage)
- */
-const goToWarehouseTracking = (warehouseName?: string) => {
-    router.push({
-        name: 'inventory-job-tracking',
-        params: {
-            reference: inventoryReference
-        },
-        ...(warehouseName ? { query: { warehouse: warehouseName } } : {})
-    })
-}
-
-/**
- * Navigue vers la page de monitoring d'un warehouse
- *
- * @param warehouseName - Nom du warehouse
- */
-const goToWarehouseMonitoring = (warehouseName: string) => {
-    router.push({
-        name: 'inventory-monitoring',
-        params: {
-            reference: inventoryReference,
-            warehouse: warehouseName
-        }
-    })
-}
-
 // ===== LIFECYCLE =====
-
-/**
- * Initialisation au montage du composant
- */
 onMounted(async () => {
-    // Ne charger les ressources que si elles ne sont pas déjà chargées
     if (resourceStore.getResources.length === 0) {
         await resourceStore.fetchResources()
     }
-    // Initialiser l'inventaire (récupération de l'ID puis chargement des détails)
     await initializeInventory()
 })
 </script>

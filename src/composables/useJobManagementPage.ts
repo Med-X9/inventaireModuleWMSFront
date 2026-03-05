@@ -1,6 +1,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { alertService } from '@/services/alertService'
-import type { DataTableColumn, ColumnDataType } from '@/components/DataTable/types/dataTable'
+import type { DataTableColumn, ColumnDataType } from '@SMATCH-Digital-dev/vue-system-design'
 
 // Types
 interface Job {
@@ -55,7 +55,7 @@ export function useJobManagementPage() {
     // Pagination
     const pagination = ref<PaginationConfig>({
         page: 1,
-        pageSize: 20,
+        pageSize: 50,
         total: 0
     })
 

@@ -3,7 +3,7 @@ import { useAppStore } from '@/stores/index';
 import appSetting from '@/app-setting';
 import { getTokens } from '@/utils/cookieUtils';
 
-import HomeView from '../views/index.vue';
+import HomeView from '@/views/index.vue';
 
 const routes: RouteRecordRaw[] = [
     // Dashboard
@@ -18,160 +18,163 @@ const routes: RouteRecordRaw[] = [
     {
         path: '/inventory/create',
         name: 'inventory-create',
-        component: () =>
-            import(/* webpackChunkName: "inventory-create" */ '../views/Inventory/InventoryCreation.vue'),
+        component: () => import(/* webpackChunkName: "inventory-create" */ '@/views/Inventory/InventoryCreation.vue'),
         meta: { requiresAuth: true },
     },
     {
         path: '/inventory/management',
         name: 'inventory-list',
-        component: () =>
-            import(/* webpackChunkName: "inventory-list" */ '../views/Inventory/Management/InventoryManagement.vue'),
+        component: () => import(/* webpackChunkName: "inventory-list" */ '@/views/Inventory/Management/InventoryManagement.vue'),
         meta: { requiresAuth: true },
     },
     {
-        path: '/inventory/:reference/results',
+        path: '/inventory/:reference/:warehouse/results',
         name: 'inventory-results',
         component: () => import(/* webpackChunkName: "inventory-results" */ '@/views/Inventory/Results/InventoryResults.vue'),
-        props: route => ({ reference: route.params.reference as string }),
+        props: route => ({
+            reference: route.params.reference as string,
+            warehouse: route.params.warehouse as string,
+        }),
         meta: { requiresAuth: true },
     },
     {
-        path: '/inventory/:reference/job-tracking',
+        path: '/inventory/:reference/:warehouse/job-tracking',
         name: 'inventory-job-tracking',
         component: () => import(/* webpackChunkName: "inventory-job-tracking" */ '@/views/Inventory/Results/JobTracking.vue'),
-        props: route => ({ reference: route.params.reference as string }),
-        meta: { requiresAuth: true }
+        props: route => ({
+            reference: route.params.reference as string,
+            warehouse: route.params.warehouse as string,
+        }),
+        meta: { requiresAuth: true },
     },
     {
         path: '/inventory/:reference/import-tracking',
         name: 'inventory-import-tracking',
         component: () => import(/* webpackChunkName: "inventory-import-tracking" */ '@/views/Inventory/ImportTracking.vue'),
         props: route => ({ reference: route.params.reference as string }),
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true },
     },
-
     {
         path: '/inventory/:reference/detail',
         name: 'inventory-detail',
-        component: () => import('@/views/Inventory/InventoryDetail.vue'),
+        component: () => import(/* webpackChunkName: "inventory-detail" */ '@/views/Inventory/InventoryDetail.vue'),
         props: route => ({ reference: route.params.reference as string }),
         meta: { requiresAuth: true },
     },
-
     {
         path: '/inventory/:reference/:warehouse/planning',
         name: 'inventory-planning',
-        component: () =>
-            import(/* webpackChunkName: "inventory-planning" */ '../views/Inventory/Planning.vue'),
+        component: () => import(/* webpackChunkName: "inventory-planning" */ '@/views/Inventory/Planning.vue'),
         props: route => ({
             reference: route.params.reference as string,
-            warehouse: route.params.warehouse as string
+            warehouse: route.params.warehouse as string,
         }),
         meta: { requiresAuth: true },
     },
     {
         path: '/inventory/:reference/:warehouse/affecter',
         name: 'inventory-affecter',
-        component: () =>
-            import(/* webpackChunkName: "inventory-affecter" */ '../views/Inventory/Affecter.vue'),
+        component: () => import(/* webpackChunkName: "inventory-affecter" */ '@/views/Inventory/Affecter.vue'),
         props: route => ({
             reference: route.params.reference as string,
-            warehouse: route.params.warehouse as string
+            warehouse: route.params.warehouse as string,
+        }),
+        meta: { requiresAuth: true },
+    },
+    {
+        path: '/inventory/:reference/:warehouse/reaffectation',
+        name: 'inventory-reaffectation',
+        component: () => import(/* webpackChunkName: "inventory-reaffectation" */ '@/views/Inventory/Reaffectation.vue'),
+        props: route => ({
+            reference: route.params.reference as string,
+            warehouse: route.params.warehouse as string,
         }),
         meta: { requiresAuth: true },
     },
     {
         path: '/inventory/:reference/edit',
         name: 'inventory-edit',
-        component: () => import('../views/Inventory/InventoryCreation.vue'),
+        component: () => import(/* webpackChunkName: "inventory-edit" */ '@/views/Inventory/InventoryCreation.vue'),
         props: route => ({ reference: route.params.reference as string }),
         meta: { requiresAuth: true },
     },
-
     {
         path: '/inventory/:reference/planning-management',
         name: 'planning-management',
-        component: () =>
-            import(/* webpackChunkName: "planning-management" */ '../views/Inventory/PlanningManagement.vue'),
+        component: () => import(/* webpackChunkName: "planning-management" */ '@/views/Inventory/PlanningManagement.vue'),
         props: route => ({ reference: route.params.reference as string }),
         meta: { requiresAuth: true },
     },
     {
         path: '/inventory/launch-jobs',
         name: 'jobs-launch',
-        component: () =>
-            import(/* webpackChunkName: "jobs-launch" */ '../views/Inventory/LaunchJobs.vue'),
+        component: () => import(/* webpackChunkName: "jobs-launch" */ '@/views/Inventory/LaunchJobs.vue'),
         meta: { requiresAuth: true },
     },
     {
         path: '/inventory/grid-demo',
         name: 'inventory-grid-demo',
-        component: () =>
-            import(/* webpackChunkName: "inventory-grid-demo" */ '../views/Inventory/InventoryGridDemo.vue'),
+        component: () => import(/* webpackChunkName: "inventory-grid-demo" */ '@/views/Inventory/InventoryGridDemo.vue'),
         meta: { requiresAuth: true },
     },
     {
         path: '/inventory/job-management',
         name: 'inventory-job-management',
-        component: () =>
-            import(/* webpackChunkName: "inventory-job-management" */ '../views/Inventory/JobManagement.vue'),
+        component: () => import(/* webpackChunkName: "inventory-job-management" */ '@/views/Inventory/JobManagement.vue'),
         meta: { requiresAuth: true },
     },
     {
         path: '/inventory/:inventoryId/:warehouseId/monitoring/pivot',
         name: 'inventory-monitoring-pivot',
-        component: () =>
-            import(/* webpackChunkName: "inventory-monitoring-pivot" */ '../views/Inventory/MonitoringPivotTable.vue'),
+        component: () => import(/* webpackChunkName: "inventory-monitoring-pivot" */ '@/views/Inventory/MonitoringPivotTable.vue'),
         props: route => ({
             inventoryId: route.params.inventoryId as string,
-            warehouseId: route.params.warehouseId as string
+            warehouseId: route.params.warehouseId as string,
         }),
         meta: { requiresAuth: true, layout: 'monitoring' },
     },
     {
         path: '/inventory/:reference/:warehouse/monitoring',
         name: 'inventory-monitoring',
-        component: () =>
-            import(/* webpackChunkName: "inventory-monitoring" */ '../views/Inventory/Monitoring.vue'),
+        component: () => import(/* webpackChunkName: "inventory-monitoring" */ '@/views/Inventory/Monitoring.vue'),
         props: route => ({
             inventoryReference: route.params.reference as string,
-            warehouseReference: route.params.warehouse as string
+            warehouseReference: route.params.warehouse as string,
         }),
         meta: { requiresAuth: true, layout: 'monitoring' },
     },
 
-    // Auth (login)
+    // Auth
     {
         path: '/auth/login',
         name: 'login',
-        component: () => import(/* webpackChunkName: "auth-login" */ '../views/auth/login.vue'),
+        component: () => import(/* webpackChunkName: "auth-login" */ '@/views/auth/login.vue'),
         meta: { requiresAuth: false, layout: 'auth' },
     },
 
-    // Error pages
+    // Erreurs
     {
         path: '/401',
         name: 'error-401',
-        component: () => import(/* webpackChunkName: "error-401" */ '../views/errors/Error401.vue'),
+        component: () => import(/* webpackChunkName: "error-401" */ '@/views/errors/Error401.vue'),
         meta: { requiresAuth: false, layout: 'auth' },
     },
     {
         path: '/403',
         name: 'error-403',
-        component: () => import(/* webpackChunkName: "error-403" */ '../views/errors/Error403.vue'),
+        component: () => import(/* webpackChunkName: "error-403" */ '@/views/errors/Error403.vue'),
         meta: { requiresAuth: false, layout: 'auth' },
     },
     {
         path: '/404',
         name: 'error-404',
-        component: () => import(/* webpackChunkName: "error-404" */ '../views/errors/Error404.vue'),
+        component: () => import(/* webpackChunkName: "error-404" */ '@/views/errors/Error404.vue'),
         meta: { requiresAuth: false, layout: 'auth' },
     },
     {
         path: '/:pathMatch(.*)*',
         name: 'not-found',
-        component: () => import(/* webpackChunkName: "error-404" */ '../views/errors/Error404.vue'),
+        component: () => import(/* webpackChunkName: "error-404" */ '@/views/errors/Error404.vue'),
         meta: { requiresAuth: false, layout: 'auth' },
     },
 ];

@@ -49,9 +49,6 @@
                 :rowDataProp="jobs"
                 :loading="loading"
                 :pagination="true"
-                :serverSidePagination="true"
-                :serverSideFiltering="true"
-                :serverSideSorting="true"
                 :currentPageProp="pagination.page"
                 :totalItemsProp="pagination.total"
                 :pageSizeProp="pagination.pageSize"
@@ -59,9 +56,7 @@
                 :enableFiltering="true"
                 :enableGlobalSearch="true"
                 storageKey="job_management_table"
-                @pagination-changed="onPaginationChanged"
-                @sort-changed="onSortChanged"
-                @filter-changed="onFilterChanged"
+                @query-model-changed="onPaginationChanged"
                 @selection-changed="onSelectionChanged"
             />
         </div>
@@ -129,7 +124,7 @@
 </template>
 
 <script setup lang="ts">
-import DataTable from '@/components/DataTable/DataTable.vue'
+import { DataTable } from '@SMATCH-Digital-dev/vue-system-design'
 import { useJobManagementPage } from '@/composables/useJobManagementPage'
 
 // Utilisation du composable pour toute la logique

@@ -1,22 +1,28 @@
 /**
- * Configuration Tailwind CSS - Source unique depuis src/theme
+ * Configuration Tailwind CSS - Utilise le thème du package @SMATCH-Digital-dev/vue-system-design
  * 
- * Cette configuration utilise les valeurs du thème TypeScript comme source unique de vérité
- * Les couleurs, polices et autres valeurs proviennent de src/theme/
+ * Cette configuration utilise les valeurs du thème du package comme source unique de vérité
+ * Les couleurs, polices et autres valeurs proviennent du package
  * 
  * @type {import('tailwindcss').Config}
  */
 const plugin = require('tailwindcss/plugin');
 
-// Import du thème depuis le bridge CommonJS
-const { colors: themeColors, typography: themeTypography } = require('./src/theme/theme.bridge.cjs');
+// Import du thème depuis le package (via bridge CommonJS)
+const { colors: themeColors, typography: themeTypography } = require('./src/theme/theme.package.cjs');
 
 const rotateX = plugin(function ({ addUtilities }) {
   addUtilities({ '.rotate-y-180': { transform: 'rotateY(180deg)' } });
 });
 
 module.exports = {
-  content: ['./index.html','./src/**/*.{vue,js,ts,jsx,tsx}'],
+    // Inclure le contenu du package @SMATCH-Digital-dev/vue-system-design
+    // pour que les classes Tailwind du package soient disponibles
+    content: [
+        './index.html',
+        './src/**/*.{vue,js,ts,jsx,tsx}',
+        './node_modules/@SMATCH-Digital-dev/vue-system-design/dist/**/*.{vue,js,ts,jsx,tsx}'
+    ],
   darkMode: 'class',
   theme: {
     container: { center: true },
@@ -155,7 +161,7 @@ module.exports = {
           dark: '#888ea8',
         },
       },
-      // ===== POLICES (Source: src/theme/typography.ts) =====
+            // ===== POLICES (Source: package @SMATCH-Digital-dev/vue-system-design) =====
       fontFamily: {
         heading: themeTypography.fontFamilies.heading,
         body: themeTypography.fontFamilies.body,
@@ -202,16 +208,16 @@ module.exports = {
   plugins: [
     require('@tailwindcss/forms')({ strategy: 'class' }),  
     require('@tailwindcss/typography'),
-    // Plugin pour exposer les variables CSS du thème
+        // Plugin pour exposer les variables CSS du thème du package
     function ({ addBase, theme }) {
-      // Récupérer les polices de manière sécurisée depuis le bridge (accessible via require)
-      const { typography: bridgeTypography } = require('./src/theme/theme.bridge.cjs');
+            // Récupérer les polices depuis le thème du package
+            const { typography: packageTypography } = require('./src/theme/theme.package.cjs');
       const getFontFamily = (key) => {
-        const bridgeFont = bridgeTypography.fontFamilies[key];
-        if (Array.isArray(bridgeFont)) {
-          return bridgeFont.join(', ');
+                const packageFont = packageTypography.fontFamilies[key];
+                if (Array.isArray(packageFont)) {
+                    return packageFont.join(', ');
         }
-        return bridgeFont || 'sans-serif';
+                return packageFont || 'sans-serif';
       };
 
       addBase({

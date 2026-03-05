@@ -1,227 +1,236 @@
 <template>
-    <div class="min-h-screen bg-app dark:bg-[#0e1726] p-8">
+    <div class="inventory-management min-h-screen bg-gray-50 dark:bg-[#0e1726]">
         <!-- En-tête -->
-        <div class="bg-card dark:bg-[#1b2e4b] rounded-[20px] p-8 mb-8 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] border border-border dark:border-gray-700">
-            <div class="flex justify-between items-center gap-8">
-                <div class="flex-1">
-                    <h1 class="flex items-center gap-4 text-[2.5rem] font-extrabold text-text-dark dark:text-white-light m-0 mb-2">
-                        <IconBox class="w-10 h-10 text-primary" />
-                        Gestion des inventaires
-                    </h1>
+        <Card class="mb-6 shadow-sm border-0 rounded-xl overflow-hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-6">
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 dark:bg-primary/20">
+                        <IconBox class="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white m-0">
+                            Gestion des inventaires
+                        </h1>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 m-0">
+                            Consultez, importez une image de stock ou ajoutez une planification
+                        </p>
+                    </div>
                 </div>
-                <div class="flex gap-4 items-center ml-auto">
-                    <button @click="redirectToAdd"
-                        class="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold cursor-pointer transition-all duration-300 whitespace-nowrap bg-gradient-to-br from-primary to-primary-light text-white shadow-[0_4px_12px_rgba(79,70,229,0.3)] hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(79,70,229,0.4)] disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none">
-                        <IconPlus class="w-4 h-4" />
-                        <span>Nouveau inventaire</span>
-                    </button>
-                </div>
+                <Button variant="primary" @click="redirectToAdd" class="flex items-center gap-2 shrink-0">
+                    <IconPlus class="w-4 h-4" />
+                    <span>Nouveau inventaire</span>
+                </Button>
             </div>
-        </div>
+        </Card>
 
         <!-- Table des inventaires -->
-        <div v-if="isDataLoaded" class="bg-card dark:bg-[#1b2e4b] rounded-[20px] p-8 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] border border-border dark:border-gray-700 overflow-hidden md:p-4">
+        <Card v-if="isDataLoaded" class="overflow-hidden rounded-xl shadow-sm border-0">
             <DataTable
                 :columns="columns"
-                :actions="actions"
                 :rowDataProp="inventories"
-                :serverSidePagination="false"
-                :pagination="true"
+                :actions="actions"
+                :enableVirtualScrolling="undefined"
+                :currentPageProp="pagination.current_page"
+                :totalPagesProp="pagination.total_pages"
+                :totalItemsProp="pagination.total"
+                :pageSizeProp="pagination.page_size"
+                @query-model-changed="(queryModel) => onInventoryTableEvent('query-model-changed', queryModel)"
                 storageKey="inventory-management"
-                @filter-changed="handleFilterChanged"
-                @pagination-changed="handlePaginationChanged"
-                @sort-changed="handleSortChanged"
-                @global-search-changed="handleGlobalSearchChanged"
+                ref="inventoryTableRef"
+                :loading="inventoryLoading"
+                :enableDynamicColumns="false"
+                :debounceFilter="300"
+                :debounceSearch="300"
+                :pagination="true"
+                :enableFiltering="true"
+                :enableGlobalSearch="true"
             />
-        </div>
+        </Card>
 
         <!-- État de chargement -->
-        <div v-else class="bg-card dark:bg-[#1b2e4b] rounded-[20px] p-8 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] border border-border dark:border-gray-700 overflow-hidden md:p-4 flex items-center justify-center min-h-[400px]">
-            <div class="flex flex-col items-center gap-4">
-                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                <p class="text-text-dark dark:text-white-light">Chargement des inventaires...</p>
+        <Card v-else class="overflow-hidden rounded-xl shadow-sm flex items-center justify-center min-h-[400px]">
+            <div class="flex flex-col items-center gap-4 py-12">
+                <div class="animate-spin rounded-full h-12 w-12 border-2 border-primary border-t-transparent"></div>
+                <p class="text-gray-600 dark:text-gray-300 font-medium">Chargement des inventaires...</p>
             </div>
-        </div>
+        </Card>
 
-        <!--
-        Modal d'import d'image de stock
-        Note: Cette modal complexe (200+ lignes) pourrait être extraite dans un composant séparé
-        pour améliorer la lisibilité et la maintenabilité du fichier principal
-        -->
-        <div v-if="showImportModal" class="fixed inset-0 z-50 overflow-y-auto">
-            <div class="flex items-stretch justify-center px-0 h-full text-center sm:block sm:p-0">
-                <div class="fixed inset-0 bg-text-dark opacity-75" @click="closeImportModalWithCleanup"></div>
-                <div class="relative w-full h-full">
-                    <InventoryFullscreenModal
-                        title="Import de stock image"
-                        :inventory="currentImportInventory"
-                        :close-disabled="isImporting"
-                        :format-date="formatDate"
-                        @close="closeImportModalWithCleanup"
-                    >
-                        <template #main>
-                            <FileInputUpload
-                                :is-dragging="isDragging"
-                                :is-uploading="isImporting"
-                                :selected-file="selectedFile"
-                                :upload-progress="uploadProgress"
-                                uploading-label="Import en cours..."
-                                empty-title="Glissez-déposez votre fichier ici"
-                                empty-description="ou"
-                                browse-button-label="Parcourir les fichiers"
-                                accept-description="Formats acceptés : .xlsx, .xls"
-                                :file-type-label="selectedFile ? getFileType(selectedFile.name) : ''"
-                                @browse-click="() => (fileInput as any)?.click()"
-                                @dragover="handleDragOver"
-                                @dragleave="handleDragLeave"
-                                @drop="handleDrop"
-                                @clear-file="() => (selectedFile = null)"
-                            />
-
-                            <!-- Messages de feedback -->
-                            <div v-if="importSuccess && importSuccessMessage" class="success-message">
+        <!-- Modal d'import d'image de stock (Dialog fullscreen) -->
+        <Dialog
+            v-model="showImportModal"
+            :title="importModalTitle"
+            :size="dialogSizeFullscreen"
+            class="inventory-management-dialog-fullscreen"
+            @update:model-value="(v) => !v && closeImportModalWithCleanup()"
+        >
+            <div class="dialog-fullscreen-content">
+                <div v-if="currentImportInventory" class="inventory-context-bar">
+                    <span class="font-semibold text-gray-800 dark:text-gray-200">{{ currentImportInventory.label }}</span>
+                    <span v-if="currentImportInventory.date" class="text-sm text-gray-600 dark:text-gray-400">
+                        {{ formatDate(currentImportInventory.date) }}
+                    </span>
+                </div>
+                <div class="dialog-fullscreen-grid">
+                    <div class="dialog-main">
+                        <FileInputUpload
+                            :is-dragging="isDragging"
+                            :is-uploading="isImporting"
+                            :selected-file="selectedFile"
+                            :upload-progress="uploadProgress"
+                            uploading-label="Import en cours..."
+                            empty-title="Glissez-déposez votre fichier ici"
+                            empty-description="ou"
+                            browse-button-label="Parcourir les fichiers"
+                            accept-description="Formats acceptés : .xlsx, .xls"
+                            :file-type-label="selectedFile ? getFileType(selectedFile.name) : ''"
+                            @browse-click="() => (fileInput as any)?.click()"
+                            @dragover="handleDragOver"
+                            @dragleave="handleDragLeave"
+                            @drop="handleDrop"
+                            @clear-file="() => (selectedFile = null)"
+                        />
+                        <Alert v-if="importSuccess && importSuccessMessage" variant="success" class="mt-4">
+                            <template #icon>
                                 <IconCircleCheck class="w-5 h-5" />
-                                <div>
-                                    <h4>Import réussi</h4>
-                                    <p>{{ importSuccessMessage }}</p>
-                                </div>
+                            </template>
+                            <div>
+                                <h4 class="text-base font-semibold m-0 mb-1">Import réussi</h4>
+                                <p class="text-sm m-0">{{ importSuccessMessage }}</p>
                             </div>
-
-                            <div v-if="importError && importErrorDetails" class="error-message">
+                        </Alert>
+                        <Alert v-if="importError && importErrorDetails" variant="error" class="mt-4">
+                            <template #icon>
                                 <IconXCircle class="w-5 h-5" />
-                                <div>
-                                    <h4>Erreur lors de l'import</h4>
-                                    <p>{{ importErrorDetails.message }}</p>
-                                    <!-- Détails d'erreur simplifiés pour la lisibilité -->
-                                    <div v-if="importErrorDetails.errors" class="error-details">
-                                        {{ importErrorDetails.errors.length }} erreur(s) de validation
-                                    </div>
+                            </template>
+                            <div>
+                                <h4 class="text-base font-semibold m-0 mb-1">Erreur lors de l'import</h4>
+                                <p class="text-sm m-0">{{ importErrorDetails.message }}</p>
+                                <div v-if="importErrorDetails.errors" class="text-xs font-semibold mt-2">
+                                    {{ importErrorDetails.errors.length }} erreur(s) de validation
                                 </div>
                             </div>
-                        </template>
-
-                        <template #sidebar>
-                            <div class="instructions">
-                                <h4>Instructions d'import</h4>
-                                <ul>
-                                    <li>Format Excel requis (.xlsx, .xls)</li>
-                                    <li>Validation des données obligatoire</li>
-                                    <li>Import peut prendre plusieurs minutes</li>
-                                </ul>
-                            </div>
-
-                            <div class="actions">
-                                <button @click="closeImportModalWithCleanup" :disabled="isImporting">
-                                    Annuler
-                                </button>
-                                <button
-                                    @click="() => selectedFile && processImportExcelWithProgress(selectedFile)"
-                                    :disabled="!selectedFile || isImporting"
-                                >
-                                    {{ isImporting ? 'Import en cours...' : 'Lancer l\'import' }}
-                                </button>
-                            </div>
-                        </template>
-                    </InventoryFullscreenModal>
-
-                    <input type="file" ref="fileInput" @change="handleFileChange" accept=".xlsx,.xls" class="hidden" />
+                        </Alert>
+                    </div>
+                    <div class="dialog-sidebar">
+                        <div class="instructions">
+                            <h4>Instructions d'import</h4>
+                            <ul>
+                                <li>Format Excel requis (.xlsx, .xls)</li>
+                                <li>Validation des données obligatoire</li>
+                                <li>Import peut prendre plusieurs minutes</li>
+                            </ul>
+                        </div>
+                        <div class="actions">
+                            <Button variant="secondary" @click="closeImportModalWithCleanup" :disabled="isImporting" class="w-full">
+                                Annuler
+                            </Button>
+                            <Button
+                                variant="primary"
+                                @click="() => selectedFile && processImportExcelWithProgress(selectedFile)"
+                                :disabled="!selectedFile || isImporting"
+                                class="w-full"
+                            >
+                                {{ isImporting ? 'Import en cours...' : 'Lancer l\'import' }}
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
+            <input type="file" ref="fileInput" @change="handleFileChange" accept=".xlsx,.xls" class="hidden" />
+        </Dialog>
 
-        <!--
-        Modal d'ajout de planification
-        Note: Cette modal complexe pourrait aussi être extraite dans un composant séparé
-        -->
-        <div v-if="showPlanningModal" class="fixed inset-0 z-50 overflow-y-auto">
-            <div class="flex items-stretch justify-center px-0 h-full text-center sm:block sm:p-0">
-                <div class="fixed inset-0 bg-text-dark opacity-75" @click="closePlanningModal"></div>
-                <div class="relative w-full h-full">
-                    <InventoryFullscreenModal
-                        title="Ajouter planification"
-                        :inventory="currentPlanningInventory"
-                        :close-disabled="isUploadingPlanning"
-                        :format-date="formatDate"
-                        @close="closePlanningModal"
-                    >
-                        <template #main>
-                            <FileInputUpload
-                                :is-dragging="isDraggingPlanning"
-                                :is-uploading="isUploadingPlanning"
-                                :selected-file="planningFile"
-                                :upload-progress="planningUploadProgress"
-                                uploading-label="Upload en cours..."
-                                empty-title="Glissez-déposez votre fichier de planification ici"
-                                empty-description="ou"
-                                browse-button-label="Parcourir les fichiers"
-                                accept-description="Formats acceptés : .xlsx, .xls"
-                                :file-type-label="planningFile ? getFileType(planningFile.name) : ''"
-                                @browse-click="() => (planningFileInput as any)?.click()"
-                                @dragover="handlePlanningDragOver"
-                                @dragleave="handlePlanningDragLeave"
-                                @drop="handlePlanningDrop"
-                                @clear-file="() => (planningFile = null)"
-                            />
-
-                            <!-- Messages de feedback simplifiés -->
-                            <div v-if="planningSuccess && planningSuccessMessage" class="success-message">
+        <!-- Modal d'ajout de planification (Dialog fullscreen) -->
+        <Dialog
+            v-model="showPlanningModal"
+            :title="planningModalTitle"
+            :size="dialogSizeFullscreen"
+            class="inventory-management-dialog-fullscreen"
+            @update:model-value="(v) => !v && closePlanningModal()"
+        >
+            <div class="dialog-fullscreen-content">
+                <div v-if="currentPlanningInventory" class="inventory-context-bar">
+                    <span class="font-semibold text-gray-800 dark:text-gray-200">{{ currentPlanningInventory.label }}</span>
+                    <span v-if="currentPlanningInventory.date" class="text-sm text-gray-600 dark:text-gray-400">
+                        {{ formatDate(currentPlanningInventory.date) }}
+                    </span>
+                </div>
+                <div class="dialog-fullscreen-grid">
+                    <div class="dialog-main">
+                        <FileInputUpload
+                            :is-dragging="isDraggingPlanning"
+                            :is-uploading="isUploadingPlanning"
+                            :selected-file="planningFile"
+                            :upload-progress="planningUploadProgress"
+                            uploading-label="Upload en cours..."
+                            empty-title="Glissez-déposez votre fichier de planification ici"
+                            empty-description="ou"
+                            browse-button-label="Parcourir les fichiers"
+                            accept-description="Formats acceptés : .xlsx, .xls"
+                            :file-type-label="planningFile ? getFileType(planningFile.name) : ''"
+                            @browse-click="() => (planningFileInput as any)?.click()"
+                            @dragover="handlePlanningDragOver"
+                            @dragleave="handlePlanningDragLeave"
+                            @drop="handlePlanningDrop"
+                            @clear-file="() => (planningFile = null)"
+                        />
+                        <Alert v-if="planningSuccess && planningSuccessMessage" variant="success" class="mt-4">
+                            <template #icon>
                                 <IconCircleCheck class="w-5 h-5" />
-                                <div>
-                                    <h4>Planification ajoutée avec succès</h4>
-                                    <p>{{ planningSuccessMessage }}</p>
-                                </div>
+                            </template>
+                            <div>
+                                <h4 class="text-base font-semibold m-0 mb-1">Planification ajoutée avec succès</h4>
+                                <p class="text-sm m-0">{{ planningSuccessMessage }}</p>
                             </div>
-
-                            <div v-if="planningInfoMessage" class="info-message">
+                        </Alert>
+                        <Alert v-if="planningInfoMessage" variant="info" class="mt-4">
+                            <template #icon>
                                 <IconLoader class="w-5 h-5 animate-spin" />
-                                <div>
-                                    <h4>Import en cours</h4>
-                                    <p>{{ planningInfoMessage }}</p>
-                                </div>
+                            </template>
+                            <div>
+                                <h4 class="text-base font-semibold m-0 mb-1">Import en cours</h4>
+                                <p class="text-sm m-0">{{ planningInfoMessage }}</p>
                             </div>
-
-                            <div v-if="planningError" class="error-message">
+                        </Alert>
+                        <Alert v-if="planningError" variant="error" class="mt-4">
+                            <template #icon>
                                 <IconXCircle class="w-5 h-5" />
-                                <div>
-                                    <h4>Erreur</h4>
-                                    <p>{{ planningError }}</p>
-                                    <div v-if="planningErrorDetails?.length" class="error-details">
-                                        {{ planningErrorDetails.length }} erreur(s) détaillées
-                                    </div>
+                            </template>
+                            <div>
+                                <h4 class="text-base font-semibold m-0 mb-1">Erreur</h4>
+                                <p class="text-sm m-0">{{ planningError }}</p>
+                                <div v-if="planningErrorDetails?.length" class="text-xs font-semibold mt-2">
+                                    {{ planningErrorDetails.length }} erreur(s) détaillées
                                 </div>
                             </div>
-                        </template>
-
-                        <template #sidebar>
-                            <div class="instructions">
-                                <h4>Instructions</h4>
-                                <ul>
-                                    <li>Format Excel requis (.xlsx, .xls)</li>
-                                    <li>Validation des données obligatoire</li>
-                                    <li>Upload peut prendre plusieurs minutes</li>
-                                </ul>
-                            </div>
-
-                            <div class="actions">
-                                <button @click="closePlanningModal" :disabled="isUploadingPlanning">
-                                    Annuler
-                                </button>
-                                <button
-                                    @click="handlePlanningUpload"
-                                    :disabled="!planningFile || isUploadingPlanning"
-                                >
-                                    {{ isUploadingPlanning ? 'Upload en cours...' : 'Lancer l\'upload' }}
-                                </button>
-                            </div>
-                        </template>
-                    </InventoryFullscreenModal>
-
-                    <input type="file" ref="planningFileInput" @change="handlePlanningFileChange" accept=".xlsx,.xls" class="hidden" />
+                        </Alert>
+                    </div>
+                    <div class="dialog-sidebar">
+                        <div class="instructions">
+                            <h4>Instructions</h4>
+                            <ul>
+                                <li>Format Excel requis (.xlsx, .xls)</li>
+                                <li>Validation des données obligatoire</li>
+                                <li>Upload peut prendre plusieurs minutes</li>
+                            </ul>
+                        </div>
+                        <div class="actions">
+                            <Button variant="secondary" @click="closePlanningModal" :disabled="isUploadingPlanning" class="w-full">
+                                Annuler
+                            </Button>
+                            <Button
+                                variant="primary"
+                                @click="handlePlanningUpload"
+                                :disabled="!planningFile || isUploadingPlanning"
+                                class="w-full"
+                            >
+                                {{ isUploadingPlanning ? 'Upload en cours...' : 'Lancer l\'upload' }}
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-
-
+            <input type="file" ref="planningFileInput" @change="handlePlanningFileChange" accept=".xlsx,.xls" class="hidden" />
+        </Dialog>
     </div>
 </template>
 
@@ -240,20 +249,17 @@
 
 // ===== IMPORTS =====
 import { onMounted, ref, computed } from 'vue'
-import DataTable from '@/components/DataTable/DataTable.vue'
-import InventoryFullscreenModal from '@/components/Inventory/InventoryFullscreenModal.vue'
+// Composants du package @SMATCH-Digital-dev/vue-system-design
+import { DataTable, Card, Button, Alert, Dialog } from '@SMATCH-Digital-dev/vue-system-design'
 import FileInputUpload from '@/components/Upload/FileInputUpload.vue'
 import { useInventoryManagement } from '@/composables/useInventoryManagement'
 
 // ===== IMPORTS ICÔNES =====
 import IconBox from '@/components/icon/icon-box.vue'
 import IconPlus from '@/components/icon/icon-plus.vue'
-import IconX from '@/components/icon/icon-x.vue'
 import IconLoader from '@/components/icon/icon-loader.vue'
 import IconXCircle from '@/components/icon/icon-x-circle.vue'
-import IconInfoCircle from '@/components/icon/icon-info-circle.vue'
 import IconCircleCheck from '@/components/icon/icon-circle-check.vue'
-import IconDownload from '@/components/icon/icon-download.vue'
 
 // ===== COMPOSABLES =====
 
@@ -264,11 +270,11 @@ import IconDownload from '@/components/icon/icon-download.vue'
 const {
     columns,
     actions,
+    pagination,
+    inventoryTableRef,
+    inventoryLoading,
     redirectToAdd,
-    handlePaginationChanged,
-    handleSortChanged,
-    handleFilterChanged,
-    handleGlobalSearchChanged,
+    onInventoryTableEvent,
     handleCellValueChanged,
     handleExportCsv,
     handleExportExcel,
@@ -311,26 +317,19 @@ const {
     loadInventories
 } = useInventoryManagement()
 
-// ===== COMPUTED =====
-
-/**
- * État de débogage pour le bouton d'upload
- */
-const uploadButtonDebug = computed(() => {
-    const hasFile = !!planningFile.value
-    const isUploading = isUploadingPlanning.value
-    const isDisabled = !hasFile || isUploading
-
-    console.log('[DEBUG] uploadButtonDebug:', {
-        planningFile: planningFile.value,
-        hasFile,
-        isUploading,
-        isDisabled,
-        currentPlanningInventory: currentPlanningInventory.value
-    })
-
-    return { hasFile, isUploading, isDisabled }
-})
+// Titres des modals fullscreen
+const importModalTitle = computed(() =>
+    currentImportInventory.value
+        ? `Import de stock image — ${currentImportInventory.value.label}`
+        : 'Import de stock image'
+)
+const planningModalTitle = computed(() =>
+    currentPlanningInventory.value
+        ? `Ajouter planification — ${currentPlanningInventory.value.label}`
+        : 'Ajouter planification'
+)
+/** Taille fullscreen pour Dialog (assertion de type pour accepter fullscreen) */
+const dialogSizeFullscreen = 'fullscreen' as 'xl'
 
 // ===== HANDLERS =====
 
@@ -338,23 +337,12 @@ const uploadButtonDebug = computed(() => {
  * Handler pour lancer l'upload de planification
  */
 const handlePlanningUpload = async () => {
-    console.log('[handlePlanningUpload] >>>>>>>>>>>>> CLIC SUR LE BOUTON DETECTE <<<<<<<<<<<<<')
-    console.log('[handlePlanningUpload] Début de la fonction')
-    console.log('[handlePlanningUpload] planningFile:', planningFile.value)
-    console.log('[handlePlanningUpload] planningFile exists:', !!planningFile.value)
-    console.log('[handlePlanningUpload] isUploadingPlanning:', isUploadingPlanning.value)
-    console.log('[handlePlanningUpload] currentPlanningInventory:', currentPlanningInventory.value)
-
     if (planningFile.value) {
-        console.log('[handlePlanningUpload] Appel de processPlanningUpload avec le fichier:', planningFile.value.name)
         try {
             await processPlanningUpload(planningFile.value)
-            console.log('[handlePlanningUpload] processPlanningUpload terminé avec succès')
-        } catch (error) {
-            console.error('[handlePlanningUpload] Erreur lors de processPlanningUpload:', error)
+        } catch {
+            // Erreur gérée dans le composable / alerts
         }
-    } else {
-        console.warn('[handlePlanningUpload] Aucun fichier sélectionné')
     }
 }
 
@@ -403,96 +391,155 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Messages de feedback */
-.success-message {
-    @apply flex gap-3 bg-green-50 dark:bg-green-900/30 border-2 border-green-200 dark:border-green-800 rounded-xl p-3.5 mt-2 flex-shrink-0;
+.inventory-management {
+    padding: 1.5rem;
+}
+@media (min-width: 768px) {
+    .inventory-management {
+        padding: 2rem;
+    }
 }
 
-.success-message h4 {
-    @apply text-base font-semibold text-green-900 dark:text-green-100 m-0 mb-1;
+.dialog-fullscreen-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-height: 60vh;
+    padding: 0.5rem;
+}
+@media (min-width: 1024px) {
+    .dialog-fullscreen-content {
+        padding: 1rem;
+    }
 }
 
-.success-message p {
-    @apply text-sm text-green-700 dark:text-green-300 m-0 font-medium leading-relaxed;
+.inventory-context-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0.75rem 1rem;
+    background: var(--color-bg-subtle, #f3f4f6);
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+}
+.dark .inventory-context-bar {
+    background: rgba(30, 41, 59, 0.5);
 }
 
-.info-message {
-    @apply flex gap-3 bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-200 dark:border-blue-800 rounded-xl p-3.5 mt-2 flex-shrink-0;
+.dialog-fullscreen-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    flex: 1;
+    min-height: 0;
+}
+@media (min-width: 1024px) {
+    .dialog-fullscreen-grid {
+        grid-template-columns: 1fr 360px;
+        gap: 1.5rem;
+    }
 }
 
-.info-message h4 {
-    @apply text-base font-semibold text-blue-900 dark:text-blue-100 m-0 mb-1;
+.dialog-main,
+.dialog-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 0;
 }
 
-.error-message {
-    @apply flex gap-3 bg-red-50 dark:bg-red-900/30 border-2 border-red-200 dark:border-red-800 rounded-xl p-3.5 mt-2 flex-shrink-0;
+.dialog-sidebar {
+    gap: 1rem;
 }
 
-.error-message h4 {
-    @apply text-base font-semibold text-red-900 dark:text-red-100 m-0 mb-1;
-}
-
-.error-message p {
-    @apply text-sm text-red-700 dark:text-red-300 m-0 font-medium leading-relaxed;
-}
-
-.error-details {
-    @apply text-xs font-semibold text-red-900 dark:text-red-100 m-0 mb-2;
-}
-
-/* Instructions */
 .instructions {
-    @apply bg-gradient-to-br from-blue-50 to-blue-100/60 dark:from-blue-900/30 dark:to-slate-800 border-2 border-blue-200/80 dark:border-blue-800 rounded-xl p-3.5 shadow-md flex-shrink-0 max-h-fit;
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 0.75rem;
+    padding: 1rem 1.25rem;
+    flex-shrink: 0;
+}
+.dark .instructions {
+    background: linear-gradient(135deg, rgba(30, 58, 138, 0.4) 0%, rgba(30, 64, 175, 0.3) 100%);
+    border-color: rgba(96, 165, 250, 0.3);
 }
 
 .instructions h4 {
-    @apply text-sm font-semibold m-0 dark:text-blue-100;
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem 0;
+    color: #1e40af;
+}
+.dark .instructions h4 {
+    color: #93c5fd;
 }
 
 .instructions ul {
-    @apply list-none p-0 m-0 flex flex-col gap-2;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
 }
 
 .instructions li {
-    @apply flex items-start gap-2 p-2 bg-white/60 dark:bg-slate-800/50 rounded-md transition-all duration-200;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    color: #1e3a8a;
+}
+.dark .instructions li {
+    background: rgba(15, 23, 42, 0.5);
+    color: #bfdbfe;
 }
 
-/* Actions */
 .actions {
-    @apply bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-lg p-3 shadow-md flex-shrink-0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: var(--color-bg-card, #fff);
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: 0.5rem;
+    flex-shrink: 0;
+}
+.dark .actions {
+    background: rgba(30, 41, 59, 0.6);
+    border-color: rgba(71, 85, 105, 0.5);
 }
 
-.actions h4 {
-    @apply text-sm font-semibold text-slate-900 dark:text-slate-100 m-0 mb-3 pb-2 border-b border-slate-200 dark:border-slate-700;
+.actions :deep(button) {
+    justify-content: center;
 }
 
-.actions {
-    @apply flex flex-col gap-2;
+/* Dialog fullscreen : plein écran (100vw x 100vh) */
+.inventory-management-dialog-fullscreen :deep([role="dialog"]),
+.inventory-management-dialog-fullscreen :deep(.dialog-panel) {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
 }
-
-.actions button {
-    @apply w-full justify-center inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm;
+.inventory-management-dialog-fullscreen :deep([role="dialog"] > div),
+.inventory-management-dialog-fullscreen :deep(.dialog-panel > div) {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
 }
-
-.actions button:first-child {
-    @apply bg-slate-600 text-white hover:bg-slate-700;
-}
-
-.actions button:last-child {
-    @apply bg-gradient-to-r from-primary to-primary-light text-white hover:from-primary-dark hover:to-primary;
-}
-
-/* Transitions */
-.slide-up-enter-active,
-.slide-up-leave-active {
-    @apply transition-all duration-300;
-}
-
-.slide-up-enter-from {
-    @apply opacity-0 transform translate-y-5;
-}
-
-.slide-up-leave-to {
-    @apply opacity-0 -translate-y-2;
+.inventory-management-dialog-fullscreen :deep(.fixed.inset-0) {
+    position: fixed !important;
+    inset: 0 !important;
 }
 </style>

@@ -25,26 +25,7 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Select magasin déplacé dans le header -->
-                    <div class="w-full md:w-80 lg:w-96">
-                        <label class="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-2">
-                            <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                        Magasin
-                    </label>
-                    <SelectField
-                        v-model="selectedStore"
-                        :options="stores"
-                        :clearable="false"
-                        :searchable="true"
-                        placeholder="Rechercher un magasin..."
-                        :disabled="loading || stores.length === 0"
-                            class="w-full"
-                        searchPlaceholder="Tapez pour rechercher..."
-                        @update:modelValue="onStoreChanged"
-                    />
-                    </div>
+                    <!-- Le magasin est maintenant déterminé par la référence dans l'URL (?warehouse=...) -->
                 </div>
 
                 <!-- Boutons d'action : regroupés avec ButtonGroup -->
@@ -54,9 +35,10 @@
             </div>
         </div>
 
-        <!-- DataTable harmonisée avec Affecter.vue -->
-        <div v-if="selectedStore" class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <!-- DataTable (package) - même pattern que InventoryManagement.vue -->
+        <div v-if="selectedStore" class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
             <DataTable
+                :key="resultsTableKey"
                 :columns="columns"
                 :rowDataProp="results"
                 :actions="actions as any"
@@ -72,8 +54,11 @@
                 :loading="loading"
                 :enableDynamicColumns="false"
                 :debounceFilter="300"
-                :debounceSearch="300">
-            </DataTable>
+                :debounceSearch="300"
+                :pagination="true"
+                :enableFiltering="true"
+                :enableGlobalSearch="true"
+            />
         </div>
 
         <!-- Message si aucun magasin sélectionné -->
@@ -158,8 +143,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { logger } from '@/services/loggerService'
 
 // ===== IMPORTS COMPOSANTS =====
-import DataTable from '@/components/DataTable/DataTable.vue'
-import SelectField from '@/components/Form/SelectField.vue'
+import { DataTable } from '@SMATCH-Digital-dev/vue-system-design'
 import ButtonGroup from '@/components/Form/ButtonGroup.vue'
 import Modal from '@/components/Modal.vue'
 
@@ -175,6 +159,11 @@ const router = useRouter()
  * Référence de l'inventaire depuis l'URL
  */
 const inventoryReference = computed(() => route.params.reference as string)
+
+/**
+ * Référence du warehouse depuis l'URL (?warehouse=...)
+ */
+const warehouseRefFromUrl = computed(() => route.query.warehouse as string | undefined)
 
 // ===== COMPOSABLE =====
 /**
@@ -213,10 +202,12 @@ const {
     exportResultsModalMessage,
     onStoreChanged,
     resultsKey,
+    resultsTableKey,
     resultsTableRef,
     resultsQueryModel
 } = useInventoryResults({
     inventoryReference: inventoryReference.value,
+    initialWarehouseReference: warehouseRefFromUrl.value,
     route,
     router
 })

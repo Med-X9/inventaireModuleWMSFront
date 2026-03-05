@@ -7,15 +7,10 @@
             :pagination="true"
             :rowSelection="false"
             :enableFiltering="true"
-            :serverSidePagination="true"
-            :serverSideFiltering="true"
-            :serverSideSorting="true"
-            :storageKey="'job_management_table'"
-            :showColumnSelector="true"
             :loading="loading"
-            @pagination-changed="handlePaginationChanged"
-            @sort-changed="handleSortChanged"
-            @filter-changed="handleFilterChanged"
+            storageKey="job_management_table"
+            :showColumnSelector="true"
+            @query-model-changed="handlePaginationChanged"
         >
             <template #table-actions>
                 <div class="flex items-center flex-wrap gap-2">
@@ -32,7 +27,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
 import { useJobManagement } from '@/composables/useJobManagement';
-import DataTable from '@/components/DataTable/DataTable.vue';
+import { DataTable } from '@SMATCH-Digital-dev/vue-system-design';
 import IconPlus from '@/components/icon/icon-plus.vue';
 
 const {

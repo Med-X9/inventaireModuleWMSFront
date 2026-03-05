@@ -430,6 +430,18 @@ export class JobService {
     }
 
     /**
+     * Rouvrir un assignment avec ses emplacements
+     * Endpoint: POST inventory/assignments/<int:assignment_id>/reopen-with-locations/
+     */
+    static async reopenAssignmentWithLocations(
+        assignmentId: number
+    ): Promise<AxiosResponse<any>> {
+        return await axiosInstance.post(
+            `${this.baseUrlInventory}assignments/${assignmentId}/reopen-with-locations/`
+        );
+    }
+
+    /**
      * Exporte les jobs validés en CSV ou Excel
      * @param inventoryId - ID de l'inventaire
      * @param warehouseId - ID de l'entrepôt

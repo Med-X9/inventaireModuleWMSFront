@@ -19,8 +19,8 @@ import type {
     JobReadyResponse
 } from '@/models/Job';
 import type { DataTableResponse } from '@/utils/dataTableUtils';
-import type { QueryModel } from '@/components/DataTable/types/QueryModel';
-import { convertQueryModelToQueryParams } from '@/components/DataTable/utils/queryModelConverter';
+import type { QueryModel } from '@SMATCH-Digital-dev/vue-system-design';
+import { convertQueryModelToQueryParams } from '@SMATCH-Digital-dev/vue-system-design';
 import API from '@/api';
 
 export const useJobStore = defineStore('job', () => {
@@ -123,19 +123,20 @@ export const useJobStore = defineStore('job', () => {
             const requestedPageSize = requestBody.pageSize || requestBody.page_size
             const responsePageSize = responseData.pageSize
 
-            // Stocker les données brutes
-            jobs.value = responseData.data || [];
-
             // Convertir pageSize en number pour éviter les erreurs de type
             const pageSizeNumber = Number(requestedPageSize) || Number(responsePageSize) || 20;
 
-            // Stocker les métadonnées de pagination brutes du backend (sans calcul)
+            // ⚠️ Définir paginationMetadata AVANT jobs pour que les vues reçoivent le total serveur (ex: 75) avant rowDataProp
+            const totalFromApi = responseData.total ?? responseData.recordsFiltered ?? responseData.recordsTotal ?? 0;
             paginationMetadata.value = {
                 page: responseData.page ?? 1,
                 totalPages: responseData.totalPages ?? 1,
                 pageSize: pageSizeNumber,
-                total: responseData.total ?? responseData.recordsFiltered ?? responseData.recordsTotal ?? 0
+                total: Number(totalFromApi)
             };
+
+            // Stocker les données brutes (après les métadonnées pour cohérence réactivité)
+            jobs.value = responseData.data || [];
 
             console.log('[jobStore.fetchJobs] 📊 Final pagination metadata:', {
                 requestedPageSize,
@@ -207,22 +208,21 @@ export const useJobStore = defineStore('job', () => {
                 page: responseData.page
             });
 
-            // Stocker les données brutes
-            jobsValidated.value = responseData.data || [];
-
-            // Synchroniser avec la propriété principale du store pour useBackendDataTable
-            jobs.value = (responseData.data || []) as any;
-
             // Convertir pageSize en number pour éviter les erreurs de type
             const pageSizeNumber = Number(requestedPageSize) || Number(responsePageSize) || 20;
 
-            // Stocker les métadonnées de pagination brutes du backend (sans calcul)
+            // ⚠️ Définir paginationMetadata AVANT jobs pour que les vues reçoivent le total serveur (ex: 75) avant rowDataProp
+            const totalFromApi = responseData.total ?? responseData.recordsFiltered ?? responseData.recordsTotal ?? 0;
             paginationMetadata.value = {
                 page: responseData.page ?? 1,
                 totalPages: responseData.totalPages ?? 1,
                 pageSize: pageSizeNumber,
-                total: responseData.total ?? responseData.recordsFiltered ?? responseData.recordsTotal ?? 0
+                total: Number(totalFromApi)
             };
+
+            // Stocker les données brutes (après les métadonnées pour cohérence réactivité)
+            jobsValidated.value = responseData.data || [];
+            jobs.value = (responseData.data || []) as any;
 
             console.log('[jobStore.fetchJobsValidated] 📊 Final pagination metadata:', {
                 page: paginationMetadata.value.page,

@@ -11,7 +11,7 @@ export const STORES_FETCH_TIMEOUT_MS = 500 // Timeout pour le fetch des magasins
 
 // Valeurs par défaut
 export const DEFAULT_PAGE = 1
-export const DEFAULT_PAGE_SIZE = 20
+export const DEFAULT_PAGE_SIZE = 50
 export const DEFAULT_MAX_PENDING_EVENTS = 10 // Taille max de la file d'attente
 export const DEFAULT_KEEP_PENDING_EVENTS = 5 // Nombre d'événements à garder si dépassement
 

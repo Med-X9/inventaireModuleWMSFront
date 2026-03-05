@@ -7,7 +7,7 @@
         <!-- screen loader -->
         <div
             v-show="store.isShowMainLoader"
-            class="screen_loader  fixed inset-0 bg-[#fafafa] dark:bg-[#060818] z-[60] grid place-content-center animate__animated"
+            class="screen_loader fixed inset-0 bg-[#fafafa] dark:bg-[#060818] z-[60] grid place-content-center animate__animated"
         >
             <svg width="64" height="64" viewBox="0 0 135 135" xmlns="http://www.w3.org/2000/svg" fill="#4361ee">
                 <path
@@ -23,7 +23,8 @@
             </svg>
         </div>
 
-        <div class="fixed bottom-6 ltr:right-6 rtl:left-6 z-50">
+        <!-- Bouton retour en haut -->
+        <!-- <div class="fixed bottom-6 ltr:right-6 rtl:left-6 z-50">
             <template v-if="showTopButton">
                 <button
                     type="button"
@@ -45,45 +46,98 @@
                     </svg>
                 </button>
             </template>
-        </div>
+        </div> -->
 
         <!-- BEGIN APP SETTING LAUNCHER -->
 
         <!-- END APP SETTING LAUNCHER -->
 
-        <div class="main-container text-black dark:text-white-dark min-h-screen" :class="[store.navbar]">
-            <!--  BEGIN SIDEBAR  -->
-            <Sidebar />
-            <!--  END SIDEBAR  -->
-
-            <div class="main-content flex flex-col min-h-screen">
-                <!--  BEGIN TOP NAVBAR  -->
-                <Header />
-                <!--  END TOP NAVBAR  -->
-
-                <!--  BEGIN CONTENT AREA  -->
-                <div class="animation">
-                    <router-view></router-view>
+        <!-- Utilisation de AppLayout du package -->
+        <AppLayout
+            :show-header="true"
+            :show-sidebar="true"
+            :show-footer="true"
+            :show-navbar="true"
+            :show-sub-nav="true"
+            :sidebar-items="sidebarItems"
+            :show-sidebar-toggle="true"
+            header-title=""
+            :logo="LogoComponent"
+            class="main-container text-black dark:text-white-dark"
+        >
+            <!-- Slot par défaut : Contenu principal avec Header local personnalisé -->
+            <template #default>
+                <div class="main-content flex flex-col min-h-screen">
+                    <!-- Zone de contenu avec animation -->
+                    <div class="animation flex-1">
+                        <router-view></router-view>
+                    </div>
                 </div>
-                <!--  END CONTENT AREA  -->
+            </template>
 
-                <!-- BEGIN FOOTER -->
-                <Footer />
-                <!-- END FOOTER -->
-            </div>
-        </div>
+            <!-- Slot pour le header de la sidebar (logo + bouton toggle personnalisé) -->
+            <template #sidebar-header>
+                <div class="flex justify-between items-center px-4 py-6 border-b border-gray-200 dark:border-gray-700">
+                    <router-link to="/" class="main-logo flex items-center shrink-0 group">
+                        <img class="w-10 h-10 flex-none rounded-lg transition-transform duration-300 group-hover:scale-105" src="/assets/images/logo/logo.png" alt="Logo" />
+                    </router-link>
+                    <button
+                        type="button"
+                        class="collapse-icon w-9 h-9 rounded-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-white-light transition-all duration-300 rtl:rotate-180 hover:text-primary hover:scale-110"
+                        @click="store.toggleSidebar()"
+                        aria-label="Fermer la sidebar"
+                    >
+                        <component :is="IconMenuComponent" class="w-5 h-5" />
+                    </button>
+                </div>
+            </template>
+        </AppLayout>
     </div>
 </template>
+
 <script setup lang="ts">
-    import { ref, onMounted } from 'vue';
-    import Sidebar from '@/components/layout/Sidebar.vue';
-    import Header from '@/components/layout/Header.vue';
-    import Footer from '@/components/layout/Footer.vue';
+    import { ref, onMounted, computed, markRaw } from 'vue';
+    // Composant AppLayout du package
+    import { AppLayout } from '@SMATCH-Digital-dev/vue-system-design';
+    import type { SidebarItem } from '@SMATCH-Digital-dev/vue-system-design';
+    // Composants locaux
+    import Logo from '@/components/layout/Logo.vue';
+    // Icônes - marquer comme non réactives avec markRaw
+    import IconMenuDashboard from '@/components/icon/menu/icon-menu-dashboard.vue';
+    import IconMenuInventory from '@/components/icon/menu/icon-menu-inventory.vue';
+    import IconMenu from '@/components/icon/icon-menu.vue';
+    // i18n
+    import { useI18n } from 'vue-i18n';
     import appSetting from '@/app-setting';
 
     import { useAppStore } from '@/stores/index';
     const store = useAppStore();
+    const { t } = useI18n();
     const showTopButton = ref(false);
+
+    // Composant Logo marqué comme non réactif
+    const LogoComponent = markRaw(Logo);
+
+    // Composant IconMenu marqué comme non réactif pour le toggle de la sidebar
+    const IconMenuComponent = markRaw(IconMenu);
+
+    /**
+     * Items de navigation pour la Sidebar du package
+     * Les composants d'icônes sont marqués comme non réactifs avec markRaw pour éviter les avertissements Vue
+     */
+    const sidebarItems = computed<SidebarItem[]>(() => [
+        {
+            path: '/',
+            label: t('dashboard'),
+            icon: markRaw(IconMenuDashboard),
+        },
+        {
+            path: '/inventory/management',
+            label: t('inventaire'),
+            icon: markRaw(IconMenuInventory),
+        },
+    ]);
+
     onMounted(() => {
         window.onscroll = () => {
             if (document.body.scrollTop > 50 || document.documentElement.scrollTop > 50) {
@@ -94,9 +148,11 @@
         };
 
         const eleanimation: any = document.querySelector('.animation');
-        eleanimation.addEventListener('animationend', function () {
-            appSetting.changeAnimation('remove');
-        });
+        if (eleanimation) {
+            eleanimation.addEventListener('animationend', function () {
+                appSetting.changeAnimation('remove');
+            });
+        }
         store.toggleMainLoader();
     });
 

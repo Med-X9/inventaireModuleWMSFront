@@ -1,6 +1,6 @@
 /**
  * Utilitaire de normalisation des réponses DataTable
- * 
+ *
  * Normalise toutes les réponses backend vers le format unifié :
  * { rows: [...], page: number, pageSize: number, total: number, totalPages: number }
  */
@@ -20,10 +20,10 @@ export interface UnifiedDataTableResponse<T = any> {
 
 /**
  * Normalise les réponses backend vers le format unifié
- * 
+ *
  * Format attendu du backend :
  * { rows: [...], page: 2, pageSize: 10, total: 28, totalPages: 3 }
- * 
+ *
  * @param payload - Réponse brute du backend
  * @returns Réponse normalisée au format unifié
  */
@@ -49,8 +49,10 @@ export function normalizeDataTableResponse<T = any>(
         // Selon PAGINATION_FRONTEND.md, le backend doit toujours fournir ces valeurs
         const page = payload.page ?? 1
         const pageSize = payload.pageSize ?? 20
-        const total = payload.total ?? 0 // ⚠️ Pas de fallback sur rows.length, utiliser uniquement total du backend
-        
+        // ⚠️ Certains backends renvoient pageSize dans "total" et le vrai total dans "total_count"
+        // On doit donc prioriser total_count / totalCount avant total
+        const total = payload.total_count ?? payload.totalCount ?? payload.total ?? 0
+
         // ⚠️ IMPORTANT : Utiliser UNIQUEMENT totalPages du backend selon PAGINATION_FRONTEND.md
         // Le backend doit toujours fournir totalPages calculé côté serveur
         // Fallback de sécurité uniquement si le backend ne fournit vraiment pas la valeur
@@ -81,7 +83,7 @@ export function normalizeDataTableResponse<T = any>(
         const pageSize = payload.pageSize ?? 20
         const total = payload.total ?? payload.recordsFiltered ?? payload.recordsTotal ?? 0
         const totalPages = payload.totalPages ?? (total > 0 ? Math.ceil(total / pageSize) : 0)
-        
+
         return {
             rows: payload.data as T[],
             page: Number(page),
@@ -90,14 +92,14 @@ export function normalizeDataTableResponse<T = any>(
             totalPages: Number(totalPages)
         }
     }
-    
+
     if ('results' in payload && Array.isArray(payload.results)) {
         // Format REST API : { results: [...], count, next, previous }
         const page = payload.page ?? 1
         const pageSize = payload.pageSize ?? 20
         const total = payload.total ?? payload.count ?? 0
         const totalPages = payload.totalPages ?? (total > 0 ? Math.ceil(total / pageSize) : 0)
-        
+
         return {
             rows: payload.results as T[],
             page: Number(page),
@@ -106,9 +108,9 @@ export function normalizeDataTableResponse<T = any>(
             totalPages: Number(totalPages)
         }
     }
-    
+
     logger.warn('Format de réponse backend non reconnu (pas de champ "rows", "data" ou "results")', payload)
-    
+
     // Retourner un format vide par défaut
     return {
         rows: [],
@@ -121,7 +123,7 @@ export function normalizeDataTableResponse<T = any>(
 
 /**
  * Convertit le format unifié vers le format DataTable standard (pour compatibilité)
- * 
+ *
  * @param unifiedResponse - Réponse au format unifié
  * @returns Réponse au format DataTable standard
  */

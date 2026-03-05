@@ -2,6 +2,11 @@ import { createApp } from 'vue';
 import App from '@/App.vue';
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import axios from 'axios'
+import { useAppStore } from '@/stores/index'
+
+// ⚠️ Workaround: Le package @SMATCH-Digital-dev/vue-system-design utilise useAppStore
+// sans l'importer. On le fournit via globalThis pour DarkModeSwitch et autres composants.
+;(globalThis as any).useAppStore = useAppStore
 
 // 🔒 Bloquer les requêtes vers reasonlabsapi.com AVANT qu'elles ne soient envoyées
 // Intercepteur Axios pour bloquer reasonlabsapi.com
@@ -66,7 +71,7 @@ window.addEventListener('error', (event) => {
     const errorTarget = event.target as HTMLScriptElement | HTMLImageElement | HTMLLinkElement | null;
     const errorSource = event.filename || (errorTarget && ('src' in errorTarget || 'href' in errorTarget) ? ((errorTarget as HTMLScriptElement).src || (errorTarget as HTMLImageElement).src || (errorTarget as HTMLLinkElement).href) : '') || '';
     const errorUrl = errorSource || errorMessage;
-    
+
     if (errorUrl.includes('reasonlabsapi.com') || errorMessage.includes('reasonlabsapi.com')) {
         console.warn('🚫 Erreur bloquée pour reasonlabsapi.com:', {
             message: errorMessage,
@@ -98,21 +103,21 @@ window.addEventListener('error', (event) => {
 window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason;
     let shouldBlock = false;
-    
+
     if (reason && typeof reason === 'object') {
         const message = String(reason.message || '');
         const stack = String(reason.stack || '');
         const url = String(reason.url || reason.config?.url || '');
-        
-        if (message.includes('reasonlabsapi.com') || 
-            stack.includes('reasonlabsapi.com') || 
+
+        if (message.includes('reasonlabsapi.com') ||
+            stack.includes('reasonlabsapi.com') ||
             url.includes('reasonlabsapi.com')) {
             shouldBlock = true;
         }
     } else if (typeof reason === 'string' && reason.includes('reasonlabsapi.com')) {
         shouldBlock = true;
     }
-    
+
     if (shouldBlock) {
         console.warn('🚫 Rejet de promesse bloqué pour reasonlabsapi.com:', reason);
         event.preventDefault();
@@ -174,6 +179,11 @@ app.use(router);
 // global CSS
 import '@/assets/css/app.css';
 
+// Styles / thème du système de design
+// Les styles incluent automatiquement le thème (spacings, typography, colors, borders, etc.)
+// Le thème est automatiquement appliqué via les styles CSS importés
+import '@SMATCH-Digital-dev/vue-system-design/styles';
+
 // perfect scrollbar
 import PerfectScrollbar from 'vue3-perfect-scrollbar';
 app.use(PerfectScrollbar);
@@ -226,6 +236,10 @@ async function initializeCSRF() {
 // Initialiser CSRF puis monter l'app
 async function initializeApp() {
     // await initializeCSRF();
+
+    // Le thème est automatiquement appliqué via l'import des styles CSS du package
+    // Les variables CSS du thème (spacings, typography, colors, borders, etc.) sont incluses
+
     app.mount('#app');
 }
 

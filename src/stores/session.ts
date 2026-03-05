@@ -43,44 +43,6 @@ export const useSessionStore = defineStore('session', () => {
 
     // ===== ACTIONS =====
 
-    /**
-     * Récupère toutes les sessions depuis l'API
-     */
-    const fetchSessions = async (): Promise<void> => {
-        // Éviter les appels multiples simultanés
-        if (isFetching.value) {
-            logger.debug('fetchSessions déjà en cours, abandon de la requête');
-            return;
-        }
-
-        // Si les sessions sont déjà chargées, ne pas refaire la requête
-        if (sessions.value.length > 0) {
-            logger.debug('Sessions déjà chargées, pas besoin de recharger');
-            return;
-        }
-
-        try {
-            isFetching.value = true;
-            setLoading(true);
-            clearError();
-
-            const response: SessionResponse = await SessoinService.getSession();
-
-            if (response.status === 'success' && response.data) {
-                sessions.value = response.data;
-            } else {
-                throw new Error(response.message || 'Erreur lors de la récupération des sessions');
-            }
-        } catch (err: any) {
-            logger.error('Erreur dans le store session', err);
-            const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
-            setError(errorMessage);
-            throw err;
-        } finally {
-            setLoading(false);
-            isFetching.value = false;
-        }
-    };
 
     /**
      * Efface toutes les sessions du store
@@ -159,7 +121,6 @@ export const useSessionStore = defineStore('session', () => {
         setLoading,
         setError,
         clearError,
-        fetchSessions,
         clearSessions,
         getSessionById,
         getSessionsByUsername,

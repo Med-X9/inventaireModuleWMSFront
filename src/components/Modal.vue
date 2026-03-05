@@ -1,39 +1,41 @@
 <!-- src/components/Modal.vue -->
 <template>
-    <div v-if="modelValue" class="fixed inset-0 z-50 overflow-y-auto">
-        <div :class="containerClasses">
-            <!-- Overlay semi-transparent -->
-            <div class="fixed inset-0 transition-opacity" @click="close">
-                <div class="absolute inset-0 bg-text-dark opacity-75"></div>
-            </div>
+    <Teleport to="body">
+        <div v-if="modelValue" class="modal-root fixed inset-0 z-[99999] overflow-y-auto">
+            <div :class="containerClasses">
+                <!-- Overlay semi-transparent -->
+                <div class="fixed inset-0 transition-opacity" @click="close">
+                    <div class="absolute inset-0 bg-text-dark opacity-75"></div>
+                </div>
 
-            <div :class="modalClasses" role="dialog" aria-modal="true" aria-labelledby="modal-headline">
-                <button
-                    v-if="!props.hideCloseButton"
-                    type="button"
-                    class="absolute top-3 right-3 text-text-muted hover:text-text-dark focus:outline-none z-10"
-                    @click="close"
-                    aria-label="Close modal">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                        stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-                <div class="sm:flex mt-6 sm:items-start h-full">
-                    <div class="mt-4 text-center sm:mt-0 sm:text-left w-full h-full flex flex-col">
-                        <h3 v-if="title" class="text-lg leading-6 font-medium text-text-dark font-heading mb-6 mt-2 flex-shrink-0"
-                            id="modal-headline">
-                            {{ title }}
-                        </h3>
-                        <div class="mt-2 flex-1 flex flex-col min-h-0">
-                            <slot />
+                <div :class="modalClasses" role="dialog" aria-modal="true" aria-labelledby="modal-headline">
+                    <button
+                        v-if="!props.hideCloseButton"
+                        type="button"
+                        class="absolute top-3 right-3 text-text-muted hover:text-text-dark focus:outline-none z-10"
+                        @click="close"
+                        aria-label="Close modal">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                    <div class="sm:flex mt-6 sm:items-start h-full">
+                        <div class="mt-4 text-center sm:mt-0 sm:text-left w-full h-full flex flex-col">
+                            <h3 v-if="title" class="text-lg leading-6 font-medium text-text-dark font-heading mb-6 mt-2 flex-shrink-0"
+                                id="modal-headline">
+                                {{ title }}
+                            </h3>
+                            <div class="mt-2 flex-1 flex flex-col min-h-0">
+                                <slot />
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    </Teleport>
 </template>
 
 <script setup lang="ts">

@@ -71,7 +71,7 @@ export function useGenericDataTable<T>(
     /**
      * Taille de page courante
      */
-    const pageSize = ref(options?.initialPageSize || 20)
+    const pageSize = ref(options?.initialPageSize || 50)
 
     // ===== FONCTIONS DE GESTION =====
 
@@ -295,7 +295,7 @@ export function useMyDataTable() {
     }
 
     const dataTable = useGenericDataTable(fetchMyData, {
-        initialPageSize: 20,
+        initialPageSize: 50,
         initialPage: 1
     })
 

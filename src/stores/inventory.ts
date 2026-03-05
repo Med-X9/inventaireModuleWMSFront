@@ -11,8 +11,8 @@ import {
     processDataTableResponse,
     type DataTableResponse
 } from '@/utils/dataTableUtils';
-import type { QueryModel } from '@/components/DataTable/types/QueryModel';
-import { convertQueryModelToQueryParams } from '@/components/DataTable/utils/queryModelConverter';
+import type { QueryModel } from '@SMATCH-Digital-dev/vue-system-design';
+import { convertQueryModelToQueryParams } from '@SMATCH-Digital-dev/vue-system-design';
 
 export const useInventoryStore = defineStore('inventory', () => {
     // State
@@ -276,11 +276,11 @@ export const useInventoryStore = defineStore('inventory', () => {
     };
 
 
-    const launchInventory = async (id: number | string) => {
+    const launchInventoryByWarehause = async (idInventory: number, idWarehouse: number) => {
         loading.value = true;
         error.value = null;
         try {
-            await InventoryService.launch(id);
+            await InventoryService.launchByWarehause(idInventory, idWarehouse);
             await fetchInventories();
         } catch (err: any) {
             handleError(err, 'Erreur lors du lancement de l\'inventaire');
@@ -494,7 +494,7 @@ export const useInventoryStore = defineStore('inventory', () => {
         createInventory,
         updateInventory,
         deleteInventory,
-        launchInventory,
+        launchInventoryByWarehause,
         cancelInventory,
         terminateInventory,
         closeInventory,

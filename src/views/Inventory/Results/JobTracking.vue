@@ -1,7 +1,7 @@
 <template>
-    <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 dark:from-slate-900 dark:to-slate-800 p-4 sm:p-6 lg:p-8">
+    <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 dark:from-slate-900 dark:to-slate-800 p-8">
         <!-- Carte unifiée : Titre + sélection magasin -->
-        <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 mb-6 shadow-xl border border-slate-200 dark:border-slate-700">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 mb-8 shadow-lg border border-slate-200 dark:border-slate-700">
             <!-- Titre + select magasin (même structure qu'InventoryResults.vue) -->
             <div class="flex flex-col gap-6 mb-4">
                 <div class="flex justify-between items-start flex-wrap gap-6">
@@ -31,24 +31,7 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Sélection du magasin -->
-                    <div class="w-full md:w-80 lg:w-96">
-                        <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-2">
-                        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                        Magasin
-                    </label>
-                    <SelectField
-                        v-model="selectedStore"
-                        :options="storeOptions || []"
-                        :clearable="false"
-                        :searchable="false"
-                        placeholder="Sélectionner un magasin"
-                        :disabled="storeLoading || !storeOptions || (storeOptions && storeOptions.length === 0)"
-                            class="w-full"
-                    />
-                    </div>
+                    <!-- Le magasin est maintenant déterminé par la référence dans l'URL (?warehouse=...) -->
                 </div>
 
                 <!-- Boutons d'action (Résultats + Imprimer) alignés à droite -->
@@ -58,36 +41,34 @@
             </div>
         </div>
 
-        <!-- DataTable harmonisée avec InventoryResults.vue et Affecter.vue -->
-        <div v-if="selectedStore" class="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <!-- DataTable harmonisée avec InventoryResults.vue -->
+        <div v-if="selectedStore" class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
             <DataTable
                 ref="trackingTableRef"
                 :key="trackingKey"
                 :columns="columns"
                 :rowDataProp="rows"
                 :actions="[]"
-                :queryModelProp="queryModel"
-                :enableVirtualScrolling="false"
+                :enableVirtualScrolling="undefined"
                 :currentPageProp="pagination.current_page"
                 :totalPagesProp="pagination.total_pages"
                 :totalItemsProp="trackingTotalItems"
                 :pageSizeProp="pagination.page_size"
                 :rowSelection="true"
-                :enableRowClick="false"
-                @pagination-changed="(queryModel) => onTrackingTableEvent('pagination', queryModel)"
-                @page-size-changed="(queryModel) => onTrackingTableEvent('page-size-changed', queryModel)"
-                @sort-changed="(queryModel) => onTrackingTableEvent('sort', queryModel)"
-                @filter-changed="(queryModel) => onTrackingTableEvent('filter', queryModel)"
-                @global-search-changed="(queryModel) => onTrackingTableEvent('search', queryModel)"
+                :customDataTableParams="trackingCustomParams"
+                @query-model-changed="(queryModel) => onTrackingTableEvent('query-model-changed', queryModel)"
                 storageKey="job_tracking_table"
                 :loading="loading || trackingLoadingLocal"
+                :enableDynamicColumns="false"
+                :debounceFilter="300"
+                :debounceSearch="300"
                 emptyMessage="Aucune donnée disponible pour ces critères"
                 @selection-changed="onSelectionChanged"
             />
         </div>
 
         <!-- Message si aucun magasin sélectionné -->
-        <div v-else class="bg-white dark:bg-slate-800 rounded-3xl p-16 text-center shadow-xl border border-slate-200 dark:border-slate-700">
+        <div v-else class="bg-white dark:bg-slate-800 rounded-2xl p-16 text-center shadow-lg border border-slate-200 dark:border-slate-700">
             <div class="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-xl">
                 <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -121,8 +102,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 
 // ===== IMPORTS COMPOSANTS =====
-import DataTable from '@/components/DataTable/DataTable.vue'
-import SelectField from '@/components/Form/SelectField.vue'
+import { DataTable } from '@SMATCH-Digital-dev/vue-system-design'
 import ButtonGroup, { type ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
 
 // ===== IMPORTS COMPOSABLES =====
@@ -132,7 +112,7 @@ import { useJobTracking } from '@/composables/useJobTracking'
 import { useWarehouseStore } from '@/stores/warehouse'
 
 // ===== IMPORTS TYPES =====
-import type { DataTableColumn } from '@/types/dataTable'
+import type { DataTableColumn } from '@SMATCH-Digital-dev/vue-system-design'
 
 // ===== IMPORTS ICÔNES =====
 import IconListCheck from '@/components/icon/icon-list-check.vue'
@@ -142,6 +122,7 @@ import IconPrinter from '@/components/icon/icon-printer.vue'
 const route = useRoute()
 const router = useRouter()
 const referenceParam = computed(() => route.params.reference as string)
+const warehouseRefFromUrl = computed(() => route.query.warehouse as string | undefined)
 
 // ===== STORES =====
 const warehouseStore = useWarehouseStore()
@@ -173,11 +154,15 @@ const { warehouses, loading: warehousesLoading } = storeToRefs(warehouseStore)
         pagination,
         trackingTotalItems,
         onTrackingTableEvent,
+        trackingCustomParams,
         // Clés pour forcer le re-render
         trackingKey,
         trackingTableRef,
         trackingLoadingLocal
-    } = useJobTracking({ inventoryReference: referenceParam.value })
+    } = useJobTracking({
+        inventoryReference: referenceParam.value,
+        initialWarehouseReference: warehouseRefFromUrl.value
+    })
 
 // ===== COMPUTED =====
 
@@ -215,9 +200,28 @@ const actionButtons = computed<ButtonGroupButton[]>(() => {
         disabled: !inventoryReference.value,
         visible: !!inventoryReference.value,
         onClick: () => {
-            if (inventoryReference.value) {
-                void router.push({ name: 'inventory-results', params: { reference: inventoryReference.value } })
+            if (!inventoryReference.value) {
+                return
             }
+
+            // Navigation de base avec la seule référence d'inventaire
+            const navigation: any = {
+                name: 'inventory-results',
+                params: { reference: inventoryReference.value }
+            }
+
+            // Si un magasin est sélectionné, utiliser sa référence de warehouse
+            if (selectedWarehouse.value) {
+                const warehouseRef =
+                    selectedWarehouse.value.reference ||
+                    selectedWarehouse.value.warehouse_name
+
+                if (warehouseRef) {
+                    navigation.query = { warehouse: warehouseRef }
+                }
+            }
+
+            void router.push(navigation)
         }
     })
 
@@ -256,28 +260,6 @@ watch(referenceParam, async newReference => {
     await reinitialize(newReference)
 })
 
-/**
- * Watcher pour déboguer les données
- */
-watch(rows, (newRows) => {
-    console.log('🔍 JobTracking - rows changed:', {
-        rowsLength: newRows?.length || 0,
-        firstRow: newRows?.[0],
-        allRows: newRows,
-        isArray: Array.isArray(newRows),
-        type: typeof newRows
-    })
-}, { immediate: true, deep: true })
-
-/**
- * Watcher pour vérifier que les colonnes sont bien créées
- */
-watch(columns, (newColumns) => {
-    console.log('🔍 JobTracking - columns changed:', {
-        columnsLength: newColumns?.length || 0,
-        columnFields: newColumns?.map((c: any) => c.field) || []
-    })
-}, { immediate: true })
 </script>
 
 <style scoped>

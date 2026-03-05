@@ -30,6 +30,25 @@ import { logger } from '@/services/loggerService'
 // ===== IMPORTS UTILS =====
 import { generatePDF } from '@/utils/pdfGenerator'
 
+// ===== IMPORTS TYPES =====
+import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
+import type { FieldConfig } from '@/interfaces/form'
+
+// ===== IMPORTS ICÔNES =====
+import IconDownload from '@/components/icon/icon-download.vue'
+import IconFile from '@/components/icon/icon-file.vue'
+import IconPlay from '@/components/icon/icon-play.vue'
+import IconEdit from '@/components/icon/icon-edit.vue'
+import IconCancel from '@/components/icon/icon-cancel.vue'
+import IconCheck from '@/components/icon/icon-check.vue'
+import IconLock from '@/components/icon/icon-lock.vue'
+import IconUpload from '@/components/icon/icon-upload.vue'
+import IconCalendar from '@/components/icon/icon-calendar.vue'
+import IconUsers from '@/components/icon/icon-users.vue'
+import IconBarChart from '@/components/icon/icon-bar-chart.vue'
+import IconClipboardText from '@/components/icon/icon-clipboard-text.vue'
+import IconChartSquare from '@/components/icon/icon-chart-square.vue'
+
 // ===== INTERFACES =====
 
 /**
@@ -195,26 +214,275 @@ export function useInventoryDetail(inventoryReference: string) {
         }
     }
 
+    /** Classe CSS commune pour les boutons d'action (bordure primaire, fond blanc, hover) */
+    const ACTION_BUTTON_CLASS =
+        'bg-white text-primary border border-primary hover:bg-primary hover:text-white ' +
+        'dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary ' +
+        'dark:hover:text-white transition-all duration-200'
+
+    /**
+     * Retourne le variant Badge pour le statut de l'inventaire
+     */
+    const getStatusBadgeVariant = (status?: string): 'primary' | 'success' | 'error' | 'warning' | 'info' => {
+        if (!status) return 'primary'
+        switch (status.toUpperCase()) {
+            case 'EN PREPARATION':
+                return 'info'
+            case 'EN REALISATION':
+                return 'warning'
+            case 'TERMINE':
+                return 'success'
+            case 'CLOTURE':
+            case 'CLOTUREE':
+                return 'primary'
+            case 'ANNULE':
+            case 'ANNULEE':
+                return 'error'
+            default:
+                return 'primary'
+        }
+    }
+
+    /**
+     * Vérifie si un comptage a des options activées
+     */
+    const hasAnyOption = (comptage: any): boolean => {
+        if (comptage?.champs_actifs && Array.isArray(comptage.champs_actifs)) {
+            return comptage.champs_actifs.length > 0
+        }
+        const c = comptage as any
+        return !!(
+            c?.isVariante ||
+            c?.guideArticle ||
+            c?.guideQuantite ||
+            c?.dlc ||
+            c?.numeroSerie ||
+            c?.numeroLot ||
+            c?.inputMethod === 'scanner' ||
+            c?.inputMethod === 'saisie' ||
+            c?.scannerUnitaire ||
+            c?.saisieQuantite ||
+            c?.is_variant ||
+            c?.show_product ||
+            c?.quantity_show ||
+            c?.unit_scanned ||
+            c?.entry_quantity
+        )
+    }
+
+    /**
+     * Retourne la classe CSS pour le badge de mode de comptage
+     */
+    const getCountModeBadgeClass = (countMode: string): string => {
+        switch (countMode) {
+            case 'image de stock':
+                return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-700'
+            case 'en vrac':
+                return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border border-green-200 dark:border-green-700'
+            case 'par article':
+                return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-700'
+            default:
+                return 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
+        }
+    }
+
+    /**
+     * Retourne le label affiché pour le mode de comptage
+     */
+    const getCountModeLabel = (countMode: string): string => {
+        switch (countMode) {
+            case 'image de stock':
+                return 'Image de stock'
+            case 'en vrac':
+                return 'En vrac'
+            case 'par article':
+                return 'Par article'
+            default:
+                return countMode || 'Non défini'
+        }
+    }
+
+    /**
+     * Retourne le nom d'utilisateur d'une équipe
+     */
+    const getTeamUserName = (team: any): string => {
+        if (team?.user) return team.user
+        if (team?.userObject?.username) return team.userObject.username
+        return 'Utilisateur inconnu'
+    }
+
+    // ===== PAGINATION ÉQUIPE =====
+    const teamCurrentPage = ref(1)
+    const teamItemsPerPage = ref(6)
+    const paginatedTeam = computed(() => {
+        const teamList = inventory.value?.equipe && Array.isArray(inventory.value.equipe) ? inventory.value.equipe : []
+        const start = (teamCurrentPage.value - 1) * teamItemsPerPage.value
+        const end = start + teamItemsPerPage.value
+        return teamList.slice(start, end)
+    })
+    const teamTotalPages = computed(() => {
+        const teamList = inventory.value?.equipe && Array.isArray(inventory.value.equipe) ? inventory.value.equipe : []
+        return Math.ceil(teamList.length / teamItemsPerPage.value)
+    })
+
+    // ===== NAVIGATION WAREHOUSE =====
+    const goToWarehousePlanning = (warehouseReference: string) => {
+        router.push({
+            name: 'inventory-planning',
+            params: { reference: inventoryReference, warehouse: warehouseReference }
+        })
+    }
+    const goToWarehouseAffectation = (warehouseReference: string) => {
+        router.push({
+            name: 'inventory-affecter',
+            params: { reference: inventoryReference, warehouse: warehouseReference }
+        })
+    }
+    const goToWarehouseReaffectation = (warehouseReference: string) => {
+        router.push({
+            name: 'inventory-reaffectation',
+            params: { reference: inventoryReference, warehouse: warehouseReference }
+        })
+    }
+    const goToWarehouseResults = (warehouseReference: string) => {
+        router.push({
+            name: 'inventory-results',
+            params: { reference: inventoryReference, warehouse: warehouseReference }
+        })
+    }
+    const goToWarehouseTracking = (warehouseReference: string) => {
+        router.push({
+            name: 'inventory-job-tracking',
+            params: { reference: inventoryReference, warehouse: warehouseReference }
+        })
+    }
+    const goToWarehouseMonitoring = (warehouseReference: string) => {
+        router.push({
+            name: 'inventory-monitoring',
+            params: { reference: inventoryReference, warehouse: warehouseReference }
+        })
+    }
+
+    /**
+     * Génère les boutons d'action pour un magasin (planning, affectation, résultats, etc.)
+     */
+    const getWarehouseButtons = (magasin: any): ButtonGroupButton[] => {
+        const warehouseName = magasin?.nom
+        const warehouseReference = magasin?.reference
+
+        const buttons: ButtonGroupButton[] = [
+            { id: 'planning', label: 'Planification', icon: IconCalendar, onClick: () => goToWarehousePlanning(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+            { id: 'affectation', label: 'Affectation', icon: IconUsers, onClick: () => goToWarehouseAffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+            { id: 'reaffectation', label: 'Réaffectation', icon: IconUsers, onClick: () => goToWarehouseReaffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+            { id: 'tracking', label: 'Suivi', icon: IconClipboardText, onClick: () => goToWarehouseTracking(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS }
+        ]
+        if (inventory.value?.status === 'EN REALISATION') {
+            buttons.push(
+                { id: 'results', label: 'Résultats', icon: IconBarChart, onClick: () => goToWarehouseResults(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+                { id: 'monitoring', label: 'Monitoring', icon: IconChartSquare, onClick: () => goToWarehouseMonitoring(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS }
+            )
+        }
+        if (inventory.value?.status === 'EN PREPARATION') {
+            buttons.push({
+                id: 'launch',
+                label: 'Lancer',
+                icon: IconPlay,
+                onClick: async () => { await launchInventoryByWarehouseName(warehouseName) },
+                variant: 'default',
+                class: ACTION_BUTTON_CLASS
+            })
+        }
+        return buttons
+    }
+
+    /**
+     * Boutons d'action principaux selon le statut de l'inventaire
+     */
+    const actionButtons = computed<ButtonGroupButton[]>(() => {
+        const buttons: ButtonGroupButton[] = []
+        if (inventory.value?.status === 'EN PREPARATION') {
+            buttons.push({ id: 'edit', label: 'Modifier', icon: IconEdit, onClick: editInventory, variant: 'default', class: ACTION_BUTTON_CLASS })
+        } else if (inventory.value?.status === 'EN REALISATION') {
+            buttons.push(
+                { id: 'cancel', label: 'Annuler', icon: IconCancel, onClick: async () => { await cancelInventory() }, variant: 'default', class: ACTION_BUTTON_CLASS },
+                { id: 'terminate', label: 'Terminer', icon: IconCheck, onClick: async () => { await terminateInventory() }, variant: 'default', class: ACTION_BUTTON_CLASS }
+            )
+        } else if (inventory.value?.status === 'TERMINE') {
+            buttons.push({ id: 'close', label: 'Clôturer', icon: IconLock, onClick: async () => { await closeInventory() }, variant: 'default', class: ACTION_BUTTON_CLASS })
+        }
+        buttons.push({ id: 'import-tracking', label: 'Suivi Import', icon: IconUpload, onClick: () => handleGoToImportTracking(), variant: 'default', class: ACTION_BUTTON_CLASS })
+        if (inventory.value?.status !== 'CLOTURE' && inventory.value?.status !== 'CLOTUREE') {
+            buttons.push({ id: 'export-detail', label: 'Exporter Détail', icon: IconFile, onClick: exportToPDF, variant: 'default', class: ACTION_BUTTON_CLASS })
+            if (inventoryId.value) {
+                buttons.push({ id: 'export-jobs', label: 'PDF Jobs', icon: IconDownload, onClick: exportJobsToPDF, variant: 'default', class: ACTION_BUTTON_CLASS })
+            }
+        }
+        return buttons
+    })
+
     // ===== ACTIONS SUR L'INVENTAIRE =====
 
     /**
-     * Lance l'inventaire
+     * Lance l'inventaire pour un warehouse spécifique
+     *
+     * @param warehouseId - ID du warehouse (optionnel, si non fourni lance pour tous les warehouses)
      */
-    const launchInventory = async () => {
+    const launchInventoryByWarehause = async (warehouseId?: number) => {
         if (!inventory.value || !inventoryId.value) return false
+
+        // Capturer la valeur de inventoryId dans une variable locale pour éviter les problèmes de type dans les closures
+        const currentInventoryId: number = inventoryId.value
 
         try {
             const result = await alertService.confirm({
                 title: 'Lancer l\'inventaire',
-                text: `Voulez-vous vraiment lancer l'inventaire "${inventory.value.label}" ?`
+                text: warehouseId
+                    ? `Voulez-vous vraiment lancer l'inventaire "${inventory.value.label}" pour ce magasin ?`
+                    : `Voulez-vous vraiment lancer l'inventaire "${inventory.value.label}" ?`
             })
 
             if (result.isConfirmed) {
-                await inventoryStore.launchInventory(inventoryId.value)
+                if (warehouseId) {
+                    // Lancer pour un warehouse spécifique
+                    await inventoryStore.launchInventoryByWarehause(currentInventoryId, warehouseId)
+                } else {
+                    // Si aucun warehouseId n'est fourni, lancer pour tous les warehouses
+                    // Itérer sur tous les magasins de l'inventaire
+                    const warehouses = inventory.value?.magasins || []
+                    if (warehouses.length === 0) {
+                        await alertService.error({
+                            title: 'Erreur',
+                            text: 'Aucun magasin associé à cet inventaire'
+                        })
+                        return false
+                    }
+
+                    // Lancer pour chaque warehouse
+                    const launchPromises = warehouses.map(async (magasin) => {
+                        try {
+                            // Les informations des magasins (dont potentiellement l'ID) viennent déjà de l'API
+                            // GET /inventory/{id}/warehouses/ via InventoryService.getInventoryWarehouses
+                            const whId = (magasin as any).id
+
+                            if (typeof whId === 'number' && whId > 0) {
+                                return inventoryStore.launchInventoryByWarehause(currentInventoryId, whId)
+                            }
+                            logger.warn(`Warehouse ID invalide pour le magasin ${magasin.nom}: ${whId}`)
+                            return null
+                        } catch (error) {
+                            logger.error(`Erreur lors du lancement pour le magasin ${magasin.nom}`, error)
+                            return null
+                        }
+                    })
+
+                    await Promise.all(launchPromises)
+                }
                 await loadDetailData()
 
                 await alertService.success({
-                    text: 'L\'inventaire a été lancé avec succès'
+                    text: warehouseId
+                        ? 'L\'inventaire a été lancé avec succès pour ce magasin'
+                        : 'L\'inventaire a été lancé avec succès'
                 })
                 return true
             }
@@ -234,6 +502,46 @@ export function useInventoryDetail(inventoryReference: string) {
             await alertService.error({
                 title: 'Erreur de lancement',
                 text: 'Une erreur est survenue lors du lancement de l\'inventaire'
+            })
+            return false
+        }
+    }
+
+    /**
+     * Lance l'inventaire pour un warehouse par son nom
+     * Récupère l'ID du warehouse depuis son nom puis lance l'inventaire
+     *
+     * @param warehouseName - Nom du warehouse
+     */
+    const launchInventoryByWarehouseName = async (warehouseName: string) => {
+        if (!inventory.value || !inventoryId.value) return false
+
+        try {
+            // Les informations de magasins viennent déjà de l'API
+            // GET /inventory/{id}/warehouses/ et sont exposées dans inventory.value.magasins
+            const magasin = inventory.value.magasins.find((m: any) => m.nom === warehouseName)
+
+            const warehouseId = magasin?.id
+
+            if (!warehouseId || typeof warehouseId !== 'number' || warehouseId <= 0) {
+                await alertService.error({
+                    title: 'Erreur',
+                    text: `Impossible de trouver le magasin "${warehouseName}"`
+                })
+                logger.warn('[useInventoryDetail] ID de magasin introuvable dans les données de warehouses', {
+                    warehouseName,
+                    magasins: inventory.value.magasins
+                })
+                return false
+            }
+
+            // Lancer l'inventaire pour ce warehouse
+            return await launchInventoryByWarehause(warehouseId)
+        } catch (error) {
+            logger.error('Erreur lors de la récupération du warehouse à partir des données d\'inventaire', error)
+            await alertService.error({
+                title: 'Erreur',
+                text: 'Une erreur est survenue lors de la récupération du magasin'
             })
             return false
         }
@@ -426,6 +734,94 @@ export function useInventoryDetail(inventoryReference: string) {
         }
     }
 
+    // ===== MODAL RESSOURCES (état + méthodes) =====
+    const showAddResourceModal = ref(false)
+    const resourceLines = ref([{ resource: '', quantity: 1 }])
+    const availableResources = ref<any[]>([])
+
+    const resourceOptions = computed(() => {
+        return resourceStore.getResources
+            .filter((r: any) => r.id)
+            .map((r: any) => ({
+                value: String(r.id),
+                label: r.ressource_nom || r.libelle
+            }))
+    })
+
+    const addResourceLine = () => {
+        resourceLines.value.push({ resource: '', quantity: 1 })
+    }
+
+    const removeResourceLine = (index: number) => {
+        if (resourceLines.value.length > 1) {
+            resourceLines.value.splice(index, 1)
+        }
+    }
+
+    const getAvailableResourceOptions = (currentIndex: number) => {
+        const selected = resourceLines.value
+            .map((line, idx) => (idx !== currentIndex ? line.resource : null))
+            .filter((v): v is string => v != null && v !== '')
+        return resourceOptions.value.filter(opt => !selected.includes(opt.value))
+    }
+
+    const resourceFields = (index: number): FieldConfig[] => [
+        {
+            key: 'resource',
+            label: 'Ressource',
+            type: 'select',
+            options: getAvailableResourceOptions(index),
+            required: true,
+            props: { placeholder: 'Choisissez une ressource' }
+        },
+        {
+            key: 'quantity',
+            label: 'Quantité',
+            type: 'number',
+            required: true,
+            props: { min: 1, type: 'number', inputmode: 'numeric', placeholder: 'Quantité' }
+        }
+    ]
+
+    const loadAvailableResources = async () => {
+        try {
+            const resources = await getAvailableResources()
+            availableResources.value = resources || []
+        } catch (err) {
+            logger.error('Erreur lors du chargement des ressources disponibles', err)
+            availableResources.value = []
+        }
+    }
+
+    const onAddResources = async () => {
+        try {
+            const validLines = resourceLines.value.filter(line => line.resource && line.quantity > 0)
+            if (validLines.length === 0) {
+                await alertService.error({ text: 'Veuillez sélectionner au moins une ressource avec une quantité valide.' })
+                return
+            }
+            const resourcesToAssign = validLines.map(line => ({
+                resource_id: parseInt(line.resource),
+                quantity: line.quantity
+            }))
+            await assignResourceToInventory(resourcesToAssign)
+            showAddResourceModal.value = false
+            resourceLines.value = [{ resource: '', quantity: 1 }]
+            await loadDetailData()
+        } catch (err) {
+            logger.error('Erreur lors de l\'ajout des ressources', err)
+        }
+    }
+
+    const openAddResourceModal = async () => {
+        if (resourceStore.getResources.length === 0) {
+            await resourceStore.fetchResources()
+        }
+        await loadAvailableResources()
+        resourceLines.value = [{ resource: '', quantity: 1 }]
+        showAddResourceModal.value = true
+    }
+
     // ===== EXPORT PDF =====
 
     /**
@@ -542,8 +938,34 @@ export function useInventoryDetail(inventoryReference: string) {
         resourcesLoading,
         resourcesError,
 
+        // Pagination équipe
+        teamCurrentPage,
+        teamItemsPerPage,
+        paginatedTeam,
+        teamTotalPages,
+        getTeamUserName,
+
+        // Boutons et navigation warehouse
+        actionButtons,
+        getWarehouseButtons,
+        ACTION_BUTTON_CLASS,
+        goToWarehousePlanning,
+        goToWarehouseAffectation,
+        goToWarehouseReaffectation,
+        goToWarehouseResults,
+        goToWarehouseTracking,
+        goToWarehouseMonitoring,
+
+        // Helpers affichage
+        getStatusBadgeVariant,
+        hasAnyOption,
+        getCountModeBadgeClass,
+        getCountModeLabel,
+
         // Actions sur l'inventaire
-        launchInventory,
+        launchInventoryByWarehause,
+        launchInventoryByWarehouseName,
+        launchInventory: launchInventoryByWarehause,
         editInventory,
         cancelInventory,
         terminateInventory,
@@ -560,6 +982,17 @@ export function useInventoryDetail(inventoryReference: string) {
         updateResourceQuantity,
         removeResourceFromInventory,
         getAvailableResources,
+        showAddResourceModal,
+        resourceLines,
+        availableResources,
+        resourceOptions,
+        addResourceLine,
+        removeResourceLine,
+        getAvailableResourceOptions,
+        resourceFields,
+        loadAvailableResources,
+        onAddResources,
+        openAddResourceModal,
 
         // Export
         exportToPDF,

@@ -36,7 +36,7 @@ import type { Component } from 'vue'
  */
 export interface ButtonGroupButton {
     id?: string | number
-    label: string
+    label?: string
     icon?: Component
     onClick: () => void | Promise<void>
     variant?: 'primary' | 'success' | 'danger' | 'warning' | 'info' | 'default'
@@ -75,17 +75,17 @@ const getBorderRadiusClass = (index: number, total: number): string => {
         // Un seul bouton : tous les coins arrondis
         return 'rounded-lg'
     }
-    
+
     if (index === 0) {
         // Premier bouton : coins arrondis à gauche
         return 'rounded-l-lg'
     }
-    
+
     if (index === total - 1) {
         // Dernier bouton : coins arrondis à droite
         return 'rounded-r-lg'
     }
-    
+
     // Boutons du milieu : pas de coins arrondis
     return 'rounded-none'
 }

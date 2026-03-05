@@ -18,7 +18,7 @@ import { ref, computed, watch, markRaw, onMounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 
 // ===== IMPORTS COMPOSABLES =====
-import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
+import { useQueryModel } from '@SMATCH-Digital-dev/vue-system-design'
 
 // ===== IMPORTS STORES =====
 import { useInventoryStore } from '@/stores/inventory'
@@ -36,12 +36,9 @@ import Swal from 'sweetalert2'
 // ===== IMPORTS TYPES =====
 import type { StoreOption } from '@/interfaces/inventoryResults'
 import type { JobResult, JobAssignment, JobEmplacement } from '@/models/Job'
-import type { DataTableColumn, ColumnDataType, ActionConfig } from '@/types/dataTable'
-import type { QueryModel } from '@/components/DataTable/types/QueryModel'
-import { createQueryModelFromDataTableParams, convertQueryModelToQueryParams } from '@/components/DataTable/utils/queryModelConverter'
-
-// ===== IMPORTS UTILS =====
-import { mergeQueryModelWithCustomParams } from '@/components/DataTable/utils/queryModelConverter'
+import type { DataTableColumn, ColumnDataType, ActionConfig } from '@SMATCH-Digital-dev/vue-system-design'
+import type { QueryModel } from '@SMATCH-Digital-dev/vue-system-design'
+import { createQueryModelFromDataTableParams, convertQueryModelToQueryParams, mergeQueryModelWithCustomParams } from '@SMATCH-Digital-dev/vue-system-design'
 
 // ===== IMPORTS ICÔNES =====
 import IconPrinter from '@/components/icon/icon-printer.vue'
@@ -54,8 +51,10 @@ import IconPrinter from '@/components/icon/icon-printer.vue'
 export interface UseJobTrackingConfig {
     /** Référence de l'inventaire */
     inventoryReference?: string
-    /** ID du magasin initial */
+    /** ID du magasin initial (warehouse_id sous forme de string) */
     initialStoreId?: string
+    /** Référence du magasin initial (warehouse.reference ou warehouse_name depuis l'URL) */
+    initialWarehouseReference?: string
     /** Ordre du comptage initial */
     initialCountingOrder?: number
 }
@@ -189,8 +188,11 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
     /** Options de magasins */
     const storeOptions = ref<StoreOption[]>([])
 
-    /** Magasin sélectionné */
+    /** Magasin sélectionné (warehouse_id au format string) */
     const selectedStore = ref<string | null>(config?.initialStoreId ?? null)
+
+    /** Référence du magasin initial (ex. depuis l'URL ?warehouse=REF) */
+    const initialWarehouseReference = ref<string | null>(config?.initialWarehouseReference ?? null)
 
     // Paramètres personnalisés pour les appels API
     const trackingCustomParams = computed(() => ({
@@ -255,7 +257,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
         // Utiliser directement les valeurs du backend depuis jobsPaginationMetadata
         const currentPageValue = storeMetadata?.page ?? 1
-        const pageSizeValue = storeMetadata?.pageSize ?? 20
+        const pageSizeValue = storeMetadata?.pageSize ?? 50
         const totalValue = storeMetadata?.total ?? 0
         let totalPagesValue = storeMetadata?.totalPages ?? 0
 
@@ -299,7 +301,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         // S'assurer que le QueryModel a des valeurs par défaut valides
         const sanitizedQueryModel: QueryModel = {
             page: queryModel.page ?? 1,
-            pageSize: queryModel.pageSize ?? 20,
+            pageSize: queryModel.pageSize ?? 50,
             sort: queryModel.sort ?? [],
             filters: queryModel.filters ?? {},
             search: queryModel.search ?? '',
@@ -318,7 +320,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         }
 
         // Éviter les appels API inutiles pour les événements de filtre/recherche vides
-        if (eventType === 'filter' || eventType === 'search') {
+        if (eventType === 'query-model-changed' || eventType === 'filter' || eventType === 'search') {
             const hasFilters = Object.keys(finalQueryModel.filters || {}).length > 0
             const hasSearch = !!finalQueryModel.search?.trim()
             const hasSorting = (finalQueryModel.sort || []).length > 0
@@ -1190,7 +1192,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             const response = await jobStore.fetchJobsDiscrepancies(inventoryId.value, warehouseId, apiParams)
 
             // Le backend renvoie un objet avec success, data, rowCount, totalCount, page, pageSize
-            // Format: { success: true, data: [...], rowCount: 2, totalCount: 2, page: 1, pageSize: 20 }
+            // Format: { success: true, data: [...], rowCount: 2, totalCount: 2, page: 1, pageSize: 50 }
             let jobs: any[] = []
             if (response?.success && response?.data && Array.isArray(response.data)) {
                 // Format standard avec success et data
@@ -1295,9 +1297,31 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             await fetchStores()
 
             // 3. Charger les jobs immédiatement si un magasin est disponible
-            // Sélectionner automatiquement le premier magasin si aucun n'est sélectionné
+            // Sélectionner automatiquement le magasin provenant de l'URL si présent,
+            // sinon fallback sur le premier magasin disponible
             if (!selectedStore.value && storeOptions.value.length > 0) {
-                selectedStore.value = storeOptions.value[0].value
+                // Si une référence de warehouse est fournie (via URL), la faire correspondre
+                if (initialWarehouseReference.value) {
+                    const targetRef = initialWarehouseReference.value
+                    // Chercher par référence ou nom
+                    const matchingStore = storeOptions.value.find(opt => {
+                        const warehouse = warehouses.value.find(w => String(w.id) === opt.value)
+                        return warehouse && (
+                            warehouse.reference === targetRef ||
+                            warehouse.warehouse_name === targetRef ||
+                            opt.label === targetRef
+                        )
+                    })
+
+                    if (matchingStore) {
+                        selectedStore.value = matchingStore.value
+                    }
+                }
+
+                // Fallback : si toujours rien de sélectionné, prendre le premier
+                if (!selectedStore.value) {
+                    selectedStore.value = storeOptions.value[0].value
+                }
             }
 
             // Charger les données immédiatement (non-bloquant)
@@ -1305,7 +1329,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 // Charger avec un QueryModel par défaut
                 const defaultQueryModel: QueryModel = {
                     page: 1,
-                    pageSize: 20,
+                    pageSize: 50,
                     sort: [],
                     filters: {},
                     search: '',
@@ -1360,7 +1384,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                         // Créer un QueryModel depuis l'état sauvegardé
                         const savedQueryModel: QueryModel = {
                             page: parsedState.page || 1,
-                            pageSize: parsedState.pageSize || 20,
+                            pageSize: parsedState.pageSize || 50,
                             sort: parsedState.sort || [],
                             filters: parsedState.filters || {},
                             search: parsedState.search || ''
@@ -1378,7 +1402,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 console.log('[useJobTracking.initialize] No saved state, loading default data')
                 await fetchTrackingData({
                     page: 1,
-                    pageSize: 20,
+                    pageSize: 50,
                     sort: [],
                     filters: {},
                     search: '',
@@ -1443,7 +1467,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             // Charger immédiatement avec un QueryModel par défaut (non-bloquant pour meilleure UX)
             const defaultQueryModel: QueryModel = {
                 page: 1,
-                pageSize: 20,
+                pageSize: 50,
                 sort: [],
                 filters: {},
                 search: '',
@@ -1466,9 +1490,9 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
     const printJobs = async () => {
         try {
             // Charger les sessions si nécessaire
-            if (sessionStore.getAllSessions.length === 0) {
-                await sessionStore.fetchSessions()
-            }
+            // if (sessionStore.getAllSessions.length === 0) {
+            //     await sessionStore.fetchSessions()
+            // }
 
             const sessions = sessionStore.getAllSessions
 
@@ -1800,6 +1824,9 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
         // Handlers DataTable harmonisés avec useInventoryResults.ts
         onTrackingTableEvent,
+
+        // Paramètres personnalisés pour la DataTable (inventory_id, warehouse_id)
+        trackingCustomParams,
 
         // Clés pour forcer le re-render (harmonisé avec useAffecter.ts et useInventoryResults.ts)
         trackingKey,

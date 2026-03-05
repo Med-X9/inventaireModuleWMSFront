@@ -24,6 +24,11 @@ export interface InventoryEquipe {
 }
 
 export interface InventoryMagasin {
+    /**
+     * ID du magasin tel que renvoyé par l'API
+     * (endpoint: /inventory/{id}/warehouses/)
+     */
+    id?: number;
     nom: string;
     date: string | null;
 }

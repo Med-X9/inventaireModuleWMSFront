@@ -20,15 +20,16 @@ import { InventoryService } from '@/services/InventoryService'
 import { useInventoryStore } from '@/stores/inventory'
 import { useAppStore } from '@/stores'
 import { useWarehouseStore } from '@/stores/warehouse'
-import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
-import { convertQueryModelToQueryParams } from '@/components/DataTable/utils/queryModelConverter'
-import type { QueryModel } from '@/components/DataTable/types/QueryModel'
+import { useQueryModel } from '@SMATCH-Digital-dev/vue-system-design'
+import { convertQueryModelToQueryParams } from '@SMATCH-Digital-dev/vue-system-design'
+import type { QueryModel } from '@SMATCH-Digital-dev/vue-system-design'
 import type { Store, PlanningAction, ViewModeType } from '@/interfaces/planningManagement'
 
 // ===== IMPORTS ICÔNES =====
 import IconUser from '@/components/icon/icon-user.vue'
 import IconCalendar from '@/components/icon/icon-calendar.vue'
 import IconBarChart from '@/components/icon/icon-bar-chart.vue'
+import IconRefresh from '@/components/icon/icon-refresh.vue'
 
 // ===== CONSTANTES =====
 
@@ -120,7 +121,7 @@ export function usePlanningManagement(inventoryRef?: string) {
      * État de pagination actuel
      */
     const currentPage = ref(1)
-    const pageSize = ref(20)
+    const pageSize = ref(50)
 
     // ===== QUERYMODEL =====
 
@@ -135,6 +136,14 @@ export function usePlanningManagement(inventoryRef?: string) {
      * Cache des IDs de warehouse pour optimisation
      */
     const warehouseIdMap = ref<Map<string, number>>(new Map())
+
+    /** Paramètres personnalisés pour la DataTable (harmonisé avec useInventoryResults) */
+    const planningCustomParams = computed(() => ({
+        inventory_id: inventoryId.value
+    }))
+
+    /** Référence au composant DataTable du planning */
+    const planningTableRef = ref<any>(null)
 
     /**
      * Pagination calculée pour le planning management
@@ -282,6 +291,19 @@ export function usePlanningManagement(inventoryRef?: string) {
                 })
             }
         },
+        {
+            label: 'Réaffecter',
+            icon: IconRefresh,
+            handler: (store: Store) => {
+                router.push({
+                    name: 'inventory-reaffectation',
+                    params: {
+                        reference: inventoryReference.value || '',
+                        warehouse: store.reference || ''
+                    }
+                })
+            }
+        },
         // Monitoring seulement si l'inventaire est disponible
         ...(inventoryId.value ? [{
             label: 'Monitoring',
@@ -377,7 +399,7 @@ export function usePlanningManagement(inventoryRef?: string) {
             // Créer un QueryModel par défaut si non fourni
             const finalQueryModel: QueryModel = queryModel || {
                 page: 1,
-                pageSize: 20,
+                pageSize: 50,
                 sort: [],
                 filters: {},
                 search: '',
@@ -389,7 +411,7 @@ export function usePlanningManagement(inventoryRef?: string) {
             // Mettre à jour l'état local de pagination si on reçoit un QueryModel
             if (queryModel) {
                 currentPage.value = queryModel.page || 1
-                pageSize.value = queryModel.pageSize || 20
+                pageSize.value = queryModel.pageSize || 50
             }
 
             await nextTick()
@@ -432,7 +454,7 @@ export function usePlanningManagement(inventoryRef?: string) {
      */
     const resetPlanningDataTable = async () => {
         currentPage.value = 1
-        pageSize.value = 20
+        pageSize.value = 50
         await loadPlanningData()
     }
 
@@ -535,6 +557,16 @@ export function usePlanningManagement(inventoryRef?: string) {
      */
     const goToAffectation = (reference: string): void => {
         router.push({ name: 'inventory-affecter', params: { reference } })
+    }
+
+    /**
+     * Navigation vers la page de réaffectation
+     */
+    const goToReaffectation = (reference: string, warehouse: string): void => {
+        router.push({
+            name: 'inventory-reaffectation',
+            params: { reference, warehouse }
+        })
     }
 
     /**
@@ -697,6 +729,7 @@ export function usePlanningManagement(inventoryRef?: string) {
         // ===== NAVIGATION =====
         goToInventoryDetail,
         goToAffectation,
+        goToReaffectation,
         goToJobTracking,
         goToMonitoring,
 
@@ -719,6 +752,10 @@ export function usePlanningManagement(inventoryRef?: string) {
         // ===== HANDLERS GRIDVIEW =====
         adaptedHandleItemClick,
         adaptedHandleActionsClick,
+
+        // ===== DATATABLE =====
+        planningCustomParams,
+        planningTableRef,
 
         // ===== PAGINATION =====
         currentPage,

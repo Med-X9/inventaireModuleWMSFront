@@ -642,12 +642,7 @@ export function useInventoryCreation() {
         try {
             // Utiliser validateComptage qui prend un ComptageConfig directement
             // Cette méthode fait la conversion et la validation complète
-            console.log(`[validateComptage] Validation du comptage ${step + 1}`, {
-                mode: comptage.mode,
-                comptage: JSON.parse(JSON.stringify(comptage))
-            });
             inventoryCreationService.validateComptage(comptage);
-            console.log(`[validateComptage] ✅ Comptage ${step + 1} validé avec succès`);
             return true;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -659,10 +654,6 @@ export function useInventoryCreation() {
                 errorName: error instanceof Error ? error.name : 'UnknownError',
                 errorStack: error instanceof Error ? error.stack : undefined
             };
-
-            console.error(`[validateComptage] ❌ Erreur de validation du comptage ${step + 1}:`, errorDetails);
-            console.error(`[validateComptage] Message d'erreur:`, errorMessage);
-            console.error(`[validateComptage] Erreur complète:`, error);
 
             logger.error(`[validateComptage] Erreur de validation du comptage ${step + 1}`, errorDetails);
             return false;
@@ -944,6 +935,8 @@ export function useInventoryCreation() {
         resetForm,
         validateComptage,
         validateAllComptages,
-        validateBusinessRules
+        validateBusinessRules,
+        accountOptions,
+        warehouseOptions
     };
 }

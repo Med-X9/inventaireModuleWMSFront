@@ -5,8 +5,8 @@ import { EcartComptageService, type BulkResolveEcartsResponse } from '@/services
 import type { InventoryResult, StoreOption } from '@/interfaces/inventoryResults';
 import type { AxiosResponse } from 'axios';
 import { logger } from '@/services/loggerService';
-import type { QueryModel } from '@/components/DataTable/types/QueryModel';
-import { convertQueryModelToQueryParams } from '@/components/DataTable/utils/queryModelConverter';
+import type { QueryModel } from '@SMATCH-Digital-dev/vue-system-design';
+import { convertQueryModelToQueryParams } from '@SMATCH-Digital-dev/vue-system-design';
 
 export const useResultsStore = defineStore('results', () => {
     // State
@@ -87,9 +87,19 @@ export const useResultsStore = defineStore('results', () => {
 
             const response = await InventoryResultsService.getResults(inventoryId, storeId, requestBody);
 
+            // DEBUG données : réponse API → store
+            const rows = (response.rows as InventoryResult[]) || [];
+            const rowsLength = Array.isArray(rows) ? rows.length : 0;
+            console.log('[DEBUG resultsStore.fetchResults]', {
+                inventoryId,
+                storeId,
+                rowsLength,
+                pagination: { page: response.page, pageSize: response.pageSize, total: response.total, totalPages: response.totalPages },
+                firstRowKeys: rowsLength > 0 && typeof rows[0] === 'object' ? Object.keys(rows[0]).slice(0, 10) : []
+            });
+
             // Stocker les données brutes (rows selon FORMAT_ACTUEL.md)
-            // La normalisation des résultats sera faite dans le composable
-            results.value = (response.rows as InventoryResult[]) || [];
+            results.value = rows;
             currentInventoryId.value = inventoryId;
 
             // Stocker les métadonnées de pagination brutes du backend (selon FORMAT_ACTUEL.md)

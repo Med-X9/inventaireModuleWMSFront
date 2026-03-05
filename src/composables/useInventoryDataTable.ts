@@ -16,10 +16,10 @@ import { ref, computed, type Ref, type ComputedRef } from 'vue'
 import { logger } from '@/services/loggerService'
 
 // ===== IMPORTS UTILS =====
-import { type StandardDataTableParams, convertToStandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter'
-import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
-import { convertQueryModelToQueryParams, convertQueryModelToRestApi, createQueryModelFromDataTableParams } from '@/components/DataTable/utils/queryModelConverter'
-import type { QueryModel } from '@/components/DataTable/types/QueryModel'
+import { type StandardDataTableParams, convertToStandardDataTableParams } from '@SMATCH-Digital-dev/vue-system-design/dist/components/DataTable/utils/dataTableParamsConverter'
+import { useQueryModel } from '@SMATCH-Digital-dev/vue-system-design'
+import { convertQueryModelToQueryParams, convertQueryModelToRestApi, createQueryModelFromDataTableParams } from '@SMATCH-Digital-dev/vue-system-design'
+import type { QueryModel } from '@SMATCH-Digital-dev/vue-system-design'
 
 // ===== IMPORTS STORES =====
 import { useInventoryStore } from '@/stores/inventory'
@@ -108,7 +108,7 @@ export interface PaginationInfo {
  * @returns État et méthodes pour gérer le DataTable
  */
 export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) {
-    const { store, fetchAction, defaultPageSize = 20, queryOutputMode = 'queryParams', additionalParams } = config
+    const { store, fetchAction, defaultPageSize = 50, queryOutputMode = 'queryParams', additionalParams } = config
 
     // ===== ÉTAT RÉACTIF =====
 
@@ -319,8 +319,8 @@ export function useGenericDataTable<T = any>(config: GenericDataTableConfig<T>) 
      * @returns Objet contenant page, pageSize, searchQuery, sortModel, filters
      */
     const extractFromStandardParams = (standardParams: StandardDataTableParams) => {
-        const page = Math.floor((standardParams.start || 0) / (standardParams.length || 20)) + 1
-        const extractedPageSize = standardParams.length || 20
+        const page = Math.floor((standardParams.start || 0) / (standardParams.length || 50)) + 1
+        const extractedPageSize = standardParams.length || 50
         const extractedSearch = standardParams['search[value]'] || ''
 
         // Extraire les filtres depuis les paramètres standard
@@ -679,6 +679,6 @@ export function useInventoryDataTable() {
     return useGenericDataTable<InventoryTable>({
         store: inventoryStore,
         fetchAction: 'fetchInventories',
-        defaultPageSize: 20
+        defaultPageSize: 50
     })
 }

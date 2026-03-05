@@ -1,7 +1,7 @@
 <template>
     <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 dark:from-slate-900 dark:to-slate-800 p-8">
         <!-- Header et Barre d'actions fusionnées -->
-        <div class="bg-white dark:bg-slate-800 rounded-3xl p-8 mb-8 shadow-lg border border-slate-200 dark:border-slate-700">
+        <Card class="mb-8 p-8 rounded-3xl shadow-lg border border-slate-200 dark:border-slate-700">
             <!-- Section Header -->
             <div class="flex justify-between items-center gap-8 mb-6">
                 <div class="flex-1">
@@ -11,12 +11,12 @@
                     </h1>
                 </div>
                 <div class="flex justify-end">
-                    <ButtonGroup :buttons="navigationButtons" justify="end" />
+                    <ButtonGroup :buttons="adaptedNavigationButtons" justify="end" />
                 </div>
             </div>
 
             <!-- Séparateur -->
-            <hr class="border-slate-200 dark:border-slate-700 my-6" />
+            <Divider class="my-6" />
 
             <!-- Section Barre d'actions -->
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
@@ -46,15 +46,18 @@
 
                 <!-- Boutons d'action -->
                 <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-                    <!-- Dropdown pour les affectations -->
-                    <div class="relative" ref="dropdownRef">
-                        <button
-                            @click="toggleDropdown"
-                            @keydown.down.prevent="focusFirstItem"
-                            class="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                            aria-haspopup="true"
-                            :aria-expanded="showDropdown"
-                            type="button">
+                    <!-- Dropdown pour les affectations - Utilisation du système de design -->
+                    <Dropdown
+                        v-model="showDropdown"
+                        placement="bottom-end"
+                        trigger="click"
+                        :offset="8"
+                        aria-label="Menu d'affectation">
+                        <template #trigger>
+                            <Button
+                                variant="primary"
+                                size="md"
+                                class="flex items-center justify-center gap-2">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-2.025m13.5-8.5a2.121 2.121 0 00-3-3L7 9l2.025 2.025M13.5 21V9l-6-6" />
                             </svg>
@@ -62,23 +65,14 @@
                             <svg class="w-4 h-4 transition-transform duration-200" :class="{ 'rotate-180': showDropdown }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                             </svg>
-                        </button>
-                        <Transition name="dropdown" appear>
-                            <ul
-                                v-if="showDropdown"
-                                class="absolute right-0 z-50 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl focus:outline-none max-h-60 overflow-y-auto py-2"
-                                role="menu"
-                                tabindex="-1"
-                                @keydown.esc="closeDropdown"
-                                @keydown.down.prevent="focusNextItem"
-                                @keydown.up.prevent="focusPrevItem">
-                                <li v-for="(item, idx) in dropdownItems" :key="item.label">
-                                    <button
-                                        ref="el => setDropdownItemRef(el, idx)"
-                                        class="w-full flex items-center gap-3 text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 focus:bg-blue-100 dark:focus:bg-blue-900/30 transition-colors duration-150 rounded-lg mx-2"
-                                        @click="item.action(); closeDropdown()"
-                                        @keydown.enter.prevent="item.action(); closeDropdown()"
-                                        role="menuitem">
+                            </Button>
+                        </template>
+                        <template #menu>
+                            <div class="w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl max-h-60 overflow-y-auto py-2">
+                                <div v-for="(item, idx) in dropdownItems" :key="item.label">
+                                    <DropdownItem
+                                        @click="item.action(); showDropdown = false"
+                                        class="w-full flex items-center gap-3 text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
                                         <span class="w-6 h-6 flex items-center justify-center rounded-lg" :class="{
                                             'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400': item.icon === 'premier',
                                             'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400': item.icon === 'deuxieme',
@@ -95,34 +89,36 @@
                                             </svg>
                                         </span>
                                         <span class="font-medium text-slate-900 dark:text-white">{{ item.label }}</span>
-                                    </button>
+                                    </DropdownItem>
                                     <div v-if="idx < dropdownItems.length - 1" class="border-b border-slate-100 dark:border-slate-700 mx-4 my-1"></div>
-                                </li>
-                            </ul>
-                        </Transition>
+                                </div>
                     </div>
+                        </template>
+                    </Dropdown>
 
                     <!-- ButtonGroup pour les autres boutons -->
-                    <ButtonGroup :buttons="actionButtons" justify="end" />
+                    <ButtonGroup :buttons="adaptedActionButtons" justify="end" />
                 </div>
             </div>
-        </div>
+        </Card>
 
         <!-- DataTable -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <Card class="overflow-hidden">
             <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 m-0">Liste des jobs</h3>
                 <div class="relative inline-block" ref="statusLegendTooltip">
-                    <button
+                    <Button
                         @mouseenter="showStatusTooltip"
                         @mouseleave="hideStatusTooltip"
-                        class="w-6 h-6 rounded-full bg-primary/10 hover:bg-primary/20 dark:bg-primary/20 dark:hover:bg-primary/30 flex items-center justify-center transition-colors cursor-help"
+                        variant="ghost"
+                        size="sm"
+                        class="w-6 h-6 rounded-full p-0 cursor-help"
                         type="button"
                         aria-label="Signification des statuts">
                         <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
-                    </button>
+                    </Button>
                     <Teleport to="body">
                         <div
                             v-if="showStatusLegend"
@@ -133,31 +129,31 @@
                             <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Signification des statuts</h4>
                             <div class="space-y-2">
                                 <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center rounded-md bg-slate-200 px-2 py-1 text-xs font-medium text-slate-900 ring-1 ring-slate-300/20 ring-inset">EN ATTENTE</span>
+                                    <Badge variant="primary" size="sm" class="bg-slate-200 text-slate-900">EN ATTENTE</Badge>
                                     <span class="text-xs text-slate-600 dark:text-slate-400">Job en attente de validation</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset">VALIDE</span>
+                                    <Badge variant="primary" size="sm" class="bg-slate-700 text-white">VALIDE</Badge>
                                     <span class="text-xs text-slate-600 dark:text-slate-400">Job validé</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center rounded-md bg-teal-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-teal-600/20 ring-inset">AFFECTE</span>
+                                    <Badge variant="success" size="sm">AFFECTE</Badge>
                                     <span class="text-xs text-slate-600 dark:text-slate-400">Job affecté à une équipe</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center rounded-md bg-purple-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-purple-600/20 ring-inset">PRET</span>
+                                    <Badge variant="warning" size="sm" class="bg-purple-500 text-white">PRET</Badge>
                                     <span class="text-xs text-slate-600 dark:text-slate-400">Job prêt pour le comptage</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset">TRANSFERT</span>
+                                    <Badge variant="warning" size="sm" class="bg-amber-500 text-white">TRANSFERT</Badge>
                                     <span class="text-xs text-slate-600 dark:text-slate-400">Job en transfert</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset">ENTAME</span>
+                                    <Badge variant="info" size="sm">ENTAME</Badge>
                                     <span class="text-xs text-slate-600 dark:text-slate-400">Comptage entamé</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <span class="inline-flex items-center rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-700/20 ring-inset">TERMINE</span>
+                                    <Badge variant="success" size="sm" class="bg-green-600 text-white">TERMINE</Badge>
                                     <span class="text-xs text-slate-600 dark:text-slate-400">Comptage terminé</span>
                                 </div>
                             </div>
@@ -167,36 +163,35 @@
                 </div>
             </div>
 
-            <!-- DataTable des jobs harmonisée avec Planning.vue -->
+            <!-- DataTable des jobs - config harmonisée avec InventoryResults.vue -->
             <DataTable
                 :key="jobsKey"
                 :columns="adaptedStoreJobsColumns"
                 :rowDataProp="jobs"
-                :queryModelProp="jobsQueryModel"
                 :actions="[]"
-                :loading="jobsLoading"
-                :enableVirtualScrolling="false"
+                :enableVirtualScrolling="undefined"
                 :currentPageProp="jobPaginationMetadata?.page"
                 :totalPagesProp="jobPaginationMetadata?.totalPages"
                 :totalItemsProp="jobPaginationMetadata?.total"
                 :pageSizeProp="jobPaginationMetadata?.pageSize"
                 :rowSelection="true"
-                :enableRowClick="true"
+                :loading="jobsLoading"
+                :customDataTableParams="jobsCustomParams"
+                @query-model-changed="(queryModel) => onJobsTableEvent('query-model-changed', queryModel)"
+                storageKey="affecter_table"
+                ref="jobsTableRef"
+                :enableDynamicColumns="false"
+                :debounceFilter="300"
+                :debounceSearch="300"
+                :pagination="true"
                 @selection-changed="onJobSelectionChanged"
                 @row-clicked="onRowClicked"
-                @pagination-changed="(queryModel) => onJobsTableEvent('pagination', queryModel)"
-                @page-size-changed="(queryModel) => onJobsTableEvent('page-size-changed', queryModel)"
-                @sort-changed="(queryModel) => onJobsTableEvent('sort', queryModel)"
-                @filter-changed="(queryModel) => onJobsTableEvent('filter', queryModel)"
-                @global-search-changed="(queryModel) => onJobsTableEvent('search', queryModel)"
-                storageKey="affecter_table"
-                ref="jobsTableRef">
-            </DataTable>
+            />
 
-        </div>
+        </Card>
 
         <!-- Modals -->
-        <Modal v-model="showTeamModal" :title="modalTitle">
+        <Dialog v-model="showTeamModal" :title="modalTitle">
             <div class="mt-4">
                 <FormBuilder
                     v-model="teamForm"
@@ -204,9 +199,9 @@
                     @submit="handleTeamSubmit"
                     submitLabel="Affecter" />
             </div>
-        </Modal>
+        </Dialog>
 
-        <Modal v-model="showResourceModal" title="Affecter Ressources">
+        <Dialog v-model="showResourceModal" title="Affecter Ressources">
             <div class="mt-4">
                 <FormBuilder
                     v-model="resourceForm"
@@ -215,21 +210,22 @@
                     submitLabel="Affecter"
                     :columns="1" />
             </div>
-        </Modal>
+        </Dialog>
 
-        <!-- Modal d'affectation de job spécialisée -->
-        <JobAffectationModal
+        <!-- Dialog d'affectation de job (package SMATCH) -->
+        <JobAffectationDialog
             :key="modalKey"
             v-model="showJobAffectationModal"
             :selected-job="selectedJobForModal"
             :team-options="modalTeamOptions"
             :team-options-by-counting-order="modalTeamOptionsByCountingOrder"
             :inventory-id="inventoryId"
+            :saving-assignment="assignmentSavingInModal"
             @team-changed="handleJobAffectationModalTeamChanged"
             @finish="handleJobAffectationModalFinish"
         />
 
-        <Modal v-model="showTransferModal" :title="`Transférer ${eligibleJobsForTransfer.length} Job(s)`" :size="'xl'">
+        <Dialog v-model="showTransferModal" :title="`Transférer ${eligibleJobsForTransfer.length} Job(s)`" :size="'xl'">
             <div class="flex flex-col" style="height: 75vh; max-height: 75vh;">
                 <!-- Section 1: Header et alert -->
                 <div class="flex-shrink-0 mb-4">
@@ -249,23 +245,18 @@
                         </div>
                     </div>
                     <!-- Alert pour les jobs exclus -->
-                    <div
+                    <Alert
                         v-if="selectedJobs.length - eligibleJobsForTransfer.length > 0"
-                        class="p-3 bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-800 rounded-lg">
-                        <div class="flex items-start">
-                            <svg class="w-5 h-5 text-warning-600 dark:text-warning-400 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                            </svg>
-                            <div class="flex-1">
-                                <p class="text-sm font-medium text-warning-800 dark:text-warning-300">
+                        type="warning"
+                        size="sm"
+                        class="mt-3">
+                        <p class="text-sm font-medium">
                                     {{ selectedJobs.length - eligibleJobsForTransfer.length }} job(s) ne sont pas éligibles au transfert
                                 </p>
-                                <p class="text-xs text-warning-700 dark:text-warning-400 mt-1">
+                        <p class="text-xs mt-1">
                                     Seuls les jobs en statut TRANSFERT, PRET ou ENTAME peuvent être transférés.
                                 </p>
-                            </div>
-                        </div>
-                    </div>
+                    </Alert>
                 </div>
 
                 <!-- Section 2: Liste des jobs -->
@@ -309,7 +300,7 @@
                 </div>
 
                 <!-- Divider -->
-                <div class="border-t border-slate-200 dark:border-slate-700 my-4"></div>
+                <Divider class="my-4" />
 
                 <!-- Formulaire de sélection du comptage -->
                 <div class="flex-shrink-0 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 mb-4">
@@ -321,9 +312,9 @@
                         :columns="1" />
                 </div>
             </div>
-        </Modal>
+        </Dialog>
 
-        <Modal v-model="showManualModal" :title="`Lancer manuellement ${eligibleJobsForManual.length} Job(s)`" :size="'xl'">
+        <Dialog v-model="showManualModal" :title="`Lancer manuellement ${eligibleJobsForManual.length} Job(s)`" :size="'xl'">
             <div class="flex flex-col" style="height: 75vh; max-height: 75vh;">
                 <!-- Section 1: Header et alert -->
                 <div class="flex-shrink-0 mb-4">
@@ -343,23 +334,18 @@
                         </div>
                     </div>
                     <!-- Alert pour les jobs exclus -->
-                    <div
+                    <Alert
                         v-if="selectedJobs.length - eligibleJobsForManual.length > 0"
-                        class="p-3 bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-800 rounded-lg">
-                        <div class="flex items-start">
-                            <svg class="w-5 h-5 text-warning-600 dark:text-warning-400 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                            </svg>
-                            <div class="flex-1">
-                                <p class="text-sm font-medium text-warning-800 dark:text-warning-300">
+                        type="warning"
+                        size="sm"
+                        class="mt-3">
+                        <p class="text-sm font-medium">
                                     {{ selectedJobs.length - eligibleJobsForManual.length }} job(s) ne sont pas éligibles pour le lancement manuel
                                 </p>
-                                <p class="text-xs text-warning-700 dark:text-warning-400 mt-1">
+                        <p class="text-xs mt-1">
                                     Seuls les jobs en statut PRET, TRANSFERT ou ENTAME peuvent être lancés manuellement.
                                 </p>
-                            </div>
-                        </div>
-                    </div>
+                    </Alert>
                 </div>
 
                 <!-- Section 2: Liste des jobs -->
@@ -402,7 +388,7 @@
                 </div>
 
                 <!-- Divider -->
-                <div class="border-t border-slate-200 dark:border-slate-700 my-4"></div>
+                <Divider class="my-4" />
 
                 <!-- Formulaire de sélection du comptage -->
                 <div class="flex-shrink-0 bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-lg p-4 mb-4">
@@ -414,7 +400,7 @@
                         :columns="1" />
                 </div>
             </div>
-        </Modal>
+        </Dialog>
     </div>
 </template>
 
@@ -433,23 +419,26 @@
  */
 
 // ===== IMPORTS VUE =====
-import { ref, nextTick, Teleport, watch } from 'vue'
+import { ref, computed, nextTick, Teleport, watch } from 'vue'
 
 // ===== IMPORTS ROUTER =====
 import { useRoute } from 'vue-router'
 
 // ===== IMPORTS COMPOSANTS =====
-import DataTable from '@/components/DataTable/DataTable.vue'
-import Modal from '@/components/Modal.vue'
-import JobAffectationModal from '@/components/JobAffectationModal.vue'
-import FormBuilder from '@/components/Form/FormBuilder.vue'
+import { Dialog, Button, Badge, Card, Dropdown, DropdownItem, DataTable, Divider, Alert } from '@SMATCH-Digital-dev/vue-system-design'
+// ButtonGroup n'est pas encore implémenté dans le package (seulement les types), utilisation du composant local
 import ButtonGroup from '@/components/Form/ButtonGroup.vue'
+import JobAffectationDialog from '@/components/JobAffectationDialog.vue'
+import FormBuilder from '@/components/Form/FormBuilder.vue'
 
 // ===== IMPORTS COMPOSABLES =====
 import { useAffecter } from '@/composables/useAffecter'
 
 // ===== IMPORTS ICÔNES =====
 import IconCalendar from '@/components/icon/icon-calendar.vue'
+
+// ===== IMPORTS TYPES =====
+import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
 
 // ===== ROUTE =====
 const route = useRoute()
@@ -473,7 +462,7 @@ let tooltipTimeoutId: number | null = null
 
 // ===== MODAL D'AFFECTATION =====
 // Utiliser les propriétés du composable useAffecter
-const { showJobAffectationModal, selectedJobForModal, modalTeamOptions, modalTeamOptionsByCountingOrder } = affecter
+const { showJobAffectationModal, selectedJobForModal, modalTeamOptions, modalTeamOptionsByCountingOrder, assignmentSavingInModal } = affecter
 
 // Clé pour forcer le re-render de la modal
 const modalKey = ref(0)
@@ -548,7 +537,6 @@ const {
     // Références harmonisées avec usePlanning.ts
     jobsTableRef,
     jobsKey,
-    dropdownRef,
 
     // État des modales
     showDropdown,
@@ -576,12 +564,6 @@ const {
     onCellValueChanged,
     onJobSelectionChanged,
     onRowClicked,
-    toggleDropdown,
-    focusFirstItem,
-    closeDropdown,
-    focusNextItem,
-    focusPrevItem,
-    setDropdownItemRef,
 
     // Handlers d'actions
     handleValiderClick,
@@ -607,6 +589,9 @@ const {
     // Handler DataTable unifié
     onJobsTableEvent,
 
+    // CustomParams pour les DataTables
+    jobsCustomParams,
+
     // Gestion des IDs
     initializeIdsFromReferences,
     refreshIdsFromReferences,
@@ -618,7 +603,6 @@ const {
     // Computed
     eligibleJobsForTransfer,
     eligibleJobsForManual,
-    sessionOptions,
     resourceOptions,
     showTransferButton,
     showManualButton,
@@ -630,7 +614,6 @@ const {
     jobsActions,
 
     // Utilitaires
-    loadSessionsIfNeeded,
     dateValueParser,
     dateValueSetter,
     getTransformedLocations,
@@ -649,6 +632,43 @@ const {
     loadJobs,
     refreshJobs
 } = affecter
+
+// ===== ADAPTATION DES BOUTONS POUR BUTTONGROUP DU PACKAGE =====
+/**
+ * Adapte les boutons de navigation au format ButtonGroup local
+ * Le composant ButtonGroup du package n'est pas encore implémenté, utilisation du composant local
+ */
+const adaptedNavigationButtons = computed<ButtonGroupButton[]>(() => {
+    return navigationButtons.value.map(button => ({
+        id: button.id,
+        label: button.label,
+        icon: button.icon,
+        onClick: button.onClick,
+        variant: button.variant,
+        type: button.type || 'button',
+        disabled: button.disabled,
+        visible: button.visible,
+        class: button.class
+    }))
+})
+
+/**
+ * Adapte les boutons d'action au format ButtonGroup local
+ * Le composant ButtonGroup du package n'est pas encore implémenté, utilisation du composant local
+ */
+const adaptedActionButtons = computed<ButtonGroupButton[]>(() => {
+    return actionButtons.value.map(button => ({
+        id: button.id,
+        label: button.label,
+        icon: button.icon,
+        onClick: button.onClick,
+        variant: button.variant,
+        type: button.type || 'button',
+        disabled: button.disabled,
+        visible: button.visible,
+        class: button.class
+    }))
+})
 </script>
 
 <style scoped>
@@ -683,21 +703,4 @@ const {
     background: #64748b;
 }
 
-/* Animations pour le dropdown */
-.dropdown-enter-active,
-.dropdown-leave-active {
-    transition: all 0.3s ease;
-}
-
-.dropdown-enter-from,
-.dropdown-leave-to {
-    opacity: 0;
-    transform: translateY(-10px) scale(0.95);
-}
-
-.dropdown-enter-to,
-.dropdown-leave-from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-}
 </style>

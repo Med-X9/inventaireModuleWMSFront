@@ -12,15 +12,14 @@
 
 // ===== IMPORTS =====
 
-import { ref, markRaw } from 'vue'
+import { ref, markRaw, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { alertService } from '@/services/alertService'
-import { dataTableService } from '@/services/dataTableService'
 import { useInventoryStore } from '@/stores/inventory'
-import type { DataTableColumn, ColumnDataType, ActionConfig } from '@/types/dataTable'
 import type { InventoryTable } from '@/models/Inventory'
-import type { QueryModel } from '@/components/DataTable/types/QueryModel'
+// Imports depuis le package @SMATCH-Digital-dev/vue-system-design (conforme à la documentation)
+import type { QueryModel, DataTableColumn, ActionConfig, ColumnDataType } from '@SMATCH-Digital-dev/vue-system-design'
 
 // ===== IMPORTS ICÔNES =====
 import IconEye from '@/components/icon/icon-eye.vue'
@@ -75,7 +74,21 @@ const STATUS_BADGE_STYLES = [
 export function useInventoryManagement() {
     const router = useRouter()
     const inventoryStore = useInventoryStore()
-    const { inventories } = storeToRefs(inventoryStore)
+    const { inventories, paginationMetadata, loading: inventoryLoading } = storeToRefs(inventoryStore)
+
+    /** Pagination pour DataTable - harmonisé avec useInventoryResults */
+    const pagination = computed(() => {
+        const meta = paginationMetadata.value
+        return {
+            current_page: meta?.page ?? 1,
+            total_pages: meta?.totalPages ?? 1,
+            total: meta?.total ?? 0,
+            page_size: meta?.pageSize ?? 50
+        }
+    })
+
+    /** Référence au composant DataTable des inventaires */
+    const inventoryTableRef = ref<any>(null)
 
     // ===== ÉTATS RÉACTIFS =====
 
@@ -119,11 +132,7 @@ export function useInventoryManagement() {
             sortable: true,
             dataType: 'text' as ColumnDataType,
             filterable: true,
-            width: dataTableService.calculateOptimalColumnWidth({
-                field: 'label',
-                headerName: 'Libellé',
-                dataType: 'text'
-            }),
+            width: 150,
             editable: true,
             visible: true,
             draggable: true,
@@ -137,11 +146,7 @@ export function useInventoryManagement() {
             sortable: true,
             dataType: 'date' as ColumnDataType,
             filterable: true,
-            width: dataTableService.calculateOptimalColumnWidth({
-                field: 'date',
-                headerName: 'Date',
-                dataType: 'date'
-            }),
+            width: 150,
             editable: true,
             visible: true,
             draggable: true,
@@ -156,11 +161,7 @@ export function useInventoryManagement() {
             sortable: true,
             dataType: 'select' as ColumnDataType,
             filterable: true,
-            width: dataTableService.calculateOptimalColumnWidth({
-                field: 'status',
-                headerName: 'Statut',
-                dataType: 'select'
-            }),
+            width: 150,
             editable: false,
             visible: true,
             draggable: true,
@@ -253,12 +254,14 @@ export function useInventoryManagement() {
     ]
 
     // Validation des colonnes
-    columns.forEach(column => {
-        const validation = dataTableService.validateColumnConfig(column)
-        if (!validation.isValid) {
-            console.warn(`Configuration de colonne invalide pour ${column.field}:`, validation.errors)
-        }
-    })
+    // Note: La validation est gérée par le DataTable du package @SMATCH-Digital-dev/vue-system-design
+    // La validation locale via dataTableService n'est plus nécessaire
+    // columns.forEach(column => {
+    //     const validation = dataTableService.validateColumnConfig(column)
+    //     if (!validation.isValid) {
+    //         console.warn(`Configuration de colonne invalide pour ${column.field}:`, validation.errors)
+    //     }
+    // })
 
     // ===== ACTIONS SUR LES INVENTAIRES =====
 
@@ -300,13 +303,6 @@ export function useInventoryManagement() {
             color: 'primary',
             onClick: (row: any) => handleEdit(row as InventoryTable),
             show: (row: any) => (row as InventoryTable).status === 'EN PREPARATION',
-        },
-        {
-            label: 'Résultats',
-            icon: markRaw(IconCheck),
-            color: 'primary',
-            onClick: (row: any) => handleResults(row as InventoryTable),
-            show: (row: any) => ['EN REALISATION', 'TERMINE', 'CLOTURE'].includes((row as InventoryTable).status),
         },
         {
             label: 'Supprimer',
@@ -359,11 +355,8 @@ export function useInventoryManagement() {
      * Ouverture de la modal d'ajout de planification
      */
     const handleAddPlanning = (inventory: InventoryTable) => {
-        console.log('[handleAddPlanning] Définition de currentPlanningInventory avec:', inventory)
-        console.log('[handleAddPlanning] ID de l\'inventaire:', inventory?.id)
         currentPlanningInventory.value = inventory
         showPlanningModal.value = true
-        console.log('[handleAddPlanning] currentPlanningInventory défini:', currentPlanningInventory.value)
     }
 
     /**
@@ -402,13 +395,10 @@ export function useInventoryManagement() {
      * Fermeture de la modal de planification
      */
     const closePlanningModal = () => {
-        console.log('[closePlanningModal] Fermeture de la modal - remise à null de currentPlanningInventory')
-        console.log('[closePlanningModal] currentPlanningInventory avant:', currentPlanningInventory.value)
         showPlanningModal.value = false
         planningFile.value = null
         isDraggingPlanning.value = false
         currentPlanningInventory.value = null
-        console.log('[closePlanningModal] currentPlanningInventory après:', currentPlanningInventory.value)
     }
 
     // ===== IMPORT D'IMAGE DE STOCK =====
@@ -491,22 +481,11 @@ export function useInventoryManagement() {
      * Upload et traitement d'un fichier de planification
      */
     const processPlanningUpload = async (file: File) => {
-        console.log('[processPlanningUpload] Début avec fichier:', file?.name)
-        console.log('[processPlanningUpload] currentPlanningInventory:', currentPlanningInventory.value)
-        console.log('[processPlanningUpload] currentPlanningInventory.value existe:', !!currentPlanningInventory.value)
-        console.log('[processPlanningUpload] currentPlanningInventory.value?.id:', currentPlanningInventory.value?.id)
-        console.log('[processPlanningUpload] typeof currentPlanningInventory.value?.id:', typeof currentPlanningInventory.value?.id)
-
-        // Vérifier si on a un ID ou une référence
         const inventoryId = currentPlanningInventory.value?.id || currentPlanningInventory.value?.reference
 
         if (!inventoryId) {
-            console.error('[processPlanningUpload] Ni id ni reference trouvés - RETOUR ANTICIPE')
-            console.error('[processPlanningUpload] Valeur complète:', JSON.stringify(currentPlanningInventory.value, null, 2))
             return
         }
-
-        console.log('[processPlanningUpload] Démarrage de l\'upload pour inventory ID/Reference:', inventoryId)
 
         isUploadingPlanning.value = true
         planningError.value = null
@@ -516,11 +495,9 @@ export function useInventoryManagement() {
         planningUploadProgress.value = 0
 
         try {
-            console.log('[processPlanningUpload] Création du FormData avec fichier:', file.name)
             const formData = new FormData()
             formData.append('file', file)
 
-            console.log('[processPlanningUpload] Appel de inventoryStore.importLocationJobsSync')
             // Simuler la progression
             const progressInterval = setInterval(() => {
                 planningUploadProgress.value += Math.random() * 20
@@ -531,7 +508,6 @@ export function useInventoryManagement() {
 
             planningInfoMessage.value = 'Traitement des données de planification...'
             await inventoryStore.importLocationJobsSync(inventoryId, formData)
-            console.log('[processPlanningUpload] inventoryStore.importLocationJobsSync terminé avec succès')
 
             clearInterval(progressInterval)
             planningUploadProgress.value = 100
@@ -551,13 +527,10 @@ export function useInventoryManagement() {
             }, 2000)
 
         } catch (error: any) {
-            console.error('[processPlanningUpload] Erreur capturée:', error)
-            console.error('[processPlanningUpload] Erreur response:', error?.response?.data)
             planningUploadProgress.value = 0
             planningErrorDetails.value = error.response?.data || error
             planningError.value = error?.message || 'Erreur lors de l\'upload'
         } finally {
-            console.log('[processPlanningUpload] Finally - nettoyage terminé')
             isUploadingPlanning.value = false
             planningInfoMessage.value = null
         }
@@ -753,6 +726,9 @@ export function useInventoryManagement() {
         // ===== CONFIGURATION DATATABLE =====
         columns,
         actions,
+        pagination,
+        inventoryTableRef,
+        inventoryLoading,
 
         // ===== NAVIGATION =====
         redirectToAdd,

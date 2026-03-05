@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import path from 'path';
 import { vueI18n } from '@intlify/vite-plugin-vue-i18n';
+import { fixSystemDesignImports } from './vite-plugin-fix-system-design';
 
 export default defineConfig({
     plugins: [
@@ -11,6 +12,7 @@ export default defineConfig({
         vueI18n({
             include: path.resolve(__dirname, './src/locales/**'),
         }),
+        fixSystemDesignImports(),
     ],
     resolve: {
         alias: {
@@ -20,10 +22,16 @@ export default defineConfig({
             '@/interfaces': path.resolve(__dirname, './src/interfaces'),
             '@/utils': path.resolve(__dirname, './src/utils'),
             '@/services': path.resolve(__dirname, './src/services'),
+            // Alias pour les styles du système de design
+            '@SMATCH-Digital-dev/vue-system-design/styles': path.resolve(__dirname, './node_modules/@SMATCH-Digital-dev/vue-system-design/dist/style.css'),
         },
+        // Permettre l'import de modules externes même s'ils ont des imports internes problématiques
+        dedupe: ['vue', 'vue-router'],
     },
     optimizeDeps: {
         include: ['quill', 'vue-flatpickr-component', 'flatpickr'],
+        // Exclure le package mal compilé de l'optimisation
+        exclude: ['@SMATCH-Digital-dev/vue-system-design'],
     },
     define: {
         __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false,

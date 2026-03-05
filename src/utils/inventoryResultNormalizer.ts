@@ -90,18 +90,18 @@ function extractJobId(
     if (item.id && item.id !== null && item.id !== undefined) {
         return `id-${item.id}-${index}` // Ajouter index pour garantir l'unicité même si id est dupliqué
     }
-    
+
     // ⚡ CORRECTION : Fallback avec combinaison unique basée sur les données de la ligne
     // Utiliser emplacement + article + index pour garantir l'unicité
     const emplacement = String(item.emplacement ?? item.location ?? '')
     const article = String(item.article ?? item.product ?? '')
     const uniqueHash = `${emplacement}-${article}-${index}`
-    
+
     // Si emplacement et article sont vides, utiliser inventoryId + storeId + index
     if (!emplacement && !article) {
         return `${inventoryId}-${storeId}-${index}`
     }
-    
+
     // Sinon, utiliser le hash unique basé sur les données + index
     return `${inventoryId}-${storeId}-${uniqueHash}`
 }
@@ -126,14 +126,14 @@ function normalizeDynamicFields(
 ): InventoryResultLabels {
     const countingLabels: Record<string, string> = {}
     const differenceLabels: Record<string, string> = {}
-    
+
     // ⚡ OPTIMISATION : Itérer directement sur les clés au lieu de Object.entries (plus rapide)
     const keys = Object.keys(item)
-    
+
     for (let i = 0; i < keys.length; i++) {
         const rawKey = keys[i]
         const value = item[rawKey]
-        
+
         // Ignorer undefined et champs déjà normalisés (check rapide)
         if (value === undefined || rawKey in normalizedItem) continue
 
@@ -156,7 +156,7 @@ function normalizeDynamicFields(
         // ⚡ OPTIMISATION : Éviter normalizeKey et regex si possible
         // Vérifier d'abord les patterns simples avant d'utiliser regex
         const hasDigit = /\d/.test(rawKey)
-        
+
         // Seulement si la clé contient des chiffres, essayer les formats alternatifs (plus coûteux)
         if (hasDigit && (keyLower.includes('comptage') || keyLower.includes('ecart'))) {
             const normalized = normalizeKey(rawKey)
@@ -290,10 +290,23 @@ function extractDifferenceField(
     rawKey: string,
     value: unknown
 ): { field: string } | null {
-    const match = normalized.match(/^ecart_((?:\d+_?)+)$/i)
+    // 1. Cas simple déjà normalisé : "ecart_1_2", "ecart_1_2_3", etc.
+    let match = normalized.match(/^ecart_((?:\d+_?)+)$/i)
+    if (match) {
+        const numbers = match[1].split('_').filter(n => n.length > 0)
+        if (numbers.length < 2) return null
+        return { field: `ecart_${numbers.join('_')}` }
+    }
+
+    // 2. Cas labels backend type "Écart 1er-2ème comptage"
+    //    Exemples possibles après normalisation :
+    //    - "ecart 1er-2eme comptage"
+    //    - "ecart 1-2 comptage"
+    //    - "ecart 1er 2eme comptage"
+    match = normalized.match(/^ecart[ _-]*([\d\w _-]+?)\s*comptage?$/i)
     if (!match) return null
 
-    const numbers = match[1].split('_').filter(n => n.length > 0)
+    const numbers = (match[1].match(/\d+/g) || [])
     if (numbers.length < 2) return null
 
     return { field: `ecart_${numbers.join('_')}` }

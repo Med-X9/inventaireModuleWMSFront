@@ -37,10 +37,10 @@ import SelectField from '@/components/Form/SelectField.vue'
 // ===== IMPORTS COMPOSABLES =====
 import type { FieldConfig } from '@/interfaces/form'
 import { Job } from '@/models/Job'
-import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
-import { convertQueryModelToQueryParams, createQueryModelFromDataTableParams, mergeQueryModelWithCustomParams } from '@/components/DataTable/utils/queryModelConverter'
-import type { QueryModel } from '@/components/DataTable/types/QueryModel'
-import type { DataTableColumn, DataTableColumnAny, ActionConfig, ColumnDataType } from '@/components/DataTable/types/dataTable'
+// Imports depuis le package @SMATCH-Digital-dev/vue-system-design (conforme à la documentation)
+// Le package ré-exporte tout depuis l'index principal
+import { useQueryModel, convertQueryModelToQueryParams, createQueryModelFromDataTableParams, mergeQueryModelWithCustomParams } from '@SMATCH-Digital-dev/vue-system-design'
+import type { QueryModel, DataTableColumn, DataTableColumnAny, ActionConfig, ColumnDataType } from '@SMATCH-Digital-dev/vue-system-design'
 import type { InventoryDetails } from '@/models/Inventory'
 import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
 import type { Component } from 'vue'
@@ -65,7 +65,6 @@ import IconTrash from '@/components/icon/icon-trash.vue'
 
 // ===== IMPORTS COMPOSANTS =====
 import Modal from '@/components/Modal.vue'
-import JobAffectationModal from '@/components/JobAffectationModal.vue'
 
 // ===== IMPORTS EXTERNES =====
 import Swal from 'sweetalert2'
@@ -256,17 +255,17 @@ export const dateValueSetter = (params: any) => {
  * @param options - Options optionnelles avec inventoryReference et warehouseReference
  * @returns Objet contenant toutes les propriétés et méthodes nécessaires
  */
-export function useAffecter(options?: { inventoryReference?: string, warehouseReference?: string }) {
+export function useAffecter(options?: { inventoryReference?: string; warehouseReference?: string }) {
     const route = useRoute()
     const router = useRouter()
 
     // ===== RÉFÉRENCES =====
 
     /** Référence de l'inventaire (priorité aux options, sinon fallback sur la route) */
-    const inventoryReference = options?.inventoryReference ?? (route.params.reference as string)
+    const inventoryReference = options?.inventoryReference || (route.params.reference as string) || ''
 
     /** Référence de l'entrepôt (priorité aux options, sinon fallback sur la route) */
-    const warehouseReference = options?.warehouseReference ?? (route.params.warehouse as string)
+    const warehouseReference = options?.warehouseReference || (route.params.warehouse as string) || ''
 
     // ===== ÉTAT RÉACTIF =====
 
@@ -311,6 +310,8 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     const showTransferModal = ref(false)
     const showManualModal = ref(false)
     const showJobAffectationModal = ref(false)
+    /** Indique qu'une affectation est en cours de sauvegarde (pour feedback visuel dans le dialog) */
+    const assignmentSavingInModal = ref(false)
 
     /** Type d'équipe en cours d'affectation */
     const currentTeamType = ref<'premier' | 'deuxieme'>('premier')
@@ -343,21 +344,30 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
 
     /**
      * Traite un événement DataTable directement (sans vérification d'initialisation)
-     * Utilisé pour traiter les événements mis en file d'attente
+     *
+     * ⚡ SIMPLIFIÉ : Le DataTable gère déjà la validation et la fusion des customParams.
+     * Ce handler appelle simplement le store avec le QueryModel fourni.
      */
     const processEventDirectly = async (eventType: string, queryModel: QueryModel) => {
+        // ⚡ GARDE : Vérifier que queryModel est valide
+        if (!queryModel || typeof queryModel !== 'object') {
+            return
+        }
+
         // S'assurer que le QueryModel a des valeurs par défaut valides
         const sanitizedQueryModel: QueryModel = {
             page: queryModel.page ?? 1,
-            pageSize: queryModel.pageSize ?? 20,
+            pageSize: queryModel.pageSize ?? 50,
             sort: queryModel.sort ?? [],
             filters: queryModel.filters ?? {},
             search: queryModel.search ?? '',
             customParams: queryModel.customParams ?? {}
         }
 
-        // Toujours fusionner avec les customParams requis (inventory_id, warehouse_id)
-        const finalQueryModel = mergeQueryModelWithCustomParams(sanitizedQueryModel, jobsCustomParams.value)
+        // ⚡ CONFORME À LA DOC : Le DataTable du package fusionne automatiquement les customParams
+        // dans le QueryModel émis via @query-model-changed (voir DOCUMENTATION_DATATABLE.md)
+        // Utiliser directement le QueryModel fourni (customParams déjà fusionnés)
+        const finalQueryModel = sanitizedQueryModel
 
         // Éviter les appels API inutiles en comparant avec le dernier appel réussi
         const queryModelStr = JSON.stringify(finalQueryModel)
@@ -386,10 +396,8 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         }
 
         try {
-            // Activer le loading pour les événements DataTable
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+            // Activer le loading pour tous les événements qui modifient les données
                 jobsLoadingLocal.value = true
-            }
 
             // Mettre à jour le QueryModel local pour synchroniser avec la DataTable
             jobsQueryModelRef.value = { ...finalQueryModel }
@@ -402,11 +410,9 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             // Mettre à jour le cache après un appel réussi
             lastExecutedQueryModel = { ...finalQueryModel }
 
-            // Forcer le re-rendu de la DataTable pour tous les événements qui modifient les données
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
+            // Forcer le re-rendu de la DataTable
                 jobsKey.value++
                 jobsLoadingLocal.value = false
-            }
         } catch (error) {
             console.error('[useAffecter] ❌ Error in jobStore.fetchJobsValidated:', {
                 eventType,
@@ -414,6 +420,8 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                 queryModel: finalQueryModel
             })
             await alertService.error({ text: 'Erreur lors du chargement des jobs' })
+            // Désactiver le loading en cas d'erreur
+            jobsLoadingLocal.value = false
         }
     }
 
@@ -580,9 +588,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                 promises.push(warehouseStore.fetchWarehouses())
             }
 
-            if (sessionStore.getAllSessions.length === 0) {
-                promises.push(sessionStore.fetchSessions())
-            }
+
 
             // Exécuter tous les appels en parallèle
             await Promise.all(promises)
@@ -593,20 +599,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         }
     }
 
-    /**
-     * Charge les sessions si nécessaire
-     */
-    async function loadSessionsIfNeeded() {
-        if (sessionStore.getAllSessions.length === 0) {
-            try {
-                await sessionStore.fetchSessions()
-            } catch (error) {
-                alertService.error({
-                    text: 'Erreur lors du chargement des sessions'
-                })
-            }
-        }
-    }
 
     // ===== WATCHERS =====
 
@@ -717,7 +709,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         total_pages: 1,
         has_next: false,
         has_previous: false,
-        page_size: 20,
+        page_size: 50,
         total: 0
     })
 
@@ -726,7 +718,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         // Utiliser directement les valeurs du backend depuis paginationMetadata du store
         const storeMetadata = jobPaginationMetadata.value
         const currentPageValue = storeMetadata?.page ?? 1
-        const pageSizeValue = storeMetadata?.pageSize ?? 20
+        const pageSizeValue = storeMetadata?.pageSize ?? 50
 
         // Récupérer total depuis paginationMetadata (valeur du backend)
         const totalValue = storeMetadata?.total ?? 0
@@ -784,23 +776,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         }))
     })
 
-    /**
-     * Options des sessions pour les filtres et selects
-     */
-    const sessionOptions = computed(() => {
-        const sessions = sessionStore.getAllSessions
 
-        if (sessions.length === 0) {
-            loadSessionsIfNeeded()
-            return []
-        }
-
-        const options = sessions.map(session => ({
-            value: session.username,
-            label: session.username
-        }))
-        return options
-    })
 
     /**
      * Options des ressources pour les filtres et selects
@@ -1835,6 +1811,8 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         }
     ]
 
+    const resolvedJobsActions = computed(() => jobsActions)
+
     /**
      * Charger les jobs avec les paramètres donnés
      *
@@ -1857,7 +1835,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             const finalParams: QueryModel = params || mergeQueryModelWithCustomParams(
                 {
                     page: 1,
-                    pageSize: 20
+                    pageSize: 50
                 },
                 jobsCustomParams.value
             )
@@ -1872,6 +1850,8 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             // Transformer les données
             updateDisplayData()
 
+            // Forcer le re-rendu du DataTable (surtout pour le package qui peut ne pas réagir à rowDataProp)
+            jobsKey.value++
 
             // Désactiver le loading
             jobsLoadingLocal.value = false
@@ -1891,12 +1871,15 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
      * @param params - Paramètres de requête optionnels au format QueryModel
      */
     const refreshJobs = async (params?: QueryModel) => {
+        // Utiliser l'état courant du DataTable si aucun params fourni
+        const queryToUse: QueryModel | undefined = params ?? (jobsQueryModelRef.value
+            ? mergeQueryModelWithCustomParams({ ...jobsQueryModelRef.value }, jobsCustomParams.value)
+            : lastExecutedQueryModel ?? undefined)
 
-        await loadJobs(params)
+        await loadJobs(queryToUse)
 
-        // Forcer le re-rendu de la DataTable après le chargement des données
+        // Forcer le re-rendu du DataTable après le chargement des données
         jobsKey.value++
-
     }
 
     // ===== GESTION DES MODIFICATIONS =====
@@ -2104,6 +2087,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
     const handleJobAffectationModalTeamChanged = async (countingOrder: number, teamId: string, assignmentType?: 'complet' | 'partiel') => {
         if (!selectedJobForModal.value) return
 
+        assignmentSavingInModal.value = true
         try {
             // Déterminer si l'affectation est complète selon le choix de l'utilisateur
             // Par défaut : partiel (complete: false)
@@ -2138,24 +2122,34 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                 }
             }
 
-            // Rafraîchir les données du DataTable après le changement d'équipe
-            await refreshJobs()
-                        } catch (error) {
+            // Rafraîchir les données du DataTable (conserver page/filtres, forcer rechargement)
+            await refreshJobs(lastExecutedQueryModel ?? undefined)
+
+            // Mettre à jour le job dans la modal avec les données rechargées (feedback visuel)
+            const jobIdStr = String(selectedJobForModal.value.id)
+            const updatedRow = displayData.value.find((j: RowNode) => extractJobId(j.id) === jobIdStr)
+            if (updatedRow) {
+                selectedJobForModal.value = updatedRow
+            }
+        } catch (error) {
             logger.error('Erreur lors du changement d\'équipe:', error)
             alertService.error({ text: 'Erreur lors de l\'assignation de l\'équipe' })
-                        }
+        } finally {
+            assignmentSavingInModal.value = false
+        }
     }
 
     /**
      * Handler pour la fin de l'affectation dans JobAffectationModal
      */
     const handleJobAffectationModalFinish = async () => {
-        // Fermer la modal
         showJobAffectationModal.value = false
         selectedJobForModal.value = null
 
-        // Rafraîchir les données
-        await refreshJobs()
+        // Recharger le DataTable (même page/filtres) et forcer la mise à jour visuelle
+        await refreshJobs(lastExecutedQueryModel ?? undefined)
+        await nextTick()
+        resetDataTableSelections()
     }
 
     /**
@@ -2436,7 +2430,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                 // Réinitialiser la sélection après l'action
                 resetAllSelections()
 
-                await refreshJobs()
+                await refreshJobs(lastExecutedQueryModel ?? undefined)
             }
         } catch (error) {
             // Extraire et afficher le message d'erreur backend
@@ -2470,7 +2464,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                 // Réinitialiser la sélection après l'action
                 resetAllSelections()
 
-                await refreshJobs()
+                await refreshJobs(lastExecutedQueryModel ?? undefined)
             }
         } catch (error) {
             // Extraire et afficher le message d'erreur backend
@@ -2686,9 +2680,9 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             await Swal.close()
             await alertService.success({ text: 'Tous les jobs ont été validés avec succès' })
 
-            // Rafraîchir les données
+            // Rafraîchir les données du DataTable (avec le même query pour garder page/filtres)
             resetAllSelections()
-            await refreshJobs()
+            await refreshJobs(lastExecutedQueryModel ?? undefined)
 
         } catch (error: any) {
             await Swal.close()
@@ -2731,8 +2725,8 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
                     text: response.message
                 })
 
-                // Rafraîchir les données après l'affectation
-                await refreshJobs()
+                // Rafraîchir les données du DataTable (avec le même query pour garder page/filtres)
+                await refreshJobs(lastExecutedQueryModel ?? undefined)
             } else {
                 // Afficher les erreurs de validation
                 if (response.errors && response.errors.length > 0) {
@@ -3124,7 +3118,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             // Créer un QueryModel basique pour l'export
             const currentQueryModel: QueryModel = {
                 page: 1,
-                pageSize: 20,
+                pageSize: 50,
                 filters: {},
                 customParams: jobsCustomParams.value
             }
@@ -3170,7 +3164,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
             // Créer un QueryModel basique pour l'export
             const currentQueryModel: QueryModel = {
                 page: 1,
-                pageSize: 20,
+                pageSize: 50,
                 filters: {},
                 customParams: jobsCustomParams.value
             }
@@ -3227,6 +3221,7 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         showManualModal,
         showJobAffectationModal,
         selectedJobForModal,
+        assignmentSavingInModal,
         modalTeamOptions,
         modalTeamOptionsByCountingOrder,
         modalTitle,
@@ -3307,7 +3302,6 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         // Computed
         eligibleJobsForTransfer,
         eligibleJobsForManual,
-        sessionOptions,
         resourceOptions,
         showTransferButton,
         showManualButton,
@@ -3316,10 +3310,9 @@ export function useAffecter(options?: { inventoryReference?: string, warehouseRe
         navigationButtons,
         jobsColumns,
         adaptedStoreJobsColumns,
-        jobsActions,
+        jobsActions: resolvedJobsActions,
 
         // Utilitaires
-        loadSessionsIfNeeded,
         dateValueParser,
         dateValueSetter,
         getTransformedLocations,

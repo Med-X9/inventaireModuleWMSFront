@@ -1,7 +1,7 @@
 <template>
     <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 dark:from-slate-900 dark:to-slate-800 p-4 sm:p-6 lg:p-8">
-        <!-- En-tête moderne avec gradient -->
-        <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 mb-6 shadow-xl border border-slate-200 dark:border-slate-700">
+        <!-- En-tête - config harmonisée avec InventoryResults.vue -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 mb-8 shadow-lg border border-slate-200 dark:border-slate-700">
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                 <div class="flex-1">
                     <div class="flex items-center gap-4">
@@ -81,18 +81,25 @@
         <!-- Contenu principal -->
         <template v-else>
             <!-- Vue Table -->
-        <div v-if="viewMode === 'table'" class="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div v-if="viewMode === 'table'" class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden mb-8">
             <DataTable
                 :columns="adaptedColumns"
-                :actions="adaptedActions"
                 :rowDataProp="stores"
-                :serverSidePagination="true"
-                :pagination="true"
+                :actions="adaptedActions"
+                :enableVirtualScrolling="undefined"
+                :currentPageProp="pagination.current_page"
+                :totalPagesProp="pagination.total_pages"
+                :totalItemsProp="pagination.total"
+                :pageSizeProp="pagination.page_size"
+                :customDataTableParams="planningCustomParams"
+                @query-model-changed="handlePaginationChanged"
                 storageKey="planning-management"
-                @filter-changed="handleFilterChanged"
-                @pagination-changed="handlePaginationChanged"
-                @sort-changed="handleSortChanged"
-                @global-search-changed="handleGlobalSearchChanged"
+                ref="planningTableRef"
+                :loading="loading"
+                :enableDynamicColumns="false"
+                :debounceFilter="300"
+                :debounceSearch="300"
+                :pagination="true"
             />
         </div>
 
@@ -135,7 +142,7 @@
 
 // ===== IMPORTS =====
 import { ref, onMounted, watch } from 'vue'
-import DataTable from '@/components/DataTable/DataTable.vue'
+import { DataTable } from '@SMATCH-Digital-dev/vue-system-design'
 import ToggleButtons from '@/components/ToggleButtons/ToggleButtons.vue'
 import GridView from '@/components/GridView/GridView.vue'
 import { usePlanningManagement } from '@/composables/usePlanningManagement'
@@ -162,6 +169,9 @@ const {
     // États
     selectedStore,
     loading,
+    pagination,
+    planningCustomParams,
+    planningTableRef,
     dataTableError,
     inventoryLoading,
     inventoryError,

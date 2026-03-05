@@ -3,7 +3,7 @@ import type { StoreOption, InventoryResult } from '../interfaces/inventoryResult
 import type { AxiosResponse } from 'axios';
 import API from '@/api';
 import { normalizeDataTableResponse } from '@/utils/dataTableResponseNormalizer';
-import type { StandardDataTableParams } from '@/components/DataTable/utils/dataTableParamsConverter';
+import type { StandardDataTableParams } from '@SMATCH-Digital-dev/vue-system-design/dist/components/DataTable/utils/dataTableParamsConverter';
 import type { UnifiedDataTableResponse } from '@/utils/dataTableResponseNormalizer';
 
 /**

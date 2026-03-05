@@ -42,8 +42,8 @@
 /* dragndrop */
 @import 'dragndrop.css';
 
-/* Theme WMS - Palette de couleurs et typographie */
-@import '../../theme/theme.css';
+/* Theme WMS - Le thème provient maintenant du package @SMATCH-Digital-dev/vue-system-design */
+/* Les styles du package sont importés dans main.ts */
 
 @tailwind base;
 @tailwind components;

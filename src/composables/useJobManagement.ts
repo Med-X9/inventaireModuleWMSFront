@@ -33,7 +33,7 @@ export function useJobManagement() {
     } = useGenericDataTable<JobTable>({
         store: jobStore,
         fetchAction: 'fetchJobs',
-        defaultPageSize: 20,
+        defaultPageSize: 50,
         queryOutputMode: 'queryParams', // Format EXEMPLES_REQUETES_QUERYMODEL
         additionalParams: {
             inventoryId,

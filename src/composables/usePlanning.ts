@@ -19,13 +19,10 @@
 import { ref, computed, markRaw, onMounted, nextTick, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
-import type { Router } from 'vue-router'
-
 // ===== IMPORTS COMPOSABLES =====
 
 // ===== IMPORTS SERVICES =====
 import { alertService } from '@/services/alertService'
-import { LocationService } from '@/services/LocationService'
 
 // ===== IMPORTS PINIA =====
 
@@ -36,12 +33,12 @@ import { useInventoryStore } from '@/stores/inventory'
 import { useWarehouseStore } from '@/stores/warehouse'
 
 // ===== IMPORTS UTILS =====
-import { useQueryModel } from '@/components/DataTable/composables/useQueryModel'
-import { convertQueryModelToQueryParams, mergeQueryModelWithCustomParams } from '@/components/DataTable/utils/queryModelConverter'
-import type { QueryModel } from '@/components/DataTable/types/QueryModel'
+import { useQueryModel } from '@SMATCH-Digital-dev/vue-system-design'
+import { convertQueryModelToQueryParams, mergeQueryModelWithCustomParams } from '@SMATCH-Digital-dev/vue-system-design'
+import type { QueryModel } from '@SMATCH-Digital-dev/vue-system-design'
 
 // ===== IMPORTS TYPES =====
-import type { DataTableColumn, ColumnDataType, ActionConfig } from '@/types/dataTable'
+import type { DataTableColumn, ColumnDataType, ActionConfig } from '@SMATCH-Digital-dev/vue-system-design'
 import type { Job, JobTable } from '@/models/Job'
 import type { Location } from '@/models/Location'
 import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
@@ -720,12 +717,12 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
     // ===== MÉTHODES DE CHARGEMENT DES DONNÉES =====
 
     /**
-     * Recharger toutes les données (jobs et locations)
+     * Recharger toutes les données (jobs et locations) avec le dernier query pour garder page/filtres
      */
     const refreshData = async () => {
         await Promise.all([
-            refreshJobs(),
-            refreshLocations()
+            refreshJobs(lastJobsQueryModel ?? undefined),
+            refreshLocations(lastLocationsQueryModel ?? undefined)
         ])
     }
 
@@ -943,20 +940,29 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
 
     /**
      * Traite un événement DataTable Jobs directement (sans vérification d'initialisation)
+     *
+     * ⚡ SIMPLIFIÉ : Le DataTable gère déjà la validation et la fusion des customParams.
+     * Ce handler appelle simplement le store avec le QueryModel fourni.
      */
     const processJobsEventDirectly = async (eventType: string, queryModel: QueryModel) => {
+        // ⚡ GARDE : Vérifier que queryModel est valide
+        if (!queryModel || typeof queryModel !== 'object') {
+            return
+        }
+
         // S'assurer que le QueryModel a des valeurs par défaut valides
         const sanitizedQueryModel: QueryModel = {
             page: queryModel.page ?? 1,
-            pageSize: queryModel.pageSize ?? 20,
+            pageSize: queryModel.pageSize ?? 50,
             sort: queryModel.sort ?? [],
             filters: queryModel.filters ?? {},
             search: queryModel.search ?? '',
             customParams: queryModel.customParams ?? {}
         }
 
-        // Toujours fusionner avec les customParams requis
-        const finalQueryModel = mergeQueryModelWithCustomParams(sanitizedQueryModel, jobsCustomParams.value)
+        // ⚡ SIMPLIFIÉ : Le DataTable fusionne déjà les customParams via customDataTableParams
+        // Utiliser directement le QueryModel fourni (customParams déjà fusionnés)
+        const finalQueryModel = sanitizedQueryModel
 
         // Éviter les appels API inutiles en comparant avec le dernier appel réussi
         const queryModelStr = JSON.stringify(finalQueryModel)
@@ -980,10 +986,8 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
         }
 
         try {
-            // Activer le loading pour les événements DataTable
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
-                jobsLoadingLocal.value = true
-            }
+            // Activer le loading pour tous les événements qui modifient les données
+            jobsLoadingLocal.value = true
 
             // Mettre à jour le QueryModel local pour synchroniser avec la DataTable
             jobsQueryModelRef.value = { ...finalQueryModel }
@@ -993,11 +997,9 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
             // Mettre à jour le cache après un appel réussi
             lastJobsQueryModel = { ...finalQueryModel }
 
-            // Forcer le re-rendu de la DataTable pour tous les événements qui modifient les données
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
-                jobsKey.value++
-                jobsLoadingLocal.value = false
-            }
+            // Forcer le re-rendu de la DataTable
+            jobsKey.value++
+            jobsLoadingLocal.value = false
         } catch (error) {
             console.error('[usePlanning] ❌ Error in jobStore.fetchJobs:', {
                 eventType,
@@ -1006,28 +1008,35 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
             })
             await alertService.error({ text: 'Erreur lors du chargement des jobs' })
             // Désactiver le loading en cas d'erreur
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
-                jobsLoadingLocal.value = false
-            }
+            jobsLoadingLocal.value = false
         }
     }
 
     /**
      * Traite un événement DataTable Locations directement (sans vérification d'initialisation)
+     *
+     * ⚡ SIMPLIFIÉ : Le DataTable gère déjà la validation et la fusion des customParams.
+     * Ce handler appelle simplement le store avec le QueryModel fourni.
      */
     const processLocationsEventDirectly = async (eventType: string, queryModel: QueryModel) => {
+        // ⚡ GARDE : Vérifier que queryModel est valide
+        if (!queryModel || typeof queryModel !== 'object') {
+            return
+        }
+
         // S'assurer que le QueryModel a des valeurs par défaut valides
         const sanitizedQueryModel: QueryModel = {
             page: queryModel.page ?? 1,
-            pageSize: queryModel.pageSize ?? 20,
+            pageSize: queryModel.pageSize ?? 50,
             sort: queryModel.sort ?? [],
             filters: queryModel.filters ?? {},
             search: queryModel.search ?? '',
             customParams: queryModel.customParams ?? {}
         }
 
-        // Toujours fusionner avec les customParams requis
-        const finalQueryModel = mergeQueryModelWithCustomParams(sanitizedQueryModel, locationsCustomParams.value)
+        // ⚡ SIMPLIFIÉ : Le DataTable fusionne déjà les customParams via customDataTableParams
+        // Utiliser directement le QueryModel fourni (customParams déjà fusionnés)
+        const finalQueryModel = sanitizedQueryModel
 
         // Éviter les appels API inutiles en comparant avec le dernier appel réussi
         const queryModelStr = JSON.stringify(finalQueryModel)
@@ -1051,10 +1060,8 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
         }
 
         try {
-            // Activer le loading pour les événements DataTable
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
-                locationsLoadingLocal.value = true
-            }
+            // Activer le loading pour tous les événements qui modifient les données
+            locationsLoadingLocal.value = true
 
             // Mettre à jour le QueryModel local pour synchroniser avec la DataTable
             locationsQueryModelRef.value = { ...finalQueryModel }
@@ -1069,11 +1076,9 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
             // Mettre à jour le cache après un appel réussi
             lastLocationsQueryModel = { ...finalQueryModel }
 
-            // Forcer le re-rendu de la DataTable pour tous les événements qui modifient les données
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
-                availableLocationsKey.value++
-                locationsLoadingLocal.value = false
-            }
+            // Forcer le re-rendu de la DataTable
+            availableLocationsKey.value++
+            locationsLoadingLocal.value = false
         } catch (error) {
             console.error('[usePlanning] ❌ Error in locationStore.fetchUnassignedLocations:', {
                 eventType,
@@ -1082,9 +1087,7 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
             })
             await alertService.error({ text: 'Erreur lors du chargement des locations' })
             // Désactiver le loading en cas d'erreur
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
-                locationsLoadingLocal.value = false
-            }
+            locationsLoadingLocal.value = false
         }
     }
 
@@ -1225,7 +1228,7 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
             const finalParams: QueryModel = params || mergeQueryModelWithCustomParams(
                 {
                     page: 1,
-                    pageSize: 20
+                    pageSize: 50
                 },
                 jobsCustomParams.value
             )
@@ -1256,7 +1259,7 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
             const finalParams: QueryModel = params || mergeQueryModelWithCustomParams(
                 {
                     page: 1,
-                    pageSize: 20
+                    pageSize: 50
                 },
                 locationsCustomParams.value
             )
@@ -1823,6 +1826,10 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
 
         // Métadonnées de pagination
         jobPaginationMetadata,
-        locationPaginationMetadata
+        locationPaginationMetadata,
+
+        // CustomParams pour les DataTables (exportés pour utilisation dans la vue avec customDataTableParams)
+        jobsCustomParams,
+        locationsCustomParams
     }
 }

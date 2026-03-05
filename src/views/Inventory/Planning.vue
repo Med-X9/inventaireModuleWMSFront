@@ -81,30 +81,30 @@
                 </div>
             </div>
 
-            <!-- DataTable des jobs avec configuration complète optimisée -->
+            <!-- DataTable des jobs - config harmonisée avec InventoryResults.vue -->
             <DataTable
                 :key="jobsKey"
                 :columns="adaptedStoreJobsColumns"
                 :rowDataProp="jobs"
                 :actions="jobsActions as any"
-                :enableVirtualScrolling="false"
+                :enableVirtualScrolling="undefined"
                 :currentPageProp="jobPaginationMetadata?.page"
                 :totalPagesProp="jobPaginationMetadata?.totalPages"
                 :totalItemsProp="jobPaginationMetadata?.total"
                 :pageSizeProp="jobPaginationMetadata?.pageSize"
                 :rowSelection="true"
                 :loading="jobsLoading"
-                @selection-changed="onJobSelectionChanged"
-                :exportTitle="'Jobs créés'"
-                v-if="jobs && jobs.length > 0"
-                @pagination-changed="(queryModel) => onJobsTableEvent('pagination', queryModel)"
-                @page-size-changed="(queryModel) => onJobsTableEvent('page-size-changed', queryModel)"
-                @sort-changed="(queryModel) => onJobsTableEvent('sort', queryModel)"
-                @filter-changed="(queryModel) => onJobsTableEvent('filter', queryModel)"
-                @global-search-changed="(queryModel) => onJobsTableEvent('search', queryModel)"
+                :customDataTableParams="jobsCustomParams"
+                @query-model-changed="(queryModel) => onJobsTableEvent('query-model-changed', queryModel)"
                 storageKey="planning_jobs_table"
-                ref="jobsTableRef">
-            </DataTable>
+                ref="jobsTableRef"
+                :enableDynamicColumns="false"
+                :debounceFilter="300"
+                :debounceSearch="300"
+                :exportTitle="'Jobs créés'"
+                @selection-changed="onJobSelectionChanged"
+                v-if="jobs && jobs.length > 0"
+            />
         </div>
 
         <!-- Section Emplacements disponibles -->
@@ -115,27 +115,28 @@
                 </div>
             </div>
 
-            <!-- DataTable des locations -->
+            <!-- DataTable des locations - config harmonisée avec InventoryResults.vue -->
             <DataTable
                 :key="availableLocationsKey"
                 :columns="adaptedAvailableLocationColumns"
                 :rowDataProp="locations"
-                :enableVirtualScrolling="false"
+                :actions="locationsActions as any"
+                :enableVirtualScrolling="undefined"
                 :currentPageProp="locationPaginationMetadata?.page"
                 :totalPagesProp="locationPaginationMetadata?.totalPages"
                 :totalItemsProp="locationPaginationMetadata?.total"
                 :pageSizeProp="locationPaginationMetadata?.pageSize"
                 :rowSelection="true"
                 :loading="locationsLoading"
-                @selection-changed="onAvailableSelectionChanged"
-                :actions="locationsActions as any"
-                @pagination-changed="(queryModel) => onLocationsTableEvent('pagination', queryModel)"
-                @page-size-changed="(queryModel) => onLocationsTableEvent('page-size-changed', queryModel)"
-                @sort-changed="(queryModel) => onLocationsTableEvent('sort', queryModel)"
-                @filter-changed="(queryModel) => onLocationsTableEvent('filter', queryModel)"
-                @global-search-changed="(queryModel) => onLocationsTableEvent('search', queryModel)"
+                :customDataTableParams="locationsCustomParams"
+                @query-model-changed="(queryModel) => onLocationsTableEvent('query-model-changed', queryModel)"
                 storageKey="planning_locations_table"
-                ref="availableLocationsTableRef" />
+                ref="availableLocationsTableRef"
+                :enableDynamicColumns="false"
+                :debounceFilter="300"
+                :debounceSearch="300"
+                @selection-changed="onAvailableSelectionChanged"
+            />
             </div>
         </div>
 
@@ -205,21 +206,14 @@ import { ref, computed, nextTick, Teleport, onMounted } from 'vue'
 import { usePlanning } from '@/composables/usePlanning'
 
 // ===== IMPORTS COMPOSANTS =====
-import DataTable from '@/components/DataTable/DataTable.vue'
+import { DataTable } from '@SMATCH-Digital-dev/vue-system-design'
 import SelectField from '@/components/Form/SelectField.vue'
 import Modal from '@/components/Modal.vue'
 import ButtonGroup from '@/components/Form/ButtonGroup.vue'
-import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
 
 // ===== IMPORTS ICÔNES =====
 import IconCalendar from '@/components/icon/icon-calendar.vue'
-import IconCheck from '@/components/icon/icon-check.vue'
-import IconEye from '@/components/icon/icon-eye.vue'
-import IconPlus from '@/components/icon/icon-plus.vue'
-import IconArrowLeft from '@/components/icon/icon-arrow-left.vue'
-import IconUser from '@/components/icon/icon-user.vue'
-import IconTrash from '@/components/icon/icon-trash.vue'
-import IconXCircle from '@/components/icon/icon-x-circle.vue'
+
 
 // ===== IMPORTS UTILITAIRES =====
 // Les fonctions d'optimisation sont maintenant disponibles via usePlanning
@@ -337,7 +331,11 @@ const {
 
     // Métadonnées de pagination
     jobPaginationMetadata,
-    locationPaginationMetadata
+    locationPaginationMetadata,
+
+    // CustomParams pour les DataTables
+    jobsCustomParams,
+    locationsCustomParams
 } = usePlanning({
     inventoryReference: route.params.reference as string,
     warehouseReference: route.params.warehouse as string
