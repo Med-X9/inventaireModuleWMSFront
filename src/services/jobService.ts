@@ -486,6 +486,48 @@ export class JobService {
             throw error;
         }
     }
+
+    /**
+     * Récupérer la liste des PDFs déjà générés pour les assignments
+     * GET /web/api/assignments/pdfs/generated/
+     */
+    static async getGeneratedAssignmentPdfs(): Promise<{
+        success: boolean;
+        count_jobs: number;
+        count_pdfs: number;
+        results: Array<{
+            job: {
+                id: number;
+                reference: string;
+                status: string;
+            };
+            pdfs: Array<{
+                task_id: string;
+                task_status: string;
+                assignment: {
+                    id: number;
+                    reference: string;
+                    status: string;
+                    counting_order: number;
+                };
+                pdf_path: string;
+                download_url: string;
+            }>;
+        }>;
+    }> {
+        const response = await axiosInstance.get('/web/api/assignments/pdfs/generated/');
+        return response.data;
+    }
+
+    /**
+     * Télécharger un PDF généré via son URL de téléchargement.
+     */
+    static async downloadGeneratedPdf(downloadUrl: string): Promise<Blob> {
+        const response = await axiosInstance.get(downloadUrl, {
+            responseType: 'blob'
+        });
+        return response.data;
+    }
 }
 
 export const jobService = new JobService();

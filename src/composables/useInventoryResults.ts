@@ -472,7 +472,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
      * Les colonnes sont détectées automatiquement :
      * - Colonnes fixes : JOB, Emplacement, Article, Résolu, Résultat final
      * - Colonnes de comptage : 1er comptage, 2ème comptage, etc. (détectées dynamiquement)
-     * - Colonnes d'écart : Écart 1-2, Écart 3, etc. (détectées dynamiquement)
+     * - Colonne d'écart unique : Écart 1-2 uniquement (champ ecart_1_2)
      *
      * L'ordre d'affichage est : JOB, Emplacement, Article, Comptages/Écarts intercalés, Résolu, Résultat final
      *
@@ -489,9 +489,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     const columns = computed<DataTableColumn[]>(() => {
         // ⚡ OPTIMISATION : Utiliser le cache si les résultats n'ont pas changé
         const currentResults = results.value
+        const ordersKey = getAvailableCountingOrders(currentResults as InventoryResult[]).join('-')
         const resultsHash = currentResults.length > 0
-            ? `${currentResults.length}-${currentResults[0]?.id || ''}-${currentResults[currentResults.length - 1]?.id || ''}`
-            : 'empty'
+            ? `${currentResults.length}-${ordersKey}-${currentResults[0]?.id || ''}-${currentResults[currentResults.length - 1]?.id || ''}`
+            : `empty-${ordersKey}`
 
         if (columnsCache.value &&
             columnsCache.value.resultsLength === currentResults.length &&
@@ -733,12 +734,17 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 badgeDefaultClass: badgeDefaultClassCommon,
                 cellRenderer: ((value: any, column?: any, row?: any) => {
                     const currentFieldName = column?.field || fieldName
-                    // Essayer d'abord le champ spécifique, puis les variantes
+                    // Essayer d'abord le champ API (1er comptage, 2e comptage, 3e comptage), puis contage_X
                     let comptageValue = row ? row[currentFieldName] : value
                     if (comptageValue === undefined || comptageValue === null || comptageValue === '') {
-                        // Fallback: essayer contage_X si fieldName était "2e comptage"
-                        if (currentFieldName === '2e comptage') {
-                            comptageValue = row ? row['contage_2'] : undefined
+                        if (order === 1) {
+                            comptageValue = row ? (row['contage_1'] ?? row['1er comptage']) : undefined
+                        } else if (order === 2) {
+                            comptageValue = row ? (row['contage_2'] ?? row['2e comptage']) : undefined
+                        } else if (order === 3) {
+                            comptageValue = row ? (row['contage_3'] ?? row['3e comptage']) : undefined
+                        } else if (row) {
+                            comptageValue = row[`contage_${order}`] ?? row[`${order}e comptage`]
                         }
                     }
 
@@ -759,14 +765,13 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 }) as any
             })
 
-            // Colonne d'écart après chaque comptage (sauf le dernier)
-            if (index < availableOrders.length - 1) {
-                const nextOrder = availableOrders[index + 1]
-                const ecartFieldName = `ecart_${order}_${nextOrder}`
-                const ecartPriority = priority - 0.5 // Priorité entre les deux comptages
+            // Un seul écart affiché : 1er ↔ 2e comptage (ecart_1_2) — pas d’Écart 1-3, 2-3, etc.
+            if (order === 1 && availableOrders[index + 1] === 2) {
+                const ecartFieldName = 'ecart_1_2'
+                const ecartPriority = priority - 0.5
 
                 cols.push({
-                    headerName: `Écart ${order}-${nextOrder}`,
+                    headerName: 'Écart 1-2',
                     field: ecartFieldName,
                     sortable: true,
                     dataType: 'number' as ColumnDataType,
@@ -778,8 +783,8 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                     autoSize: true,
                     icon: 'icon-trending-up',
                     align: 'center',
+                    priority: ecartPriority,
                     cellRenderer: ((value: any, column?: any, row?: any) => {
-                        // Supporter (params) ou (value, column, row) selon le DataTable
                         const params = value && typeof value === 'object' && ('value' in value || 'data' in value)
                             ? value
                             : null

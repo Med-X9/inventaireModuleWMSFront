@@ -49,13 +49,33 @@ export function getAvailableCountingOrders(results: InventoryResult[]): number[]
                 }
             }
 
-            // Pattern alternatif: "2e comptage", "3e comptage", etc.
-            const matchAlt = key.match(/^(\d+)e?\s*comptage$/i)
-            if (matchAlt) {
-                const order = parseInt(matchAlt[1], 10)
+            // "1er comptage", "2e comptage", "3e comptage", "4e comptage", …
+            const match1er = key.match(/^1er\s+comptage$/i)
+            if (match1er) {
+                ordersSet.add(1)
+            }
+            const matchNe = key.match(/^(\d+)e\s+comptage$/i)
+            if (matchNe) {
+                const order = parseInt(matchNe[1], 10)
                 if (!isNaN(order) && order > 0) {
                     ordersSet.add(order)
                 }
+            }
+
+            // Paires d’écarts ecart_1_2, ecart_1_3, ecart_3_4 (API dynamique)
+            const ecartPair = key.match(/^ecart_(\d+)_(\d+)$/i)
+            if (ecartPair) {
+                const a = parseInt(ecartPair[1], 10)
+                const b = parseInt(ecartPair[2], 10)
+                if (!isNaN(a) && a > 0) ordersSet.add(a)
+                if (!isNaN(b) && b > 0) ordersSet.add(b)
+            }
+
+            // statut_3er_comptage, statut_4er_comptage, …
+            const statEr = key.match(/^statut_(\d+)er_comptage$/i)
+            if (statEr) {
+                const order = parseInt(statEr[1], 10)
+                if (!isNaN(order) && order > 0) ordersSet.add(order)
             }
         })
     })
@@ -94,12 +114,12 @@ export function getCountingOrderLabel(order: number): string {
  * @returns Nom du champ (contage_X ou format alternatif)
  */
 export function getCountingFieldName(order: number): string {
-    if (order === 2) {
-        // Le 2ème comptage utilise parfois "2e comptage" au lieu de "contage_2"
-        // On essaie d'abord "2e comptage", puis "contage_2" en fallback
-        return '2e comptage'
-    }
-    return `contage_${order}`
+    // Aligné sur l’API inventaire-résultats (clés littérales avec espaces)
+    if (order === 1) return '1er comptage'
+    if (order === 2) return '2e comptage'
+    if (order === 3) return '3e comptage'
+    // 4e comptage, 5e comptage, … (pas « contage_4 » seul)
+    return `${order}e comptage`
 }
 
 /**

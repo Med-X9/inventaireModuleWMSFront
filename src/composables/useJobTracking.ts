@@ -423,25 +423,14 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         return `${order}ème comptage`
     }
 
-    /** Helper : récupère les comptages qui ont des données d'écarts (>= 3) */
-    const getCountingOrdersWithDiscrepancies = (): number[] => {
-        if (!trackingRows.value.length) {
-            return []
-        }
-
-        const ordersWithDiscrepancies = new Set<number>()
-        trackingRows.value.forEach(row => {
-            if (row.countingDiscrepancies) {
-                Object.keys(row.countingDiscrepancies).forEach(key => {
-                    const order = parseInt(key)
-                    if (!isNaN(order) && order >= 3) {
-                        ordersWithDiscrepancies.add(order)
-                    }
-                })
-            }
-        })
-
-        return Array.from(ordersWithDiscrepancies).sort((a, b) => a - b)
+    /**
+     * En-tête court pour la colonne « session » (équipe) par comptage — sans « comptage » ni « Session »
+     */
+    const getSessionColumnHeader = (order: number): string => {
+        if (order === 1) return '1er'
+        if (order === 2) return '2ème'
+        if (order === 3) return '3ème'
+        return `${order}e`
     }
 
     /** Helper : récupère le max des counting_order présents dans les lignes */
@@ -515,11 +504,14 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
         const cols: DataTableColumn[] = []
 
+        /** Ordres de comptage : dérivés des assignments + clés discrepancy_count_Xer (alignés avec l’API) */
+        const sessionOrders = getAvailableCountingOrders()
+
         // Log pour déboguer la création des colonnes
         logger.debug('columns computed - création des colonnes', {
             trackingKey: trackingKey.value,
             trackingRowsLength: trackingRows.value.length,
-            availableOrders: getAvailableCountingOrders()
+            sessionOrders
         })
 
         // Colonne cachée pour l'ID d'assignment (impression)
@@ -592,15 +584,10 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             }
         })
 
-        // Colonnes dynamiques par comptage : Session + Statut (badge), Taux d'écart, Nombre d'écarts
-        // Utiliser les counting_order disponibles dans les données pour créer les colonnes dynamiquement
-        const availableOrders = getAvailableCountingOrders()
-        const ordersWithDiscrepancies = getCountingOrdersWithDiscrepancies()
-
-        availableOrders.forEach(order => {
-            // Colonne 1 : Session avec badge de statut du comptage (fusionné)
+        // Colonnes par comptage : équipe (username) + badge statut — dynamiques (1er … Ne selon assignments)
+        sessionOrders.forEach((order) => {
             cols.push({
-                headerName: `${getCountingOrderLabel(order)} - Session`,
+                headerName: getSessionColumnHeader(order),
                 field: `counting_${order}_session`,
                 sortable: true,
                 filterable: true,
@@ -609,7 +596,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 minWidth: 160,
                 align: 'center' as const,
                 allowWrap: true,
-                description: `Session et statut du ${getCountingOrderLabel(order)}`,
+                description: `Équipe et statut du comptage ${order}`,
                 badgeStyles,
                 badgeDefaultClass,
                 cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
@@ -640,7 +627,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                         (assignment as any).username ||
                         assignment.session?.username ||
                         (assignment as any).session_full_name ||
-                        'Session inconnue'
+                        '—'
                     const status = assignment.status || ''
 
                     const badgeStyle = badgeStyles.find((s: any) => s.value === status)
@@ -654,100 +641,53 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                     options: statusFilterOptions
                 }
             })
+        })
 
-            // Ajouter les colonnes d'écarts seulement si ce comptage a des données d'écarts
-            if (ordersWithDiscrepancies.includes(order)) {
-                // Colonne 2 : Taux d'écart du comptage (seulement pour comptages qui ont des données d'écarts)
-                cols.push({
-                    headerName: `${getCountingOrderLabel(order)} - Taux écart`,
-                    field: `counting_${order}_rate`,
-                    sortable: true,
-                    filterable: false,
-                    dataType: 'number' as ColumnDataType,
-                    width: 130,
-                    minWidth: 110,
-                    align: 'center' as const,
-                    description: `Taux d'écart du ${getCountingOrderLabel(order)} (en %)`,
-                    cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
-                        let rowData: JobTrackingRow | null = null
+        // Nb d’écarts par comptage : discrepancy_count_1er, …_3er, …_4er → countingDiscrepancies['1'], … (une colonne par ordre)
+        sessionOrders.forEach((order) => {
+            cols.push({
+                headerName: `Nb écarts (${getSessionColumnHeader(order)})`,
+                field: `counting_${order}_discrepancy`,
+                sortable: true,
+                filterable: false,
+                dataType: 'number' as ColumnDataType,
+                width: 130,
+                minWidth: 100,
+                align: 'center' as const,
+                description: `Nombre d’écarts pour le comptage ${order} (discrepancy_count_${order}er si fourni par l’API)`,
+                cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
+                    let rowData: JobTrackingRow | null = null
 
-                        if (row && typeof row === 'object') {
-                            rowData = row as JobTrackingRow
-                        } else if (paramsOrValue && typeof paramsOrValue === 'object') {
-                            if (paramsOrValue.data) {
-                                rowData = paramsOrValue.data as JobTrackingRow
-                            } else {
-                                rowData = paramsOrValue as JobTrackingRow
-                            }
+                    if (row && typeof row === 'object') {
+                        rowData = row as JobTrackingRow
+                    } else if (paramsOrValue && typeof paramsOrValue === 'object') {
+                        if (paramsOrValue.data) {
+                            rowData = paramsOrValue.data as JobTrackingRow
+                        } else {
+                            rowData = paramsOrValue as JobTrackingRow
                         }
+                    }
 
-                        if (!rowData) {
-                            return '-'
-                        }
+                    if (!rowData) {
+                        return '-'
+                    }
 
-                        // Récupérer le taux d'écart global (car les données spécifiques par comptage ne sont pas disponibles)
-                        const rate = rowData.discrepancyRate
-                        if (rate === null || rate === undefined) {
-                            return '-'
-                        }
+                    const count = rowData.countingDiscrepancies?.[String(order)] ?? null
 
-                        const numRate = Number(rate)
-                        const colorClass = numRate === 0
-                            ? 'text-green-600 font-semibold'
-                            : numRate < 10
-                            ? 'text-yellow-600 font-semibold'
-                            : 'text-red-600 font-semibold'
+                    if (count === null || count === undefined) {
+                        return '-'
+                    }
 
-                        return `<span class="${colorClass}">${numRate.toFixed(2)}%</span>`
-                    }) as any
-                })
+                    const numCount = Number(count)
+                    const colorClass = numCount === 0
+                        ? 'text-green-600 font-semibold'
+                        : numCount < 10
+                        ? 'text-yellow-600 font-semibold'
+                        : 'text-red-600 font-semibold'
 
-                // Colonne 3 : Nombre d'écarts du comptage (seulement pour comptages qui ont des données d'écarts)
-                cols.push({
-                    headerName: `${getCountingOrderLabel(order)} - Nb écarts`,
-                    field: `counting_${order}_count`,
-                    sortable: true,
-                    filterable: false,
-                    dataType: 'number' as ColumnDataType,
-                    width: 120,
-                    minWidth: 100,
-                    align: 'center' as const,
-                    description: `Nombre d'écarts du ${getCountingOrderLabel(order)}`,
-                    cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
-                        let rowData: JobTrackingRow | null = null
-
-                        if (row && typeof row === 'object') {
-                            rowData = row as JobTrackingRow
-                        } else if (paramsOrValue && typeof paramsOrValue === 'object') {
-                            if (paramsOrValue.data) {
-                                rowData = paramsOrValue.data as JobTrackingRow
-                            } else {
-                                rowData = paramsOrValue as JobTrackingRow
-                            }
-                        }
-
-                        if (!rowData) {
-                            return '-'
-                        }
-
-                        // Récupérer le nombre d'écarts depuis countingDiscrepancies
-                        const count = rowData.countingDiscrepancies?.[order.toString()] ?? null
-
-                        if (count === null || count === undefined) {
-                            return '-'
-                        }
-
-                        const numCount = Number(count)
-                        const colorClass = numCount === 0
-                            ? 'text-green-600 font-semibold'
-                            : numCount < 10
-                            ? 'text-yellow-600 font-semibold'
-                            : 'text-red-600 font-semibold'
-
-                        return `<span class="${colorClass}">${numCount}</span>`
-                    }) as any
-                })
-            }
+                    return `<span class="${colorClass}">${numCount}</span>`
+                }) as any
+            })
         })
 
         // Colonne : Taux d'écart global (tous comptages)

@@ -58,6 +58,7 @@ import IconListCheck from '@/components/icon/icon-list-check.vue'
 import IconCalendar from '@/components/icon/icon-calendar.vue'
 import IconBarChart from '@/components/icon/icon-bar-chart.vue'
 import IconClock from '@/components/icon/icon-clock.vue'
+import IconDownload from '@/components/icon/icon-download.vue'
 import IconUsers from '@/components/icon/icon-users.vue'
 import IconXCircle from '@/components/icon/icon-x-circle.vue'
 import IconUpload from '@/components/icon/icon-upload.vue'
@@ -1064,6 +1065,17 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
             onClick: () => { handleGoToAffectation() }
         })
 
+        // Bouton PDFs générés
+        buttons.push({
+            id: 'generated-pdfs',
+            label: 'PDFs générés',
+            icon: IconDownload as Component,
+            variant: 'default',
+            class: ACTION_BUTTON_CLASS,
+            visible: !!inventoryReference && !!warehouseReference,
+            onClick: () => { handleGoToGeneratedPdfs() }
+        })
+
         return buttons.filter(b => b.visible !== false)
     })
 
@@ -1799,6 +1811,16 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
         jobsKey.value++
     }
 
+    /**
+     * Rafraîchissement renforcé pour les actions bulk.
+     * Certains endpoints peuvent être appliqués légèrement après la réponse HTTP.
+     */
+    const refreshJobsRobust = async (params?: QueryModel) => {
+        await refreshJobs(params)
+        await new Promise(resolve => setTimeout(resolve, 250))
+        await refreshJobs(params)
+    }
+
     // ===== GESTION DES MODIFICATIONS =====
 
     /**
@@ -2347,7 +2369,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
                 // Réinitialiser la sélection après l'action
                 resetAllSelections()
 
-                await refreshJobs(lastExecutedQueryModel ?? undefined)
+                await refreshJobsRobust(lastExecutedQueryModel ?? undefined)
             }
         } catch (error) {
             // Extraire et afficher le message d'erreur backend
@@ -2381,7 +2403,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
                 // Réinitialiser la sélection après l'action
                 resetAllSelections()
 
-                await refreshJobs(lastExecutedQueryModel ?? undefined)
+                await refreshJobsRobust(lastExecutedQueryModel ?? undefined)
             }
         } catch (error) {
             // Extraire et afficher le message d'erreur backend
@@ -2405,7 +2427,8 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
             alertService.success({ text: 'Inventaire clôturé avec succès !' })
 
             // Rafraîchir les données pour mettre à jour le statut
-            await refreshJobs()
+            resetAllSelections()
+            await refreshJobsRobust(lastExecutedQueryModel ?? undefined)
 
             // Rafraîchir le statut de l'inventaire
             if (inventoryId.value) {
@@ -2599,7 +2622,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
 
             // Rafraîchir les données du DataTable (avec le même query pour garder page/filtres)
             resetAllSelections()
-            await refreshJobs(lastExecutedQueryModel ?? undefined)
+            await refreshJobsRobust(lastExecutedQueryModel ?? undefined)
 
         } catch (error: any) {
             await Swal.close()
@@ -2643,7 +2666,8 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
                 })
 
                 // Rafraîchir les données du DataTable (avec le même query pour garder page/filtres)
-                await refreshJobs(lastExecutedQueryModel ?? undefined)
+                resetAllSelections()
+                await refreshJobsRobust(lastExecutedQueryModel ?? undefined)
             } else {
                 // Afficher les erreurs de validation
                 if (response.errors && response.errors.length > 0) {
@@ -2947,6 +2971,19 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
         })
     }
 
+    /**
+     * Navigation vers la page des PDFs déjà générés
+     */
+    const handleGoToGeneratedPdfs = () => {
+        router.push({
+            name: 'inventory-generated-pdfs',
+            params: {
+                reference: inventoryReference,
+                warehouse: warehouseReference
+            }
+        })
+    }
+
     // ===== LIFECYCLE =====
 
     /**
@@ -3182,6 +3219,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
         handleGoToResults,
         handleGoToJobTracking,
         handleGoToImportTracking,
+        handleGoToGeneratedPdfs,
         handleTransferClick,
         handleManualClick,
         handleTransferAll,

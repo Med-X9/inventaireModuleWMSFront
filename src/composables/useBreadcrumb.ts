@@ -81,6 +81,14 @@ const breadcrumbConfig: BreadcrumbConfig = {
         { label: params.reference || '' }
     ],
 
+    // Route des PDFs générés
+    'inventory-generated-pdfs': (params) => [
+        { label: 'Gestion d\'inventaire', path: '/inventory/management' },
+        { label: 'Affectation des équipes', path: `/inventory/${params.reference}/${params.warehouse}/affecter` },
+        { label: 'PDFs générés', isActive: true },
+        { label: params.reference || '' }
+    ],
+
     // Route de suivi d'importation du planning
     'inventory-import-tracking': (params) => [
         { label: 'Gestion d\'inventaire', path: '/inventory/management' },

@@ -48,6 +48,16 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true },
     },
     {
+        path: '/inventory/:reference/:warehouse/generated-pdfs',
+        name: 'inventory-generated-pdfs',
+        component: () => import(/* webpackChunkName: "inventory-generated-pdfs" */ '@/views/Inventory/GeneratedPdfs.vue'),
+        props: route => ({
+            reference: route.params.reference as string,
+            warehouse: route.params.warehouse as string,
+        }),
+        meta: { requiresAuth: true },
+    },
+    {
         path: '/inventory/:reference/import-tracking',
         name: 'inventory-import-tracking',
         component: () => import(/* webpackChunkName: "inventory-import-tracking" */ '@/views/Inventory/ImportTracking.vue'),

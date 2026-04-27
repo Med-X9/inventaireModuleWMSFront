@@ -1258,6 +1258,7 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
      */
     const refreshJobs = async (params?: QueryModel) => {
         await loadJobs(params)
+        jobsKey.value++
     }
 
     /**
@@ -1265,6 +1266,7 @@ const locationPaginationMetadata = computed(() => locationStore.paginationMetada
      */
     const refreshLocations = async (params?: QueryModel) => {
         await loadLocations(params)
+        availableLocationsKey.value++
     }
 
     /**

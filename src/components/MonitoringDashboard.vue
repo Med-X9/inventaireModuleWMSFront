@@ -32,14 +32,14 @@ const {
     warehouseId: props.warehouseId
 })
 
-// Classes CSS pour les LEDs selon le statut
-const getLedClass = (status: string) => {
-    const baseClass = 'w-2 h-2 rounded-full inline-block'
+// Classes CSS pour les LEDs selon le statut (taille augmentée quand peu de zones)
+const getLedClass = (status: string, large = false) => {
+    const size = large ? 'w-3 h-3 sm:w-3.5 sm:h-3.5' : 'w-2 h-2'
+    const baseClass = `${size} rounded-full inline-block shrink-0`
     switch (status) {
         case 'success':
             return `${baseClass} bg-emerald-500`
         case 'warning':
-            // Utilisation de la couleur primaire du projet pour le statut "warning"
             return `${baseClass} bg-[#FECD1C]`
         case 'danger':
             return `${baseClass} bg-red-500`
@@ -65,10 +65,84 @@ const formatNombre = (value: any) => {
     }
     return Number(value).toString()
 }
+
+/** Nombre de zones affichées */
+const zoneCount = computed(() => monitoringData.value?.zones?.length ?? 0)
+
+/**
+ * Peu de zones : agrandir les cartes et remplir la hauteur disponible (évite la « moitié d’écran vide »).
+ * Beaucoup de zones : mosaïque compacte avec défilement.
+ */
+/** Seuil : au-delà, mosaïque compacte + scroll pour exploiter l’écran sans tuiles géantes */
+const zonesSparse = computed(() => zoneCount.value >= 1 && zoneCount.value <= 8)
+
+/** Classes grille zones selon la densité */
+const zonesMosaicClass = computed(() => {
+    const n = zoneCount.value
+    const sparse = 'zones-mosaic zones-mosaic--sparse grid min-h-0'
+
+    if (!zonesSparse.value) {
+        return (
+            'zones-mosaic grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 ' +
+            'min-[1800px]:grid-cols-5 auto-rows-min overflow-y-auto pb-1'
+        )
+    }
+
+    if (n === 1) {
+        return `${sparse} h-full gap-4 grid-cols-1 grid-rows-1 auto-rows-[minmax(0,1fr)]`
+    }
+    if (n === 2) {
+        return `${sparse} h-full gap-4 grid-cols-1 md:grid-cols-2 md:grid-rows-1 auto-rows-[minmax(0,1fr)]`
+    }
+    if (n === 3) {
+        return `${sparse} h-full gap-4 grid-cols-1 lg:grid-cols-3 auto-rows-[minmax(0,1fr)]`
+    }
+    if (n === 4) {
+        return `${sparse} h-full gap-3 grid-cols-1 sm:grid-cols-2 grid-rows-2 auto-rows-[minmax(0,1fr)]`
+    }
+    /* 5–8 zones */
+    return `${sparse} h-full gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-[minmax(10rem,1fr)]`
+})
+
+/** Typo / espacements : mode sparse = contenu des cartes agrandi (pas seulement la boîte) */
+const zoneUi = computed(() => {
+    const s = zonesSparse.value
+    return {
+        card: s ? 'p-3 sm:p-4 md:p-5 rounded-xl' : 'p-1 rounded-lg',
+        header: s ? 'gap-2 mb-3 pb-3 border-b border-slate-200 dark:border-gray-700' : 'gap-1 mb-1 pb-1 border-b border-slate-200 dark:border-gray-700',
+        title: s ? 'text-sm sm:text-base md:text-lg font-bold leading-snug px-1' : 'text-xs font-semibold',
+        stack: s ? 'gap-3' : 'gap-0.5',
+        panel: s ? 'rounded-xl p-3 sm:p-4 shadow-md' : 'rounded-lg p-0.5',
+        jobRow: s ? 'gap-2 sm:gap-3 flex-wrap justify-center items-center' : 'gap-1',
+        panelTitle: s ? 'text-xs sm:text-sm font-bold mb-2 text-center tracking-tight' : 'text-[10px] mb-0.5 text-center font-semibold',
+        triple: s ? 'gap-2 sm:gap-3 flex-wrap sm:flex-nowrap justify-center' : 'gap-0.5',
+        cell: s ? 'rounded-lg p-2 sm:p-2.5 flex-1 min-w-[min(100%,7.5rem)] shadow-sm' : 'rounded p-0.5 flex-1 shadow-sm',
+        cellInner: s ? 'gap-1.5 sm:gap-2 justify-center items-center flex-wrap' : 'gap-1',
+        icon: s ? 'w-4 h-4 sm:w-5 sm:h-5 shrink-0' : 'w-3 h-3',
+        lbl: s ? 'text-xs sm:text-sm font-medium' : 'text-[10px] font-medium',
+        num: s ? 'text-base sm:text-lg md:text-xl font-bold tabular-nums' : 'text-sm font-bold',
+        pct: s ? 'text-xs sm:text-sm font-medium tabular-nums' : 'text-[10px] font-medium',
+        jobLbl: s ? 'text-xs sm:text-sm font-medium' : 'text-[10px]',
+        jobNum: s ? 'text-lg sm:text-xl md:text-2xl font-bold tabular-nums' : 'text-sm font-bold'
+    }
+})
+
+/** KPI globaux du haut : même logique d’échelle quand peu de zones */
+const globalKpiUi = computed(() => {
+    const s = zonesSparse.value
+    return {
+        grid: s ? 'gap-2 md:gap-3' : 'gap-1',
+        card: s ? 'rounded-xl p-2 sm:p-3 md:p-4 shadow-md' : 'rounded-lg p-1 shadow-sm',
+        icon: s ? 'w-5 h-5 sm:w-6 sm:h-6 shrink-0' : 'w-4 h-4',
+        label: s ? 'text-xs sm:text-sm font-medium' : 'text-xs',
+        value: s ? 'text-xl sm:text-2xl md:text-3xl font-bold tabular-nums leading-none' : 'text-xl font-bold',
+        pct: s ? 'text-xs sm:text-sm font-semibold' : 'text-xs font-medium'
+    }
+})
 </script>
 
 <template>
-    <div class="h-screen flex flex-col bg-slate-500 dark:bg-slate-800 overflow-hidden">
+    <div class="h-full min-h-0 flex flex-col bg-slate-500 dark:bg-slate-800 overflow-hidden">
         <!-- En-tête minimaliste -->
         <div
             class="flex-shrink-0 flex justify-end items-center px-4 py-2 bg-white dark:bg-[#1b2e4b] border-b border-slate-200 dark:border-gray-700 z-10">
@@ -89,9 +163,11 @@ const formatNombre = (value: any) => {
             </div>
         </div>
 
-        <!-- Contenu scrollable -->
+        <!-- Contenu : scroll global si mosaïque dense ; sinon zones étirées (peu de cartes) sans bande vide -->
         <div
-            class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600 scrollbar-track-transparent hover:scrollbar-thumb-slate-400 dark:hover:scrollbar-thumb-slate-500">
+            class="flex-1 flex flex-col min-h-0 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600 scrollbar-track-transparent hover:scrollbar-thumb-slate-400 dark:hover:scrollbar-thumb-slate-500"
+            :class="monitoringData && zonesSparse ? 'overflow-hidden' : 'overflow-y-auto'"
+        >
 
             <!-- Skeleton loading -->
             <div v-if="loading && !monitoringData" class="monitoring-container bg-slate-500 dark:bg-slate-800 p-1">
@@ -208,169 +284,177 @@ const formatNombre = (value: any) => {
                 </div>
             </div>
 
-            <!-- Dashboard de monitoring compact -->
-            <div v-else-if="monitoringData" class="monitoring-container bg-slate-500 dark:bg-slate-800 p-1">
-                <div class="flex flex-col gap-1">
-                    <!-- Métriques globales compactes -->
-                    <div class="grid grid-cols-4 gap-1">
+            <!-- Dashboard -->
+            <div
+                v-else-if="monitoringData"
+                class="monitoring-container bg-slate-500 dark:bg-slate-800 p-1 flex flex-col flex-1 min-h-0 gap-2"
+            >
+                <div class="flex flex-col gap-2 flex-1 min-h-0 min-w-0">
+                    <!-- Métriques globales (taille augmentée si peu de zones) -->
+                    <div class="flex-shrink-0 grid grid-cols-2 md:grid-cols-4" :class="globalKpiUi.grid">
                         <div
-                            class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 shadow-sm hover:shadow-md transition-all duration-300">
-                            <div class="flex items-center justify-center gap-1">
-                                <IconBox class="w-4 h-4 text-slate-500 dark:text-gray-400" />
-                                <span class="text-xs text-slate-500 dark:text-gray-400">Total JOB</span>
-                                <span class="text-xl font-bold text-slate-900 dark:text-white-light">{{
+                            class="bg-white dark:bg-[#1b2e4b] hover:shadow-md transition-all duration-300 flex flex-col justify-center min-h-[3.25rem]"
+                            :class="globalKpiUi.card">
+                            <div class="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
+                                <IconBox :class="[globalKpiUi.icon, 'text-slate-500 dark:text-gray-400']" />
+                                <span :class="[globalKpiUi.label, 'text-slate-500 dark:text-gray-400']">Total JOB</span>
+                                <span :class="[globalKpiUi.value, 'text-slate-900 dark:text-white-light']">{{
                                     formatNombre(monitoringData.total.totalJobs) }}</span>
                             </div>
                         </div>
                         <div
-                            class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 border border-emerald-200/60 dark:border-emerald-800/60 shadow-sm hover:shadow-md transition-all duration-300">
-                            <div class="flex items-center justify-center gap-1">
-                                <IconCheck class="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                                <span class="text-xs text-slate-500 dark:text-gray-400">1er Clôturé</span>
-                                <span class="text-xl font-bold text-emerald-600 dark:text-emerald-400">{{
+                            class="bg-white dark:bg-[#1b2e4b] border border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-md transition-all duration-300 flex flex-col justify-center min-h-[3.25rem]"
+                            :class="globalKpiUi.card">
+                            <div class="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
+                                <IconCheck :class="[globalKpiUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
+                                <span :class="[globalKpiUi.label, 'text-slate-500 dark:text-gray-400']">1er Clôturé</span>
+                                <span :class="[globalKpiUi.value, 'text-emerald-600 dark:text-emerald-400']">{{
                                     formatNombre(monitoringData.total.premierComptage.cloture) }}</span>
-                                <span class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">({{
+                                <span :class="[globalKpiUi.pct, 'text-emerald-600 dark:text-emerald-400']">({{
                                     formatPourcentage(monitoringData.total.premierComptage.cloturePourcentage)
                                     }})</span>
                             </div>
                         </div>
                         <div
-                            class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 border border-emerald-200/60 dark:border-emerald-800/60 shadow-sm hover:shadow-md transition-all duration-300">
-                            <div class="flex items-center justify-center gap-1">
-                                <IconCheck class="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                                <span class="text-xs text-slate-500 dark:text-gray-400">2ème Clôturé</span>
-                                <span class="text-xl font-bold text-emerald-600 dark:text-emerald-400">{{
+                            class="bg-white dark:bg-[#1b2e4b] border border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-md transition-all duration-300 flex flex-col justify-center min-h-[3.25rem]"
+                            :class="globalKpiUi.card">
+                            <div class="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
+                                <IconCheck :class="[globalKpiUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
+                                <span :class="[globalKpiUi.label, 'text-slate-500 dark:text-gray-400']">2ème Clôturé</span>
+                                <span :class="[globalKpiUi.value, 'text-emerald-600 dark:text-emerald-400']">{{
                                     formatNombre(monitoringData.total.deuxiemeComptage.cloture) }}</span>
-                                <span class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">({{
+                                <span :class="[globalKpiUi.pct, 'text-emerald-600 dark:text-emerald-400']">({{
                                     formatPourcentage(monitoringData.total.deuxiemeComptage.cloturePourcentage)
                                     }})</span>
                             </div>
                         </div>
                         <div
-                            class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 border border-emerald-200/60 dark:border-emerald-800/60 shadow-sm hover:shadow-md transition-all duration-300">
-                            <div class="flex items-center justify-center gap-1">
-                                <IconCheck class="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                                <span class="text-xs text-slate-500 dark:text-gray-400">3ème Terminé</span>
-                                <span class="text-xl font-bold text-emerald-600 dark:text-emerald-400">{{
+                            class="bg-white dark:bg-[#1b2e4b] border border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-md transition-all duration-300 flex flex-col justify-center min-h-[3.25rem]"
+                            :class="globalKpiUi.card">
+                            <div class="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
+                                <IconCheck :class="[globalKpiUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
+                                <span :class="[globalKpiUi.label, 'text-slate-500 dark:text-gray-400']">3ème Terminé</span>
+                                <span :class="[globalKpiUi.value, 'text-emerald-600 dark:text-emerald-400']">{{
                                     formatNombre(monitoringData.total.troisiemeComptage.termine) }}</span>
-                                <span class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">({{
+                                <span :class="[globalKpiUi.pct, 'text-emerald-600 dark:text-emerald-400']">({{
                                     formatPourcentage(monitoringData.total.troisiemeComptage.terminePourcentage)
                                     }})</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Zones en grille compacte -->
-                    <div class="grid grid-cols-3 grid-rows-3 gap-1">
+                    <!-- Zones : étirées si peu de cartes ; compactes + scroll si beaucoup -->
+                    <div class="flex flex-1 flex-col min-h-0 min-w-0">
+                        <div :class="[zonesMosaicClass, zonesSparse ? 'flex-1 min-h-0 w-full' : '']">
                         <div v-for="zone in monitoringData.zones" :key="zone.zoneId"
-                            class="bg-white dark:bg-[#1b2e4b] rounded-lg border border-slate-200/60 dark:border-gray-700 p-1 hover:shadow-lg transition-all duration-300 shadow-sm">
-                            <!-- En-tête zone horizontale -->
-                            <div
-                                class="flex items-center justify-between gap-1 mb-1 pb-1 border-b border-slate-200 dark:border-gray-700">
-                                <span :class="getLedClass(zone.statusLed)" class="animate-pulse"></span>
-                                <div class="flex-1 text-center">
-                                    <div class="text-xs font-semibold text-slate-900 dark:text-white-light">{{
+                            class="min-w-0 bg-white dark:bg-[#1b2e4b] border border-slate-200/60 dark:border-gray-700 transition-all duration-300"
+                            :class="[
+                                zoneUi.card,
+                                zonesSparse
+                                    ? 'h-full min-h-0 flex flex-col overflow-hidden shadow-lg hover:shadow-xl'
+                                    : 'shadow-sm hover:shadow-lg'
+                            ]">
+                            <!-- En-tête zone -->
+                            <div class="flex items-center justify-between" :class="zoneUi.header">
+                                <span :class="[getLedClass(zone.statusLed, zonesSparse), 'animate-pulse']"></span>
+                                <div class="flex-1 min-w-0 text-center px-1">
+                                    <div :class="[zoneUi.title, 'text-slate-900 dark:text-white-light']">{{
                                         zone.zoneDescription }}</div>
                                 </div>
                             </div>
 
-                            <!-- Métriques horizontales -->
-                            <div class="flex flex-col gap-0.5">
-                                <!-- JOB et Emplacements - horizontale -->
-                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                                    <div class="flex items-center justify-center gap-1">
-                                        <IconBox class="w-3 h-3 text-slate-500 dark:text-gray-400" />
-                                        <span class="text-[10px] text-slate-500 dark:text-gray-400">JOB</span>
-                                        <span class="text-sm font-bold text-slate-900 dark:text-white-light">
+                            <!-- Corps carte : typo plus grande si peu de zones -->
+                            <div
+                                class="flex flex-col"
+                                :class="[zoneUi.stack, zonesSparse ? 'flex-1 min-h-0 overflow-y-auto overscroll-contain' : '']"
+                            >
+                                <!-- JOB -->
+                                <div class="bg-slate-50 dark:bg-slate-700/50" :class="zoneUi.panel">
+                                    <div :class="['flex items-center justify-center', zoneUi.jobRow]">
+                                        <IconBox :class="[zoneUi.icon, 'text-slate-500 dark:text-gray-400']" />
+                                        <span :class="[zoneUi.jobLbl, 'text-slate-500 dark:text-gray-400']">JOB</span>
+                                        <span :class="[zoneUi.jobNum, 'text-slate-900 dark:text-white-light']">
                                             {{ formatNombre(zone.totalJobs) }} ({{
                                             formatNombre(zone.totalEmplacements) }})
                                         </span>
                                     </div>
                                 </div>
 
-                                <!-- 1er comptage - horizontale -->
-                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                                    <div
-                                        class="text-[10px] text-slate-600 dark:text-gray-300 mb-0.5 text-center font-semibold">
+                                <!-- 1er comptage -->
+                                <div class="bg-slate-50 dark:bg-slate-700/50" :class="zoneUi.panel">
+                                    <div :class="[zoneUi.panelTitle, 'text-slate-600 dark:text-gray-300']">
                                         1er Comptage
                                     </div>
-                                    <div class="flex gap-0.5">
-                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                            <div class="flex items-center justify-center gap-1">
-                                                <IconClock class="w-3 h-3 text-[#FECD1C]" />
-                                                <span class="text-[10px] text-[#FECD1C] font-medium">Attente</span>
-                                                <span class="text-sm font-bold text-[#FECD1C]">{{
+                                    <div :class="['flex', zoneUi.triple]">
+                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
+                                            <div :class="['flex items-center', zoneUi.cellInner]">
+                                                <IconClock :class="[zoneUi.icon, 'text-[#FECD1C]']" />
+                                                <span :class="[zoneUi.lbl, 'text-[#FECD1C]']">Attente</span>
+                                                <span :class="[zoneUi.num, 'text-[#FECD1C]']">{{
                                                     formatNombre(zone.premierComptage.nonEntame) }}</span>
-                                                <span class="text-[10px] text-[#FECD1C] font-medium">{{
+                                                <span :class="[zoneUi.pct, 'text-[#FECD1C]']">{{
                                                     formatPourcentage(zone.premierComptage.nonEntamePourcentage)
                                                     }}</span>
                                             </div>
                                         </div>
-                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                            <div class="flex items-center justify-center gap-1">
-                                                <IconPlay class="w-3 h-3 text-primary" />
-                                                <span class="text-[10px] text-primary font-medium">Entamé</span>
-                                                <span class="text-sm font-bold text-primary">{{
+                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
+                                            <div :class="['flex items-center', zoneUi.cellInner]">
+                                                <IconPlay :class="[zoneUi.icon, 'text-primary']" />
+                                                <span :class="[zoneUi.lbl, 'text-primary']">Entamé</span>
+                                                <span :class="[zoneUi.num, 'text-primary']">{{
                                                     formatNombre(zone.premierComptage.enCours) }}</span>
-                                                <span class="text-[10px] text-primary font-medium">{{
+                                                <span :class="[zoneUi.pct, 'text-primary']">{{
                                                     formatPourcentage(zone.premierComptage.enCoursPourcentage) }}</span>
                                             </div>
                                         </div>
-                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                            <div class="flex items-center justify-center gap-1">
-                                                <IconCheck class="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                                <span
-                                                    class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Terminé</span>
-                                                <span
-                                                    class="text-sm font-bold text-emerald-600 dark:text-emerald-400">{{
+                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
+                                            <div :class="['flex items-center', zoneUi.cellInner]">
+                                                <IconCheck :class="[zoneUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
+                                                <span :class="[zoneUi.lbl, 'text-emerald-600 dark:text-emerald-400']">Terminé</span>
+                                                <span :class="[zoneUi.num, 'text-emerald-600 dark:text-emerald-400']">{{
                                                         formatNombre(zone.premierComptage.cloture) }}</span>
-                                                <span
-                                                    class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">{{
+                                                <span :class="[zoneUi.pct, 'text-emerald-600 dark:text-emerald-400']">{{
                                                         formatPourcentage(zone.premierComptage.cloturePourcentage) }}</span>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- 2e comptage - horizontale -->
-                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                                    <div
-                                        class="text-[10px] text-slate-600 dark:text-gray-300 mb-0.5 text-center font-semibold">
+                                <!-- 2e comptage -->
+                                <div class="bg-slate-50 dark:bg-slate-700/50" :class="zoneUi.panel">
+                                    <div :class="[zoneUi.panelTitle, 'text-slate-600 dark:text-gray-300']">
                                         2ème Comptage
                                     </div>
-                                    <div class="flex gap-0.5">
-                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                            <div class="flex items-center justify-center gap-1">
-                                                <IconClock class="w-3 h-3 text-[#FECD1C]" />
-                                                <span class="text-[10px] text-[#FECD1C] font-medium">Attente</span>
-                                                <span class="text-sm font-bold text-[#FECD1C]">{{
+                                    <div :class="['flex', zoneUi.triple]">
+                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
+                                            <div :class="['flex items-center', zoneUi.cellInner]">
+                                                <IconClock :class="[zoneUi.icon, 'text-[#FECD1C]']" />
+                                                <span :class="[zoneUi.lbl, 'text-[#FECD1C]']">Attente</span>
+                                                <span :class="[zoneUi.num, 'text-[#FECD1C]']">{{
                                                     formatNombre(zone.deuxiemeComptage.nonEntame) }}</span>
-                                                <span class="text-[10px] text-[#FECD1C] font-medium">{{
+                                                <span :class="[zoneUi.pct, 'text-[#FECD1C]']">{{
                                                     formatPourcentage(zone.deuxiemeComptage.nonEntamePourcentage)
                                                     }}</span>
                                             </div>
                                         </div>
-                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                            <div class="flex items-center justify-center gap-1">
-                                                <IconPlay class="w-3 h-3 text-primary" />
-                                                <span class="text-[10px] text-primary font-medium">Entamé</span>
-                                                <span class="text-sm font-bold text-primary">{{
+                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
+                                            <div :class="['flex items-center', zoneUi.cellInner]">
+                                                <IconPlay :class="[zoneUi.icon, 'text-primary']" />
+                                                <span :class="[zoneUi.lbl, 'text-primary']">Entamé</span>
+                                                <span :class="[zoneUi.num, 'text-primary']">{{
                                                     formatNombre(zone.deuxiemeComptage.enCours) }}</span>
-                                                <span class="text-[10px] text-primary font-medium">{{
+                                                <span :class="[zoneUi.pct, 'text-primary']">{{
                                                     formatPourcentage(zone.deuxiemeComptage.enCoursPourcentage)
                                                     }}</span>
                                             </div>
                                         </div>
-                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                            <div class="flex items-center justify-center gap-1">
-                                                <IconCheck class="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                                <span
-                                                    class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Terminé</span>
-                                                <span
-                                                    class="text-sm font-bold text-emerald-600 dark:text-emerald-400">{{
+                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
+                                            <div :class="['flex items-center', zoneUi.cellInner]">
+                                                <IconCheck :class="[zoneUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
+                                                <span :class="[zoneUi.lbl, 'text-emerald-600 dark:text-emerald-400']">Terminé</span>
+                                                <span :class="[zoneUi.num, 'text-emerald-600 dark:text-emerald-400']">{{
                                                         formatNombre(zone.deuxiemeComptage.cloture) }}</span>
-                                                <span
-                                                    class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">{{
+                                                <span :class="[zoneUi.pct, 'text-emerald-600 dark:text-emerald-400']">{{
                                                         formatPourcentage(zone.deuxiemeComptage.cloturePourcentage)
                                                     }}</span>
                                             </div>
@@ -378,45 +462,41 @@ const formatNombre = (value: any) => {
                                     </div>
                                 </div>
 
-                                <!-- 3e comptage - horizontale -->
-                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                                    <div
-                                        class="text-[10px] text-slate-600 dark:text-gray-300 mb-0.5 text-center font-semibold">
+                                <!-- 3e comptage -->
+                                <div class="bg-slate-50 dark:bg-slate-700/50" :class="zoneUi.panel">
+                                    <div :class="[zoneUi.panelTitle, 'text-slate-600 dark:text-gray-300']">
                                         3ème Comptage
                                     </div>
-                                    <div class="flex gap-0.5">
-                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                            <div class="flex items-center justify-center gap-1">
-                                                <IconClock class="w-3 h-3 text-[#FECD1C]" />
-                                                <span class="text-[10px] text-[#FECD1C] font-medium">Attente</span>
-                                                <span class="text-sm font-bold text-[#FECD1C]">{{
+                                    <div :class="['flex', zoneUi.triple]">
+                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
+                                            <div :class="['flex items-center', zoneUi.cellInner]">
+                                                <IconClock :class="[zoneUi.icon, 'text-[#FECD1C]']" />
+                                                <span :class="[zoneUi.lbl, 'text-[#FECD1C]']">Attente</span>
+                                                <span :class="[zoneUi.num, 'text-[#FECD1C]']">{{
                                                     formatNombre(zone.troisiemeComptage.nonEntame) }}</span>
-                                                <span class="text-[10px] text-[#FECD1C] font-medium">{{
+                                                <span :class="[zoneUi.pct, 'text-[#FECD1C]']">{{
                                                     formatPourcentage(zone.troisiemeComptage.nonEntamePourcentage)
                                                     }}</span>
                                             </div>
                                         </div>
-                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                            <div class="flex items-center justify-center gap-1">
-                                                <IconPlay class="w-3 h-3 text-primary" />
-                                                <span class="text-[10px] text-primary font-medium">Entamé</span>
-                                                <span class="text-sm font-bold text-primary">{{
+                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
+                                            <div :class="['flex items-center', zoneUi.cellInner]">
+                                                <IconPlay :class="[zoneUi.icon, 'text-primary']" />
+                                                <span :class="[zoneUi.lbl, 'text-primary']">Entamé</span>
+                                                <span :class="[zoneUi.num, 'text-primary']">{{
                                                     formatNombre(zone.troisiemeComptage.enCours) }}</span>
-                                                <span class="text-[10px] text-primary font-medium">{{
+                                                <span :class="[zoneUi.pct, 'text-primary']">{{
                                                     formatPourcentage(zone.troisiemeComptage.enCoursPourcentage)
                                                     }}</span>
                                             </div>
                                         </div>
-                                        <div class="flex-1 bg-white dark:bg-[#0e1726] rounded p-0.5 shadow-sm">
-                                            <div class="flex items-center justify-center gap-1">
-                                                <IconCheck class="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                                <span
-                                                    class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Terminé</span>
-                                                <span
-                                                    class="text-sm font-bold text-emerald-600 dark:text-emerald-400">{{
+                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
+                                            <div :class="['flex items-center', zoneUi.cellInner]">
+                                                <IconCheck :class="[zoneUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
+                                                <span :class="[zoneUi.lbl, 'text-emerald-600 dark:text-emerald-400']">Terminé</span>
+                                                <span :class="[zoneUi.num, 'text-emerald-600 dark:text-emerald-400']">{{
                                                         formatNombre(zone.troisiemeComptage.termine) }}</span>
-                                                <span
-                                                    class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">{{
+                                                <span :class="[zoneUi.pct, 'text-emerald-600 dark:text-emerald-400']">{{
                                                         formatPourcentage(zone.troisiemeComptage.terminePourcentage)
                                                     }}</span>
                                             </div>
@@ -425,6 +505,7 @@ const formatNombre = (value: any) => {
                                 </div>
                             </div>
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>
