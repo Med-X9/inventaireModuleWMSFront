@@ -1,5 +1,5 @@
 import axiosInstance from '@/utils/axiosConfig';
-import type { AxiosResponse } from 'axios';
+import type { AxiosError, AxiosResponse } from 'axios';
 import type { CreateInventoryRequest, InventoryDetails, InventoryTable, ResponseInventoryDetails } from '@/models/Inventory';
 import type { InventoryDetail, InventoryDetailResponse } from '@/models/InventoryDetail';
 import API from '@/api';
@@ -17,6 +17,109 @@ interface PaginatedResponse<T> {
 }
 
 import type { DataTableResponse, DataTableParams } from '@/utils/dataTableUtils';
+
+// ---------------------------------------------------------------------------
+// PDF jobs inventaire — POST /web/api/inventory/<id>/jobs/pdf/ (API_PDF_INVENTAIRE.md)
+// ---------------------------------------------------------------------------
+
+export class InventoryJobsPdfRequestError extends Error {
+    constructor(
+        message: string,
+        public readonly errorType?: string
+    ) {
+        super(message)
+        this.name = 'InventoryJobsPdfRequestError'
+    }
+}
+
+export interface InventoryJobsPdfResult {
+    blob: Blob
+    /** Extrait de Content-Disposition si présent (ex. Job inventaire (&lt;ref&gt;).pdf) */
+    filename: string | null
+}
+
+/** POST …/jobs/pdf/async/ → 202 */
+export type PdfTaskState = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'ERROR'
+
+export interface InventoryJobsPdfAsyncStartResponse {
+    success: boolean
+    task_id: string
+    status: PdfTaskState
+}
+
+/** GET …/pdf-tasks/&lt;uuid&gt;/ */
+export interface PdfTaskStatusResponse {
+    success: boolean
+    task_id: string
+    task_type: string
+    status: PdfTaskState
+    error_message: string | null
+    download_url?: string
+}
+
+interface InventoryJobsPdfJsonBody {
+    success?: boolean
+    message?: string
+    error_type?: string
+}
+
+async function parseJsonFromBlob(blob: Blob): Promise<InventoryJobsPdfJsonBody | null> {
+    try {
+        const text = await blob.text()
+        const j = JSON.parse(text) as InventoryJobsPdfJsonBody
+        if (j && typeof j === 'object') {
+            return j
+        }
+    } catch {
+        /* pas du JSON */
+    }
+    return null
+}
+
+function parseFilenameFromContentDisposition(header: string | undefined): string | null {
+    if (!header) {
+        return null
+    }
+    const utf8 = /filename\*=UTF-8''([^;\n]+)/i.exec(header)
+    if (utf8?.[1]) {
+        try {
+            return decodeURIComponent(utf8[1].trim())
+        } catch {
+            return utf8[1]
+        }
+    }
+    const quoted = /filename="([^"]+)"/i.exec(header)
+    return quoted?.[1] ?? null
+}
+
+async function blobLooksLikePdf(blob: Blob): Promise<boolean> {
+    if (blob.size < 4) {
+        return false
+    }
+    const buf = await blob.slice(0, 4).arrayBuffer()
+    const a = new Uint8Array(buf)
+    return a[0] === 0x25 && a[1] === 0x50 && a[2] === 0x44 && a[3] === 0x46 // %PDF
+}
+
+/**
+ * Entier strictement &gt; 0 pour les segments d’URL (évite /inventory/undefined/…).
+ */
+export function parsePositiveInventoryId(raw: unknown): number | null {
+    if (raw == null) {
+        return null
+    }
+    if (typeof raw === 'string') {
+        const t = raw.trim()
+        if (t === '' || t === 'undefined' || t === 'null') {
+            return null
+        }
+    }
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n < 1) {
+        return null
+    }
+    return Math.trunc(n)
+}
 
 // Interface pour les réponses de lancement d'inventaire
 export interface LaunchResponse {
@@ -485,23 +588,209 @@ export class InventoryService {
     }
 
     /**
-     * Exporte les jobs d'un inventaire en PDF
+     * Exporte les jobs d'un inventaire en PDF (synchrone).
+     * POST ` /web/api/inventory/<inventory_id>/jobs/pdf/ `
+     *
+     * Body JSON optionnel : `job` ou `job[]` (IDs de jobs) — sinon `{}` ; filtrage défaut côté API
+     * (assignments / jobs PRET + TRANSFERT, voir API_PDF_INVENTAIRE.md).
+     *
      * @param id - ID de l'inventaire
-     * @returns Promise qui résout avec le blob du PDF
+     * @param options - `jobIds` pour restreindre à certains jobs (mêmes filtres de statut API)
      */
-    static async exportJobsToPDF(id: number | string): Promise<Blob> {
+    static async exportJobsToPDF(
+        id: number | string,
+        options?: { jobIds?: number[] }
+    ): Promise<InventoryJobsPdfResult> {
+        const iid = parsePositiveInventoryId(id)
+        if (iid == null) {
+            throw new InventoryJobsPdfRequestError('ID inventaire invalide pour l’export PDF.', 'validation_error')
+        }
+        const body: Record<string, unknown> = {}
+        if (options?.jobIds?.length) {
+            body.job = options.jobIds
+        }
+
         try {
-            const response = await axiosInstance.post(
-                `${API.endpoints.inventory.base}${id}/jobs/pdf/`,
-                {}, // Body vide pour POST
+            const response = await axiosInstance.post<Blob>(
+                `${API.endpoints.inventory.base}${iid}/jobs/pdf/`,
+                body,
                 {
-                    responseType: 'blob' // Configuration axios pour recevoir un blob
+                    responseType: 'blob',
+                    headers: {
+                        Accept: 'application/pdf, application/json;q=0.1',
+                        'Content-Type': 'application/json'
+                    }
                 }
-            );
-            return response.data;
-        } catch (error) {
-            logger.error('Erreur lors de l\'export PDF des jobs', error);
-            throw error;
+            )
+
+            const blob = response.data
+            const contentType = String(response.headers['content-type'] || '')
+
+            if (contentType.includes('application/json')) {
+                const errJson = await parseJsonFromBlob(blob)
+                throw new InventoryJobsPdfRequestError(
+                    errJson?.message || 'Erreur lors de la génération du PDF des jobs',
+                    errJson?.error_type
+                )
+            }
+
+            if (!(await blobLooksLikePdf(blob))) {
+                const errJson = await parseJsonFromBlob(blob)
+                if (errJson?.message) {
+                    throw new InventoryJobsPdfRequestError(errJson.message, errJson.error_type)
+                }
+                throw new InventoryJobsPdfRequestError(
+                    'La réponse du serveur n\'est pas un fichier PDF valide.'
+                )
+            }
+
+            const filename = parseFilenameFromContentDisposition(
+                response.headers['content-disposition'] as string | undefined
+            )
+            return { blob, filename }
+        } catch (err: unknown) {
+            if (err instanceof InventoryJobsPdfRequestError) {
+                throw err
+            }
+
+            const ax = err as AxiosError<Blob>
+            if (ax.response?.data instanceof Blob) {
+                const errJson = await parseJsonFromBlob(ax.response.data)
+                if (errJson?.message) {
+                    throw new InventoryJobsPdfRequestError(errJson.message, errJson.error_type)
+                }
+            }
+
+            logger.error('Erreur lors de l\'export PDF des jobs', err)
+            throw err
+        }
+    }
+
+    /**
+     * Démarre la génération PDF des jobs en arrière-plan.
+     * POST ` /web/api/inventory/<id>/jobs/pdf/async/ ` → 202 + task_id
+     */
+    /**
+     * PDF des assignments TERMINE non encore imprimés pour un magasin (async + poll).
+     * POST `…/warehouse/<warehouse_id>/jobs/pdf/finished-assignments/async/`
+     */
+    static async startWarehouseFinishedAssignmentsPdfAsync(
+        inventoryId: number | string,
+        warehouseId: number | string
+    ): Promise<InventoryJobsPdfAsyncStartResponse> {
+        const iid = parsePositiveInventoryId(inventoryId)
+        const wid = parsePositiveInventoryId(warehouseId)
+        if (iid == null) {
+            throw new Error('ID inventaire invalide pour l’export PDF (valeur manquante ou incorrecte).')
+        }
+        if (wid == null) {
+            throw new Error('ID entrepôt invalide pour l’export PDF (valeur manquante ou incorrecte).')
+        }
+        const response = await axiosInstance.post<InventoryJobsPdfAsyncStartResponse>(
+            `${API.endpoints.inventory.base}${iid}/warehouse/${wid}/jobs/pdf/finished-assignments/async/`,
+            {},
+            {
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            }
+        )
+        return response.data
+    }
+
+    static async startInventoryJobsPdfAsync(
+        id: number | string,
+        options?: { jobIds?: number[] }
+    ): Promise<InventoryJobsPdfAsyncStartResponse> {
+        const iid = parsePositiveInventoryId(id)
+        if (iid == null) {
+            throw new Error('ID inventaire invalide pour l’export PDF (valeur manquante ou incorrecte).')
+        }
+        const body: Record<string, unknown> = {}
+        if (options?.jobIds?.length) {
+            body.job = options.jobIds
+        }
+        const response = await axiosInstance.post<InventoryJobsPdfAsyncStartResponse>(
+            `${API.endpoints.inventory.base}${iid}/jobs/pdf/async/`,
+            body,
+            {
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            }
+        )
+        return response.data
+    }
+
+    /**
+     * Statut d'une tâche PDF (polling).
+     * GET ` /web/api/pdf-tasks/<task_id>/ `
+     */
+    static async getPdfTaskStatus(taskId: string): Promise<PdfTaskStatusResponse> {
+        const response = await axiosInstance.get<PdfTaskStatusResponse>(
+            `${API.endpoints.pdfTasks.base}${taskId}/`
+        )
+        return response.data
+    }
+
+    /**
+     * Télécharge le binaire PDF depuis l'URL retournée par la tâche (Bearer via intercepteur).
+     * L'URL peut être absolue ou chemin relatif sous la même origine que l'API.
+     */
+    static async fetchPdfFromDownloadUrl(url: string): Promise<InventoryJobsPdfResult> {
+        const base = String(API.baseURL || '').replace(/\/$/, '')
+        const resolved = url.startsWith('http://') || url.startsWith('https://')
+            ? url
+            : `${base}/${url.replace(/^\//, '')}`
+
+        try {
+            const response = await axiosInstance.get<Blob>(resolved, {
+                responseType: 'blob',
+                headers: {
+                    Accept: 'application/pdf, application/json;q=0.1'
+                }
+            })
+
+            const blob = response.data
+            const contentType = String(response.headers['content-type'] || '')
+
+            if (contentType.includes('application/json')) {
+                const errJson = await parseJsonFromBlob(blob)
+                throw new InventoryJobsPdfRequestError(
+                    errJson?.message || 'Impossible de récupérer le fichier PDF',
+                    errJson?.error_type
+                )
+            }
+
+            if (!(await blobLooksLikePdf(blob))) {
+                const errJson = await parseJsonFromBlob(blob)
+                if (errJson?.message) {
+                    throw new InventoryJobsPdfRequestError(errJson.message, errJson.error_type)
+                }
+                throw new InventoryJobsPdfRequestError(
+                    'Le fichier reçu n\'est pas un PDF valide. Vérifiez l\'accès au média (authentification, CORS).'
+                )
+            }
+
+            const filename = parseFilenameFromContentDisposition(
+                response.headers['content-disposition'] as string | undefined
+            )
+            return { blob, filename }
+        } catch (err: unknown) {
+            if (err instanceof InventoryJobsPdfRequestError) {
+                throw err
+            }
+            const ax = err as AxiosError<Blob>
+            if (ax.response?.data instanceof Blob) {
+                const errJson = await parseJsonFromBlob(ax.response.data)
+                if (errJson?.message) {
+                    throw new InventoryJobsPdfRequestError(errJson.message, errJson.error_type)
+                }
+            }
+            logger.error('Erreur lors du téléchargement du PDF (URL tâche)', err)
+            throw err
         }
     }
 }

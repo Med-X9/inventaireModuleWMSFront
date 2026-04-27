@@ -667,6 +667,13 @@
             :infos="validationInfos"
             @close="validationAlert.hide"
         />
+
+        <InventoryJobsPdfExportModal
+            v-model="showJobsPdfExportModal"
+            export-mode="inventory"
+            :inventory-id="inventoryIdResolved"
+            :inventory-reference="inventory?.reference ?? null"
+        />
         </template>
 
         <!-- Message d'erreur si aucun inventaire et erreur -->
@@ -726,6 +733,7 @@ import { useInventoryDetail } from '@/composables/useInventoryDetail'
 
 // ===== IMPORTS COMPOSANTS =====
 import InventoryDetailSkeleton from '@/components/InventoryDetailSkeleton.vue'
+import InventoryJobsPdfExportModal from '@/components/Inventory/InventoryJobsPdfExportModal.vue'
 
 // ===== IMPORTS STORES =====
 import { useResourceStore } from '@/stores/resource'
@@ -743,6 +751,7 @@ const {
     loading,
     error,
     inventoryId,
+    inventoryIdResolved,
     magasins,
     launchInventory,
     launchInventoryByWarehouseName,
@@ -759,6 +768,7 @@ const {
     getAvailableResources,
     exportToPDF,
     exportJobsToPDF,
+    showJobsPdfExportModal,
     // Pagination équipe
     teamCurrentPage,
     teamItemsPerPage,

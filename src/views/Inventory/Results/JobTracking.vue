@@ -35,7 +35,8 @@
                 </div>
 
                 <!-- Boutons d'action (Résultats + Imprimer) alignés à droite -->
-                <div class="flex justify-end">
+                <div class="flex justify-end items-center gap-3">
+                    <JobStatusLegendTooltip />
                     <ButtonGroup :buttons="actionButtons" justify="end" />
                 </div>
             </div>
@@ -77,6 +78,15 @@
             <h3 class="text-2xl font-bold text-slate-900 dark:text-slate-100 m-0 mb-2">Sélectionnez un magasin</h3>
             <p class="text-base text-slate-600 dark:text-slate-400 m-0">Veuillez sélectionner un magasin pour afficher le suivi des jobs</p>
         </div>
+
+        <InventoryJobsPdfExportModal
+            v-model="showJobsPdfExportModal"
+            :export-mode="pdfExportMode"
+            :inventory-id="inventoryIdForPdf"
+            :warehouse-id="warehouseIdForPdf"
+            :job-ids="jobIdsForModal"
+            :inventory-reference="inventoryReference"
+        />
     </div>
 </template>
 
@@ -93,7 +103,7 @@
  */
 
 // ===== IMPORTS VUE =====
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 // ===== IMPORTS ROUTER =====
 import { useRoute, useRouter } from 'vue-router'
@@ -104,9 +114,13 @@ import { storeToRefs } from 'pinia'
 // ===== IMPORTS COMPOSANTS =====
 import { DataTable } from '@SMATCH-Digital-dev/vue-system-design'
 import ButtonGroup, { type ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
+import JobStatusLegendTooltip from '@/components/JobStatusLegendTooltip.vue'
+import InventoryJobsPdfExportModal from '@/components/Inventory/InventoryJobsPdfExportModal.vue'
 
 // ===== IMPORTS COMPOSABLES =====
-import { useJobTracking } from '@/composables/useJobTracking'
+import { useJobTracking, type JobTrackingRow } from '@/composables/useJobTracking'
+import { alertService } from '@/services/alertService'
+import { parsePositiveInventoryId } from '@/services/InventoryService'
 
 // ===== IMPORTS STORES =====
 import { useWarehouseStore } from '@/stores/warehouse'
@@ -136,6 +150,7 @@ const { warehouses, loading: warehousesLoading } = storeToRefs(warehouseStore)
      */
     const {
         inventoryReference,
+        inventoryId,
         loading,
         storeOptions,
         selectedStore,
@@ -144,6 +159,10 @@ const { warehouses, loading: warehousesLoading } = storeToRefs(warehouseStore)
         selectedRows,
         selectedRowsCount,
         hasSelectedRows,
+        finishedRowsCount,
+        selectedFinishedRowsCount,
+        finishedRows,
+        selectedFinishedRows,
         initialize,
         reinitialize,
         printJobs,
@@ -171,6 +190,9 @@ const { warehouses, loading: warehousesLoading } = storeToRefs(warehouseStore)
  */
 const storeLoading = computed(() => loading.value || warehousesLoading.value)
 
+/** ID inventaire sûr pour l’URL (jamais undefined / « undefined ») */
+const inventoryIdForPdf = computed((): number | null => parsePositiveInventoryId(inventoryId.value))
+
 /**
  * Magasin sélectionné (objet complet depuis le store)
  */
@@ -186,6 +208,74 @@ const ACTION_BUTTON_CLASS =
     'bg-white text-primary border border-primary hover:bg-primary hover:text-white ' +
     'dark:bg-slate-900 dark:text-primary dark:border-primary dark:hover:bg-primary ' +
     'dark:hover:text-white'
+
+// ===== Export PDF (modale async + suivi) =====
+const showJobsPdfExportModal = ref(false)
+const pdfExportMode = ref<'inventory' | 'finished'>('finished')
+const pdfExportJobIds = ref<number[] | undefined>(undefined)
+
+const warehouseIdForPdf = computed((): number | null => {
+    if (!selectedStore.value) {
+        return null
+    }
+    const n = Number(selectedStore.value)
+    return Number.isNaN(n) ? null : n
+})
+
+const jobIdsForModal = computed((): number[] | undefined => {
+    if (pdfExportMode.value !== 'inventory') {
+        return undefined
+    }
+    const j = pdfExportJobIds.value
+    return j?.length ? j : undefined
+})
+
+function uniqueJobIds(rows: JobTrackingRow[]): number[] {
+    const s = new Set<number>()
+    for (const r of rows) {
+        if (r.jobId) {
+            s.add(r.jobId)
+        }
+    }
+    return [...s]
+}
+
+function openExportAllFinishedJobsPdf() {
+    if (!inventoryIdForPdf.value) {
+        void alertService.error({
+            title: 'Export PDF',
+            text: 'Identifiant d’inventaire introuvable. Rechargez la page.'
+        })
+        return
+    }
+    if (warehouseIdForPdf.value == null) {
+        void alertService.warning({ text: 'Sélectionnez un magasin pour lancer l’export PDF.' })
+        return
+    }
+    if (finishedRowsCount.value === 0) {
+        return
+    }
+    pdfExportMode.value = 'finished'
+    pdfExportJobIds.value = undefined
+    showJobsPdfExportModal.value = true
+}
+
+function openExportSelectedFinishedJobsPdf() {
+    if (!inventoryIdForPdf.value) {
+        void alertService.error({
+            title: 'Export PDF',
+            text: 'Identifiant d’inventaire introuvable. Rechargez la page.'
+        })
+        return
+    }
+    const ids = uniqueJobIds(selectedFinishedRows.value)
+    if (ids.length === 0) {
+        return
+    }
+    pdfExportMode.value = 'inventory'
+    pdfExportJobIds.value = ids
+    showJobsPdfExportModal.value = true
+}
 
 // ===== BOUTONS D'ACTION (pour le ButtonGroup) =====
 const actionButtons = computed<ButtonGroupButton[]>(() => {
@@ -222,6 +312,30 @@ const actionButtons = computed<ButtonGroupButton[]>(() => {
             }
 
             void router.push(navigation)
+        }
+    })
+
+    buttons.push({
+        id: 'export-finished-jobs',
+        label: 'Exporter jobs terminés',
+        variant: 'default',
+        class: ACTION_BUTTON_CLASS,
+        disabled: storeLoading.value || finishedRowsCount.value === 0,
+        visible: true,
+        onClick: () => {
+            void openExportAllFinishedJobsPdf()
+        }
+    })
+
+    buttons.push({
+        id: 'export-selected-finished-jobs',
+        label: 'Exporter sélection terminée',
+        variant: 'default',
+        class: ACTION_BUTTON_CLASS,
+        disabled: storeLoading.value || selectedFinishedRowsCount.value === 0,
+        visible: true,
+        onClick: () => {
+            void openExportSelectedFinishedJobsPdf()
         }
     })
 

@@ -33,61 +33,7 @@
                         ({{ jobPaginationMetadata.total }} au total)
                     </span>
                 </div>
-                <div class="relative inline-block" ref="statusLegendTooltip">
-                    <Button
-                        @mouseenter="showStatusTooltip"
-                        @mouseleave="hideStatusTooltip"
-                        variant="ghost"
-                        size="sm"
-                        class="w-6 h-6 rounded-full p-0 cursor-help"
-                        type="button"
-                        aria-label="Signification des statuts">
-                        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                    </Button>
-                    <Teleport to="body">
-                        <div
-                            v-if="showStatusLegend"
-                            ref="tooltipElement"
-                            :style="tooltipStyle"
-                            class="fixed z-50 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 p-4 pointer-events-none max-w-sm"
-                            style="min-width: 280px;">
-                            <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Signification des statuts</h4>
-                            <div class="space-y-2">
-                                <div class="flex items-center gap-2">
-                                    <Badge variant="primary" size="sm" class="bg-slate-200 text-slate-900">EN ATTENTE</Badge>
-                                    <span class="text-xs text-slate-600 dark:text-slate-400">Job en attente de validation</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <Badge variant="primary" size="sm" class="bg-slate-700 text-white">VALIDE</Badge>
-                                    <span class="text-xs text-slate-600 dark:text-slate-400">Job validé</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <Badge variant="success" size="sm">AFFECTE</Badge>
-                                    <span class="text-xs text-slate-600 dark:text-slate-400">Job affecté à une équipe</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <Badge variant="warning" size="sm" class="bg-purple-500 text-white">PRET</Badge>
-                                    <span class="text-xs text-slate-600 dark:text-slate-400">Job prêt pour le comptage</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <Badge variant="warning" size="sm" class="bg-amber-500 text-white">TRANSFERT</Badge>
-                                    <span class="text-xs text-slate-600 dark:text-slate-400">Job en transfert</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <Badge variant="info" size="sm">ENTAME</Badge>
-                                    <span class="text-xs text-slate-600 dark:text-slate-400">Comptage entamé</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <Badge variant="success" size="sm" class="bg-green-600 text-white">TERMINE</Badge>
-                                    <span class="text-xs text-slate-600 dark:text-slate-400">Comptage terminé</span>
-                                </div>
-                            </div>
-                            <div class="absolute w-2 h-2 bg-white dark:bg-slate-800 border-l border-b border-slate-200 dark:border-slate-700 transform rotate-45 -bottom-1 right-4"></div>
-                        </div>
-                    </Teleport>
-                </div>
+                <JobStatusLegendTooltip />
             </div>
 
             <!-- DataTable des jobs avec actions (Valider, Réaffecter) -->
@@ -313,12 +259,13 @@
  * @component Reaffectation
  */
 
-import { ref, computed, nextTick, Teleport, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Dialog, Button, Badge, Card, DataTable, Divider, Alert } from '@SMATCH-Digital-dev/vue-system-design'
+import { Dialog, Card, DataTable, Divider, Alert } from '@SMATCH-Digital-dev/vue-system-design'
 import ButtonGroup from '@/components/Form/ButtonGroup.vue'
 import JobAffectationDialog from '@/components/JobAffectationDialog.vue'
 import FormBuilder from '@/components/Form/FormBuilder.vue'
+import JobStatusLegendTooltip from '@/components/JobStatusLegendTooltip.vue'
 import { useReaffectation } from '@/composables/useReaffectation'
 import { useJobStore } from '@/stores/job'
 import IconEdit from '@/components/icon/icon-edit.vue'
@@ -340,12 +287,6 @@ watch(
     { immediate: true, flush: 'sync' }
 )
 
-const showStatusLegend = ref(false)
-const statusLegendTooltip = ref<HTMLElement | null>(null)
-const tooltipElement = ref<HTMLElement | null>(null)
-const tooltipStyle = ref<Record<string, string>>({})
-let tooltipTimeoutId: number | null = null
-
 const { showJobAffectationModal, selectedJobForModal, modalTeamOptions, modalTeamOptionsByCountingOrder, assignmentSavingInModal } = affecter
 const modalKey = ref(0)
 
@@ -354,41 +295,6 @@ watch(() => modalTeamOptionsByCountingOrder, (newVal) => {
         modalKey.value++
     }
 }, { immediate: true })
-
-const showStatusTooltip = async () => {
-    if (tooltipTimeoutId) clearTimeout(tooltipTimeoutId)
-    tooltipTimeoutId = window.setTimeout(async () => {
-        showStatusLegend.value = true
-        await nextTick()
-        positionStatusTooltip()
-    }, 300)
-}
-
-const hideStatusTooltip = () => {
-    if (tooltipTimeoutId) {
-        clearTimeout(tooltipTimeoutId)
-        tooltipTimeoutId = null
-    }
-    showStatusLegend.value = false
-}
-
-const positionStatusTooltip = () => {
-    if (!statusLegendTooltip.value || !tooltipElement.value) return
-    const containerRect = statusLegendTooltip.value.getBoundingClientRect()
-    const tooltipRect = tooltipElement.value.getBoundingClientRect()
-    const viewportWidth = window.innerWidth
-    const viewportHeight = window.innerHeight
-    let top = containerRect.bottom + 8
-    let left = containerRect.right - tooltipRect.width
-    if (left < 8) left = 8
-    if (left + tooltipRect.width > viewportWidth - 8) {
-        left = viewportWidth - tooltipRect.width - 8
-    }
-    if (top + tooltipRect.height > viewportHeight - 8) {
-        top = containerRect.top - tooltipRect.height - 8
-    }
-    tooltipStyle.value = { top: `${top}px`, left: `${left}px` }
-}
 
 const { handleJobAffectationModalTeamChanged, handleJobAffectationModalFinish } = affecter
 

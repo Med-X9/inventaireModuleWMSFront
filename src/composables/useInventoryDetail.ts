@@ -23,8 +23,8 @@ import { useAppStore } from '@/stores'
 
 // ===== IMPORTS SERVICES =====
 import { alertService } from '@/services/alertService'
+import { parsePositiveInventoryId } from '@/services/InventoryService'
 import { validationAlertService } from '@/services/validationAlertService'
-import { InventoryService } from '@/services/InventoryService'
 import { logger } from '@/services/loggerService'
 
 // ===== IMPORTS UTILS =====
@@ -100,6 +100,19 @@ export function useInventoryDetail(inventoryReference: string) {
     /** Erreur depuis le store */
     const error = computed(() => inventoryError.value || inventoryStore.getError)
 
+    /**
+     * ID numérique d’inventaire pour les appels API (ref résolu, sinon id du détail chargé).
+     * Évite les requêtes du type /inventory/undefined/…
+     */
+    const inventoryIdResolved = computed((): number | null => {
+        const fromRef = parsePositiveInventoryId(inventoryId.value)
+        if (fromRef != null) {
+            return fromRef
+        }
+        const fromDetail = (inventory.value as { id?: number } | undefined)?.id
+        return parsePositiveInventoryId(fromDetail)
+    })
+
     /** Ressources associées à l'inventaire */
     const resources = computed(() => inventory.value?.ressources || [])
 
@@ -130,11 +143,12 @@ export function useInventoryDetail(inventoryReference: string) {
             // Cette méthode fait un appel API direct, plus fiable que de chercher dans la liste paginée
             const inventory = await inventoryStore.fetchInventoryByReference(reference)
 
-            if (inventory && inventory.id) {
-                inventoryId.value = inventory.id
+            const parsedId = parsePositiveInventoryId(inventory?.id)
+            if (inventory && parsedId != null) {
+                inventoryId.value = parsedId
                 logger.debug('ID de l\'inventaire résolu avec succès', {
                     reference,
-                    inventoryId: inventory.id
+                    inventoryId: parsedId
                 })
             } else {
                 inventoryError.value = `Aucun inventaire trouvé avec la référence: ${reference}`
@@ -371,21 +385,22 @@ export function useInventoryDetail(inventoryReference: string) {
         const warehouseReference = magasin?.reference
 
         const buttons: ButtonGroupButton[] = [
-            { id: 'planning', label: 'Planification', icon: IconCalendar, onClick: () => goToWarehousePlanning(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
-            { id: 'affectation', label: 'Affectation', icon: IconUsers, onClick: () => goToWarehouseAffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
-            { id: 'reaffectation', label: 'Réaffectation', icon: IconUsers, onClick: () => goToWarehouseReaffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
-            { id: 'tracking', label: 'Suivi', icon: IconClipboardText, onClick: () => goToWarehouseTracking(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS }
+            { id: 'planning', label: '', title: 'Planification', icon: IconCalendar, onClick: () => goToWarehousePlanning(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+            { id: 'affectation', label: '', title: 'Affectation', icon: IconUsers, onClick: () => goToWarehouseAffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+            { id: 'reaffectation', label: '', title: 'Réaffectation', icon: IconUsers, onClick: () => goToWarehouseReaffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+            { id: 'tracking', label: '', title: 'Suivi', icon: IconClipboardText, onClick: () => goToWarehouseTracking(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS }
         ]
         if (inventory.value?.status === 'EN REALISATION') {
             buttons.push(
-                { id: 'results', label: 'Résultats', icon: IconBarChart, onClick: () => goToWarehouseResults(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
-                { id: 'monitoring', label: 'Monitoring', icon: IconChartSquare, onClick: () => goToWarehouseMonitoring(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS }
+                { id: 'results', label: '', title: 'Résultats', icon: IconBarChart, onClick: () => goToWarehouseResults(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+                { id: 'monitoring', label: '', title: 'Monitoring', icon: IconChartSquare, onClick: () => goToWarehouseMonitoring(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS }
             )
         }
         if (inventory.value?.status === 'EN PREPARATION') {
             buttons.push({
                 id: 'launch',
-                label: 'Lancer',
+                label: '',
+                title: "Lancer l'inventaire pour ce magasin",
                 icon: IconPlay,
                 onClick: async () => { await launchInventoryByWarehouseName(warehouseName) },
                 variant: 'default',
@@ -413,8 +428,17 @@ export function useInventoryDetail(inventoryReference: string) {
         buttons.push({ id: 'import-tracking', label: 'Suivi Import', icon: IconUpload, onClick: () => handleGoToImportTracking(), variant: 'default', class: ACTION_BUTTON_CLASS })
         if (inventory.value?.status !== 'CLOTURE' && inventory.value?.status !== 'CLOTUREE') {
             buttons.push({ id: 'export-detail', label: 'Exporter Détail', icon: IconFile, onClick: exportToPDF, variant: 'default', class: ACTION_BUTTON_CLASS })
-            if (inventoryId.value) {
-                buttons.push({ id: 'export-jobs', label: 'PDF Jobs', icon: IconDownload, onClick: exportJobsToPDF, variant: 'default', class: ACTION_BUTTON_CLASS })
+            if (inventoryIdResolved.value) {
+                buttons.push({
+                    id: 'export-jobs',
+                    label: 'PDF Jobs',
+                    icon: IconDownload,
+                    onClick: () => {
+                        exportJobsToPDF()
+                    },
+                    variant: 'default',
+                    class: ACTION_BUTTON_CLASS
+                })
             }
         }
         return buttons
@@ -736,6 +760,8 @@ export function useInventoryDetail(inventoryReference: string) {
 
     // ===== MODAL RESSOURCES (état + méthodes) =====
     const showAddResourceModal = ref(false)
+    /** Modale de suivi export PDF jobs (async + poll) */
+    const showJobsPdfExportModal = ref(false)
     const resourceLines = ref([{ resource: '', quantity: 1 }])
     const availableResources = ref<any[]>([])
 
@@ -847,39 +873,17 @@ export function useInventoryDetail(inventoryReference: string) {
     }
 
     /**
-     * Exporte les jobs d'un inventaire en PDF depuis le backend
+     * Ouvre la modale de suivi d’export PDF des jobs (POST …/jobs/pdf/async/ + poll …/pdf-tasks/&lt;uuid&gt;/).
      */
-    const exportJobsToPDF = async () => {
-        if (!inventoryId.value) {
-            await alertService.error({
+    const exportJobsToPDF = () => {
+        if (!inventoryIdResolved.value) {
+            void alertService.error({
                 title: 'Erreur',
-                text: 'ID d\'inventaire non disponible'
+                text: 'ID d’inventaire non disponible. Rechargez la page ou vérifiez l’inventaire.'
             })
             return
         }
-
-        try {
-            const blob = await InventoryService.exportJobsToPDF(inventoryId.value)
-
-            const url = window.URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = url
-            link.download = `Jobs_Inventaire_${inventory.value?.reference || inventoryId.value}.pdf`
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            window.URL.revokeObjectURL(url)
-
-            await alertService.success({
-                text: 'Export PDF des jobs réussi'
-            })
-        } catch (error: any) {
-            logger.error('Erreur lors de l\'export PDF des jobs', error)
-            await alertService.error({
-                title: 'Erreur',
-                text: error?.response?.data?.message || 'Impossible d\'exporter les jobs en PDF'
-            })
-        }
+        showJobsPdfExportModal.value = true
     }
 
     // ===== MÉTHODES D'INITIALISATION =====
@@ -929,6 +933,7 @@ export function useInventoryDetail(inventoryReference: string) {
         loading,
         error,
         inventoryId,
+        inventoryIdResolved,
         inventoryLoading,
         inventoryError,
 
@@ -983,6 +988,7 @@ export function useInventoryDetail(inventoryReference: string) {
         removeResourceFromInventory,
         getAvailableResources,
         showAddResourceModal,
+        showJobsPdfExportModal,
         resourceLines,
         availableResources,
         resourceOptions,

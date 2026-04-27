@@ -65,6 +65,7 @@ import IconTrash from '@/components/icon/icon-trash.vue'
 
 // ===== IMPORTS COMPOSANTS =====
 import Modal from '@/components/Modal.vue'
+import { JOB_STATUS_BADGE_DEFAULT_CLASS, JOB_STATUS_BADGE_STYLES, JOB_STATUS_FILTER_OPTIONS } from '@/constants/jobStatus'
 
 // ===== IMPORTS EXTERNES =====
 import Swal from 'sweetalert2'
@@ -1506,41 +1507,8 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
             autoSize: true,
             align: 'center' as const,
             description: 'Référence du job avec badge de statut',
-            badgeStyles: [
-                {
-                    value: 'EN ATTENTE',
-                    class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
-                },
-                {
-                    value: 'VALIDE',
-                    class: 'inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
-                },
-                {
-                    value: 'AFFECTE',
-                    class: 'inline-flex items-center rounded-md bg-teal-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-teal-600/20 ring-inset'
-                },
-                {
-                    value: 'PRET',
-                    class: 'inline-flex items-center rounded-md bg-purple-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-purple-600/20 ring-inset'
-                },
-                {
-                    value: 'TRANSFERT',
-                    class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
-                },
-                {
-                    value: 'ENTAME',
-                    class: 'inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset'
-                },
-                {
-                    value: 'TERMINE',
-                    class: 'inline-flex items-center rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-700/20 ring-inset'
-                },
-                {
-                    value: 'CLOTURE',
-                    class: 'inline-flex items-center rounded-md bg-slate-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
-                }
-            ],
-            badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
+            badgeStyles: JOB_STATUS_BADGE_STYLES,
+            badgeDefaultClass: JOB_STATUS_BADGE_DEFAULT_CLASS,
             allowWrap: true,
             cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
                 let rowData: RowNode | null = null
@@ -1567,23 +1535,14 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
                 }
 
                 const badgeStyle = column?.badgeStyles.find((s: any) => s.value === status)
-                const badgeClass = badgeStyle?.class || column?.badgeDefaultClass || 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+                const badgeClass = badgeStyle?.class || column?.badgeDefaultClass || JOB_STATUS_BADGE_DEFAULT_CLASS
 
                 return `<span class="${badgeClass}">${reference}</span>`
             }) as any,
             filterConfig: {
                 dataType: 'select' as const,
                 operator: 'equals' as const,
-                options: [
-                    { label: 'EN ATTENTE', value: 'EN ATTENTE' },
-                    { label: 'VALIDE', value: 'VALIDE' },
-                    { label: 'AFFECTE', value: 'AFFECTE' },
-                    { label: 'PRET', value: 'PRET' },
-                    { label: 'TRANSFERT', value: 'TRANSFERT' },
-                    { label: 'ENTAME', value: 'ENTAME' },
-                    { label: 'TERMINE', value: 'TERMINE' },
-                    { label: 'CLOTURE', value: 'CLOTURE' }
-                ]
+                options: JOB_STATUS_FILTER_OPTIONS
             }
         })
 
@@ -1651,41 +1610,8 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
                 align: 'center' as const,
                 allowWrap: true,
                 description: `Session et statut du ${getCountingOrderLabel(order)}`,
-                badgeStyles: [
-                    {
-                        value: 'EN ATTENTE',
-                        class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
-                    },
-                    {
-                        value: 'VALIDE',
-                        class: 'inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
-                    },
-                    {
-                        value: 'AFFECTE',
-                        class: 'inline-flex items-center rounded-md bg-teal-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-teal-600/20 ring-inset'
-                    },
-                    {
-                        value: 'PRET',
-                        class: 'inline-flex items-center rounded-md bg-purple-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-purple-600/20 ring-inset'
-                    },
-                    {
-                        value: 'TRANSFERT',
-                        class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
-                    },
-                    {
-                        value: 'ENTAME',
-                        class: 'inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset'
-                    },
-                    {
-                        value: 'TERMINE',
-                        class: 'inline-flex items-center rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-700/20 ring-inset'
-                    },
-                    {
-                        value: 'CLOTURE',
-                        class: 'inline-flex items-center rounded-md bg-slate-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
-                    }
-                ],
-                badgeDefaultClass: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset',
+                badgeStyles: JOB_STATUS_BADGE_STYLES,
+                badgeDefaultClass: JOB_STATUS_BADGE_DEFAULT_CLASS,
                 cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
                     let rowData: RowNode | null = null
 
@@ -1718,23 +1644,14 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
                     const status = assignment.status || ''
 
                     const badgeStyle = column?.badgeStyles.find((s: any) => s.value === status)
-                    const badgeClass = badgeStyle?.class || column?.badgeDefaultClass || 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+                    const badgeClass = badgeStyle?.class || column?.badgeDefaultClass || JOB_STATUS_BADGE_DEFAULT_CLASS
 
                     return `<span class="${badgeClass}">${sessionLabel}</span>`
                 }) as any,
                 filterConfig: {
                     dataType: 'select' as const,
                     operator: 'equals' as const,
-                    options: [
-                        { label: 'EN ATTENTE', value: 'EN ATTENTE' },
-                        { label: 'VALIDE', value: 'VALIDE' },
-                        { label: 'AFFECTE', value: 'AFFECTE' },
-                        { label: 'PRET', value: 'PRET' },
-                        { label: 'TRANSFERT', value: 'TRANSFERT' },
-                        { label: 'ENTAME', value: 'ENTAME' },
-                        { label: 'TERMINE', value: 'TERMINE' },
-                        { label: 'CLOTURE', value: 'CLOTURE' }
-                    ]
+                    options: JOB_STATUS_FILTER_OPTIONS
                 }
             })
         })

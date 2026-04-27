@@ -32,6 +32,10 @@ const API = {
         job: {
             base: '/web/api/jobs/'
         },
+        /** GET statut tâche PDF (POST async → poll) — API_PDF_INVENTAIRE.md §6 */
+        pdfTasks: {
+            base: '/web/api/pdf-tasks/'
+        },
         resource: {
             base: 'masterdata/api/ressources'
         },

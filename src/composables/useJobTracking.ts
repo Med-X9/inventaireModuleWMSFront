@@ -29,6 +29,8 @@ import { useSessionStore } from '@/stores/session'
 // ===== IMPORTS SERVICES =====
 import { alertService } from '@/services/alertService'
 import { logger } from '@/services/loggerService'
+import { parsePositiveInventoryId } from '@/services/InventoryService'
+import { JOB_STATUS_BADGE_DEFAULT_CLASS, JOB_STATUS_BADGE_STYLES, JOB_STATUS_FILTER_OPTIONS } from '@/constants/jobStatus'
 
 // ===== IMPORTS EXTERNES =====
 import Swal from 'sweetalert2'
@@ -396,53 +398,11 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
     /**
      * Styles de badges pour les statuts (cohérent avec useAffecter.ts)
      */
-    const badgeStyles = [
-        {
-            value: 'EN ATTENTE',
-            class: 'inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset'
-        },
-        {
-            value: 'VALIDE',
-            class: 'inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
-        },
-        {
-            value: 'AFFECTE',
-            class: 'inline-flex items-center rounded-md bg-orange-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-orange-600/20 ring-inset'
-        },
-        {
-            value: 'PRET',
-            class: 'inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-800 ring-1 ring-purple-600/20 ring-inset'
-        },
-        {
-            value: 'TRANSFERT',
-            class: 'inline-flex items-center rounded-md bg-orange-50 px-2 py-1 text-xs font-medium text-orange-800 ring-1 ring-orange-600/20 ring-inset'
-        },
-        {
-            value: 'ENTAME',
-            class: 'inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset'
-        },
-        {
-            value: 'TERMINE',
-            class: 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-800 ring-1 ring-green-600/20 ring-inset'
-        },
-        {
-            value: 'CLOTURE',
-            class: 'inline-flex items-center rounded-md bg-slate-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset'
-        }
-    ]
-    const badgeDefaultClass = 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-800 ring-1 ring-gray-600/20 ring-inset'
+    const badgeStyles = JOB_STATUS_BADGE_STYLES
+    const badgeDefaultClass = JOB_STATUS_BADGE_DEFAULT_CLASS
 
     /** Options de filtre pour les statuts (cohérent avec useAffecter.ts) */
-    const statusFilterOptions = [
-        { label: 'EN ATTENTE', value: 'EN ATTENTE' },
-        { label: 'VALIDE', value: 'VALIDE' },
-        { label: 'AFFECTE', value: 'AFFECTE' },
-        { label: 'PRET', value: 'PRET' },
-        { label: 'TRANSFERT', value: 'TRANSFERT' },
-        { label: 'ENTAME', value: 'ENTAME' },
-        { label: 'TERMINE', value: 'TERMINE' },
-        { label: 'CLOTURE', value: 'CLOTURE' }
-    ]
+    const statusFilterOptions = JOB_STATUS_FILTER_OPTIONS
 
     /** Helper : retourne la classe de badge à partir d'un statut */
     const getStatusBadgeClass = (status: string | null | undefined, column?: any): string => {
@@ -892,6 +852,19 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
     /** Indicateur de sélection */
     const hasSelectedRows = computed(() => selectedRows.value.length > 0)
+    const isTerminatedStatus = (status: string | null | undefined): boolean => {
+        return (status || '').toUpperCase() === 'TERMINE'
+    }
+    const finishedRows = computed(() => trackingRows.value.filter(row => isTerminatedStatus(row.jobStatus)))
+    const selectedFinishedRows = computed(() => {
+        if (!selectedRows.value.length) {
+            return []
+        }
+        const selectedIds = new Set(selectedRows.value.map(id => String(id)))
+        return trackingRows.value.filter(row => selectedIds.has(String(row.id)) && isTerminatedStatus(row.jobStatus))
+    })
+    const finishedRowsCount = computed(() => finishedRows.value.length)
+    const selectedFinishedRowsCount = computed(() => selectedFinishedRows.value.length)
 
     // ===== MÉTHODES DE RÉSOLUTION =====
 
@@ -1258,7 +1231,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
         const fetchedInventory = await inventoryStore.fetchInventoryByReference(reference)
         inventory.value = fetchedInventory
-        inventoryId.value = fetchedInventory?.id || null
+        inventoryId.value = parsePositiveInventoryId(fetchedInventory?.id) ?? null
         accountId.value = fetchedInventory?.account_id || null
 
         if (!inventoryId.value) {
@@ -1686,6 +1659,90 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         }
     }
 
+    const downloadBlobAsFile = (blob: Blob, filename: string) => {
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = filename
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+    }
+
+    const exportRowsToPdf = async (rowsToExport: JobTrackingRow[], modeLabel: string) => {
+        if (!rowsToExport.length) {
+            await alertService.warning({ text: `Aucun job ${modeLabel} à exporter` })
+            return
+        }
+
+        try {
+            Swal.fire({
+                title: 'Génération en cours...',
+                html: `Export des jobs ${modeLabel} en PDF`,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    Swal.showLoading()
+                }
+            })
+
+            let successCount = 0
+            let errorCount = 0
+            let missingAssignmentCount = 0
+
+            for (const row of rowsToExport) {
+                if (!row.jobId || !row.assignmentId) {
+                    missingAssignmentCount++
+                    continue
+                }
+
+                try {
+                    const blob = await jobStore.generateJobPDF(row.jobId, row.assignmentId)
+                    const sanitizedRef = (row.jobReference || `job-${row.jobId}`).replace(/[^\w-]/g, '_')
+                    downloadBlobAsFile(blob, `job_${sanitizedRef}.pdf`)
+                    successCount++
+                } catch (error) {
+                    logger.error(`Erreur lors de la génération du PDF pour le job ${row.jobId}`, error)
+                    errorCount++
+                }
+            }
+
+            Swal.close()
+            await Swal.fire({
+                title: successCount > 0 ? 'Export terminé' : 'Export impossible',
+                html: `
+                    <div style="text-align: center; padding: 1rem 0;">
+                        <p style="color: #6b7280; font-size: 0.95rem;">
+                            ${successCount > 0 ? `${successCount} PDF(s) généré(s).` : ''}
+                            ${errorCount > 0 ? `<br>${errorCount} erreur(s) lors de la génération.` : ''}
+                            ${missingAssignmentCount > 0 ? `<br>${missingAssignmentCount} job(s) ignoré(s) (assignment manquant).` : ''}
+                        </p>
+                    </div>
+                `,
+                icon: successCount > 0 ? 'success' : 'warning',
+                confirmButtonColor: '#FECD1C',
+                customClass: {
+                    popup: 'sweet-alerts',
+                    confirmButton: 'btn btn-primary'
+                }
+            })
+        } catch (error: any) {
+            logger.error('Erreur lors de l\'export PDF des jobs terminés', error)
+            await alertService.error({
+                text: error?.response?.data?.message || error?.message || 'Erreur lors de l\'export PDF des jobs terminés'
+            })
+        }
+    }
+
+    const exportAllFinishedJobs = async () => {
+        await exportRowsToPdf(finishedRows.value, 'terminés')
+    }
+
+    const exportSelectedFinishedJobs = async () => {
+        await exportRowsToPdf(selectedFinishedRows.value, 'terminés sélectionnés')
+    }
+
     // ===== HANDLERS DE SÉLECTION =====
 
     /**
@@ -1800,6 +1857,12 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         selectedRows,
         selectedRowsCount,
         hasSelectedRows,
+        finishedRowsCount,
+        selectedFinishedRowsCount,
+        /** Lignes terminées (export PDF) */
+        finishedRows,
+        /** Lignes terminées sélectionnées dans le tableau */
+        selectedFinishedRows,
 
         // Données tableau
         rows: trackingRows, // Retourner directement le ref - Vue le déballera automatiquement dans le template
@@ -1819,6 +1882,8 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         reinitialize,
         refresh: fetchTrackingData,
         printJobs,
+        exportAllFinishedJobs,
+        exportSelectedFinishedJobs,
         onSelectionChanged,
         resetSelection,
 

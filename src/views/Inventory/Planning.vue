@@ -25,59 +25,7 @@
                 </div>
                 <div class="flex gap-4 items-center justify-end">
                     <ButtonGroup :buttons="jobsActionButtons" justify="end" />
-                    <div class="relative inline-block" ref="statusLegendTooltip">
-                        <button
-                            @mouseenter="showStatusTooltip"
-                            @mouseleave="hideStatusTooltip"
-                            class="w-6 h-6 rounded-full bg-primary/10 hover:bg-primary/20 dark:bg-primary/20 dark:hover:bg-primary/30 flex items-center justify-center transition-colors cursor-help"
-                            type="button"
-                            aria-label="Signification des statuts">
-                            <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                        </button>
-                        <Teleport to="body">
-                            <div
-                                v-if="showStatusLegend"
-                                ref="tooltipElement"
-                                :style="tooltipStyle"
-                                class="fixed z-50 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 p-4 pointer-events-none max-w-sm"
-                                style="min-width: 280px;">
-                                <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Signification des statuts</h4>
-                                <div class="space-y-2">
-                                    <div class="flex items-center gap-2">
-                                        <span class="inline-flex items-center rounded-md bg-slate-200 px-2 py-1 text-xs font-medium text-slate-900 ring-1 ring-slate-300/20 ring-inset">EN ATTENTE</span>
-                                        <span class="text-xs text-slate-600 dark:text-slate-400">Job en attente de validation</span>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white ring-1 ring-slate-600/20 ring-inset">VALIDE</span>
-                                        <span class="text-xs text-slate-600 dark:text-slate-400">Job validé</span>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="inline-flex items-center rounded-md bg-teal-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-teal-600/20 ring-inset">AFFECTE</span>
-                                        <span class="text-xs text-slate-600 dark:text-slate-400">Job affecté à une équipe</span>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="inline-flex items-center rounded-md bg-purple-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-purple-600/20 ring-inset">PRET</span>
-                                        <span class="text-xs text-slate-600 dark:text-slate-400">Job prêt pour le comptage</span>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-amber-600/20 ring-inset">TRANSFERT</span>
-                                        <span class="text-xs text-slate-600 dark:text-slate-400">Job en transfert</span>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="inline-flex items-center rounded-md bg-blue-500 px-2 py-1 text-xs font-medium text-white ring-1 ring-blue-600/20 ring-inset">ENTAME</span>
-                                        <span class="text-xs text-slate-600 dark:text-slate-400">Comptage entamé</span>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="inline-flex items-center rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white ring-1 ring-green-700/20 ring-inset">TERMINE</span>
-                                        <span class="text-xs text-slate-600 dark:text-slate-400">Comptage terminé</span>
-                                    </div>
-                                </div>
-                                <div class="absolute w-2 h-2 bg-white dark:bg-slate-800 border-l border-b border-slate-200 dark:border-slate-700 transform rotate-45 -bottom-1 right-4"></div>
-                            </div>
-                        </Teleport>
-                    </div>
+                    <JobStatusLegendTooltip />
                 </div>
             </div>
 
@@ -200,7 +148,7 @@
 
 // ===== IMPORTS VUE =====
 import { useRoute } from 'vue-router'
-import { ref, computed, nextTick, Teleport, onMounted } from 'vue'
+import { onMounted } from 'vue'
 
 // ===== IMPORTS COMPOSABLES =====
 import { usePlanning } from '@/composables/usePlanning'
@@ -210,6 +158,7 @@ import { DataTable } from '@SMATCH-Digital-dev/vue-system-design'
 import SelectField from '@/components/Form/SelectField.vue'
 import Modal from '@/components/Modal.vue'
 import ButtonGroup from '@/components/Form/ButtonGroup.vue'
+import JobStatusLegendTooltip from '@/components/JobStatusLegendTooltip.vue'
 
 // ===== IMPORTS ICÔNES =====
 import IconCalendar from '@/components/icon/icon-calendar.vue'
@@ -297,15 +246,6 @@ const {
 
     // Interface et états UI
     isDataLoaded,
-
-    // Tooltips
-    showStatusLegend,
-    statusLegendTooltip,
-    tooltipElement,
-    tooltipStyle,
-    showStatusTooltip,
-    hideStatusTooltip,
-    positionStatusTooltip,
 
     // Boutons d'actions
     navigationButtons,

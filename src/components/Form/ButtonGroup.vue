@@ -8,6 +8,8 @@
             v-for="(button, index) in visibleButtons"
             :key="button.id || index"
             :type="button.type || 'button'"
+            :title="button.title"
+            :aria-label="button.title || button.ariaLabel || (typeof button.label === 'string' && button.label ? button.label : undefined)"
             :disabled="button.disabled"
             @click="button.onClick"
             :class="[
@@ -22,7 +24,7 @@
                 :is="button.icon"
                 class="w-4 h-4 flex-shrink-0" />
             <!-- Label -->
-            <span>{{ button.label }}</span>
+            <span v-if="button.label">{{ button.label }}</span>
         </button>
     </div>
 </template>
@@ -37,6 +39,10 @@ import type { Component } from 'vue'
 export interface ButtonGroupButton {
     id?: string | number
     label?: string
+    /** Texte d’info-bulle (boutons icône seule) */
+    title?: string
+    /** Accessibilité si ni label ni title */
+    ariaLabel?: string
     icon?: Component
     onClick: () => void | Promise<void>
     variant?: 'primary' | 'success' | 'danger' | 'warning' | 'info' | 'default'
