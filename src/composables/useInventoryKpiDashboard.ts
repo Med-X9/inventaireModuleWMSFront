@@ -10,6 +10,7 @@ import {
     fetchInventoryIdByReference,
     fetchWarehouseIdByReference,
 } from '@/composables/affecter/helpers'
+import { InventoryKpiService } from '@/services/InventoryKpiService'
 import { parseInventoryKpiResponse } from '@/utils/inventoryKpiResponseParser'
 import type {
     AssignmentsByCounting,
