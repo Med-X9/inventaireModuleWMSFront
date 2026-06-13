@@ -14,7 +14,7 @@
                     <div class="flex items-center justify-between mb-5">
                         <h5 class="font-semibold text-lg dark:text-white-light">Profile</h5>
                         <router-link to="/users/user-account-settings" class="ltr:ml-auto rtl:mr-auto btn btn-primary p-2 rounded-full">
-                            <icon-pencil-paper />
+                            <MdiIcon name="mdi-pencil-box-outline" size="sm" />
                         </router-link>
                     </div>
                     <div class="mb-5">
@@ -24,42 +24,42 @@
                         </div>
                         <ul class="mt-5 flex flex-col max-w-[160px] m-auto space-y-4 font-semibold text-white-dark">
                             <li class="flex items-center gap-2">
-                                <icon-coffee class="shrink-0" />
+                                <MdiIcon name="mdi-coffee-outline" size="sm" class="shrink-0" />
                                 Web Developer
                             </li>
                             <li class="flex items-center gap-2">
-                                <icon-calendar class="shrink-0" />
+                                <MdiIcon name="mdi-calendar-outline" size="sm" class="shrink-0" />
                                 Jan 20, 1989
                             </li>
                             <li class="flex items-center gap-2">
-                                <icon-map-pin class="shrink-0" />
+                                <MdiIcon name="mdi-map-marker-outline" size="sm" class="shrink-0" />
                                 New York, USA
                             </li>
                             <li>
                                 <a href="javascript:;" class="flex items-center gap-2">
-                                    <icon-mail class="w-5 h-5 shrink-0" />
+                                    <MdiIcon name="mdi-email-outline" size="sm" class="shrink-0" />
                                     <span class="text-primary truncate">jimmy@gmail.com</span></a
                                 >
                             </li>
                             <li class="flex items-center gap-2">
-                                <icon-phone />
+                                <MdiIcon name="mdi-phone-outline" size="sm" />
                                 <span class="whitespace-nowrap" dir="ltr">+1 (530) 555-12121</span>
                             </li>
                         </ul>
                         <ul class="mt-7 flex items-center justify-center gap-2">
                             <li>
                                 <a class="btn btn-info flex items-center justify-center rounded-full w-10 h-10 p-0" href="javascript:;">
-                                    <icon-twitter class="w-5 h-5" />
+                                    <MdiIcon name="mdi-twitter" size="sm" />
                                 </a>
                             </li>
                             <li>
                                 <a class="btn btn-danger flex items-center justify-center rounded-full w-10 h-10 p-0" href="javascript:;">
-                                    <icon-dribbble />
+                                    <MdiIcon name="mdi-dribbble" size="sm" />
                                 </a>
                             </li>
                             <li>
                                 <a class="btn btn-dark flex items-center justify-center rounded-full w-10 h-10 p-0" href="javascript:;">
-                                    <icon-github />
+                                    <MdiIcon name="mdi-github" size="sm" />
                                 </a>
                             </li>
                         </ul>
@@ -169,7 +169,7 @@
                                 <div
                                     class="grid place-content-center w-9 h-9 rounded-md bg-secondary-light dark:bg-secondary text-secondary dark:text-secondary-light shrink-0"
                                 >
-                                    <icon-shopping-bag />
+                                    <MdiIcon name="mdi-shopping-outline" size="sm" />
                                 </div>
                                 <div class="ltr:ml-4 rtl:mr-4 flex items-start justify-between flex-auto font-semibold">
                                     <h6 class="text-white-dark text-[13px] dark:text-white-dark">
@@ -182,7 +182,7 @@
                         <div class="border border-[#ebedf2] rounded dark:bg-[#1b2e4b] dark:border-0">
                             <div class="flex items-center justify-between p-4 py-2">
                                 <div class="grid place-content-center w-9 h-9 rounded-md bg-info-light dark:bg-info text-info dark:text-info-light shrink-0">
-                                    <icon-tag />
+                                    <MdiIcon name="mdi-tag-outline" size="sm" />
                                 </div>
                                 <div class="ltr:ml-4 rtl:mr-4 flex items-start justify-between flex-auto font-semibold">
                                     <h6 class="text-white-dark text-[13px] dark:text-white-dark">
@@ -197,7 +197,7 @@
                                 <div
                                     class="grid place-content-center w-9 h-9 rounded-md bg-warning-light dark:bg-warning text-warning dark:text-warning-light shrink-0"
                                 >
-                                    <icon-credit-card />
+                                    <MdiIcon name="mdi-credit-card-outline" size="sm" />
                                 </div>
                                 <div class="ltr:ml-4 rtl:mr-4 flex items-start justify-between flex-auto font-semibold">
                                     <h6 class="text-white-dark text-[13px] dark:text-white-dark">
@@ -222,7 +222,7 @@
                         </ul>
                         <div class="flex items-center justify-between mb-4 font-semibold">
                             <p class="flex items-center rounded-full bg-dark px-2 py-1 text-xs text-white-light font-semibold">
-                                <icon-clock class="w-3 h-3 ltr:mr-1 rtl:ml-1" />
+                                <MdiIcon name="mdi-clock-outline" size="xs" class="ltr:mr-1 rtl:ml-1" />
                                 5 Days Left
                             </p>
                             <p class="text-info">$25 / month</p>
@@ -247,7 +247,7 @@
                                     <div class="dropdown ltr:ml-4 rtl:mr-4">
                                         <Popper :placement="store.rtlClass === 'rtl' ? 'bottom-start' : 'bottom-end'" offsetDistance="0" class="align-middle">
                                             <a href="javascript:;">
-                                                <icon-horizontal-dots class="opacity-80 hover:opacity-100" />
+                                                <MdiIcon name="mdi-dots-horizontal" size="sm" class="opacity-80 hover:opacity-100" />
                                             </a>
                                             <template #content="{ close }">
                                                 <ul @click="close()" class="whitespace-nowrap">
@@ -274,7 +274,7 @@
                                     <div class="dropdown ltr:ml-4 rtl:mr-4">
                                         <Popper :placement="store.rtlClass === 'rtl' ? 'bottom-start' : 'bottom-end'" offsetDistance="0" class="align-middle">
                                             <a href="javascript:;">
-                                                <icon-horizontal-dots class="opacity-80 hover:opacity-100" />
+                                                <MdiIcon name="mdi-dots-horizontal" size="sm" class="opacity-80 hover:opacity-100" />
                                             </a>
                                             <template #content="{ close }">
                                                 <ul @click="close()" class="whitespace-nowrap">
@@ -301,7 +301,7 @@
                                     <div class="dropdown ltr:ml-4 rtl:mr-4">
                                         <Popper :placement="store.rtlClass === 'rtl' ? 'bottom-start' : 'bottom-end'" offsetDistance="0" class="align-middle">
                                             <a href="javascript:;">
-                                                <icon-horizontal-dots class="opacity-80 hover:opacity-100" />
+                                                <MdiIcon name="mdi-dots-horizontal" size="sm" class="opacity-80 hover:opacity-100" />
                                             </a>
                                             <template #content="{ close }">
                                                 <ul @click="close()" class="whitespace-nowrap">
@@ -372,20 +372,7 @@
     import { useAppStore } from '@/stores/index';
     import { useMeta } from '@/composables/use-meta';
 
-    import IconPencilPaper from '@/components/icon/icon-pencil-paper.vue';
-    import IconCoffee from '@/components/icon/icon-coffee.vue';
-    import IconCalendar from '@/components/icon/icon-calendar.vue';
-    import IconMapPin from '@/components/icon/icon-map-pin.vue';
-    import IconMail from '@/components/icon/icon-mail.vue';
-    import IconPhone from '@/components/icon/icon-phone.vue';
-    import IconTwitter from '@/components/icon/icon-twitter.vue';
-    import IconDribbble from '@/components/icon/icon-dribbble.vue';
-    import IconGithub from '@/components/icon/icon-github.vue';
-    import IconShoppingBag from '@/components/icon/icon-shopping-bag.vue';
-    import IconTag from '@/components/icon/icon-tag.vue';
-    import IconCreditCard from '@/components/icon/icon-credit-card.vue';
-    import IconClock from '@/components/icon/icon-clock.vue';
-    import IconHorizontalDots from '@/components/icon/icon-horizontal-dots.vue';
+    import MdiIcon from '@/components/MdiIcon.vue';
 
     useMeta({ title: 'User Profile' });
     const store = useAppStore();

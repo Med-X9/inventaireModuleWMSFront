@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useMonitoring, type ZoneMonitoringData } from '@/composables/useMonitoring'
-import IconCheck from '@/components/icon/icon-check.vue'
-import IconPlay from '@/components/icon/icon-play.vue'
-import IconClock from '@/components/icon/icon-clock.vue'
-import IconBox from '@/components/icon/icon-box.vue'
+import MdiIcon from '@/components/MdiIcon.vue'
 
 // ===== PROPS =====
 /**
@@ -296,7 +293,7 @@ const globalKpiUi = computed(() => {
                             class="bg-white dark:bg-[#1b2e4b] hover:shadow-md transition-all duration-300 flex flex-col justify-center min-h-[3.25rem]"
                             :class="globalKpiUi.card">
                             <div class="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
-                                <IconBox :class="[globalKpiUi.icon, 'text-slate-500 dark:text-gray-400']" />
+                                <MdiIcon name="mdi-package-variant" :class="[globalKpiUi.icon, 'text-slate-500 dark:text-gray-400']" />
                                 <span :class="[globalKpiUi.label, 'text-slate-500 dark:text-gray-400']">Total JOB</span>
                                 <span :class="[globalKpiUi.value, 'text-slate-900 dark:text-white-light']">{{
                                     formatNombre(monitoringData.total.totalJobs) }}</span>
@@ -306,7 +303,7 @@ const globalKpiUi = computed(() => {
                             class="bg-white dark:bg-[#1b2e4b] border border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-md transition-all duration-300 flex flex-col justify-center min-h-[3.25rem]"
                             :class="globalKpiUi.card">
                             <div class="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
-                                <IconCheck :class="[globalKpiUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
+                                <MdiIcon name="mdi-check" :class="[globalKpiUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
                                 <span :class="[globalKpiUi.label, 'text-slate-500 dark:text-gray-400']">1er Clôturé</span>
                                 <span :class="[globalKpiUi.value, 'text-emerald-600 dark:text-emerald-400']">{{
                                     formatNombre(monitoringData.total.premierComptage.cloture) }}</span>
@@ -319,7 +316,7 @@ const globalKpiUi = computed(() => {
                             class="bg-white dark:bg-[#1b2e4b] border border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-md transition-all duration-300 flex flex-col justify-center min-h-[3.25rem]"
                             :class="globalKpiUi.card">
                             <div class="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
-                                <IconCheck :class="[globalKpiUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
+                                <MdiIcon name="mdi-check" :class="[globalKpiUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
                                 <span :class="[globalKpiUi.label, 'text-slate-500 dark:text-gray-400']">2ème Clôturé</span>
                                 <span :class="[globalKpiUi.value, 'text-emerald-600 dark:text-emerald-400']">{{
                                     formatNombre(monitoringData.total.deuxiemeComptage.cloture) }}</span>
@@ -332,7 +329,7 @@ const globalKpiUi = computed(() => {
                             class="bg-white dark:bg-[#1b2e4b] border border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-md transition-all duration-300 flex flex-col justify-center min-h-[3.25rem]"
                             :class="globalKpiUi.card">
                             <div class="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
-                                <IconCheck :class="[globalKpiUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
+                                <MdiIcon name="mdi-check" :class="[globalKpiUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
                                 <span :class="[globalKpiUi.label, 'text-slate-500 dark:text-gray-400']">3ème Terminé</span>
                                 <span :class="[globalKpiUi.value, 'text-emerald-600 dark:text-emerald-400']">{{
                                     formatNombre(monitoringData.total.troisiemeComptage.termine) }}</span>
@@ -371,7 +368,7 @@ const globalKpiUi = computed(() => {
                                 <!-- JOB -->
                                 <div class="bg-slate-50 dark:bg-slate-700/50" :class="zoneUi.panel">
                                     <div :class="['flex items-center justify-center', zoneUi.jobRow]">
-                                        <IconBox :class="[zoneUi.icon, 'text-slate-500 dark:text-gray-400']" />
+                                        <MdiIcon name="mdi-package-variant" :class="[zoneUi.icon, 'text-slate-500 dark:text-gray-400']" />
                                         <span :class="[zoneUi.jobLbl, 'text-slate-500 dark:text-gray-400']">JOB</span>
                                         <span :class="[zoneUi.jobNum, 'text-slate-900 dark:text-white-light']">
                                             {{ formatNombre(zone.totalJobs) }} ({{
@@ -388,7 +385,7 @@ const globalKpiUi = computed(() => {
                                     <div :class="['flex', zoneUi.triple]">
                                         <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
                                             <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <IconClock :class="[zoneUi.icon, 'text-[#FECD1C]']" />
+                                                <MdiIcon name="mdi-clock-outline" :class="[zoneUi.icon, 'text-[#FECD1C]']" />
                                                 <span :class="[zoneUi.lbl, 'text-[#FECD1C]']">Attente</span>
                                                 <span :class="[zoneUi.num, 'text-[#FECD1C]']">{{
                                                     formatNombre(zone.premierComptage.nonEntame) }}</span>
@@ -399,7 +396,7 @@ const globalKpiUi = computed(() => {
                                         </div>
                                         <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
                                             <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <IconPlay :class="[zoneUi.icon, 'text-primary']" />
+                                                <MdiIcon name="mdi-play-outline" :class="[zoneUi.icon, 'text-primary']" />
                                                 <span :class="[zoneUi.lbl, 'text-primary']">Entamé</span>
                                                 <span :class="[zoneUi.num, 'text-primary']">{{
                                                     formatNombre(zone.premierComptage.enCours) }}</span>
@@ -409,7 +406,7 @@ const globalKpiUi = computed(() => {
                                         </div>
                                         <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
                                             <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <IconCheck :class="[zoneUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
+                                                <MdiIcon name="mdi-check" :class="[zoneUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
                                                 <span :class="[zoneUi.lbl, 'text-emerald-600 dark:text-emerald-400']">Terminé</span>
                                                 <span :class="[zoneUi.num, 'text-emerald-600 dark:text-emerald-400']">{{
                                                         formatNombre(zone.premierComptage.cloture) }}</span>
@@ -428,7 +425,7 @@ const globalKpiUi = computed(() => {
                                     <div :class="['flex', zoneUi.triple]">
                                         <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
                                             <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <IconClock :class="[zoneUi.icon, 'text-[#FECD1C]']" />
+                                                <MdiIcon name="mdi-clock-outline" :class="[zoneUi.icon, 'text-[#FECD1C]']" />
                                                 <span :class="[zoneUi.lbl, 'text-[#FECD1C]']">Attente</span>
                                                 <span :class="[zoneUi.num, 'text-[#FECD1C]']">{{
                                                     formatNombre(zone.deuxiemeComptage.nonEntame) }}</span>
@@ -439,7 +436,7 @@ const globalKpiUi = computed(() => {
                                         </div>
                                         <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
                                             <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <IconPlay :class="[zoneUi.icon, 'text-primary']" />
+                                                <MdiIcon name="mdi-play-outline" :class="[zoneUi.icon, 'text-primary']" />
                                                 <span :class="[zoneUi.lbl, 'text-primary']">Entamé</span>
                                                 <span :class="[zoneUi.num, 'text-primary']">{{
                                                     formatNombre(zone.deuxiemeComptage.enCours) }}</span>
@@ -450,7 +447,7 @@ const globalKpiUi = computed(() => {
                                         </div>
                                         <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
                                             <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <IconCheck :class="[zoneUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
+                                                <MdiIcon name="mdi-check" :class="[zoneUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
                                                 <span :class="[zoneUi.lbl, 'text-emerald-600 dark:text-emerald-400']">Terminé</span>
                                                 <span :class="[zoneUi.num, 'text-emerald-600 dark:text-emerald-400']">{{
                                                         formatNombre(zone.deuxiemeComptage.cloture) }}</span>
@@ -470,7 +467,7 @@ const globalKpiUi = computed(() => {
                                     <div :class="['flex', zoneUi.triple]">
                                         <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
                                             <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <IconClock :class="[zoneUi.icon, 'text-[#FECD1C]']" />
+                                                <MdiIcon name="mdi-clock-outline" :class="[zoneUi.icon, 'text-[#FECD1C]']" />
                                                 <span :class="[zoneUi.lbl, 'text-[#FECD1C]']">Attente</span>
                                                 <span :class="[zoneUi.num, 'text-[#FECD1C]']">{{
                                                     formatNombre(zone.troisiemeComptage.nonEntame) }}</span>
@@ -481,7 +478,7 @@ const globalKpiUi = computed(() => {
                                         </div>
                                         <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
                                             <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <IconPlay :class="[zoneUi.icon, 'text-primary']" />
+                                                <MdiIcon name="mdi-play-outline" :class="[zoneUi.icon, 'text-primary']" />
                                                 <span :class="[zoneUi.lbl, 'text-primary']">Entamé</span>
                                                 <span :class="[zoneUi.num, 'text-primary']">{{
                                                     formatNombre(zone.troisiemeComptage.enCours) }}</span>
@@ -492,7 +489,7 @@ const globalKpiUi = computed(() => {
                                         </div>
                                         <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
                                             <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <IconCheck :class="[zoneUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
+                                                <MdiIcon name="mdi-check" :class="[zoneUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
                                                 <span :class="[zoneUi.lbl, 'text-emerald-600 dark:text-emerald-400']">Terminé</span>
                                                 <span :class="[zoneUi.num, 'text-emerald-600 dark:text-emerald-400']">{{
                                                         formatNombre(zone.troisiemeComptage.termine) }}</span>

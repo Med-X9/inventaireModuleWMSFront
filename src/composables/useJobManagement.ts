@@ -1,17 +1,10 @@
-import { ref, markRaw, computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import type { JobTable } from '@/models/Job'
 import type { DataTableColumn, ActionConfig } from '@/interfaces/dataTable'
 import { alertService } from '@/services/alertService'
 import { useJobStore } from '@/stores/job'
 import { useGenericDataTable } from './useInventoryDataTable'
-
-import IconEdit from '@/components/icon/icon-edit.vue'
-import IconTrashLines from '@/components/icon/icon-trash-lines.vue'
-import IconEye from '@/components/icon/icon-eye.vue'
-import IconCheck from '@/components/icon/icon-check.vue'
-import IconClock from '@/components/icon/icon-clock.vue'
-import IconPlay from '@/components/icon/icon-play.vue'
 
 export function useJobManagement() {
     const router = useRouter()
@@ -51,7 +44,7 @@ export function useJobManagement() {
             filter: 'agTextColumnFilter',
             description: 'État du job',
             cellRenderer: (params: any) => {
-                let status = params.value;
+                const status = params.value;
                 let badgeClass = '';
 
                 switch(status) {
@@ -149,42 +142,42 @@ export function useJobManagement() {
     const actions: ActionConfig<JobTable>[] = [
         {
             label: 'Détail',
-            icon: markRaw(IconEye),
+            icon: 'mdi-eye-outline',
             class: 'flex items-center gap-1 px-2 py-1 text-blue-600 hover:text-blue-800 text-md',
             handler: job => { void router.push({ name: 'job-detail', params: { id: job.id } }) },
             visible: () => true,
         },
         {
             label: 'Valider',
-            icon: markRaw(IconCheck),
+            icon: 'mdi-check',
             class: 'flex items-center gap-1 px-2 py-1 text-green-600 hover:text-green-800 text-md',
             handler: handleValidate,
             visible: job => job.status === 'EN ATTENTE',
         },
         {
             label: 'Terminer',
-            icon: markRaw(IconPlay),
+            icon: 'mdi-play-outline',
             class: 'flex items-center gap-1 px-2 py-1 text-emerald-600 hover:text-emerald-800 text-md',
             handler: handleComplete,
             visible: job => job.status === 'VALIDE',
         },
         {
             label: 'Mettre en attente',
-            icon: markRaw(IconClock),
+            icon: 'mdi-clock-outline',
             class: 'flex items-center gap-1 px-2 py-1 text-yellow-600 hover:text-yellow-800 text-md',
             handler: handleSetWaiting,
             visible: job => ['VALIDE', 'TERMINE'].includes(job.status),
         },
         {
             label: 'Modifier',
-            icon: markRaw(IconEdit),
+            icon: 'mdi-pencil-outline',
             class: 'flex items-center gap-1 px-2 py-1 text-orange-600 hover:text-orange-800 text-md',
             handler: job => { void router.push({ name: 'job-edit', params: { id: job.id } }) },
             visible: job => job.status === 'EN ATTENTE',
         },
         {
             label: 'Supprimer',
-            icon: markRaw(IconTrashLines),
+            icon: 'mdi-delete-outline',
             class: 'flex items-center gap-1 px-2 py-1 text-red-600 hover:text-red-800 text-md',
             handler: handleDelete,
             visible: job => job.status === 'EN ATTENTE',

@@ -21,7 +21,7 @@
                     ></div>
                     <div class="ltr:xl:-skew-x-[14deg] rtl:xl:skew-x-[14deg]">
                         <router-link to="/" class="w-48 block lg:w-72 ms-10">
-                            <img src="/assets/images/auth/logo-white.svg" alt="Logo" class="w-full" />
+                            <img :src="APP_LOGO_URL" :alt="APP_BRAND_NAME" class="w-full max-h-24 object-contain" />
                         </router-link>
                         <div class="mt-24 hidden w-full max-w-[430px] lg:block">
                             <img src="/assets/images/auth/register.svg" alt="Cover Image" class="w-full" />
@@ -31,7 +31,7 @@
                 <div class="relative flex w-full flex-col items-center justify-center gap-6 px-4 pb-16 pt-6 sm:px-6 lg:max-w-[667px]">
                     <div class="flex w-full max-w-[440px] items-center gap-2 lg:absolute lg:end-6 lg:top-6 lg:max-w-full">
                         <router-link to="/" class="w-8 block lg:hidden">
-                            <img src="/assets/images/logo.svg" alt="Logo" class="mx-auto w-10" />
+                            <img :src="APP_LOGO_URL" :alt="APP_BRAND_NAME" class="mx-auto h-12 w-auto max-w-[180px] object-contain" />
                         </router-link>
                         <div class="dropdown ms-auto w-max">
                             <Popper :placement="store.rtlClass === 'rtl' ? 'bottom-start' : 'bottom-end'" offsetDistance="8">
@@ -44,7 +44,7 @@
                                     </div>
                                     <div class="text-base font-bold uppercase">{{ store.locale }}</div>
                                     <span class="shrink-0">
-                                        <icon-caret-down />
+                                        <MdiIcon name="mdi-chevron-down" size="sm" />
                                     </span>
                                 </button>
                                 <template #content="{ close }">
@@ -82,7 +82,7 @@
                                 <div class="relative text-white-dark">
                                     <input id="Name" type="text" placeholder="Enter Name" class="form-input ps-10 placeholder:text-white-dark" />
                                     <span class="absolute start-4 top-1/2 -translate-y-1/2">
-                                        <icon-user :fill="true" />
+                                        <MdiIcon name="mdi-account-outline" size="sm" />
                                     </span>
                                 </div>
                             </div>
@@ -91,7 +91,7 @@
                                 <div class="relative text-white-dark">
                                     <input id="Email" type="email" placeholder="Enter Email" class="form-input ps-10 placeholder:text-white-dark" />
                                     <span class="absolute start-4 top-1/2 -translate-y-1/2">
-                                        <icon-mail :fill="true" />
+                                        <MdiIcon name="mdi-email-outline" size="sm" />
                                     </span>
                                 </div>
                             </div>
@@ -100,7 +100,7 @@
                                 <div class="relative text-white-dark">
                                     <input id="Password" type="password" placeholder="Enter Password" class="form-input ps-10 placeholder:text-white-dark" />
                                     <span class="absolute start-4 top-1/2 -translate-y-1/2">
-                                        <icon-lock-dots :fill="true" />
+                                        <MdiIcon name="mdi-lock-outline" size="sm" />
                                     </span>
                                 </div>
                             </div>
@@ -127,7 +127,7 @@
                                         class="inline-flex h-8 w-8 items-center justify-center rounded-full p-0 transition hover:scale-110"
                                         style="background: linear-gradient(135deg, rgba(239, 18, 98, 1) 0%, rgba(67, 97, 238, 1) 100%)"
                                     >
-                                        <icon-instagram />
+                                        <MdiIcon name="mdi-instagram" size="sm" />
                                     </a>
                                 </li>
                                 <li>
@@ -136,7 +136,7 @@
                                         class="inline-flex h-8 w-8 items-center justify-center rounded-full p-0 transition hover:scale-110"
                                         style="background: linear-gradient(135deg, rgba(239, 18, 98, 1) 0%, rgba(67, 97, 238, 1) 100%)"
                                     >
-                                        <icon-facebook-circle />
+                                        <MdiIcon name="mdi-facebook" size="sm" />
                                     </a>
                                 </li>
                                 <li>
@@ -145,7 +145,7 @@
                                         class="inline-flex h-8 w-8 items-center justify-center rounded-full p-0 transition hover:scale-110"
                                         style="background: linear-gradient(135deg, rgba(239, 18, 98, 1) 0%, rgba(67, 97, 238, 1) 100%)"
                                     >
-                                        <icon-twitter :fill="true" />
+                                        <MdiIcon name="mdi-twitter" size="sm" />
                                     </a>
                                 </li>
                                 <li>
@@ -154,7 +154,7 @@
                                         class="inline-flex h-8 w-8 items-center justify-center rounded-full p-0 transition hover:scale-110"
                                         style="background: linear-gradient(135deg, rgba(239, 18, 98, 1) 0%, rgba(67, 97, 238, 1) 100%)"
                                     >
-                                        <icon-google />
+                                        <MdiIcon name="mdi-google" size="sm" />
                                     </a>
                                 </li>
                             </ul>
@@ -180,14 +180,8 @@
     import { useRouter } from 'vue-router';
     import { useMeta } from '@/composables/use-meta';
 
-    import IconCaretDown from '@/components/icon/icon-caret-down.vue';
-    import IconUser from '@/components/icon/icon-user.vue';
-    import IconMail from '@/components/icon/icon-mail.vue';
-    import IconLockDots from '@/components/icon/icon-lock-dots.vue';
-    import IconInstagram from '@/components/icon/icon-instagram.vue';
-    import IconFacebookCircle from '@/components/icon/icon-facebook-circle.vue';
-    import IconTwitter from '@/components/icon/icon-twitter.vue';
-    import IconGoogle from '@/components/icon/icon-google.vue';
+    import MdiIcon from '@/components/MdiIcon.vue';
+    import { APP_LOGO_URL, APP_BRAND_NAME } from '@/constants/brand';
 
     useMeta({ title: 'Register Cover' });
     const router = useRouter();

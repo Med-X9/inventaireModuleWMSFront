@@ -49,23 +49,20 @@ export const useAuthStore = defineStore('auth', {
      */
     async logout(): Promise<void> {
       this.loading = true;
+      const refreshToken = getTokens()?.refresh ?? null;
       try {
-        // Important: Clear tokens locally BEFORE calling API logout
-        // This prevents 401 errors if the token is already expired
-        const hadTokens = !!getTokens()?.access;
         clearTokens();
         this.user = null;
         this.isAuthenticated = false;
 
-        // Only call API logout if we had tokens
-        if (hadTokens) {
-          await authService.logout();
+        if (refreshToken) {
+          await authService.logout(refreshToken);
         }
-      } catch (error) {
-        // On ignore l'erreur (déjà gérée dans authService)
+      } catch {
+        // Erreur API ignorée : la session locale est déjà invalidée
       } finally {
         this.loading = false;
-        router.push('/auth/login');
+        await router.replace({ name: 'login' });
       }
     },
 

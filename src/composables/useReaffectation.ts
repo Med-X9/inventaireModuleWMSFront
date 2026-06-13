@@ -10,9 +10,8 @@
  * @module useReaffectation
  */
 
-import { computed, markRaw } from 'vue'
+import { computed } from 'vue'
 import type { ActionConfig } from '@SMATCH-Digital-dev/vue-system-design'
-import IconEdit from '@/components/icon/icon-edit.vue'
 import { useAffecter } from '@/composables/useAffecter'
 import { JobService } from '@/services/jobService'
 import { alertService } from '@/services/alertService'
@@ -49,7 +48,7 @@ export function useReaffectation(options?: UseReaffectationOptions) {
 
     const reaffecterAction: ActionConfig<any> = {
         label: 'Réaffecter',
-        icon: markRaw(IconEdit),
+        icon: 'mdi-pencil-outline',
         color: 'primary',
         onClick: (row: any) => {
             const id = row?.id != null ? String(row.id) : row?.job
@@ -61,7 +60,7 @@ export function useReaffectation(options?: UseReaffectationOptions) {
     // Action "Remettre" : rouvre un assignment (statut ENTAME côté backend)
     const remettreAction: ActionConfig<any> = {
         label: 'Remettre',
-        icon: markRaw(IconEdit),
+        icon: 'mdi-pencil-outline',
         color: 'info',
         onClick: async (row: any) => {
             try {

@@ -18,9 +18,14 @@
                 getBorderRadiusClass(index, visibleButtons.length),
                 button.class || getDefaultButtonClass(button.variant || 'default')
             ]">
-            <!-- Icône à gauche -->
+            <!-- Icône MDI (string) ou composant Vue -->
+            <MdiIcon
+                v-if="typeof button.icon === 'string'"
+                :name="button.icon"
+                size="sm"
+                class="flex-shrink-0" />
             <component
-                v-if="button.icon"
+                v-else-if="button.icon"
                 :is="button.icon"
                 class="w-4 h-4 flex-shrink-0" />
             <!-- Label -->
@@ -32,6 +37,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Component } from 'vue'
+import MdiIcon from '@/components/MdiIcon.vue'
 
 /**
  * Interface pour un bouton dans le groupe
@@ -43,7 +49,8 @@ export interface ButtonGroupButton {
     title?: string
     /** Accessibilité si ni label ni title */
     ariaLabel?: string
-    icon?: Component
+    /** Composant Vue ou nom d'icône MDI (`mdi-eye-outline`, etc.) */
+    icon?: Component | string
     onClick: () => void | Promise<void>
     variant?: 'primary' | 'success' | 'danger' | 'warning' | 'info' | 'default'
     type?: 'button' | 'submit' | 'reset'

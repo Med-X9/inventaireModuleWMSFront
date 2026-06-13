@@ -1,17 +1,40 @@
 <template>
+
     <router-link to="/" class="main-logo flex items-center shrink-0 group">
+
         <img
-            class="w-10 h-10 flex-none rounded-lg transition-transform duration-300 group-hover:scale-105"
-            src="/assets/images/logo/logo.png"
-            alt="Logo Inventaire"
+
+            class="h-10 w-auto max-w-[160px] flex-none object-contain transition-transform duration-300 group-hover:scale-105"
+
+            :src="APP_LOGO_URL"
+
+            :alt="APP_BRAND_NAME"
+
         />
-        <span class="text-2xl ltr:ml-3 rtl:mr-3 font-bold align-middle lg:inline text-gray-900 dark:text-white-light group-hover:text-primary transition-colors duration-300">
-            Inventaire
-        </span>
+
     </router-link>
+
 </template>
 
+
+
 <script setup lang="ts">
-// Composant Logo simple pour le header
+
+import { APP_LOGO_URL, APP_BRAND_NAME } from '@/constants/brand';
+
+
+
+withDefaults(
+
+    defineProps<{
+
+        showLabel?: boolean;
+
+    }>(),
+
+    { showLabel: true },
+
+);
+
 </script>
 

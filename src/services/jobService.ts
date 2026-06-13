@@ -453,18 +453,13 @@ export class JobService {
         warehouseId: number,
         params?: Record<string, any>
     ): Promise<AxiosResponse<Blob>> {
-        try {
-            const response = await axiosInstance.get(
-                `${this.baseUrlJob}valid/warehouse/${warehouseId}/inventory/${inventoryId}/`,
-                {
-                    params: params || {},
-                    responseType: 'blob'
-                }
-            );
-            return response;
-        } catch (error) {
-            throw error;
-        }
+        return axiosInstance.get(
+            `${this.baseUrlJob}valid/warehouse/${warehouseId}/inventory/${inventoryId}/`,
+            {
+                params: params || {},
+                responseType: 'blob'
+            }
+        );
     }
 
     /**
@@ -477,14 +472,9 @@ export class JobService {
         message: string;
         errors?: string[];
     }>> {
-        try {
-            const response = await axiosInstance.post(
-                `${this.baseUrlInventory}${inventoryId}/auto-assign-jobs-from-location-jobs/`
-            );
-            return response;
-        } catch (error) {
-            throw error;
-        }
+        return axiosInstance.post(
+            `${this.baseUrlInventory}${inventoryId}/auto-assign-jobs-from-location-jobs/`
+        );
     }
 
     /**

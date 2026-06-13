@@ -45,7 +45,7 @@
                     <div class="max-h-[min(60vh,22rem)] overflow-y-auto overscroll-contain px-3 py-2 scrollbar-thin">
                         <ul class="m-0 list-none p-0">
                             <li
-                                v-for="(item, idx) in legendItems"
+                                v-for="item in legendItems"
                                 :key="item.status"
                                 class="flex items-start gap-3 rounded-xl px-2 py-2.5 transition-colors odd:bg-slate-50/50 even:bg-transparent dark:odd:bg-slate-800/40">
                                 <span class="shrink-0" :class="item.badgeClass">{{ item.status }}</span>

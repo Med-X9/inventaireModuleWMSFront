@@ -12,7 +12,10 @@
 
 // ===== IMPORTS =====
 
-import { ref, markRaw, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
+import { INITIALIZATION_DELAY_MS } from '@/composables/useInventoryResults.constants'
+import { createDataTableOperationHandler } from '@/composables/dataTable/createDataTableOperationHandler'
+import { createQueuedTableEventHandler } from '@/composables/dataTable/useDataTableInitQueue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { alertService } from '@/services/alertService'
@@ -20,15 +23,6 @@ import { useInventoryStore } from '@/stores/inventory'
 import type { InventoryTable } from '@/models/Inventory'
 // Imports depuis le package @SMATCH-Digital-dev/vue-system-design (conforme à la documentation)
 import type { QueryModel, DataTableColumn, ActionConfig, ColumnDataType } from '@SMATCH-Digital-dev/vue-system-design'
-
-// ===== IMPORTS ICÔNES =====
-import IconEye from '@/components/icon/icon-eye.vue'
-import IconUpload from '@/components/icon/icon-upload.vue'
-import IconCalendar from '@/components/icon/icon-calendar.vue'
-import IconEdit from '@/components/icon/icon-edit.vue'
-import IconCheck from '@/components/icon/icon-check.vue'
-import IconTrash from '@/components/icon/icon-trash.vue'
-import IconPlus from '@/components/icon/icon-plus.vue'
 
 // ===== CONSTANTES =====
 
@@ -89,6 +83,15 @@ export function useInventoryManagement() {
 
     /** Référence au composant DataTable des inventaires */
     const inventoryTableRef = ref<any>(null)
+
+    /** Initialisation DataTable : file d'attente des événements émis au montage */
+    const isTableInitialized = ref(false)
+    const pendingTableEvents = ref<Array<{ eventType: string; queryModel: QueryModel }>>([])
+    const lastExecutedQueryModel = ref<QueryModel | null>(null)
+
+    const inventoryTableKey = computed(
+        () => `inventory-management-${pagination.value.total}-${inventories.value.length}`,
+    )
 
     // ===== ÉTATS RÉACTIFS =====
 
@@ -272,41 +275,41 @@ export function useInventoryManagement() {
     const actions: ActionConfig[] = [
         {
             label: 'Détail',
-            icon: markRaw(IconEye),
+            icon: 'mdi-eye-outline',
             color: 'primary',
             onClick: (row: any) => handleDetail(row as InventoryTable),
         },
         {
             label: 'Planifier',
-            icon: markRaw(IconCalendar),
+            icon: 'mdi-calendar-outline',
             color: 'primary',
             onClick: (row: any) => handlePlan(row as InventoryTable),
             show: (row: any) => ['EN PREPARATION', 'EN REALISATION'].includes((row as InventoryTable).status),
         },
         {
             label: 'Ajouter planification',
-            icon: markRaw(IconPlus),
+            icon: 'mdi-plus',
             color: 'primary',
             onClick: (row: any) => handleAddPlanning(row as InventoryTable),
             show: (row: any) => (row as InventoryTable).status === 'EN PREPARATION',
         },
         {
             label: 'Importer image de stock',
-            icon: markRaw(IconUpload),
+            icon: 'mdi-upload-outline',
             color: 'primary',
             onClick: (row: any) => handleImportExcel(row as InventoryTable),
             show: (row: any) => (row as InventoryTable).status === 'EN PREPARATION',
         },
         {
             label: 'Modifier',
-            icon: markRaw(IconEdit),
+            icon: 'mdi-pencil-outline',
             color: 'primary',
             onClick: (row: any) => handleEdit(row as InventoryTable),
             show: (row: any) => (row as InventoryTable).status === 'EN PREPARATION',
         },
         {
             label: 'Supprimer',
-            icon: markRaw(IconTrash),
+            icon: 'mdi-delete-outline',
             color: 'danger',
             onClick: async (row: any) => await handleDelete(row as InventoryTable),
             show: (row: any) => (row as InventoryTable).status === 'EN PREPARATION',
@@ -629,24 +632,66 @@ export function useInventoryManagement() {
      *
      * @param queryModel - QueryModel complet avec tous les états (pagination, tri, filtres, recherche)
      */
-    const handleInventoryOperation = async (queryModel: QueryModel) => {
-        try {
+    const handleInventoryOperation = createDataTableOperationHandler({
+        fetch: async (queryModel) => {
             await inventoryStore.fetchInventories(queryModel)
-        } catch (error) {
-            alertService.error({ text: 'Erreur lors du chargement des inventaires' })
-        }
-    }
+        },
+        getLastQueryModel: () => lastExecutedQueryModel.value,
+        setLastQueryModel: (qm) => {
+            lastExecutedQueryModel.value = qm
+        },
+        onError: async () => {
+            await alertService.error({ text: 'Erreur lors du chargement des inventaires' })
+        },
+    })
 
     /**
      * Handler unifié pour l'événement query-model-changed
-     *
-     * ⚡ RECOMMANDÉ : Utiliser ce handler unique au lieu des handlers individuels.
-     * Le DataTable émet query-model-changed avec tous les états préservés.
-     *
-     * @param queryModel - QueryModel complet du DataTable
      */
-    const onInventoryTableEvent = async (eventType: string, queryModel: QueryModel) => {
-        await handleInventoryOperation(queryModel)
+    const onInventoryTableEvent = createQueuedTableEventHandler({
+        isInitialized: () => isTableInitialized.value,
+        queue: {
+            enqueue: (e) => pendingTableEvents.value.push(e),
+            drain: () => {
+                const events = [...pendingTableEvents.value]
+                pendingTableEvents.value = []
+                return events
+            },
+            get length() {
+                return pendingTableEvents.value.length
+            },
+            peek: () => pendingTableEvents.value[0],
+            shift: () => pendingTableEvents.value.shift(),
+        },
+        handleOperation: handleInventoryOperation,
+    })
+
+    /**
+     * Initialise le tableau : attend l'émission du DataTable (état localStorage) puis charge les données.
+     */
+    const initializeInventoryTable = async () => {
+        isTableInitialized.value = false
+        pendingTableEvents.value = []
+        lastExecutedQueryModel.value = null
+
+        await nextTick()
+        await new Promise((resolve) => setTimeout(resolve, INITIALIZATION_DELAY_MS))
+
+        isTableInitialized.value = true
+
+        if (pendingTableEvents.value.length > 0) {
+            const first = pendingTableEvents.value[0]
+            pendingTableEvents.value = []
+            await handleInventoryOperation(first.queryModel)
+            return
+        }
+
+        try {
+            await inventoryStore.fetchInventories()
+            lastExecutedQueryModel.value = null
+        } catch {
+            alertService.error({ text: 'Erreur lors du chargement des inventaires' })
+        }
     }
 
     // Handlers spécialisés (pour compatibilité avec les anciennes vues)
@@ -705,16 +750,8 @@ export function useInventoryManagement() {
 
     // ===== CHARGEMENT INITIAL =====
 
-    /**
-     * Chargement initial des inventaires
-     */
-    const loadInventories = async () => {
-        try {
-            await inventoryStore.fetchInventories()
-        } catch (error) {
-            alertService.error({ text: 'Erreur lors du chargement des inventaires' })
-        }
-    }
+    /** @deprecated Utiliser initializeInventoryTable */
+    const loadInventories = initializeInventoryTable
 
     // ===== RETURN =====
 
@@ -722,6 +759,8 @@ export function useInventoryManagement() {
         // ===== DONNÉES =====
         inventories,
         loadInventories,
+        initializeInventoryTable,
+        inventoryTableKey,
 
         // ===== CONFIGURATION DATATABLE =====
         columns,

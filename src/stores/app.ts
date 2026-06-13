@@ -10,7 +10,7 @@ export interface Notification {
     persistent?: boolean;
 }
 
-export const useAppStore = defineStore('app', () => {
+export const useGlobalStore = defineStore('global-shell', () => {
     // State
     const theme = ref<'light' | 'dark' | 'system'>('system');
     const sidebarCollapsed = ref(false);

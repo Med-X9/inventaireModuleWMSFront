@@ -27,9 +27,35 @@ export interface UnifiedDataTableResponse<T = any> {
  * @param payload - Réponse brute du backend
  * @returns Réponse normalisée au format unifié
  */
+/**
+ * Déplie les enveloppes API courantes ({ data: { rows } }, { success, data: ... })
+ */
+function unwrapDataTablePayload(payload: any): any {
+    if (!payload || typeof payload !== 'object') {
+        return payload
+    }
+
+    const hasRows =
+        (Array.isArray(payload.rows) && payload.rows.length >= 0) ||
+        (Array.isArray(payload.data) && payload.data.length >= 0) ||
+        (Array.isArray(payload.results) && payload.results.length >= 0)
+
+    if (hasRows) {
+        return payload
+    }
+
+    if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+        return unwrapDataTablePayload(payload.data)
+    }
+
+    return payload
+}
+
 export function normalizeDataTableResponse<T = any>(
     payload: any
 ): UnifiedDataTableResponse<T> {
+    payload = unwrapDataTablePayload(payload)
+
     // Vérifier que payload est un objet valide
     if (!payload || typeof payload !== 'object') {
         logger.warn('Format de réponse backend invalide (pas un objet)', payload)
@@ -53,6 +79,11 @@ export function normalizeDataTableResponse<T = any>(
         // On doit donc prioriser total_count / totalCount avant total
         const total = payload.total_count ?? payload.totalCount ?? payload.total ?? 0
 
+        // Fallback : certains backends envoient rows: [] mais data: [...]
+        const dataFallback =
+            'data' in payload && Array.isArray(payload.data) ? (payload.data as T[]) : []
+        const effectiveRows = payload.rows.length > 0 ? payload.rows : dataFallback
+
         // ⚠️ IMPORTANT : Utiliser UNIQUEMENT totalPages du backend selon PAGINATION_FRONTEND.md
         // Le backend doit toujours fournir totalPages calculé côté serveur
         // Fallback de sécurité uniquement si le backend ne fournit vraiment pas la valeur
@@ -67,7 +98,7 @@ export function normalizeDataTableResponse<T = any>(
         // Format PAGINATION_FRONTEND.md détecté : { rows, page, pageSize, total, totalPages }
 
         return {
-            rows: payload.rows as T[],
+            rows: effectiveRows as T[],
             page: Number(page),
             pageSize: Number(pageSize),
             total: Number(total),

@@ -34,21 +34,6 @@ import { generatePDF } from '@/utils/pdfGenerator'
 import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
 import type { FieldConfig } from '@/interfaces/form'
 
-// ===== IMPORTS ICÔNES =====
-import IconDownload from '@/components/icon/icon-download.vue'
-import IconFile from '@/components/icon/icon-file.vue'
-import IconPlay from '@/components/icon/icon-play.vue'
-import IconEdit from '@/components/icon/icon-edit.vue'
-import IconCancel from '@/components/icon/icon-cancel.vue'
-import IconCheck from '@/components/icon/icon-check.vue'
-import IconLock from '@/components/icon/icon-lock.vue'
-import IconUpload from '@/components/icon/icon-upload.vue'
-import IconCalendar from '@/components/icon/icon-calendar.vue'
-import IconUsers from '@/components/icon/icon-users.vue'
-import IconBarChart from '@/components/icon/icon-bar-chart.vue'
-import IconClipboardText from '@/components/icon/icon-clipboard-text.vue'
-import IconChartSquare from '@/components/icon/icon-chart-square.vue'
-
 // ===== INTERFACES =====
 
 /**
@@ -376,6 +361,12 @@ export function useInventoryDetail(inventoryReference: string) {
             params: { reference: inventoryReference, warehouse: warehouseReference }
         })
     }
+    const goToWarehouseKpiDashboard = (warehouseReference: string) => {
+        router.push({
+            name: 'inventory-kpi-dashboard',
+            params: { reference: inventoryReference, warehouse: warehouseReference }
+        })
+    }
 
     /**
      * Génère les boutons d'action pour un magasin (planning, affectation, résultats, etc.)
@@ -385,15 +376,16 @@ export function useInventoryDetail(inventoryReference: string) {
         const warehouseReference = magasin?.reference
 
         const buttons: ButtonGroupButton[] = [
-            { id: 'planning', label: '', title: 'Planification', icon: IconCalendar, onClick: () => goToWarehousePlanning(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
-            { id: 'affectation', label: '', title: 'Affectation', icon: IconUsers, onClick: () => goToWarehouseAffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
-            { id: 'reaffectation', label: '', title: 'Réaffectation', icon: IconUsers, onClick: () => goToWarehouseReaffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
-            { id: 'tracking', label: '', title: 'Suivi', icon: IconClipboardText, onClick: () => goToWarehouseTracking(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS }
+            { id: 'planning', label: '', title: 'Planification', icon: 'mdi-calendar-outline', onClick: () => goToWarehousePlanning(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+            { id: 'affectation', label: '', title: 'Affectation', icon: 'mdi-account-group-outline', onClick: () => goToWarehouseAffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+            { id: 'reaffectation', label: '', title: 'Réaffectation', icon: 'mdi-account-switch-outline', onClick: () => goToWarehouseReaffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+            { id: 'tracking', label: '', title: 'Suivi', icon: 'mdi-clipboard-text-outline', onClick: () => goToWarehouseTracking(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS }
         ]
         if (inventory.value?.status === 'EN REALISATION') {
             buttons.push(
-                { id: 'results', label: '', title: 'Résultats', icon: IconBarChart, onClick: () => goToWarehouseResults(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
-                { id: 'monitoring', label: '', title: 'Monitoring', icon: IconChartSquare, onClick: () => goToWarehouseMonitoring(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS }
+                { id: 'kpi-dashboard', label: '', title: 'Tableau de bord KPI', icon: 'mdi-view-dashboard-outline', onClick: () => goToWarehouseKpiDashboard(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+                { id: 'results', label: '', title: 'Résultats', icon: 'mdi-chart-bar', onClick: () => goToWarehouseResults(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+                { id: 'monitoring', label: '', title: 'Monitoring zones', icon: 'mdi-chart-box-outline', onClick: () => goToWarehouseMonitoring(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS }
             )
         }
         if (inventory.value?.status === 'EN PREPARATION') {
@@ -401,7 +393,7 @@ export function useInventoryDetail(inventoryReference: string) {
                 id: 'launch',
                 label: '',
                 title: "Lancer l'inventaire pour ce magasin",
-                icon: IconPlay,
+                icon: 'mdi-play-outline',
                 onClick: async () => { await launchInventoryByWarehouseName(warehouseName) },
                 variant: 'default',
                 class: ACTION_BUTTON_CLASS
@@ -416,23 +408,23 @@ export function useInventoryDetail(inventoryReference: string) {
     const actionButtons = computed<ButtonGroupButton[]>(() => {
         const buttons: ButtonGroupButton[] = []
         if (inventory.value?.status === 'EN PREPARATION') {
-            buttons.push({ id: 'edit', label: 'Modifier', icon: IconEdit, onClick: editInventory, variant: 'default', class: ACTION_BUTTON_CLASS })
+            buttons.push({ id: 'edit', label: 'Modifier', icon: 'mdi-pencil-outline', onClick: editInventory, variant: 'default', class: ACTION_BUTTON_CLASS })
         } else if (inventory.value?.status === 'EN REALISATION') {
             buttons.push(
-                { id: 'cancel', label: 'Annuler', icon: IconCancel, onClick: async () => { await cancelInventory() }, variant: 'default', class: ACTION_BUTTON_CLASS },
-                { id: 'terminate', label: 'Terminer', icon: IconCheck, onClick: async () => { await terminateInventory() }, variant: 'default', class: ACTION_BUTTON_CLASS }
+                { id: 'cancel', label: 'Annuler', icon: 'mdi-close-circle-outline', onClick: async () => { await cancelInventory() }, variant: 'default', class: ACTION_BUTTON_CLASS },
+                { id: 'terminate', label: 'Terminer', icon: 'mdi-check', onClick: async () => { await terminateInventory() }, variant: 'default', class: ACTION_BUTTON_CLASS }
             )
         } else if (inventory.value?.status === 'TERMINE') {
-            buttons.push({ id: 'close', label: 'Clôturer', icon: IconLock, onClick: async () => { await closeInventory() }, variant: 'default', class: ACTION_BUTTON_CLASS })
+            buttons.push({ id: 'close', label: 'Clôturer', icon: 'mdi-lock-outline', onClick: async () => { await closeInventory() }, variant: 'default', class: ACTION_BUTTON_CLASS })
         }
-        buttons.push({ id: 'import-tracking', label: 'Suivi Import', icon: IconUpload, onClick: () => handleGoToImportTracking(), variant: 'default', class: ACTION_BUTTON_CLASS })
+        buttons.push({ id: 'import-tracking', label: 'Suivi Import', icon: 'mdi-upload-outline', onClick: () => handleGoToImportTracking(), variant: 'default', class: ACTION_BUTTON_CLASS })
         if (inventory.value?.status !== 'CLOTURE' && inventory.value?.status !== 'CLOTUREE') {
-            buttons.push({ id: 'export-detail', label: 'Exporter Détail', icon: IconFile, onClick: exportToPDF, variant: 'default', class: ACTION_BUTTON_CLASS })
+            buttons.push({ id: 'export-detail', label: 'Exporter Détail', icon: 'mdi-file-outline', onClick: exportToPDF, variant: 'default', class: ACTION_BUTTON_CLASS })
             if (inventoryIdResolved.value) {
                 buttons.push({
                     id: 'export-jobs',
                     label: 'PDF Jobs',
-                    icon: IconDownload,
+                    icon: 'mdi-download-outline',
                     onClick: () => {
                         exportJobsToPDF()
                     },
@@ -960,6 +952,7 @@ export function useInventoryDetail(inventoryReference: string) {
         goToWarehouseResults,
         goToWarehouseTracking,
         goToWarehouseMonitoring,
+        goToWarehouseKpiDashboard,
 
         // Helpers affichage
         getStatusBadgeVariant,

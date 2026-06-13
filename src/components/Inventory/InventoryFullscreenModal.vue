@@ -11,7 +11,7 @@
                     <div
                         class="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-white/20 backdrop-blur-md border-2 border-white/40 flex items-center justify-center text-white flex-shrink-0 shadow-lg"
                     >
-                        <IconBox class="w-6 h-6 md:w-7 md:h-7" />
+                        <MdiIcon name="mdi-package-variant" size="md" />
                     </div>
                     <div class="flex-1">
                         <h1 class="text-lg md:text-2xl font-extrabold text-white m-0 mb-1 md:mb-2 tracking-tight text-shadow-sm">
@@ -52,7 +52,7 @@
                                 v-if="inventory.date"
                                 class="inline-flex items-center gap-2 text-white/90 font-medium"
                             >
-                                <IconCalendar class="w-4 h-4 opacity-80" />
+                                <MdiIcon name="mdi-calendar-outline" size="sm" class="opacity-80" />
                                 {{ formatDate ? formatDate(inventory.date) : inventory.date }}
                             </span>
                             <span
@@ -70,7 +70,7 @@
                     class="w-10 h-10 rounded-lg bg-white/20 backdrop-blur-md border border-white/30 text-white flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-white/30 hover:scale-105 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                     :disabled="closeDisabled"
                 >
-                    <IconX class="w-5 h-5" />
+                    <MdiIcon name="mdi-close" size="sm" />
                 </button>
             </div>
         </div>
@@ -91,10 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import IconBox from '@/components/icon/icon-box.vue';
-import IconCalendar from '@/components/icon/icon-calendar.vue';
-import IconInfoCircle from '@/components/icon/icon-info-circle.vue';
-import IconX from '@/components/icon/icon-x.vue';
+import MdiIcon from '@/components/MdiIcon.vue';
 
 interface InventoryHeaderLike {
     label?: string;

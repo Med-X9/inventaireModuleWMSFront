@@ -1,0 +1,133 @@
+/**
+ * Palette Prolog IMS — source de vérité (sync avec theme.package.cjs)
+ * @see docs/prolog-ims-color-palette.html
+ */
+
+export const prologPalette = {
+    navy: {
+        50: '#F0F3F8',
+        100: '#DDE3EE',
+        500: '#3A6DC0',
+        600: '#2353A4',
+        700: '#1A3D78',
+        800: '#122A54',
+        900: '#0B1E3D',
+    },
+    accent: {
+        50: '#E8F5FF',
+        100: '#BDE4FF',
+        300: '#5BBDFF',
+        500: '#1A9EFF',
+        700: '#006FCC',
+    },
+    slate: {
+        50: '#EEF1F6',
+        200: '#C5CEDD',
+        400: '#8A99B3',
+        500: '#5A6A87',
+        700: '#344560',
+        900: '#1E2A3B',
+    },
+    semantic: {
+        success: '#0E9E6E',
+        successBg: '#E8FAF4',
+        warning: '#D97706',
+        warningBg: '#FEF3CD',
+        error: '#DC2626',
+        errorBg: '#FEE8E8',
+        inactive: '#8A99B3',
+        pending: '#006FCC',
+        pendingBg: '#E8F5FF',
+    },
+} as const;
+
+/** Couleurs mappées pour Tailwind / variables CSS */
+export const themeColors = {
+    primary: {
+        DEFAULT: prologPalette.navy[600],
+        light: prologPalette.accent[500],
+        dark: prologPalette.navy[900],
+        50: prologPalette.navy[50],
+        100: prologPalette.navy[100],
+        200: prologPalette.slate[200],
+        300: prologPalette.slate[400],
+        400: prologPalette.navy[500],
+        500: prologPalette.navy[500],
+        600: prologPalette.navy[600],
+        700: prologPalette.navy[700],
+        800: prologPalette.navy[800],
+        900: prologPalette.navy[900],
+    },
+    secondary: {
+        DEFAULT: prologPalette.accent[500],
+        light: prologPalette.accent[300],
+        dark: prologPalette.accent[700],
+    },
+    success: {
+        DEFAULT: prologPalette.semantic.success,
+        light: prologPalette.semantic.successBg,
+        dark: '#076949',
+        50: prologPalette.semantic.successBg,
+        100: prologPalette.semantic.successBg,
+        500: prologPalette.semantic.success,
+        600: '#076949',
+        700: '#065F46',
+    },
+    error: {
+        DEFAULT: prologPalette.semantic.error,
+        light: prologPalette.semantic.errorBg,
+        dark: '#991B1B',
+        50: prologPalette.semantic.errorBg,
+        100: prologPalette.semantic.errorBg,
+        500: prologPalette.semantic.error,
+        600: prologPalette.semantic.error,
+        700: '#991B1B',
+    },
+    danger: {
+        DEFAULT: prologPalette.semantic.error,
+        light: prologPalette.semantic.errorBg,
+        dark: '#991B1B',
+    },
+    warning: {
+        DEFAULT: prologPalette.semantic.warning,
+        light: prologPalette.semantic.warningBg,
+        dark: '#92500A',
+        50: prologPalette.semantic.warningBg,
+        100: prologPalette.semantic.warningBg,
+        500: prologPalette.semantic.warning,
+        600: prologPalette.semantic.warning,
+        700: '#92500A',
+    },
+    info: {
+        DEFAULT: prologPalette.accent[500],
+        light: prologPalette.accent[50],
+        dark: prologPalette.accent[700],
+        50: prologPalette.accent[50],
+        100: prologPalette.accent[100],
+        500: prologPalette.accent[500],
+        600: prologPalette.accent[700],
+        700: prologPalette.accent[700],
+    },
+    text: {
+        DEFAULT: prologPalette.slate[900],
+        light: prologPalette.slate[500],
+        dark: prologPalette.slate[700],
+        muted: prologPalette.slate[400],
+    },
+    background: {
+        app: '#F5F7FA',
+        card: '#FFFFFF',
+        hover: prologPalette.accent[50],
+        dark: prologPalette.navy[900],
+        alertWarning: prologPalette.semantic.warningBg,
+        alertError: prologPalette.semantic.errorBg,
+        alertSuccess: prologPalette.semantic.successBg,
+    },
+    border: {
+        DEFAULT: prologPalette.navy[100],
+        light: prologPalette.slate[50],
+        dark: prologPalette.slate[700],
+    },
+    navy: prologPalette.navy,
+    accent: prologPalette.accent,
+} as const;

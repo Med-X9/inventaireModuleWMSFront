@@ -3,16 +3,12 @@
         <div class="shadow-sm">
             <div class="relative bg-white flex w-full items-center px-5 py-2.5 dark:bg-[#0e1726]">
                 <div class="horizontal-logo flex lg:hidden justify-between items-center ltr:mr-2 rtl:ml-2">
-                    <router-link to="/" class="main-logo flex items-center shrink-0">
-                        <img class="w-10 ltr:-ml-1 rtl:-mr-1 inline" src="/assets/images/logo/logo.png" alt="" />
-                        <span
-                            class="text-2xl ltr:ml-1.5 rtl:mr-1.5 font-semibold align-middle hidden md:inline dark:text-white-light transition-all duration-300">Inventaire</span>
-                    </router-link>
+                    <Logo class="ltr:-ml-1 rtl:-mr-1" />
 
                     <a href="javascript:;"
                         class="collapse-icon flex-none dark:text-[#d0d2d6] hover:text-primary dark:hover:text-primary flex lg:hidden ltr:ml-2 rtl:mr-2 p-2 rounded-full bg-white-light/40 dark:bg-dark/40 hover:bg-white-light/90 dark:hover:bg-dark/60"
                         @click="store.toggleSidebar()">
-                        <icon-menu class="w-5 h-5" />
+                        <MdiIcon name="mdi-menu" size="sm" />
                     </a>
                 </div>
                 <div
@@ -21,17 +17,17 @@
                         <a href="javascript:;" v-show="store.theme === 'light'"
                             class="flex items-center p-2 rounded-full bg-white-light/40 dark:bg-dark/40 hover:text-primary hover:bg-white-light/90 dark:hover:bg-dark/60"
                             @click="store.toggleTheme('dark')">
-                            <icon-sun />
+                            <MdiIcon name="mdi-white-balance-sunny" size="sm" />
                         </a>
                         <a href="javascript:;" v-show="store.theme === 'dark'"
                             class="flex items-center p-2 rounded-full bg-white-light/40 dark:bg-dark/40 hover:text-primary hover:bg-white-light/90 dark:hover:bg-dark/60"
                             @click="store.toggleTheme('system')">
-                            <icon-moon />
+                            <MdiIcon name="mdi-weather-night" size="sm" />
                         </a>
                         <a href="javascript:;" v-show="store.theme === 'system'"
                             class="flex items-center p-2 rounded-full bg-white-light/40 dark:bg-dark/40 hover:text-primary hover:bg-white-light/90 dark:hover:bg-dark/60"
                             @click="store.toggleTheme('light')">
-                            <icon-laptop />
+                            <MdiIcon name="mdi-laptop" size="sm" />
                         </a>
                     </div>
 
@@ -40,7 +36,7 @@
                             offsetDistance="8">
                             <button type="button"
                                 class="relative block p-2 rounded-full bg-white-light/40 dark:bg-dark/40 hover:text-primary hover:bg-white-light/90 dark:hover:bg-dark/60">
-                                <icon-bell-bing />
+                                <MdiIcon name="mdi-bell-outline" size="sm" />
 
                                 <span class="flex absolute w-3 h-3 ltr:right-0 rtl:left-0 top-0">
                                     <span
@@ -73,14 +69,14 @@
                                                 </div>
                                                 <div class="ltr:pl-3 rtl:pr-3 flex flex-auto">
                                                     <div class="ltr:pr-3 rtl:pl-3">
-                                                        <h6 v-html="notification.message"></h6>
+                                                        <h6 v-html="sanitizeHtml(notification.message)"></h6>
                                                         <span class="text-xs block font-normal dark:text-gray-500"
                                                             v-text="notification.time"></span>
                                                     </div>
                                                     <button type="button"
                                                         class="ltr:ml-auto rtl:mr-auto text-neutral-300 hover:text-danger opacity-0 group-hover:opacity-100"
                                                         @click="removeNotification(notification.id)">
-                                                        <icon-x-circle />
+                                                        <MdiIcon name="mdi-close-circle-outline" size="sm" />
                                                     </button>
                                                 </div>
                                             </div>
@@ -100,7 +96,7 @@
                                                 class="!grid place-content-center hover:!bg-transparent text-lg min-h-[200px]">
                                                 <div
                                                     class="mx-auto ring-4 ring-primary/30 rounded-full mb-4 text-primary">
-                                                    <icon-info-circle :fill="true" class="w-10 h-10" />
+                                                    <MdiIcon name="mdi-information-outline" size="lg" />
                                                 </div>
                                                 No data available.
                                             </div>
@@ -116,7 +112,7 @@
                             class="!block">
                             <button type="button" class="relative group block">
                                 <img class="w-9 h-9 rounded-full object-cover saturate-50 group-hover:saturate-100"
-                                    src="/assets/images/user-profile.jpeg" alt="" />
+                                    :src="APP_LOGO_URL" :alt="APP_BRAND_NAME" />
                             </button>
                             <template #content="{ close }">
                                 <ul
@@ -124,8 +120,8 @@
                                     <li>
                                         <div class="flex items-center px-4 py-4">
                                             <div class="flex-none">
-                                                <img class="rounded-md w-10 h-10 object-cover"
-                                                    src="/assets/images/user-profile.jpeg" alt="" />
+                                                <img class="rounded-md w-10 h-10 object-contain"
+                                                    :src="APP_LOGO_URL" :alt="APP_BRAND_NAME" />
                                             </div>
                                             <div class="ltr:pl-4 rtl:pr-4 truncate">
                                                 <h4 class="text-base">
@@ -139,22 +135,19 @@
                                     </li>
                                     <li>
                                         <router-link to="" class="dark:hover:text-white" @click="close()">
-                                            <icon-user class="w-4.5 h-4.5 ltr:mr-2 rtl:ml-2 shrink-0" />
-
+                                            <MdiIcon name="mdi-account-outline" size="sm" class="ltr:mr-2 rtl:ml-2 shrink-0 inline-flex" />
                                             Profile
                                         </router-link>
                                     </li>
                                     <li>
                                         <router-link to="" class="dark:hover:text-white" @click="close()">
-                                            <icon-lock-dots class="w-4.5 h-4.5 ltr:mr-2 rtl:ml-2 shrink-0" />
-
+                                            <MdiIcon name="mdi-lock-outline" size="sm" class="ltr:mr-2 rtl:ml-2 shrink-0 inline-flex" />
                                             Lock Screen
                                         </router-link>
                                     </li>
                                     <li class="border-t border-white-light dark:border-white-light/10">
                                         <a href="javascript:;" class="text-danger !py-3" @click="handleLogout">
-                                            <icon-logout class="w-4.5 h-4.5 ltr:mr-2 rtl:ml-2 rotate-90 shrink-0" />
-
+                                            <MdiIcon name="mdi-logout" size="sm" class="ltr:mr-2 rtl:ml-2 rotate-90 shrink-0 inline-flex" />
                                             Sign Out
                                         </a>
                                     </li>
@@ -171,25 +164,21 @@
                     <router-link to="/" exact
                         class="nav-link flex items-center hover:text-primary dark:hover:text-white"
                         @click="closeDropdown">
-                        <icon-menu-dashboard class="shrink-0" />
+                        <MdiIcon name="mdi-view-dashboard-outline" size="sm" class="shrink-0" />
                         <span class="px-2">{{ $t('dashboard') }}</span>
                     </router-link>
                 </li>
 
-                <!-- Lien simple Inventaire -->
                 <li class="nav-item">
                     <router-link to="/inventory/management" exact
                         class="nav-link flex items-center hover:text-primary dark:hover:text-white"
                         @click="closeDropdown">
-                        <icon-menu-inventory class="shrink-0" />
+                        <MdiIcon name="mdi-clipboard-list-outline" size="sm" class="shrink-0" />
                         <span class="px-2">{{ $t('inventaire') }}</span>
                     </router-link>
                 </li>
-
-                <!-- Autres éléments de menu peuvent être ajoutés ici -->
             </ul>
 
-            <!-- SubNavbar avec breadcrumb et étapes -->
             <div v-if="shouldShowBreadcrumb || shouldShowSteps"
                 class="bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
                 <SubNavbar :items="breadcrumbItems" />
@@ -206,19 +195,10 @@ import { useAuthStore } from '@/stores/auth';
 import { useBreadcrumb } from '@/composables/useBreadcrumb';
 import { useInventoryStatus } from '../../composables/useInventoryStatus';
 import SubNavbar from './SubNavbar.vue';
-import IconMenu from '@/components/icon/icon-menu.vue';
-import IconXCircle from '@/components/icon/icon-x-circle.vue';
-import IconSun from '@/components/icon/icon-sun.vue';
-import IconMoon from '@/components/icon/icon-moon.vue';
-import IconLaptop from '@/components/icon/icon-laptop.vue';
-import IconMenuDashboard from '@/components/icon/menu/icon-menu-dashboard.vue';
-import IconCaretDown from '@/components/icon/icon-caret-down.vue';
-import IconInfoCircle from '@/components/icon/icon-info-circle.vue';
-import IconBellBing from '@/components/icon/icon-bell-bing.vue';
-import IconUser from '@/components/icon/icon-user.vue';
-import IconLockDots from '@/components/icon/icon-lock-dots.vue';
-import IconMenuInventory from '@/components/icon/menu/icon-menu-inventory.vue';
-import IconLogout from '@/components/icon/icon-logout.vue';
+import MdiIcon from '@/components/MdiIcon.vue';
+import { sanitizeHtml } from '@/utils/sanitizeHtml';
+import Logo from '@/components/layout/Logo.vue';
+import { APP_LOGO_URL, APP_LOGO_ASSET, APP_BRAND_NAME } from '@/constants/brand';
 
 const store = useAppStore();
 const authStore = useAuthStore();
@@ -243,19 +223,19 @@ function handleLogout() {
 const notifications = ref([
     {
         id: 1,
-        profile: 'user-profile.jpeg',
+        profile: APP_LOGO_ASSET,
         message: '<strong class="text-sm mr-1">John Doe</strong>invite you to <strong>Prototyping</strong>',
         time: '45 min ago',
     },
     {
         id: 2,
-        profile: 'profile-34.jpeg',
+        profile: APP_LOGO_ASSET,
         message: '<strong class="text-sm mr-1">Adam Nolan</strong>mentioned you to <strong>UX Basics</strong>',
         time: '9h Ago',
     },
     {
         id: 3,
-        profile: 'profile-16.jpeg',
+        profile: APP_LOGO_ASSET,
         message: '<strong class="text-sm mr-1">Anna Morgan</strong>Upload a file',
         time: '9h Ago',
     },
@@ -265,7 +245,7 @@ onMounted(() => {
     setActiveDropdown();
 });
 
-watch(route, (to, from) => {
+watch(route, () => {
     setActiveDropdown();
 });
 

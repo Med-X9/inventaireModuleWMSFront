@@ -73,6 +73,15 @@ const breadcrumbConfig: BreadcrumbConfig = {
         { label: params.reference || '' }
     ],
 
+    // Dashboard KPI magasin
+    'inventory-kpi-dashboard': (params) => [
+        { label: 'Gestion d\'inventaire', path: '/inventory/management' },
+        { label: 'Détail inventaire', path: `/inventory/${params.reference}/detail` },
+        { label: 'Tableau de bord KPI', isActive: true },
+        { label: params.reference || '' },
+        ...(params.warehouse ? [{ label: params.warehouse }] : [])
+    ],
+
     // Route de suivi des jobs
     'inventory-job-tracking': (params) => [
         { label: 'Gestion d\'inventaire', path: '/inventory/management' },

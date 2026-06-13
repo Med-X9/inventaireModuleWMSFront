@@ -1,0 +1,40 @@
+name: CI
+
+on:
+    push:
+        branches: [main, master, develop]
+    pull_request:
+        branches: [main, master, develop]
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+                  cache: npm
+
+            - run: npm ci
+
+            - run: npm run lint:errors
+
+            - run: npm run test
+
+            - run: npm run build
+              env:
+                  VITE_API_BASE_URL: http://localhost:8000
+                  VITE_API_TIMEOUT: '30000'
+
+            - run: npx playwright install --with-deps chromium
+
+            - run: npm run test:e2e
+              env:
+                  CI: true
+                  VITE_API_BASE_URL: http://localhost:8000
+                  VITE_API_TIMEOUT: '30000'
+
+            - run: npm audit --audit-level=high
+              continue-on-error: true

@@ -5,7 +5,7 @@
             <div class="flex justify-between items-center">
                 <div class="flex-1">
                     <h1 class="flex items-center gap-4 text-4xl font-extrabold text-slate-900 dark:text-slate-100 m-0 mb-2">
-                        <IconUpload class="w-10 h-10 text-primary" />
+                        <MdiIcon name="mdi-upload-outline" size="xl" class="text-primary" />
                         Suivi d'importation du planning
                     </h1>
                     <p class="text-slate-600 dark:text-slate-400 mt-2">
@@ -17,13 +17,13 @@
                         @click="refreshStatus"
                         :disabled="loading"
                         class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                        <IconRefresh class="w-5 h-5" :class="{ 'animate-spin': loading }" />
+                        <MdiIcon name="mdi-refresh" size="sm" :class="{ 'animate-spin': loading }" />
                         <span>Actualiser</span>
                     </button>
                     <button
                         @click="goBack"
                         class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 transition-all">
-                        <IconArrowLeft class="w-5 h-5" />
+                        <MdiIcon name="mdi-arrow-left" size="sm" />
                         <span>Retour</span>
                     </button>
                 </div>
@@ -40,7 +40,7 @@
 
             <!-- Aucune tâche d'import ou erreur -->
             <div v-else-if="!importTask && !loading" class="flex flex-col items-center justify-center py-16">
-                <IconXCircle class="w-16 h-16 mb-4" :class="error ? 'text-red-400' : 'text-slate-400'" />
+                <MdiIcon name="mdi-close-circle-outline" size="xl" class="mb-4" :class="error ? 'text-red-400' : 'text-slate-400'" />
 
                 <!-- Affichage avec code d'erreur -->
                 <div v-if="error" class="text-center">
@@ -85,7 +85,7 @@
                     <div class="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-6 border border-slate-200 dark:border-slate-600">
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-sm text-slate-600 dark:text-slate-400">Total lignes</span>
-                            <IconListCheck class="w-5 h-5 text-slate-500" />
+                            <MdiIcon name="mdi-format-list-checks" size="sm" class="text-slate-500" />
                         </div>
                         <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
                             {{ formatNumber(importTask.total_rows) }}
@@ -95,7 +95,7 @@
                     <div class="bg-green-50 dark:bg-green-900/20 rounded-xl p-6 border border-green-200 dark:border-green-700 transition-all duration-300 hover:shadow-lg hover:scale-105">
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-sm text-green-700 dark:text-green-400">Créés</span>
-                            <IconCircleCheck class="w-5 h-5 text-green-600 dark:text-green-400" />
+                            <MdiIcon name="mdi-check-circle-outline" size="sm" class="text-green-600 dark:text-green-400" />
                         </div>
                         <p class="text-3xl font-bold text-green-700 dark:text-green-400 tabular-nums transition-all duration-300">
                             {{ formatNumber(animatedImportedCount) }}
@@ -105,7 +105,7 @@
                     <div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-700 transition-all duration-300 hover:shadow-lg hover:scale-105">
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-sm text-blue-700 dark:text-blue-400">Mis à jour</span>
-                            <IconEdit class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                            <MdiIcon name="mdi-pencil-outline" size="sm" class="text-blue-600 dark:text-blue-400" />
                         </div>
                         <p class="text-3xl font-bold text-blue-700 dark:text-blue-400 tabular-nums transition-all duration-300">
                             {{ formatNumber(animatedUpdatedCount) }}
@@ -115,7 +115,7 @@
                     <div class="bg-red-50 dark:bg-red-900/20 rounded-xl p-6 border border-red-200 dark:border-red-700 transition-all duration-300 hover:shadow-lg hover:scale-105">
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-sm text-red-700 dark:text-red-400">Erreurs</span>
-                            <IconXCircle class="w-5 h-5 text-red-600 dark:text-red-400" />
+                            <MdiIcon name="mdi-close-circle-outline" size="sm" class="text-red-600 dark:text-red-400" />
                         </div>
                         <p class="text-3xl font-bold text-red-700 dark:text-red-400 tabular-nums transition-all duration-300">
                             {{ formatNumber(animatedErrorCount) }}
@@ -159,7 +159,7 @@
                 <!-- Message d'erreur global -->
                 <div v-if="importTask.error_message" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl p-6 mb-8">
                     <div class="flex items-start gap-3">
-                        <IconXCircle class="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                        <MdiIcon name="mdi-close-circle-outline" size="md" class="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
                         <div>
                             <h3 class="text-lg font-semibold text-red-900 dark:text-red-100 mb-2">
                                 Erreur d'importation
@@ -232,14 +232,7 @@ import { useRoute, useRouter } from 'vue-router'
 // ===== IMPORTS COMPOSABLES =====
 import { useImportTracking } from '@/composables/useImportTracking'
 
-// ===== IMPORTS ICÔNES =====
-import IconUpload from '@/components/icon/icon-upload.vue'
-import IconRefresh from '@/components/icon/icon-refresh.vue'
-import IconArrowLeft from '@/components/icon/icon-arrow-left.vue'
-import IconXCircle from '@/components/icon/icon-x-circle.vue'
-import IconListCheck from '@/components/icon/icon-list-check.vue'
-import IconCircleCheck from '@/components/icon/icon-circle-check.vue'
-import IconEdit from '@/components/icon/icon-edit.vue'
+import MdiIcon from '@/components/MdiIcon.vue'
 
 // ===== ROUTE =====
 const route = useRoute()

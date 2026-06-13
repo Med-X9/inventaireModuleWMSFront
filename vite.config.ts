@@ -26,15 +26,27 @@ export default defineConfig({
             '@SMATCH-Digital-dev/vue-system-design/styles': path.resolve(__dirname, './node_modules/@SMATCH-Digital-dev/vue-system-design/dist/style.css'),
         },
         // Permettre l'import de modules externes même s'ils ont des imports internes problématiques
-        dedupe: ['vue', 'vue-router'],
+        dedupe: ['vue', 'vue-router', '@vueuse/core', '@vueuse/shared'],
     },
     optimizeDeps: {
-        include: ['quill', 'vue-flatpickr-component', 'flatpickr'],
+        include: [
+            'quill',
+            'vue-flatpickr-component',
+            'flatpickr',
+            '@vueuse/core',
+            '@vueuse/shared',
+            '@vueuse/head',
+        ],
         // Exclure le package mal compilé de l'optimisation
         exclude: ['@SMATCH-Digital-dev/vue-system-design'],
     },
     define: {
         __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false,
+    },
+    preview: {
+        port: 3000,
+        host: '0.0.0.0',
+        strictPort: true,
     },
     server: {
         port: 3000,

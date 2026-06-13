@@ -1,8 +1,8 @@
 import { useHead } from '@vueuse/head';
 import { unref, computed } from 'vue';
 
-let siteTitle = '';
-let separator = '|';
+const siteTitle = '';
+const separator = '|';
 
 export const usePageTitle = (pageTitle: any) =>
     useHead(

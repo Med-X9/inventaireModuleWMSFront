@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import type { Component } from 'vue';
+import MdiIcon from '@/components/MdiIcon.vue';
 
 export type GridDataItem = Record<string, unknown>;
 
@@ -12,7 +13,8 @@ export interface Stat<T> {
 
 export interface Action<T> {
   label: string;
-  icon?: Component;
+  /** Composant Vue ou nom d'icône MDI */
+  icon?: Component | string;
   handler: (item: T) => void;
   variant?: 'primary' | 'secondary';
 }
@@ -157,11 +159,14 @@ const goToPage = (page: number) => {
                 ? ' btn bg-primary text-white rounded-xl'
                 : 'btn btn-primary rounded-xl'"
             >
+              <MdiIcon
+                v-if="typeof action.icon === 'string'"
+                :name="action.icon"
+                size="sm" />
               <component
+                v-else-if="action.icon"
                 :is="action.icon"
-                class="w-4 h-4"
-                v-if="action.icon"
-              />
+                class="w-4 h-4" />
               <span class="truncate">{{ action.label }}</span>
             </button>
           </div>

@@ -4,7 +4,7 @@
             <div class="flex justify-between items-center gap-6">
                 <div class="flex-1">
                     <h1 class="flex items-center gap-4 text-4xl font-extrabold text-slate-900 dark:text-slate-100 m-0 mb-2">
-                        <IconDownload class="w-10 h-10 text-primary" />
+                        <MdiIcon name="mdi-download-outline" size="xl" class="text-primary" />
                         PDFs déjà générés
                     </h1>
                     <p class="text-slate-600 dark:text-slate-400 mt-2">
@@ -21,14 +21,14 @@
                         @click="loadGeneratedPdfs"
                         :disabled="loading"
                         class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                        <IconRefresh class="w-5 h-5" :class="{ 'animate-spin': loading }" />
+                        <MdiIcon name="mdi-refresh" size="sm" :class="{ 'animate-spin': loading }" />
                         <span>Actualiser</span>
                     </button>
                     <button
                         type="button"
                         @click="goBack"
                         class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 transition-all">
-                        <IconArrowLeft class="w-5 h-5" />
+                        <MdiIcon name="mdi-arrow-left" size="sm" />
                         <span>Retour</span>
                     </button>
                 </div>
@@ -42,7 +42,7 @@
             </div>
 
             <div v-else-if="error" class="flex flex-col items-center justify-center py-16 text-center">
-                <IconXCircle class="w-16 h-16 text-red-500 mb-4" />
+                <MdiIcon name="mdi-close-circle-outline" size="xl" class="text-red-500 mb-4" />
                 <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">Erreur</h3>
                 <p class="text-slate-600 dark:text-slate-400 max-w-xl">{{ error }}</p>
             </div>
@@ -64,7 +64,7 @@
                     class="sticky top-0 z-10 -mx-2 px-2 py-3 mb-4 bg-white/95 dark:bg-slate-800/95 backdrop-blur border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm">
                     <div class="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
                         <div class="relative flex-1 min-w-0">
-                            <IconSearch class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                            <MdiIcon name="mdi-magnify" size="sm" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                             <input
                                 v-model.trim="searchQuery"
                                 type="search"
@@ -78,7 +78,7 @@
                                 class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
                                 aria-label="Effacer la recherche"
                                 @click="searchQuery = ''">
-                                <IconXCircle class="w-5 h-5" />
+                                <MdiIcon name="mdi-close-circle-outline" size="sm" />
                             </button>
                         </div>
                         <p class="text-sm text-slate-600 dark:text-slate-400 shrink-0 m-0">
@@ -90,13 +90,13 @@
                 </div>
 
                 <div v-if="!groupedResults.length" class="text-center py-16">
-                    <IconXCircle class="w-14 h-14 text-slate-400 mx-auto mb-4" />
+                    <MdiIcon name="mdi-close-circle-outline" size="xl" class="text-slate-400 mx-auto mb-4" />
                     <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">Aucun PDF généré</h3>
                     <p class="text-slate-600 dark:text-slate-400">Aucun fichier n'est disponible pour le moment.</p>
                 </div>
 
                 <div v-else-if="!filteredResults.length" class="text-center py-16">
-                    <IconSearch class="w-14 h-14 text-slate-400 mx-auto mb-4" />
+                    <MdiIcon name="mdi-magnify" size="xl" class="text-slate-400 mx-auto mb-4" />
                     <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">Aucun résultat</h3>
                     <p class="text-slate-600 dark:text-slate-400">Aucun job ne correspond à « {{ searchQuery }} ».</p>
                 </div>
@@ -138,7 +138,7 @@
                                 <span
                                     class="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-600"
                                     :class="{ 'rotate-90': expandedJobId === item.job.id }">
-                                    <IconChevronRight class="w-4 h-4 text-slate-600 dark:text-slate-300 transition-transform" />
+                                    <MdiIcon name="mdi-chevron-right" size="xs" class="text-slate-600 dark:text-slate-300 transition-transform" />
                                 </span>
                                 <div class="flex-1 min-w-0">
                                     <span class="font-semibold text-slate-900 dark:text-slate-100">{{ item.job.reference }}</span>
@@ -205,7 +205,7 @@
                                                         @click="downloadPdf(item.job, pdf)"
                                                         :disabled="downloadingTaskIds.has(pdf.task_id)"
                                                         class="inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-primary text-primary text-xs hover:bg-primary hover:text-white transition-all disabled:opacity-50">
-                                                        <IconDownload class="w-3.5 h-3.5" />
+                                                        <MdiIcon name="mdi-download-outline" size="xs" />
                                                         <span>{{ downloadingTaskIds.has(pdf.task_id) ? '…' : 'Télécharger' }}</span>
                                                     </button>
                                                 </td>
@@ -227,12 +227,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { JobService } from '@/services/jobService'
 import { alertService } from '@/services/alertService'
-import IconDownload from '@/components/icon/icon-download.vue'
-import IconRefresh from '@/components/icon/icon-refresh.vue'
-import IconArrowLeft from '@/components/icon/icon-arrow-left.vue'
-import IconXCircle from '@/components/icon/icon-x-circle.vue'
-import IconSearch from '@/components/icon/icon-search.vue'
-import IconChevronRight from '@/components/icon/icon-chevron-right.vue'
+import MdiIcon from '@/components/MdiIcon.vue'
 
 interface GeneratedAssignmentPdf {
     task_id: string

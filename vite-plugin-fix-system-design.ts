@@ -32,13 +32,54 @@ export function fixSystemDesignImports(): Plugin {
                 const pkgPath = resolve(process.cwd(), 'node_modules/@SMATCH-Digital-dev/vue-system-design/dist/index.js');
                 let code = readFileSync(pkgPath, 'utf-8');
 
-                // 1. Ajouter alias iconSizes, iconStrokeWidth, colors (IconBase les utilise sans import)
-                // Noms réels dans le bundle : Dy=iconSizes, zy=iconStrokeWidth, vy=colors (voir exports)
-                const iconPatch = 'var iconSizes=Dy,iconStrokeWidth=zy,colors=vy;';
-                const iconSearch = /\};\s*function ib\(\)/;
-                const iconReplace = `};\n${iconPatch}\nfunction ib()`;
-                if (code.includes('iconSizes[t.size]') && iconSearch.test(code)) {
-                    code = code.replace(iconSearch, iconReplace);
+                // 1. Alias iconSizes / iconStrokeWidth / colors pour IconBase (références nues dans le bundle)
+                if (code.includes('iconSizes') && !code.includes('var iconSizes=')) {
+                    let iconAliasPatched = false;
+
+                    // v1.1.26+ : Bb/Hb/bb exportés, thème dx puis installTheme hx()
+                    const themeEndV1126 = /variants:\s*Fb\s*\n\s*\}\s*\n\};\s*\nfunction hx\(\)/;
+                    if (!iconAliasPatched && themeEndV1126.test(code) && code.includes('Bb as iconSizes')) {
+                        code = code.replace(
+                            themeEndV1126,
+                            `variants: Fb\n  }\n};\nvar iconSizes=Bb,iconStrokeWidth=Hb,colors=bb;\nfunction hx()`
+                        );
+                        iconAliasPatched = true;
+                    }
+
+                    // v1.1.24 : Pb/Bb/yb + function dx() install
+                    if (!iconAliasPatched) {
+                        const themeEndV1124 = /\}\s*;\s*\nfunction dx\(\)/;
+                        if (themeEndV1124.test(code) && code.includes('Pb as iconSizes')) {
+                            code = code.replace(
+                                themeEndV1124,
+                                `};\nvar iconSizes=Pb,iconStrokeWidth=Bb,colors=yb;\nfunction dx()`
+                            );
+                            iconAliasPatched = true;
+                        }
+                    }
+
+                    // v1.1.20-ish : Eb, zb, pb + function ax()
+                    if (!iconAliasPatched) {
+                        const themeEndThenInstall = /variants:\s*Db\s*\}\s*\}\s*;\s*function ax\(\)/;
+                        if (themeEndThenInstall.test(code)) {
+                            code = code.replace(
+                                themeEndThenInstall,
+                                `variants: Db\n  }\n};\nvar iconSizes=Eb,iconStrokeWidth=zb,colors=pb;\nfunction ax()`
+                            );
+                            iconAliasPatched = true;
+                        }
+                    }
+
+                    // Legacy : Dy, zy, vy + function ib()
+                    if (!iconAliasPatched) {
+                        const legacySearch = /\};\s*function ib\(\)/;
+                        if (legacySearch.test(code)) {
+                            code = code.replace(
+                                legacySearch,
+                                `};\nvar iconSizes=Dy,iconStrokeWidth=zy,colors=vy;\nfunction ib()`
+                            );
+                        }
+                    }
                 }
 
                 // 2. useAppStore non importé par DarkModeSwitch - fourni via globalThis (main.ts)
@@ -53,6 +94,22 @@ export function fixSystemDesignImports(): Plugin {
                     code = code.replace(
                         /function i\(\)\s*\{\s*import\("vue-router"\)\.then\s*\(\s*\(g\)\s*=>\s*\{\s*s\s*=\s*g\.useRouter\(\);\s*\}\)\.catch\s*\(\s*\(\)\s*=>\s*\{\s*\}\)\s*;\s*\}/,
                         'function i() {}'
+                    );
+                }
+
+                // 4. Import cassé @/utils/routeToNavItems → fichier fourni par l'app hôte
+                if (code.includes('@/utils/routeToNavItems')) {
+                    code = code.replace(
+                        /from\s+"@\/utils\/routeToNavItems"/g,
+                        'from "@/utils/routeToNavItems.ts"'
+                    );
+                }
+
+                // 5. Logout AppLayout : /login n'existe pas → déléguer à __appLogout (main.ts)
+                if (code.includes('p.push("/login")')) {
+                    code = code.replace(
+                        /p\.push\("\/login"\)/g,
+                        '(typeof globalThis!=="undefined"&&globalThis.__appLogout?globalThis.__appLogout():void 0)'
                     );
                 }
 

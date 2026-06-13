@@ -138,6 +138,8 @@ export const useJobStore = defineStore('job', () => {
             // Stocker les données brutes (après les métadonnées pour cohérence réactivité)
             jobs.value = responseData.data || [];
 
+            console.log('[jobStore.fetchJobs] 📋 Rows stored:', jobs.value.length)
+
             console.log('[jobStore.fetchJobs] 📊 Final pagination metadata:', {
                 requestedPageSize,
                 responsePageSize,

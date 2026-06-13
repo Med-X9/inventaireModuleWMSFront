@@ -20,7 +20,7 @@
                             class="flex gap-2 p-4 border-b border-transparent hover:border-primary hover:text-primary !outline-none"
                             :class="{ '!border-primary text-primary': selected }"
                         >
-                            <icon-home />
+                            <MdiIcon name="mdi-home-outline" size="sm" />
                             Home
                         </a>
                     </Tab>
@@ -30,7 +30,7 @@
                             class="flex gap-2 p-4 border-b border-transparent hover:border-primary hover:text-primary !outline-none"
                             :class="{ '!border-primary text-primary': selected }"
                         >
-                            <icon-dollar-sign-circle />
+                            <MdiIcon name="mdi-currency-usd-circle-outline" size="sm" />
                             Payment Details
                         </a>
                     </Tab>
@@ -40,7 +40,7 @@
                             class="flex gap-2 p-4 border-b border-transparent hover:border-primary hover:text-primary !outline-none"
                             :class="{ '!border-primary text-primary': selected }"
                         >
-                            <icon-user class="w-5 h-5" />
+                            <MdiIcon name="mdi-account-outline" size="sm" />
                             Preferences
                         </a>
                     </Tab>
@@ -50,7 +50,7 @@
                             class="flex gap-2 p-4 border-b border-transparent hover:border-primary hover:text-primary !outline-none"
                             :class="{ '!border-primary text-primary': selected }"
                         >
-                            <icon-phone />
+                            <MdiIcon name="mdi-phone-outline" size="sm" />
                             Danger Zone
                         </a>
                     </Tab>
@@ -123,25 +123,25 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                     <div class="flex">
                                         <div class="bg-[#eee] flex justify-center items-center rounded px-3 font-semibold dark:bg-[#1b2e4b] ltr:mr-2 rtl:ml-2">
-                                            <icon-linkedin class="w-5 h-5" />
+                                            <MdiIcon name="mdi-linkedin" size="sm" />
                                         </div>
                                         <input type="text" placeholder="jimmy_turner" class="form-input" />
                                     </div>
                                     <div class="flex">
                                         <div class="bg-[#eee] flex justify-center items-center rounded px-3 font-semibold dark:bg-[#1b2e4b] ltr:mr-2 rtl:ml-2">
-                                            <icon-twitter class="w-5 h-5" />
+                                            <MdiIcon name="mdi-twitter" size="sm" />
                                         </div>
                                         <input type="text" placeholder="jimmy_turner" class="form-input" />
                                     </div>
                                     <div class="flex">
                                         <div class="bg-[#eee] flex justify-center items-center rounded px-3 font-semibold dark:bg-[#1b2e4b] ltr:mr-2 rtl:ml-2">
-                                            <icon-facebook class="w-5 h-5" />
+                                            <MdiIcon name="mdi-facebook" size="sm" />
                                         </div>
                                         <input type="text" placeholder="jimmy_turner" class="form-input" />
                                     </div>
                                     <div class="flex">
                                         <div class="bg-[#eee] flex justify-center items-center rounded px-3 font-semibold dark:bg-[#1b2e4b] ltr:mr-2 rtl:ml-2">
-                                            <icon-github />
+                                            <MdiIcon name="mdi-github" size="sm" />
                                         </div>
                                         <input type="text" placeholder="jimmy_turner" class="form-input" />
                                     </div>
@@ -512,14 +512,7 @@
     import { useAppStore } from '@/stores/index';
     import { useMeta } from '@/composables/use-meta';
 
-    import IconHome from '@/components/icon/icon-home.vue';
-    import IconDollarSignCircle from '@/components/icon/icon-dollar-sign-circle.vue';
-    import IconUser from '@/components/icon/icon-user.vue';
-    import IconPhone from '@/components/icon/icon-phone.vue';
-    import IconLinkedin from '@/components/icon/icon-linkedin.vue';
-    import IconTwitter from '@/components/icon/icon-twitter.vue';
-    import IconFacebook from '@/components/icon/icon-facebook.vue';
-    import IconGithub from '@/components/icon/icon-github.vue';
+    import MdiIcon from '@/components/MdiIcon.vue';
 
     useMeta({ title: 'Account Setting' });
     const store = useAppStore();

@@ -16,7 +16,7 @@
                     class="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white transition-all duration-400 shadow-xl"
                     :class="{ 'scale-110 rotate-12': isDragging }"
                 >
-                    <IconUpload class="w-8 h-8 text-white" />
+                    <MdiIcon name="mdi-upload-outline" size="lg" class="text-white" />
                 </div>
                 <div v-if="isUploading" class="absolute -top-2.5 -left-2.5 w-[calc(100%+20px)] h-[calc(100%+20px)]">
                     <svg class="w-full h-full progress-ring" viewBox="0 0 120 120" style="transform: rotate(-90deg);">
@@ -47,7 +47,7 @@
                     @click="() => emit('browse-click')"
                     class="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-medium text-sm bg-gradient-to-r from-primary to-primary-light text-white hover:from-primary-dark hover:to-primary transition-all duration-200"
                 >
-                    <IconFolder class="w-4 h-4 text-white" />
+                    <MdiIcon name="mdi-folder-outline" size="sm" class="text-white" />
                     {{ browseButtonLabel }}
                 </button>
                 <p class="text-sm text-slate-500 dark:text-slate-500 mt-4 m-0">
@@ -61,7 +61,7 @@
                 class="flex items-center gap-4 bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border-2 border-green-500 rounded-xl p-4 w-full max-w-2xl shadow-lg animate-[slideInFile_0.3s_ease-out]"
             >
                 <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white flex-shrink-0 shadow-lg">
-                    <IconFile class="w-6 h-6" />
+                    <MdiIcon name="mdi-file-outline" size="md" />
                 </div>
                 <div class="flex-1 min-w-0">
                     <h4 class="text-base font-semibold text-slate-900 dark:text-slate-100 m-0 mb-1 truncate">
@@ -79,7 +79,7 @@
                     class="w-10 h-10 rounded-lg bg-red-50 border border-red-200 text-red-600 flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-red-100 hover:scale-110 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-red-900/30 dark:border-red-800 dark:text-red-400"
                     :disabled="isUploading"
                 >
-                    <IconX class="w-5 h-5" />
+                    <MdiIcon name="mdi-close" size="sm" />
                 </button>
             </div>
 
@@ -92,7 +92,7 @@
                     />
                 </div>
                 <p class="text-sm text-slate-600 dark:text-slate-400 m-0 flex items-center justify-center gap-2">
-                    <IconLoader class="w-4 h-4 animate-spin" />
+                    <MdiIcon name="mdi-loading" size="sm" class="animate-spin" />
                     {{ uploadingLabel }} {{ uploadProgress ?? 0 }}%
                 </p>
             </div>
@@ -101,11 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import IconUpload from '@/components/icon/icon-upload.vue';
-import IconFolder from '@/components/icon/icon-folder.vue';
-import IconFile from '@/components/icon/icon-file.vue';
-import IconX from '@/components/icon/icon-x.vue';
-import IconLoader from '@/components/icon/icon-loader.vue';
+import MdiIcon from '@/components/MdiIcon.vue';
 
 interface Props {
     isDragging: boolean;

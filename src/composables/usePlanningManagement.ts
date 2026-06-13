@@ -26,10 +26,6 @@ import type { QueryModel } from '@SMATCH-Digital-dev/vue-system-design'
 import type { Store, PlanningAction, ViewModeType } from '@/interfaces/planningManagement'
 
 // ===== IMPORTS ICÔNES =====
-import IconUser from '@/components/icon/icon-user.vue'
-import IconCalendar from '@/components/icon/icon-calendar.vue'
-import IconBarChart from '@/components/icon/icon-bar-chart.vue'
-import IconRefresh from '@/components/icon/icon-refresh.vue'
 
 // ===== CONSTANTES =====
 
@@ -267,7 +263,7 @@ export function usePlanningManagement(inventoryRef?: string) {
     const actions = computed<PlanningAction[]>(() => [
         {
             label: 'Planifier',
-            icon: IconCalendar,
+            icon: 'mdi-calendar-outline',
             handler: (store: Store) => {
                 router.push({
                     name: 'inventory-planning',
@@ -280,7 +276,7 @@ export function usePlanningManagement(inventoryRef?: string) {
         },
         {
             label: inventoryStatus.value === 'EN REALISATION' ? 'Transférer' : 'Affecter',
-            icon: IconUser,
+            icon: 'mdi-account-outline',
             handler: (store: Store) => {
                 router.push({
                     name: 'inventory-affecter',
@@ -293,7 +289,7 @@ export function usePlanningManagement(inventoryRef?: string) {
         },
         {
             label: 'Réaffecter',
-            icon: IconRefresh,
+            icon: 'mdi-refresh',
             handler: (store: Store) => {
                 router.push({
                     name: 'inventory-reaffectation',
@@ -307,7 +303,7 @@ export function usePlanningManagement(inventoryRef?: string) {
         // Monitoring seulement si l'inventaire est disponible
         ...(inventoryId.value ? [{
             label: 'Monitoring',
-            icon: IconBarChart,
+            icon: 'mdi-chart-bar',
             handler: (store: Store) => {
                 console.log('[usePlanningManagement] Monitoring action triggered', {
                     store,

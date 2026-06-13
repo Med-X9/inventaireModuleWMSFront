@@ -146,13 +146,16 @@ module.exports = {
           light: themeColors.border.light,
           dark: themeColors.border.dark,
         },
+        // ===== Prolog IMS — Navy & Accent (charte couleur) =====
+        navy: themeColors.navy,
+        accent: themeColors.accent,
         // ===== COULEURS LEGACY (pour compatibilité) =====
         dark: {
           DEFAULT: '#3b3f5c',
           light: '#eaeaec',
         },
         black: {
-          DEFAULT: '#0e1726',
+          DEFAULT: themeColors.navy[900],
           light: '#e3e4eb',
         },
         white: {
@@ -266,6 +269,21 @@ module.exports = {
           '--font-heading': getFontFamily('heading'),
           '--font-body': getFontFamily('body'),
           '--font-mono': getFontFamily('mono'),
+        },
+        '.dark': {
+          '--color-primary': theme('colors.primary.light'),
+          '--color-primary-light': theme('colors.accent.300'),
+          '--color-primary-dark': theme('colors.primary.900'),
+          '--color-text': '#EEF1F6',
+          '--color-text-light': theme('colors.text.muted'),
+          '--color-text-muted': theme('colors.text.light'),
+          '--color-bg-app': theme('colors.navy.900'),
+          '--color-bg-card': theme('colors.navy.800'),
+          '--color-bg-hover': 'rgba(26, 158, 255, 0.12)',
+          '--color-bg-dark': theme('colors.navy.900'),
+          '--color-border': theme('colors.navy.700'),
+          '--color-border-light': theme('colors.navy.800'),
+          '--color-border-dark': theme('colors.border.dark'),
         },
       });
     },  

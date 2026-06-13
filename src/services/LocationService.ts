@@ -15,7 +15,7 @@ import { normalizeDataTableResponse, convertUnifiedToStandardDataTable } from '@
 import type { UnifiedDataTableResponse } from '@/utils/dataTableResponseNormalizer';
 
 // Extension pour LocationResponse pour supporter DataTable
-export interface DataTableLocationResponse extends LocationResponse {}
+export type DataTableLocationResponse = LocationResponse
 
 // Interface pour les paramètres DataTable
 export interface DataTableParams {

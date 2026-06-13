@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
+import MdiIcon from '@/components/MdiIcon.vue'
 
 interface ToggleOption {
   value: string
-  icon?: Component
+  /** Composant Vue ou nom d'icône MDI (`mdi-view-list`, etc.) */
+  icon?: Component | string
 }
 
 interface Props {
@@ -30,7 +32,14 @@ const emit = defineEmits<{
           : 'text-secondary hover:text-secondary-dark scale-95 hover:scale-100'
       ]"
     >
-      <component :is="option.icon" class="w-5 h-5" v-if="option.icon" />
+      <MdiIcon
+        v-if="typeof option.icon === 'string'"
+        :name="option.icon"
+        size="sm" />
+      <component
+        v-else-if="option.icon"
+        :is="option.icon"
+        class="w-5 h-5" />
     </button>
   </div>
 </template>

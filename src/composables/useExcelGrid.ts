@@ -108,7 +108,7 @@ export function useExcelGrid(options: ExcelGridOptions = {}) {
         // L'article est rempli automatiquement, pas besoin de validation stricte
         break
 
-      case 'quantite':
+      case 'quantite': {
         const qty = Number(value)
         if (value === '' || value === null || value === undefined) {
           row.errors.quantite = 'Quantité requise'
@@ -118,6 +118,7 @@ export function useExcelGrid(options: ExcelGridOptions = {}) {
           row.errors.quantite = 'Nombre entier requis'
         }
         break
+      }
     }
 
     // Mettre à jour la validité de la ligne

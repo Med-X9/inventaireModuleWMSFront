@@ -15,7 +15,7 @@
                 class="bg-primary ltr:rounded-tl-full rtl:rounded-tr-full ltr:rounded-bl-full rtl:rounded-br-full absolute ltr:-left-12 rtl:-right-12 top-0 bottom-0 my-auto w-12 h-10 flex justify-center items-center text-white cursor-pointer"
                 @click="showCustomizer = !showCustomizer"
             >
-                <icon-settings class="animate-[spin_3s_linear_infinite] w-5 h-5" />
+                <MdiIcon name="mdi-cog-outline" size="sm" class="animate-[spin_3s_linear_infinite]" />
             </a>
             <perfect-scrollbar
                 :options="{
@@ -31,7 +31,7 @@
                             class="absolute top-0 ltr:right-0 rtl:left-0 opacity-30 hover:opacity-100 dark:text-white"
                             @click="showCustomizer = false"
                         >
-                            <icon-x class="w-5 h-5" />
+                            <MdiIcon name="mdi-close" size="sm" />
                         </a>
                         <h4 class="mb-1 dark:text-white">TEMPLATE CUSTOMIZER</h4>
                         <p class="text-white-dark">Set preferences that will be cookied for your live preview demonstration.</p>
@@ -46,7 +46,7 @@
                                 :class="[store.theme === 'light' ? 'btn-primary' : 'btn-outline-primary']"
                                 @click="store.toggleTheme('light')"
                             >
-                                <icon-sun class="w-5 h-5 shrink-0 ltr:mr-2 rtl:ml-2" />
+                                <MdiIcon name="mdi-white-balance-sunny" size="sm" class="shrink-0 ltr:mr-2 rtl:ml-2" />
                                 Light
                             </button>
                             <button
@@ -55,7 +55,7 @@
                                 :class="[store.theme === 'dark' ? 'btn-primary' : 'btn-outline-primary']"
                                 @click="store.toggleTheme('dark')"
                             >
-                                <icon-moon class="w-5 h-5 shrink-0 ltr:mr-2 rtl:ml-2" />
+                                <MdiIcon name="mdi-weather-night" size="sm" class="shrink-0 ltr:mr-2 rtl:ml-2" />
                                 Dark
                             </button>
                             <button
@@ -64,7 +64,7 @@
                                 :class="[store.theme === 'system' ? 'btn-primary' : 'btn-outline-primary']"
                                 @click="store.toggleTheme('system')"
                             >
-                                <icon-laptop class="w-5 h-5 shrink-0 ltr:mr-2 rtl:ml-2" />
+                                <MdiIcon name="mdi-laptop" size="sm" class="shrink-0 ltr:mr-2 rtl:ml-2" />
                                 System
                             </button>
                         </div>
@@ -194,11 +194,7 @@
 <script lang="ts" setup>
     import { ref } from 'vue';
     import { useAppStore } from '@/stores/index';
-    import IconSettings from '@/components/icon/icon-settings.vue';
-    import IconX from '@/components/icon/icon-x.vue';
-    import IconSun from '@/components/icon/icon-sun.vue';
-    import IconMoon from '@/components/icon/icon-moon.vue';
-    import IconLaptop from '@/components/icon/icon-laptop.vue';
+    import MdiIcon from '@/components/MdiIcon.vue';
     const store = useAppStore();
     const showCustomizer = ref(false);
 </script>

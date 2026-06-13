@@ -109,7 +109,7 @@
                             class="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-100 rounded text-sm text-gray-700 transition-colors"
                             title="Importer CSV"
                         >
-                            <IconUpload class="w-4 h-4" />
+                            <MdiIcon name="mdi-upload-outline" size="sm" />
                             <span class="hidden md:inline">Importer</span>
                         </button>
                         <button
@@ -117,7 +117,7 @@
                             class="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-100 rounded text-sm text-gray-700 transition-colors"
                             title="Exporter CSV"
                         >
-                            <IconDownload class="w-4 h-4" />
+                            <MdiIcon name="mdi-download-outline" size="sm" />
                             <span class="hidden md:inline">Exporter</span>
                         </button>
                     </div>
@@ -129,7 +129,7 @@
                             class="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-100 rounded text-sm text-gray-700 transition-colors"
                             title="Nouvelle ligne vide"
                         >
-                            <IconPlus class="w-4 h-4" />
+                            <MdiIcon name="mdi-plus" size="sm" />
                             <span class="hidden md:inline">Ligne vide</span>
                         </button>
                         <button
@@ -137,7 +137,7 @@
                             class="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-100 rounded text-sm text-gray-700 transition-colors"
                             title="Dupliquer la ligne"
                         >
-                            <IconCopy class="w-4 h-4" />
+                            <MdiIcon name="mdi-content-copy" size="sm" />
                             <span class="hidden md:inline">Dupliquer</span>
                         </button>
                         <button
@@ -145,7 +145,7 @@
                             class="flex items-center gap-1.5 px-3 py-1.5 hover:bg-red-50 text-error rounded text-sm transition-colors"
                             title="Vider la grille"
                         >
-                            <IconTrash class="w-4 h-4" />
+                            <MdiIcon name="mdi-delete-outline" size="sm" />
                             <span class="hidden md:inline">Vider</span>
                         </button>
                     </div>
@@ -157,7 +157,7 @@
                             class="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-100 rounded text-sm text-gray-700 transition-colors"
                             title="Valider toutes les lignes"
                         >
-                            <IconCheck class="w-4 h-4" />
+                            <MdiIcon name="mdi-check" size="sm" />
                             <span class="hidden md:inline">Valider</span>
                         </button>
                     </div>
@@ -175,7 +175,7 @@
                             :disabled="!hasUnsavedChanges"
                             title="Auto-sauvegarde"
                         >
-                            <IconSave class="w-4 h-4" />
+                            <MdiIcon name="mdi-content-save-outline" size="sm" />
                             <span class="hidden md:inline">Auto-sauvegarde</span>
                         </button>
                         <button
@@ -184,7 +184,7 @@
                             class="flex items-center gap-1.5 px-3 py-1.5 bg-success hover:bg-success-dark text-white rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Sauvegarder"
                         >
-                            <IconSave class="w-4 h-4" />
+                            <MdiIcon name="mdi-content-save-outline" size="sm" />
                             <span class="hidden md:inline">Sauvegarder</span>
                         </button>
                         <button
@@ -192,7 +192,7 @@
                             class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-sm transition-colors"
                             title="Fermer le job"
                         >
-                            <IconX class="w-4 h-4" />
+                            <MdiIcon name="mdi-close" size="sm" />
                             <span class="hidden md:inline">Fermer</span>
                         </button>
                     </div>
@@ -219,7 +219,7 @@
                 <span class="font-semibold text-primary">{{ totalQuantity }}</span>
             </div>
             <div v-if="hasUnsavedChanges" class="ml-auto flex items-center gap-2 text-warning">
-                <IconSave class="w-4 h-4 animate-pulse" />
+                <MdiIcon name="mdi-content-save-outline" size="sm" class="animate-pulse" />
                 <span class="text-xs">Modifications non sauvegardées</span>
             </div>
         </div>
@@ -270,7 +270,7 @@
                     @click="removeNotification(notification.id)"
                     class="ml-3 text-gray-500 hover:text-gray-700"
                 >
-                    <IconX class="w-4 h-4" />
+                    <MdiIcon name="mdi-close" size="sm" />
                 </button>
             </div>
         </div>
@@ -308,14 +308,7 @@ import type { Job } from '@/models/Job'
 import { useLocalStorage } from '@/utils/storage'
 
 // Icônes
-import IconSave from '@/components/icon/icon-save.vue'
-import IconCopy from '@/components/icon/icon-copy.vue'
-import IconPlus from '@/components/icon/icon-plus.vue'
-import IconX from '@/components/icon/icon-x.vue'
-import IconCheck from '@/components/icon/icon-check.vue'
-import IconTrash from '@/components/icon/icon-trash.vue'
-import IconDownload from '@/components/icon/icon-download.vue'
-import IconUpload from '@/components/icon/icon-upload.vue'
+import MdiIcon from '@/components/MdiIcon.vue'
 
 // Clé pour la sauvegarde locale
 const STORAGE_KEY = 'inventory_grid_demo_data'

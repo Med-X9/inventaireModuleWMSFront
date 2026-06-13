@@ -683,7 +683,7 @@ function showBusinessRules() {
         showConfirmButton: true,
         showCancelButton: false,
         confirmButtonText: 'Compris',
-        confirmButtonColor: '#4F46E5',
+        confirmButtonColor: '#2353A4',
         width: '95%',
         heightAuto: false,
         customClass: {
@@ -776,7 +776,6 @@ watch(
 
 // Fonction de validation pour chaque étape
 async function validateStep(step: number): Promise<boolean> {
-    try {
         if (step === 0) {
             // Validation de l'en-tête
             const headerErrors = Validators.validateHeader(state.header);
@@ -794,21 +793,15 @@ async function validateStep(step: number): Promise<boolean> {
                 throw new Error(comptageErrors.join(' | '));
             }
 
-            // Validation spécifique du comptage via CountingDispatcher
-            // On essaie de capturer le message d'erreur exact
-            try {
-                const isValid = validateComptage(comptageIndex);
-                if (!isValid) {
-                    try {
-                        inventoryCreationService.validateComptage(comptage);
-                    } catch (validationError) {
-                        const errorMessage = validationError instanceof Error ? validationError.message : String(validationError);
-                        throw new Error(errorMessage || 'Configuration du comptage invalide selon les règles métier');
-                    }
-                    throw new Error('Configuration du comptage invalide selon les règles métier');
+            const isValid = validateComptage(comptageIndex);
+            if (!isValid) {
+                try {
+                    inventoryCreationService.validateComptage(comptage);
+                } catch (validationError) {
+                    const errorMessage = validationError instanceof Error ? validationError.message : String(validationError);
+                    throw new Error(errorMessage || 'Configuration du comptage invalide selon les règles métier');
                 }
-            } catch (error) {
-                throw error;
+                throw new Error('Configuration du comptage invalide selon les règles métier');
             }
 
             // Validation spécifique du 3e comptage selon les nouvelles règles
@@ -829,9 +822,6 @@ async function validateStep(step: number): Promise<boolean> {
 
             return true;
         }
-    } catch (error) {
-        throw error;
-    }
 }
 
 // Fonctions utilitaires pour les labels et états des options

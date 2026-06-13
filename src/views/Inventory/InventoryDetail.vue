@@ -271,7 +271,7 @@
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
-                                <IconBox class="w-5 h-5 text-white" />
+                                <MdiIcon name="mdi-package-variant" size="sm" class="text-white" />
                             </div>
                             <div>
                                 <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">
@@ -308,7 +308,7 @@
                             <div class="flex items-start gap-3 mb-4">
                                 <div class="relative">
                                     <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow">
-                                        <IconBox class="w-7 h-7 text-white" />
+                                        <MdiIcon name="mdi-package-variant" size="md" class="text-white" />
                                     </div>
                                     <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-slate-800 shadow-md"></div>
                                 </div>
@@ -347,7 +347,7 @@
                     <!-- Message si aucun magasin -->
                     <div v-if="inventory.magasins.length === 0" class="text-center py-12">
                         <div class="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center shadow-lg">
-                            <IconBox class="w-10 h-10 text-slate-400" />
+                            <MdiIcon name="mdi-package-variant" size="xl" class="text-slate-400" />
                         </div>
                         <h4 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
                             Aucun magasin associé
@@ -739,7 +739,7 @@ import InventoryJobsPdfExportModal from '@/components/Inventory/InventoryJobsPdf
 import { useResourceStore } from '@/stores/resource'
 
 // ===== IMPORTS ICÔNES (template uniquement) =====
-import IconBox from '@/components/icon/icon-box.vue'
+import MdiIcon from '@/components/MdiIcon.vue'
 
 // ===== ROUTE =====
 const route = useRoute()

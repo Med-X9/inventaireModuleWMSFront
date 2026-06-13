@@ -75,10 +75,10 @@ export function useDataTableOptimizations(
     // Métriques de performance
     let frameCount = 0
     let lastFrameTime = performance.now()
-    let renderTimes: number[] = []
+    const renderTimes: number[] = []
 
     // Debounce pour les mises à jour
-    let debounceTimer: NodeJS.Timeout | null = null
+    const debounceTimer: NodeJS.Timeout | null = null
     const debounceDelay = config.debounceDelay || 16 // ~60fps
 
     /**

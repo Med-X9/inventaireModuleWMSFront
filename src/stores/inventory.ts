@@ -135,8 +135,13 @@ export const useInventoryStore = defineStore('inventory', () => {
         loading.value = true;
         error.value = null;
         try {
-            // Convertir QueryModel en paramètres de requête
-            const requestParams = params ? convertQueryModelToQueryParams(params) : {};
+            // Convertir QueryModel en paramètres GET (même pattern que resultsStore / jobStore)
+            const urlSearchParams = params ? convertQueryModelToQueryParams(params) : new URLSearchParams();
+            const requestParams =
+                urlSearchParams instanceof URLSearchParams
+                    ? Object.fromEntries(urlSearchParams.entries())
+                    : (urlSearchParams as Record<string, unknown>);
+
             const responseData = await InventoryService.getAll(requestParams);
 
             // Stocker les données brutes

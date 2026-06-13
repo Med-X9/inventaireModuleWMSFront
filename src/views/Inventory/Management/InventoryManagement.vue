@@ -1,11 +1,11 @@
 <template>
-    <div class="inventory-management min-h-screen bg-gray-50 dark:bg-[#0e1726]">
+    <div class="inventory-management min-h-screen bg-app dark:bg-bg-dark">
         <!-- En-tête -->
         <Card class="mb-6 shadow-sm border-0 rounded-xl overflow-hidden">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-6">
                 <div class="flex items-center gap-4">
                     <div class="flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 dark:bg-primary/20">
-                        <IconBox class="w-6 h-6 text-primary" />
+                        <MdiIcon name="mdi-package-variant" size="md" class="text-primary" />
                     </div>
                     <div>
                         <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white m-0">
@@ -17,53 +17,43 @@
                     </div>
                 </div>
                 <Button variant="primary" @click="redirectToAdd" class="flex items-center gap-2 shrink-0">
-                    <IconPlus class="w-4 h-4" />
+                    <MdiIcon name="mdi-plus" size="sm" />
                     <span>Nouveau inventaire</span>
                 </Button>
             </div>
         </Card>
 
         <!-- Table des inventaires -->
-        <Card v-if="isDataLoaded" class="overflow-hidden rounded-xl shadow-sm border-0">
-            <DataTable
-                :columns="columns"
-                :rowDataProp="inventories"
-                :actions="actions"
-                :enableVirtualScrolling="undefined"
-                :currentPageProp="pagination.current_page"
-                :totalPagesProp="pagination.total_pages"
-                :totalItemsProp="pagination.total"
-                :pageSizeProp="pagination.page_size"
-                @query-model-changed="(queryModel) => onInventoryTableEvent('query-model-changed', queryModel)"
-                storageKey="inventory-management"
-                ref="inventoryTableRef"
-                :loading="inventoryLoading"
-                :enableDynamicColumns="false"
-                :debounceFilter="300"
-                :debounceSearch="300"
-                :pagination="true"
-                :enableFiltering="true"
-                :enableGlobalSearch="true"
-            />
-        </Card>
-
-        <!-- État de chargement -->
-        <Card v-else class="overflow-hidden rounded-xl shadow-sm flex items-center justify-center min-h-[400px]">
-            <div class="flex flex-col items-center gap-4 py-12">
-                <div class="animate-spin rounded-full h-12 w-12 border-2 border-primary border-t-transparent"></div>
-                <p class="text-gray-600 dark:text-gray-300 font-medium">Chargement des inventaires...</p>
-            </div>
-        </Card>
+        <DataTable
+            :key="inventoryTableKey"
+            :columns="columns"
+            :rowDataProp="inventories"
+            :actions="actions"
+            :enableVirtualScrolling="undefined"
+            :currentPageProp="pagination.current_page"
+            :totalPagesProp="pagination.total_pages"
+            :totalItemsProp="pagination.total"
+            :pageSizeProp="pagination.page_size"
+            @query-model-changed="(queryModel) => onInventoryTableEvent('query-model-changed', queryModel)"
+            storageKey="inventory-management"
+            ref="inventoryTableRef"
+            :loading="inventoryLoading"
+            :enableDynamicColumns="false"
+            :debounceFilter="300"
+            :debounceSearch="300"
+            :pagination="true"
+            :enableFiltering="true"
+            :enableGlobalSearch="true"
+        />
 
         <!-- Modal d'import d'image de stock (Dialog fullscreen) -->
         <Dialog
             v-model="showImportModal"
             :title="importModalTitle"
             :size="dialogSizeFullscreen"
-            class="inventory-management-dialog-fullscreen"
-            @update:model-value="(v) => !v && closeImportModalWithCleanup()"
+            @update:model-value="onImportModalVisibilityChange"
         >
-            <div class="dialog-fullscreen-content">
+            <div class="dialog-fullscreen-content inventory-management-dialog-fullscreen">
                 <div v-if="currentImportInventory" class="inventory-context-bar">
                     <span class="font-semibold text-gray-800 dark:text-gray-200">{{ currentImportInventory.label }}</span>
                     <span v-if="currentImportInventory.date" class="text-sm text-gray-600 dark:text-gray-400">
@@ -91,7 +81,7 @@
                         />
                         <Alert v-if="importSuccess && importSuccessMessage" variant="success" class="mt-4">
                             <template #icon>
-                                <IconCircleCheck class="w-5 h-5" />
+                                <MdiIcon name="mdi-check-circle-outline" size="sm" />
                             </template>
                             <div>
                                 <h4 class="text-base font-semibold m-0 mb-1">Import réussi</h4>
@@ -100,7 +90,7 @@
                         </Alert>
                         <Alert v-if="importError && importErrorDetails" variant="error" class="mt-4">
                             <template #icon>
-                                <IconXCircle class="w-5 h-5" />
+                                <MdiIcon name="mdi-close-circle-outline" size="sm" />
                             </template>
                             <div>
                                 <h4 class="text-base font-semibold m-0 mb-1">Erreur lors de l'import</h4>
@@ -130,13 +120,13 @@
                                 :disabled="!selectedFile || isImporting"
                                 class="w-full"
                             >
-                                {{ isImporting ? 'Import en cours...' : 'Lancer l\'import' }}
+                                {{ isImporting ? 'Import en cours...' : "Lancer l'import" }}
                             </Button>
                         </div>
                     </div>
                 </div>
+                <input type="file" ref="fileInput" @change="handleFileChange" accept=".xlsx,.xls" class="hidden" />
             </div>
-            <input type="file" ref="fileInput" @change="handleFileChange" accept=".xlsx,.xls" class="hidden" />
         </Dialog>
 
         <!-- Modal d'ajout de planification (Dialog fullscreen) -->
@@ -144,10 +134,9 @@
             v-model="showPlanningModal"
             :title="planningModalTitle"
             :size="dialogSizeFullscreen"
-            class="inventory-management-dialog-fullscreen"
-            @update:model-value="(v) => !v && closePlanningModal()"
+            @update:model-value="onPlanningModalVisibilityChange"
         >
-            <div class="dialog-fullscreen-content">
+            <div class="dialog-fullscreen-content inventory-management-dialog-fullscreen">
                 <div v-if="currentPlanningInventory" class="inventory-context-bar">
                     <span class="font-semibold text-gray-800 dark:text-gray-200">{{ currentPlanningInventory.label }}</span>
                     <span v-if="currentPlanningInventory.date" class="text-sm text-gray-600 dark:text-gray-400">
@@ -175,7 +164,7 @@
                         />
                         <Alert v-if="planningSuccess && planningSuccessMessage" variant="success" class="mt-4">
                             <template #icon>
-                                <IconCircleCheck class="w-5 h-5" />
+                                <MdiIcon name="mdi-check-circle-outline" size="sm" />
                             </template>
                             <div>
                                 <h4 class="text-base font-semibold m-0 mb-1">Planification ajoutée avec succès</h4>
@@ -184,7 +173,7 @@
                         </Alert>
                         <Alert v-if="planningInfoMessage" variant="info" class="mt-4">
                             <template #icon>
-                                <IconLoader class="w-5 h-5 animate-spin" />
+                                <MdiIcon name="mdi-loading" size="sm" class="animate-spin" />
                             </template>
                             <div>
                                 <h4 class="text-base font-semibold m-0 mb-1">Import en cours</h4>
@@ -193,7 +182,7 @@
                         </Alert>
                         <Alert v-if="planningError" variant="error" class="mt-4">
                             <template #icon>
-                                <IconXCircle class="w-5 h-5" />
+                                <MdiIcon name="mdi-close-circle-outline" size="sm" />
                             </template>
                             <div>
                                 <h4 class="text-base font-semibold m-0 mb-1">Erreur</h4>
@@ -228,8 +217,8 @@
                         </div>
                     </div>
                 </div>
+                <input type="file" ref="planningFileInput" @change="handlePlanningFileChange" accept=".xlsx,.xls" class="hidden" />
             </div>
-            <input type="file" ref="planningFileInput" @change="handlePlanningFileChange" accept=".xlsx,.xls" class="hidden" />
         </Dialog>
     </div>
 </template>
@@ -255,11 +244,7 @@ import FileInputUpload from '@/components/Upload/FileInputUpload.vue'
 import { useInventoryManagement } from '@/composables/useInventoryManagement'
 
 // ===== IMPORTS ICÔNES =====
-import IconBox from '@/components/icon/icon-box.vue'
-import IconPlus from '@/components/icon/icon-plus.vue'
-import IconLoader from '@/components/icon/icon-loader.vue'
-import IconXCircle from '@/components/icon/icon-x-circle.vue'
-import IconCircleCheck from '@/components/icon/icon-circle-check.vue'
+import MdiIcon from '@/components/MdiIcon.vue'
 
 // ===== COMPOSABLES =====
 
@@ -314,7 +299,8 @@ const {
     handlePlanningDrop,
     alertService,
     inventories,
-    loadInventories
+    initializeInventoryTable,
+    inventoryTableKey,
 } = useInventoryManagement()
 
 // Titres des modals fullscreen
@@ -380,13 +366,21 @@ const closeImportModalWithCleanup = () => {
     closeImportModal()
 }
 
-// ===== ÉTATS LOCAUX =====
-const isDataLoaded = ref(false)
+function onImportModalVisibilityChange(open: boolean) {
+    if (!open) {
+        closeImportModalWithCleanup()
+    }
+}
+
+function onPlanningModalVisibilityChange(open: boolean) {
+    if (!open) {
+        closePlanningModal()
+    }
+}
 
 // ===== LIFECYCLE =====
 onMounted(async () => {
-    await loadInventories()
-    isDataLoaded.value = true
+    await initializeInventoryTable()
 })
 </script>
 
@@ -518,9 +512,9 @@ onMounted(async () => {
     justify-content: center;
 }
 
-/* Dialog fullscreen : plein écran (100vw x 100vh) */
-.inventory-management-dialog-fullscreen :deep([role="dialog"]),
-.inventory-management-dialog-fullscreen :deep(.dialog-panel) {
+/* Dialog fullscreen : plein écran (100vw x 100vh) — cible le panneau téléporté */
+.inventory-management :deep([role="dialog"]),
+.inventory-management :deep(.dialog-panel) {
     position: fixed !important;
     inset: 0 !important;
     width: 100vw !important;
@@ -532,13 +526,13 @@ onMounted(async () => {
     display: flex !important;
     flex-direction: column !important;
 }
-.inventory-management-dialog-fullscreen :deep([role="dialog"] > div),
-.inventory-management-dialog-fullscreen :deep(.dialog-panel > div) {
+.inventory-management :deep([role="dialog"] > div),
+.inventory-management :deep(.dialog-panel > div) {
     flex: 1;
     min-height: 0;
     overflow: auto;
 }
-.inventory-management-dialog-fullscreen :deep(.fixed.inset-0) {
+.inventory-management :deep(.fixed.inset-0) {
     position: fixed !important;
     inset: 0 !important;
 }

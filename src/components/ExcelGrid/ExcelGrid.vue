@@ -268,14 +268,14 @@
                   class="p-1.5 bg-primary hover:bg-primary-dark text-white rounded-md transition-all duration-200 flex items-center justify-center shadow-sm hover:shadow-md hover:scale-105"
                   title="Dupliquer la ligne"
                 >
-                  <IconCopy class="w-4 h-4" />
+                  <MdiIcon name="mdi-content-copy" size="sm" />
                 </button>
                 <button
                   @click="deleteRow(rowIndex)"
                   class="p-1.5 bg-error hover:bg-error-dark text-white rounded-md transition-all duration-200 flex items-center justify-center shadow-sm hover:shadow-md hover:scale-105"
                   title="Supprimer la ligne"
                 >
-                  <IconTrash class="w-4 h-4" />
+                  <MdiIcon name="mdi-delete-outline" size="sm" />
                 </button>
               </div>
             </td>
@@ -363,8 +363,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, nextTick, watch } from 'vue'
 import SelectField from '@/components/Form/SelectField.vue'
-import IconCopy from '@/components/icon/icon-copy.vue'
-import IconTrash from '@/components/icon/icon-trash.vue'
+import MdiIcon from '@/components/MdiIcon.vue'
 import type { SelectOption } from '@/interfaces/form'
 
 // Types
@@ -479,7 +478,7 @@ const validateCell = (rowIndex: number, field: keyof GridRow, value: any) => {
       }
       break
 
-    case 'quantite':
+    case 'quantite': {
       const qty = Number(value)
       if (value === '' || value === null || value === undefined) {
         row.errors.quantite = 'Quantité requise'
@@ -489,6 +488,7 @@ const validateCell = (rowIndex: number, field: keyof GridRow, value: any) => {
         row.errors.quantite = 'Nombre entier requis'
       }
       break
+    }
   }
 
   // Mettre à jour la validité de la ligne
@@ -706,10 +706,14 @@ const duplicateRow = (index: number) => {
 
 
 // Gestion des changements pour emplacement et article
-const handleEmplacementChange = (rowIndex: number, value: string | number | null) => {
+const handleEmplacementChange = (
+    rowIndex: number,
+    value: string | number | string[] | number[] | null
+) => {
+    const normalized = Array.isArray(value) ? (value[0] ?? null) : value
   const row = gridData.value[rowIndex]
   if (row) {
-    row.emplacement = value ? String(value) : ''
+    row.emplacement = normalized != null && normalized !== '' ? String(normalized) : ''
     validateCell(rowIndex, 'emplacement', row.emplacement)
     emit('data-changed', gridData.value)
   }
@@ -725,11 +729,15 @@ const handleArticleChange = (rowIndex: number, value: string | number | null) =>
 }
 
 // Gestion du changement de code barre avec remplissage automatique
-const handleCodeBarreChange = (rowIndex: number, value: string | number | null) => {
+const handleCodeBarreChange = (
+    rowIndex: number,
+    value: string | number | string[] | number[] | null
+) => {
   const row = gridData.value[rowIndex]
   if (!row) return
 
-  const codeBarreValue = value ? String(value) : ''
+  const normalized = Array.isArray(value) ? (value[0] ?? null) : value
+  const codeBarreValue = normalized != null && normalized !== '' ? String(normalized) : ''
   row.codeBarre = codeBarreValue
 
   // Remplir automatiquement les champs depuis articlesMap

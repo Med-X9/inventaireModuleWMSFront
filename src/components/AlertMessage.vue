@@ -41,7 +41,7 @@
 import { computed } from 'vue';
 import type { AlertMessageProps, AlertType } from '@/interfaces/inventoryCreation';
 
-interface Props extends AlertMessageProps {}
+type Props = AlertMessageProps
 
 const props = withDefaults(defineProps<Props>(), {
     primaryActionText: 'Fermer',

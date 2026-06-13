@@ -1,29 +1,16 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { clearTokens, getTokens } from './cookieUtils';
 import router from '@/router';
 import { useAuthStore } from '@/stores/auth';
 import { authService } from '@/services/authService';
-import API from '@/api';
 import { alertService } from '@/services/alertService';
+import { axiosBase } from './axiosBase';
 
 interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
     _retry?: boolean;
 }
 
-const IS_PROD = import.meta.env.PROD;
-
-const axiosInstance = axios.create({
-    baseURL: API.baseURL,
-    headers: {
-        'Content-Type': 'application/json',
-    },
-    timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
-    // ✅ Important pour les cookies CSRF / sessions : uniquement en prod
-    withCredentials: IS_PROD,
-    // ⚠️ À adapter selon la stack backend (exemple pour Django) :
-    // xsrfCookieName: IS_PROD ? 'csrftoken' : undefined,
-    // xsrfHeaderName: IS_PROD ? 'X-CSRFToken' : undefined,
-});
+const axiosInstance = axiosBase;
 
 // Intercepteur de requête pour ajouter le token d'authentification et bloquer reasonlabsapi.com
 axiosInstance.interceptors.request.use(
@@ -89,18 +76,12 @@ axiosInstance.interceptors.response.use(
                 console.error('Erreur lors du rafraîchissement du token:', refreshError);
 
                 // Nettoyer les tokens et rediriger vers la page de connexion
-                clearTokens();
                 const authStore = useAuthStore();
-                authStore.logout();
+                await authStore.logout();
 
                 alertService.error({
                     text: 'Session expirée. Veuillez vous reconnecter.'
                 });
-
-                // Rediriger vers la page de connexion
-                if (router.currentRoute.value.path !== '/auth/login') {
-                    router.push('/auth/login');
-                }
 
                 return Promise.reject(refreshError);
             }
@@ -120,11 +101,11 @@ axiosInstance.interceptors.response.use(
                     }
                     break;
 
-                case 403:
-                    // Rediriger vers la page 403
+                case 403: {
                     const router403 = (await import('@/router')).default;
                     router403.push({ name: 'error-403' });
                     break;
+                }
 
                 case 404:
                     alertService.error({ text: 'Ressource non trouvée' });
@@ -161,6 +142,10 @@ axiosInstance.interceptors.response.use(
             
             console.error('Erreur de configuration Axios:', error.message);
         }
+
+        import('@/services/sentryService')
+            .then(({ captureException }) => captureException(error, { url: error.config?.url }))
+            .catch(() => undefined)
 
         return Promise.reject(error);
     }

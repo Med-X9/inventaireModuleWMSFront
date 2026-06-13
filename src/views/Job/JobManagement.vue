@@ -15,7 +15,7 @@
             <template #table-actions>
                 <div class="flex items-center flex-wrap gap-2">
                     <button class="btn btn-primary p-2 px-4 mb-4 btn-sm" @click="redirectToAdd">
-                        <icon-plus class="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                        <MdiIcon name="mdi-plus" size="sm" class="ltr:mr-2 rtl:ml-2" />
                         Créer Job
                     </button>
                 </div>
@@ -28,7 +28,7 @@
 import { onMounted } from 'vue';
 import { useJobManagement } from '@/composables/useJobManagement';
 import { DataTable } from '@SMATCH-Digital-dev/vue-system-design';
-import IconPlus from '@/components/icon/icon-plus.vue';
+import MdiIcon from '@/components/MdiIcon.vue';
 
 const {
     jobs,

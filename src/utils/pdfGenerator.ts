@@ -4,6 +4,7 @@ import { InventoryEquipe, InventoryMagasin, InventoryRessource } from '@/models/
 import { jsPDF } from 'jspdf';
 import autoTable, { UserOptions } from 'jspdf-autotable';
 import { logger } from '@/services/loggerService';
+import { APP_LOGO_URL } from '@/constants/brand';
 
 interface Comptage {
     mode?: string;
@@ -54,7 +55,7 @@ export const generatePDF = async (data: InventoryData, filename: string) => {
     // Fonction pour ajouter le logo
     const addLogo = async () => {
         try {
-            const logoUrl = '/assets/images/logo/logo.png';
+            const logoUrl = APP_LOGO_URL;
             const img = new Image();
             img.src = logoUrl;
 

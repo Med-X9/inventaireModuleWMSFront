@@ -6,7 +6,7 @@
                 <div class="flex-1">
                     <div class="flex items-center gap-4">
                         <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-lg">
-                            <IconCalendar class="w-8 h-8 text-white" />
+                            <MdiIcon name="mdi-calendar-outline" size="lg" class="text-white" />
                         </div>
                         <div>
                             <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white mb-1">
@@ -22,7 +22,7 @@
                     <button
                         class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white dark:bg-slate-700 border-2 border-primary text-slate-900 dark:text-white font-semibold rounded-xl shadow-md hover:bg-primary-50 dark:hover:bg-slate-600 transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-slate-800"
                         @click="handleGoToInventoryDetail">
-                        <IconEye class="w-5 h-5" />
+                        <MdiIcon name="mdi-eye-outline" size="sm" />
                         <span>Détail inventaire</span>
                     </button>
                     <ToggleButtons
@@ -72,7 +72,7 @@
                     @click="retryLoadStores"
                     class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white font-semibold rounded-xl shadow-md hover:bg-primary-700 transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                 >
-                    <IconCalendar class="w-5 h-5" />
+                    <MdiIcon name="mdi-calendar-outline" size="sm" />
                     Réessayer
                 </button>
             </div>
@@ -148,10 +148,7 @@ import GridView from '@/components/GridView/GridView.vue'
 import { usePlanningManagement } from '@/composables/usePlanningManagement'
 
 // ===== IMPORTS ICÔNES =====
-import IconCalendar from '@/components/icon/icon-calendar.vue'
-import IconListCheck from '@/components/icon/icon-list-check.vue'
-import IconLayoutGrid from '@/components/icon/icon-layout-grid.vue'
-import IconEye from '@/components/icon/icon-eye.vue'
+import MdiIcon from '@/components/MdiIcon.vue'
 
 // ===== PROPS =====
 interface Props {
@@ -207,8 +204,8 @@ const {
 const viewMode = ref<'table' | 'grid'>('table')
 
 const updatedViewOptions = [
-    { value: 'table', icon: IconListCheck },
-    { value: 'grid', icon: IconLayoutGrid }
+    { value: 'table', icon: 'mdi-format-list-checks' },
+    { value: 'grid', icon: 'mdi-view-grid-outline' }
 ]
 
 // ===== UTILITAIRES =====

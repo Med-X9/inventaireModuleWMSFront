@@ -7,9 +7,7 @@ type MonitoringStatsInput = MonitoringStats | {
   readonly zones: readonly ZoneMonitoringData[]
   readonly total: MonitoringStats['total']
 } | null
-import IconCheck from '@/components/icon/icon-check.vue'
-import IconPlay from '@/components/icon/icon-play.vue'
-import IconClock from '@/components/icon/icon-clock.vue'
+import MdiIcon from '@/components/MdiIcon.vue'
 
 interface Props {
   data: MonitoringStatsInput
@@ -387,7 +385,7 @@ const toggleValue = (value: string) => {
                     v-if="value === 'termine'"
                     class="flex items-center justify-center gap-1"
                   >
-                    <IconCheck class="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                    <MdiIcon name="mdi-check" size="xs" class="text-emerald-600 dark:text-emerald-400" />
                     <span class="font-bold text-emerald-600 dark:text-emerald-400 text-xs">
                       {{ row.cells.get(getCellKey(colData, value))?.value }}
                     </span>
@@ -402,7 +400,7 @@ const toggleValue = (value: string) => {
                     v-else-if="value === 'enCours'"
                     class="flex items-center justify-center gap-1"
                   >
-                    <IconPlay class="w-3 h-3 text-[#FECD1C]" />
+                    <MdiIcon name="mdi-play-outline" size="xs" class="text-[#FECD1C]" />
                     <span class="font-bold text-[#FECD1C] text-xs">
                       {{ row.cells.get(getCellKey(colData, value))?.value }}
                     </span>
@@ -417,7 +415,7 @@ const toggleValue = (value: string) => {
                     v-else-if="value === 'attente'"
                     class="flex items-center justify-center gap-1"
                   >
-                    <IconClock class="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                    <MdiIcon name="mdi-clock-outline" size="xs" class="text-amber-600 dark:text-amber-400" />
                     <span class="font-bold text-amber-600 dark:text-amber-400 text-xs">
                       {{ row.cells.get(getCellKey(colData, value))?.value }}
                     </span>

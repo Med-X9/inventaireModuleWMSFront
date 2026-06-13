@@ -223,28 +223,22 @@ export class InventoryService {
      * @returns Promise avec la réponse paginée d'inventaires
      */
     static async getAll(params?: Record<string, any>): Promise<DataTableResponse<InventoryTable> & { page: number; totalPages: number; pageSize: number; total: number }> {
-        try {
-            // Utiliser GET avec query parameters selon FORMAT_ACTUEL.md
-            // Les paramètres complexes (sort, filters) sont automatiquement JSON.stringify par axios
-            const response = await axiosInstance.get<UnifiedDataTableResponse<InventoryTable>>(
-                API.endpoints.inventory.base,
-                {
-                    params: params || {}
-                }
-            );
+        const response = await axiosInstance.get<UnifiedDataTableResponse<InventoryTable>>(
+            API.endpoints.inventory.base,
+            {
+                params: params || {}
+            }
+        );
 
-            const unifiedResponse = normalizeDataTableResponse<InventoryTable>(response.data);
-            const standardResponse = convertUnifiedToStandardDataTable(unifiedResponse);
-            return {
-                    ...standardResponse,
-                    page: unifiedResponse.page,
-                    totalPages: unifiedResponse.totalPages,
-                    pageSize: unifiedResponse.pageSize,
-                    total: unifiedResponse.total
-            } as DataTableResponse<InventoryTable> & { page: number; totalPages: number; pageSize: number; total: number };
-        } catch (error) {
-            throw error;
-        }
+        const unifiedResponse = normalizeDataTableResponse<InventoryTable>(response.data);
+        const standardResponse = convertUnifiedToStandardDataTable(unifiedResponse);
+        return {
+                ...standardResponse,
+                page: unifiedResponse.page,
+                totalPages: unifiedResponse.totalPages,
+                pageSize: unifiedResponse.pageSize,
+                total: unifiedResponse.total
+        } as DataTableResponse<InventoryTable> & { page: number; totalPages: number; pageSize: number; total: number };
     }
 
     /**

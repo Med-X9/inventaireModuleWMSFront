@@ -1,13 +1,13 @@
 import axios, { AxiosError } from 'axios';
 import API from '@/api';
 import type { LoginResponse } from '@/interfaces/auth';
-import { getTokens } from '@/utils/cookieUtils';
+import { axiosBase } from '@/utils/axiosBase';
 
 class AuthService {
     async login(username: string, password: string): Promise<LoginResponse> {
         try {
-            const response = await axios.post<LoginResponse>(
-                `${API.baseURL}${API.endpoints.auth.login}`,
+            const response = await axiosBase.post<LoginResponse>(
+                API.endpoints.auth.login,
                 { username, password }
             );
             return response.data;
@@ -40,8 +40,8 @@ class AuthService {
 
     async refreshToken(refresh: string): Promise<{ access: string }> {
         try {
-            const response = await axios.post<{ access: string }>(
-                `${API.baseURL}${API.endpoints.auth.refresh}`,
+            const response = await axiosBase.post<{ access: string }>(
+                API.endpoints.auth.refresh,
                 { refresh }
             );
             return response.data;
@@ -50,28 +50,17 @@ class AuthService {
         }
     }
 
-    async logout(): Promise<void> {
+    async logout(refresh: string): Promise<void> {
         try {
-            const tokens = getTokens();
-            if (!tokens?.refresh) {
-                return;
-            }
-
-            await axios.post(
-                `${API.baseURL}${API.endpoints.auth.logout}`,
-                { refresh: tokens.refresh }
-            );
-        } catch (error) {
+            await axiosBase.post(API.endpoints.auth.logout, { refresh });
+        } catch {
             // Erreur de logout ignorée
         }
     }
 
     async verifyToken(token: string): Promise<void> {
         try {
-            const response = await axios.post(
-                `${API.baseURL}${API.endpoints.auth.verify}`,
-                { token }
-            );
+            const response = await axiosBase.post(API.endpoints.auth.verify, { token });
             return response.data;
         } catch (error) {
             throw new Error('Token invalide. Veuillez vous reconnecter.');

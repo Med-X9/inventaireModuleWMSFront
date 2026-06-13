@@ -129,8 +129,6 @@ import { useWarehouseStore } from '@/stores/warehouse'
 import type { DataTableColumn } from '@SMATCH-Digital-dev/vue-system-design'
 
 // ===== IMPORTS ICÔNES =====
-import IconListCheck from '@/components/icon/icon-list-check.vue'
-import IconPrinter from '@/components/icon/icon-printer.vue'
 
 // ===== ROUTE =====
 const route = useRoute()
@@ -284,7 +282,7 @@ const actionButtons = computed<ButtonGroupButton[]>(() => {
     buttons.push({
         id: 'results',
         label: 'Résultats',
-        icon: IconListCheck,
+        icon: 'mdi-format-list-checks',
         variant: 'default',
         class: ACTION_BUTTON_CLASS,
         disabled: !inventoryReference.value,
@@ -342,7 +340,7 @@ const actionButtons = computed<ButtonGroupButton[]>(() => {
     buttons.push({
         id: 'print-jobs',
         label: 'Imprimer jobs',
-        icon: IconPrinter,
+        icon: 'mdi-printer-outline',
         variant: 'default',
         class: ACTION_BUTTON_CLASS,
         disabled: storeLoading.value,

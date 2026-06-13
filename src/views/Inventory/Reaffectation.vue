@@ -6,7 +6,7 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-3 mb-2">
                         <div class="flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 dark:bg-primary/20 text-primary">
-                            <IconEdit class="w-6 h-6" />
+                            <MdiIcon name="mdi-pencil-outline" size="md" />
                         </div>
                         <div>
                             <h1 class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100 m-0 tracking-tight">
@@ -40,7 +40,7 @@
             <!-- Monté uniquement quand le total serveur est connu pour afficher "1-50 sur 75" -->
             <DataTable
                 v-if="hasServerTotal"
-                :key="`${jobsKey}-total-${jobsTableTotalItems}`"
+                :key="`${jobsTableKey}-total-${jobsTableTotalItems}`"
                 :columns="adaptedStoreJobsColumns"
                 :rowDataProp="jobs"
                 :actions="jobsActions"
@@ -259,7 +259,8 @@
  * @component Reaffectation
  */
 
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { Dialog, Card, DataTable, Divider, Alert } from '@SMATCH-Digital-dev/vue-system-design'
 import ButtonGroup from '@/components/Form/ButtonGroup.vue'
@@ -268,10 +269,10 @@ import FormBuilder from '@/components/Form/FormBuilder.vue'
 import JobStatusLegendTooltip from '@/components/JobStatusLegendTooltip.vue'
 import { useReaffectation } from '@/composables/useReaffectation'
 import { useJobStore } from '@/stores/job'
-import IconEdit from '@/components/icon/icon-edit.vue'
+import MdiIcon from '@/components/MdiIcon.vue'
 import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
 
-// Sans options : le composable lit reference et warehouse depuis la route courante
+const route = useRoute()
 const affecter = useReaffectation()
 
 // Total serveur lu directement du store pour le DataTable (évite "1-50 sur 50" au lieu de "1-50 sur 75")
@@ -302,11 +303,10 @@ const {
     jobs,
     selectedJobs,
     selectedJobsCount,
-    hasSelectedJobs,
     pendingChanges,
     hasUnsavedChanges,
     jobsTableRef,
-    jobsKey,
+    jobsTableKey,
     jobsLoading,
     showDropdown,
     showTeamModal,
@@ -340,7 +340,31 @@ const {
     adaptedStoreJobsColumns,
     jobsActions,
     jobsDataTableConfig,
+    initializeWithData,
+    isDataLoaded,
 } = affecter
+
+const mountReaffectation = async () => {
+    try {
+        await initializeWithData()
+    } catch (error) {
+        console.error('Erreur lors de l\'initialisation de la réaffectation:', error)
+        isDataLoaded.value = true
+    }
+}
+
+onMounted(() => {
+    void mountReaffectation()
+})
+
+watch(
+    () => [route.params.reference, route.params.warehouse] as const,
+    ([reference, warehouse], previous) => {
+        if (!previous) return
+        if (reference === previous[0] && warehouse === previous[1]) return
+        void mountReaffectation()
+    },
+)
 
 const adaptedNavigationButtons = computed<ButtonGroupButton[]>(() => {
     return navigationButtons.value.map(button => ({
