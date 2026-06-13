@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Badge, Button, Card } from '@SMATCH-Digital-dev/vue-system-design'
+import { Button, Card } from '@SMATCH-Digital-dev/vue-system-design'
 import MdiIcon from '@/components/MdiIcon.vue'
 import InventoryKpiDashboardPanel from '@/components/InventoryKpi/InventoryKpiDashboardPanel.vue'
-import { USE_INVENTORY_KPI_MOCK } from '@/mocks/inventoryKpiMock'
 
 interface Props {
     reference: string
@@ -35,12 +34,9 @@ const goToPlanning = () => {
                             <MdiIcon name="mdi-chart-box-outline" size="lg" class="text-primary" />
                         </div>
                         <div class="min-w-0">
-                            <div class="flex flex-wrap items-center gap-2 mb-1">
-                                <h1 class="text-2xl sm:text-3xl font-bold font-heading text-text dark:text-white m-0">
+                            <h1 class="text-2xl sm:text-3xl font-bold font-heading text-text dark:text-white m-0">
                                     Tableau de bord KPI
                                 </h1>
-                                <Badge v-if="USE_INVENTORY_KPI_MOCK" variant="warning" size="sm">Données démo</Badge>
-                            </div>
                             <p class="text-sm text-muted m-0 flex flex-wrap gap-x-3 gap-y-1">
                                 <span class="inline-flex items-center gap-1">
                                     <MdiIcon name="mdi-package-variant-closed" size="xs" />

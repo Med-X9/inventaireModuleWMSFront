@@ -10,8 +10,7 @@ import {
     fetchInventoryIdByReference,
     fetchWarehouseIdByReference,
 } from '@/composables/affecter/helpers'
-import { InventoryKpiService } from '@/services/InventoryKpiService'
-import { USE_INVENTORY_KPI_MOCK } from '@/mocks/inventoryKpiMock'
+import { parseInventoryKpiResponse } from '@/utils/inventoryKpiResponseParser'
 import type {
     AssignmentsByCounting,
     InventoryKpiData,
@@ -62,12 +61,6 @@ export function useInventoryKpiDashboard(config: UseInventoryKpiDashboardConfig)
     let pollTimer: ReturnType<typeof setInterval> | null = null
 
     const resolveIds = async () => {
-        if (USE_INVENTORY_KPI_MOCK) {
-            inventoryId.value = 1
-            warehouseId.value = 1
-            return
-        }
-
         const [invId, whId] = await Promise.all([
             fetchInventoryIdByReference(inventoryReference.value, inventoryStore),
             fetchWarehouseIdByReference(warehouseReference.value, warehouseStore),
@@ -100,17 +93,22 @@ export function useInventoryKpiDashboard(config: UseInventoryKpiDashboardConfig)
                 inventoryId.value,
                 warehouseId.value
             )
-            const body = response.data
+            const { meta: responseMeta, data } = parseInventoryKpiResponse(response.data)
+
+            const warehouseFromStore = warehouseStore.warehouses.find(
+                (w) => w.reference === warehouseReference.value,
+            )
+
             meta.value = {
-                ...(body.meta ?? {
-                    inventory_id: inventoryId.value,
-                    warehouse_id: warehouseId.value
-                }),
-                ...(USE_INVENTORY_KPI_MOCK
-                    ? { warehouse_name: warehouseReference.value }
-                    : {})
+                inventory_id: inventoryId.value,
+                warehouse_id: warehouseId.value,
+                ...responseMeta,
+                warehouse_name:
+                    responseMeta?.warehouse_name
+                    ?? warehouseFromStore?.warehouse_name
+                    ?? warehouseReference.value,
             }
-            kpiData.value = body.data ?? (body as unknown as InventoryKpiData)
+            kpiData.value = data
         } catch (err: unknown) {
             const msg =
                 (err as { response?: { data?: { message?: string } } })?.response?.data?.message

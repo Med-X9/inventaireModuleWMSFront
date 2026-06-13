@@ -1,5 +1,6 @@
 /**
  * Service KPI magasin (inventaire + entrepôt)
+ * GET /web/api/inventory/{id}/warehouses/{wh_id}/kpis/
  */
 
 import type { AxiosResponse } from 'axios'
@@ -7,32 +8,14 @@ import axiosInstance from '@/utils/axiosConfig'
 import type { InventoryKpiApiResponse } from '@/models/InventoryKpi'
 import API from '@/api'
 import { logger } from '@/services/loggerService'
-import {
-    buildInventoryKpiMockResponse,
-    inventoryKpiMockDelay,
-    USE_INVENTORY_KPI_MOCK
-} from '@/mocks/inventoryKpiMock'
+
+export { parseInventoryKpiResponse } from '@/utils/inventoryKpiResponseParser'
 
 export class InventoryKpiService {
-    /**
-     * GET /web/api/inventory/{id}/warehouses/{wh_id}/kpis/
-     */
     static async getWarehouseKpis(
         inventoryId: number,
-        warehouseId: number
+        warehouseId: number,
     ): Promise<AxiosResponse<InventoryKpiApiResponse>> {
-        if (USE_INVENTORY_KPI_MOCK) {
-            await inventoryKpiMockDelay()
-            const data = buildInventoryKpiMockResponse(inventoryId, warehouseId)
-            return {
-                data,
-                status: 200,
-                statusText: 'OK',
-                headers: {},
-                config: {} as AxiosResponse<InventoryKpiApiResponse>['config']
-            }
-        }
-
         try {
             const url = `${API.endpoints.inventory?.base}${inventoryId}/warehouses/${warehouseId}/kpis/`
             return await axiosInstance.get<InventoryKpiApiResponse>(url)
