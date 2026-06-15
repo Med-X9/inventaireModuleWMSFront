@@ -36,6 +36,16 @@ export function fixSystemDesignImports(): Plugin {
                 if (code.includes('iconSizes') && !code.includes('var iconSizes=')) {
                     let iconAliasPatched = false;
 
+                    // v1.1.31 : Tb/Fb/_b + function gx() installTheme
+                    const themeEndV1131 = /variants:\s*Wb\s*\n\s*\}\s*\n\};\s*\nfunction gx\(\)/;
+                    if (!iconAliasPatched && themeEndV1131.test(code) && code.includes('Tb as iconSizes')) {
+                        code = code.replace(
+                            themeEndV1131,
+                            `variants: Wb\n  }\n};\nvar iconSizes=Tb,iconStrokeWidth=Fb,colors=_b;\nfunction gx()`
+                        );
+                        iconAliasPatched = true;
+                    }
+
                     // v1.1.26+ : Bb/Hb/bb exportés, thème dx puis installTheme hx()
                     const themeEndV1126 = /variants:\s*Fb\s*\n\s*\}\s*\n\};\s*\nfunction hx\(\)/;
                     if (!iconAliasPatched && themeEndV1126.test(code) && code.includes('Bb as iconSizes')) {
@@ -77,6 +87,22 @@ export function fixSystemDesignImports(): Plugin {
                             code = code.replace(
                                 legacySearch,
                                 `};\nvar iconSizes=Dy,iconStrokeWidth=zy,colors=vy;\nfunction ib()`
+                            );
+                            iconAliasPatched = true;
+                        }
+                    }
+
+                    // Fallback générique : symboles minifiés depuis les exports nommés
+                    if (!iconAliasPatched) {
+                        const sizesExport = code.match(/(\w+) as iconSizes/);
+                        const strokeExport = code.match(/(\w+) as iconStrokeWidth/);
+                        const colorsExport = code.match(/(\w+) as colors,/);
+                        const genericThemeEnd = /variants:\s*(\w+)\s*\n\s*\}\s*\n\};\s*\nfunction (gx|hx)\(\)/;
+                        if (sizesExport && strokeExport && colorsExport && genericThemeEnd.test(code)) {
+                            code = code.replace(
+                                genericThemeEnd,
+                                (_match, variantName, fn) =>
+                                    `variants: ${variantName}\n  }\n};\nvar iconSizes=${sizesExport[1]},iconStrokeWidth=${strokeExport[1]},colors=${colorsExport[1]};\nfunction ${fn}()`
                             );
                         }
                     }
