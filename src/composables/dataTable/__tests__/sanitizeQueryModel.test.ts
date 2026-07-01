@@ -28,6 +28,7 @@ describe('sanitizeQueryModel', () => {
         expect(result.page).toBe(2)
         expect(result.pageSize).toBe(25)
         expect(result.search).toBe('JOB-001')
+        expect(result.sort).toEqual([{ colId: 'reference', sort: 'asc' }])
         expect(result.customParams).toEqual({ inventory_id: 1 })
     })
 })

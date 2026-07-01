@@ -52,7 +52,7 @@
                 :pageSizeProp="jobPaginationMetadata?.pageSize"
                 :loading="jobsLoading"
                 :customDataTableParams="jobsCustomParams"
-                @query-model-changed="(queryModel) => onJobsTableEvent('query-model-changed', queryModel)"
+                v-on="jobsTableEvents"
                 ref="jobsTableRef"
                 @selection-changed="onJobSelectionChanged"
                 @row-clicked="onRowClicked"
@@ -268,6 +268,7 @@ import JobAffectationDialog from '@/components/JobAffectationDialog.vue'
 import FormBuilder from '@/components/Form/FormBuilder.vue'
 import JobStatusLegendTooltip from '@/components/JobStatusLegendTooltip.vue'
 import { useReaffectation } from '@/composables/useReaffectation'
+import { bindDataTableServerEvents } from '@/composables/dataTable/bindDataTableServerEvents'
 import { useJobStore } from '@/stores/job'
 import MdiIcon from '@/components/MdiIcon.vue'
 import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
@@ -343,6 +344,8 @@ const {
     initializeWithData,
     isDataLoaded,
 } = affecter
+
+const jobsTableEvents = bindDataTableServerEvents(onJobsTableEvent)
 
 const mountReaffectation = async () => {
     try {

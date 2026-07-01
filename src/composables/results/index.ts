@@ -20,7 +20,7 @@
  */
 
 // ===== IMPORTS VUE =====
-import { ref, computed, markRaw, watch, createApp, h, getCurrentInstance, nextTick, onMounted } from 'vue'
+import { ref, computed, markRaw, watch, createApp, h, getCurrentInstance, nextTick, onMounted, shallowRef } from 'vue'
 
 // ===== IMPORTS PINIA =====
 import { storeToRefs } from 'pinia'
@@ -66,6 +66,8 @@ import {
     extractEcartComptageId,
 } from '@/composables/helpers/useInventoryResults.helpers'
 import { useResultsExport } from '@/composables/results/useResultsExport'
+import { createDataTableOperationHandler } from '@/composables/dataTable/createDataTableOperationHandler'
+import { sanitizeQueryModel } from '@/composables/dataTable/sanitizeQueryModel'
 
 // ===== IMPORTS EXTERNES =====
 import Swal from 'sweetalert2'
@@ -138,6 +140,18 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     const inventoryId = ref<number | null>(config?.initialInventoryId || null)
     const accountId = ref<number | null>(null)
     const isInitialized = ref(false)
+    const isInitializing = ref(false)
+    const isDataLoaded = ref(false)
+    const tableRenderGeneration = ref(0)
+    const resultsDataRevision = ref(0)
+    const resultsTableRows = shallowRef<NormalizedInventoryResult[]>([])
+    let resultsPageRecoveryAttempted = false
+
+    const getWarehouseReferenceFromRoute = (): string | undefined => {
+        const fromParams = routeInstance?.params?.warehouse as string | undefined
+        const fromQuery = routeInstance?.query?.warehouse as string | undefined
+        return fromParams || fromQuery || config?.initialWarehouseReference
+    }
 
     // Paramètres personnalisés pour les appels API
     const resultsCustomParams = computed(() => ({
@@ -197,6 +211,25 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     const storeOptions = ref<StoreOption[]>([])
     const usesWarehouseFallback = ref(false)
 
+    // ===== DONNÉES DU STORE (avant handlers : syncResultsTableRows en dépend) =====
+    const { results: rawResults, loading: resultsLoading } = storeToRefs(resultsStore)
+
+    const normalizedResultsCache = ref<{
+        data: NormalizedInventoryResult[]
+        rawResultsHash: string
+        inventoryId: number | null
+        storeId: string | null
+    } | null>(null)
+
+    const createRawResultsHash = (data: Record<string, unknown>[]): string => {
+        if (!data || data.length === 0) return 'empty'
+        const sampleSize = Math.min(data.length, 10)
+        const sample = data.slice(0, sampleSize)
+        const ids = sample.map((item, idx) => item.id || item.jobId || item.job_id || idx).join(',')
+        const keys = sample.length > 0 ? Object.keys(sample[0] || {}).slice(0, 20).join(',') : ''
+        return `${data.length}-${ids}-${keys}`
+    }
+
     // ===== HANDLERS DATATABLE =====
     /**
      * Le DataTable émet query-model-changed ; customDataTableParams (inventory_id, store_id) sont
@@ -205,52 +238,101 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     const lastExecutedQueryModel = ref<QueryModel | null>(null)
     const pendingEventsQueue = ref<Array<{ eventType: string; queryModel: QueryModel }>>([])
 
-    /**
-     * Traite un événement DataTable : fusionne customParams, évite doublons, appelle le store.
-     * @param eventType - Type d'événement (logging)
-     * @param queryModel - QueryModel ; customParams sont fusionnés avant l'appel
-     */
-    const processEventDirectly = async (eventType: string, queryModel: QueryModel) => {
-        if (!queryModel || typeof queryModel !== 'object') return
+    const mergeResultsQueryModel = (queryModel: QueryModel): QueryModel => ({
+        ...resultsQueryModelRef.value,
+        ...queryModel,
+        page: queryModel.page ?? resultsQueryModelRef.value.page ?? DEFAULT_PAGE,
+        pageSize: queryModel.pageSize ?? resultsQueryModelRef.value.pageSize ?? DEFAULT_PAGE_SIZE,
+        sort: queryModel.sort ?? resultsQueryModelRef.value.sort,
+        filters: queryModel.filters ?? resultsQueryModelRef.value.filters,
+        search: queryModel.search !== undefined ? queryModel.search : resultsQueryModelRef.value.search,
+        customParams: {
+            ...(queryModel.customParams || {}),
+            ...resultsCustomParams.value,
+        },
+    })
 
-        // IDs requis pour l'appel API
-        if (!inventoryId.value || !selectedStore.value) return
+    const syncResultsTableRows = () => {
+        const rawLen = rawResults.value?.length ?? 0
+        const hasIds = !!(inventoryId.value && selectedStore.value)
 
-        // Fusionner customParams (inventory_id, store_id) ; le DataTable peut ne pas les inclure
-        const mergedQueryModel: QueryModel = {
-            ...queryModel,
-            customParams: {
-                ...(queryModel.customParams || {}),
-                ...resultsCustomParams.value
-            }
-        }
-
-        // Éviter les appels API doublons
-        const queryModelStr = JSON.stringify(mergedQueryModel)
-        const lastQueryModelStr = lastExecutedQueryModel.value ? JSON.stringify(lastExecutedQueryModel.value) : null
-
-        if (queryModelStr === lastQueryModelStr) {
+        if (!rawResults.value || rawLen === 0 || !hasIds) {
+            resultsTableRows.value = []
+            normalizedResultsCache.value = null
+            resultsDataRevision.value += 1
             return
         }
 
-        try {
-            resultsLoadingLocal.value = true
+        const safeInventoryId = inventoryId.value as number
+        const safeStoreId = selectedStore.value as string | number
 
-            // Mettre à jour le QueryModel local pour synchroniser avec la DataTable
-            resultsQueryModelRef.value = { ...mergedQueryModel }
+        const normalized = normalizeInventoryResults(
+            rawResults.value as Record<string, unknown>[],
+            safeInventoryId,
+            safeStoreId,
+        )
 
-            await resultsStore.fetchResultsAuto(mergedQueryModel)
-
-            lastExecutedQueryModel.value = { ...mergedQueryModel }
-
-            // Invalider les caches de normalisation/colonnes
-            normalizedResultsCache.value = null
-            columnsCache.value = null
-            resultsLoadingLocal.value = false
-        } catch (error) {
-            await alertService.error({ text: ERROR_MESSAGES.LOAD_RESULTS })
-            resultsLoadingLocal.value = false
+        normalizedResultsCache.value = {
+            data: normalized,
+            rawResultsHash: createRawResultsHash(rawResults.value as Record<string, unknown>[]),
+            inventoryId: inventoryId.value,
+            storeId: selectedStore.value,
         }
+
+        // Nouvelle référence tableau + revision : le TableBody SMATCH ne se met à jour
+        // que si la longueur change (bug package) — la :key force le rafraîchissement.
+        resultsTableRows.value = normalized.map((row) => ({ ...row }))
+        resultsDataRevision.value += 1
+    }
+
+    const recoverEmptyResultsPage = async (requestedPage?: number) => {
+        if (resultsPageRecoveryAttempted) return
+        const total = resultsPaginationMetadata.value?.total ?? 0
+        if ((rawResults.value?.length ?? 0) > 0 || total === 0) return
+
+        const currentPage = requestedPage ?? resultsPaginationMetadata.value?.page ?? 1
+        if (currentPage <= 1) return
+
+        resultsPageRecoveryAttempted = true
+        lastExecutedQueryModel.value = null
+        await loadResults({
+            page: DEFAULT_PAGE,
+            pageSize: resultsPaginationMetadata.value?.pageSize ?? DEFAULT_PAGE_SIZE,
+            sort: resultsQueryModelRef.value.sort,
+            filters: resultsQueryModelRef.value.filters,
+            search: resultsQueryModelRef.value.search,
+            customParams: resultsCustomParams.value,
+        })
+    }
+
+    const handleResultsOperation = createDataTableOperationHandler({
+        fetch: async (finalQueryModel) => {
+            resultsQueryModelRef.value = { ...finalQueryModel }
+            await resultsStore.fetchResultsAuto(finalQueryModel)
+            await recoverEmptyResultsPage(finalQueryModel.page)
+            columnsCache.value = null
+            syncResultsTableRows()
+        },
+        getLastQueryModel: () => lastExecutedQueryModel.value,
+        setLastQueryModel: (queryModel) => {
+            lastExecutedQueryModel.value = queryModel
+        },
+        onLoading: (loading) => {
+            resultsLoadingLocal.value = loading
+        },
+        canFetch: () => !!(inventoryId.value && selectedStore.value),
+        onError: async () => {
+            await alertService.error({ text: ERROR_MESSAGES.LOAD_RESULTS })
+        },
+        sanitize: (queryModel) => sanitizeQueryModel(mergeResultsQueryModel(queryModel)),
+    })
+
+    /**
+     * Traite un événement DataTable : fusionne customParams, évite doublons, appelle le store.
+     */
+    const processEventDirectly = async (eventType: string, queryModel: QueryModel) => {
+        if (!queryModel || typeof queryModel !== 'object') return
+        await handleResultsOperation(queryModel)
     }
 
     /**
@@ -308,87 +390,13 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
 
     syncStoreOptions(storeOptionsFromStore.value)
 
-    // ===== DONNÉES DU STORE =====
-    /** Données et état gérés par le store ; normalisation des résultats bruts dans le composable. */
-    const { results: rawResults, loading: resultsLoading } = storeToRefs(resultsStore)
-
     /**
-     * Résultats normalisés pour le DataTable (mémoïsés via normalizedResultsCache).
+     * Résultats normalisés affichés dans le DataTable (shallowRef resynchronisé après chaque fetch).
      */
-
-    // Cache pour la normalisation (évite de re-normaliser si les données n'ont pas changé)
-    const normalizedResultsCache = ref<{
-        data: NormalizedInventoryResult[]
-        rawResultsHash: string
-        inventoryId: number | null
-        storeId: string | null
-    } | null>(null)
-
-    // Fonction helper pour créer un hash rapide des données brutes
-    const createRawResultsHash = (data: Record<string, unknown>[]): string => {
-        if (!data || data.length === 0) return 'empty'
-        // Utiliser seulement les IDs et quelques champs clés pour le hash (plus rapide que JSON.stringify complet)
-        const sampleSize = Math.min(data.length, 10) // Échantillonner pour performance
-        const sample = data.slice(0, sampleSize)
-        const ids = sample.map((item, idx) => item.id || item.jobId || item.job_id || idx).join(',')
-        const keys = sample.length > 0 ? Object.keys(sample[0] || {}).slice(0, 20).join(',') : ''
-        return `${data.length}-${ids}-${keys}`
-    }
-
-    const results = computed<NormalizedInventoryResult[]>(() => {
-        const rawLen = rawResults.value?.length ?? 0
-        const hasIds = !!(inventoryId.value && selectedStore.value)
-
-        if (!rawResults.value || rawLen === 0) {
-            normalizedResultsCache.value = null
-            return []
-        }
-
-        if (!hasIds) {
-            normalizedResultsCache.value = null
-            return []
-        }
-
-        // Utiliser le cache si les données n'ont pas changé
-        const rawResultsHash = createRawResultsHash(rawResults.value as Record<string, unknown>[])
-
-        if (normalizedResultsCache.value &&
-            normalizedResultsCache.value.rawResultsHash === rawResultsHash &&
-            normalizedResultsCache.value.inventoryId === inventoryId.value &&
-            normalizedResultsCache.value.storeId === selectedStore.value) {
-            return normalizedResultsCache.value.data
-        }
-
-        // Normaliser seulement si nécessaire
-        // À ce stade, hasIds est vrai donc inventoryId/selectedStore ne sont plus null
-        const safeInventoryId = inventoryId.value as number
-        const safeStoreId = selectedStore.value as string | number
-
-        const normalized = normalizeInventoryResults(
-            rawResults.value as Record<string, unknown>[],
-            safeInventoryId,
-            safeStoreId
-        )
-
-        // Mettre en cache
-        normalizedResultsCache.value = {
-            data: normalized,
-            rawResultsHash,
-            inventoryId: inventoryId.value,
-            storeId: selectedStore.value
-        }
-
-        return normalized
-    })
-
-    // ⚡ OPTIMISATION : Supprimé le watcher qui forçait le re-render à chaque changement
-    // Ce watcher était très coûteux et causait des re-renders inutiles du DataTable entier
-    // Le DataTable détecte automatiquement les changements de données via la réactivité Vue
+    const results = resultsTableRows
 
     /**
      * État de chargement global des résultats
-     *
-     * @computed {boolean} loading - True si les résultats sont en cours de chargement
      */
     const loading = computed(() => resultsLoading.value || resultsLoadingLocal.value)
 
@@ -397,13 +405,16 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     /**
      * Vérifie si des résultats sont disponibles
      */
-    const hasResults = computed(() => results.value.length > 0)
+    const hasResults = computed(() => resultsTableRows.value.length > 0)
 
     /**
-     * Clé pour forcer le re-mount du DataTable package quand les données arrivent (pattern InventoryManagement).
-     * Change quand selectedStore ou le nombre de lignes change, pour que le tableau affiche correctement.
+     * Clé stable : ne pas inclure le total (évite un remontage à chaque recherche/filtre).
      */
-    const resultsTableKey = computed(() => `results-${selectedStore.value}-${results.value.length}`)
+    const resultsTableKey = computed(
+        () =>
+            `results-g${tableRenderGeneration.value}-d${resultsDataRevision.value}-` +
+            `${inventoryId.value ?? 'x'}-${selectedStore.value ?? 'x'}`,
+    )
 
     /**
      * Pagination calculée pour les résultats
@@ -1222,31 +1233,13 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             return
         }
 
-        // Activer le loading
-        resultsLoadingLocal.value = true
-
-        try {
-            // Si params est fourni, utiliser directement (customParams déjà fusionnés par le DataTable)
-            // Sinon, construire un QueryModel par défaut avec customParams
-            const finalParams: QueryModel = params || {
-                page: 1,
-                pageSize: 50,
-                customParams: resultsCustomParams.value
-            }
-
-            await resultsStore.fetchResultsAuto(finalParams)
-            await nextTick()
-
-            // Mettre à jour le cache après un appel réussi
-            lastExecutedQueryModel.value = { ...finalParams }
-
-            // Désactiver le loading
-            resultsLoadingLocal.value = false
-        } catch (error) {
-            await alertService.error({ text: 'Erreur lors du chargement des résultats' })
-            // Désactiver le loading même en cas d'erreur
-            resultsLoadingLocal.value = false
+        const finalParams: QueryModel = params || {
+            page: DEFAULT_PAGE,
+            pageSize: DEFAULT_PAGE_SIZE,
+            customParams: resultsCustomParams.value,
         }
+
+        await handleResultsOperation(finalParams)
     }
 
     /**
@@ -1431,110 +1424,114 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         }
     }
 
+    const resetTableFetchState = () => {
+        lastExecutedQueryModel.value = null
+        pendingEventsQueue.value.length = 0
+        resultsPageRecoveryAttempted = false
+        isInitialized.value = false
+    }
+
+    const loadTablesAfterMount = async () => {
+        await nextTick()
+        await new Promise((resolve) => setTimeout(resolve, INITIALIZATION_DELAY_MS))
+
+        lastExecutedQueryModel.value = null
+
+        if (pendingEventsQueue.value.length > 0) {
+            const firstEvent = pendingEventsQueue.value.shift()!
+            await processEventDirectly(firstEvent.eventType, firstEvent.queryModel)
+            await processPendingEvents()
+        } else {
+            await loadResults({
+                page: DEFAULT_PAGE,
+                pageSize: DEFAULT_PAGE_SIZE,
+                sort: undefined,
+                filters: undefined,
+                search: undefined,
+                customParams: resultsCustomParams.value,
+            })
+        }
+
+        await recoverEmptyResultsPage()
+        syncResultsTableRows()
+        tableRenderGeneration.value += 1
+    }
+
+    /**
+     * Initialisation complète : résout le contexte puis charge les données avant montage du DataTable.
+     */
+    const initializeWithData = async (reference?: string) => {
+        isDataLoaded.value = false
+        resetTableFetchState()
+        resultsStore.resetState()
+        resultsTableRows.value = []
+        normalizedResultsCache.value = null
+        columnsCache.value = null
+        storesCache.value = null
+
+        await initialize(reference)
+
+        if (!isInitialized.value || !selectedStore.value) {
+            isDataLoaded.value = true
+            return
+        }
+
+        // Monter le DataTable d'abord pour capturer les événements (localStorage, pageSize, etc.)
+        isDataLoaded.value = true
+        await loadTablesAfterMount()
+    }
+
     /**
      * Initialise le composable avec une référence d'inventaire
      *
-     * Charge l'inventaire, les magasins disponibles et sélectionne automatiquement le premier magasin.
-     * Le DataTable avec enableAutoManagement chargera automatiquement les résultats du magasin sélectionné.
+     * Résout les IDs inventaire/magasin uniquement. Le chargement des résultats est délégué à loadTablesAfterMount.
      *
      * @async
      * @param {string} [reference] - Référence de l'inventaire (optionnel, utilise celle du config si non fourni)
      * @returns {Promise<void>} Promise qui se résout une fois l'initialisation terminée
      * @throws {Error} Si l'inventaire est introuvable ou si l'ID d'inventaire ne peut pas être résolu
-     *
-     * @example
-     * ```typescript
-     * await initialize('INV-2024-001')
-     * // Le composable est maintenant initialisé et les données sont chargées
-     * ```
      */
     const initialize = async (reference?: string) => {
+        if (isInitialized.value || isInitializing.value) return
+
+        isInitializing.value = true
         try {
-            // Utiliser la référence fournie ou celle stockée
             const ref = reference || inventoryReference.value
 
             if (!ref) {
                 return
             }
 
-            // Mettre à jour la référence si fournie
             if (reference) {
                 inventoryReference.value = reference
             }
 
-            // Récupérer l'inventaire (précharge aussi les magasins si account_id disponible)
             await fetchInventoryByReference(ref)
 
             if (!inventoryId.value) {
                 throw new Error('Impossible de résoudre l\'ID d\'inventaire')
             }
 
-            // ⚡ Référence magasin dans l'URL : appeler l'API magasin par référence pour récupérer l'ID, puis déclencher l'API résultats
-            if (config?.initialWarehouseReference) {
-                const warehouseId = await warehouseStore.fetchWarehouseByReference(config.initialWarehouseReference)
+            const warehouseRef = getWarehouseReferenceFromRoute()
+            if (warehouseRef) {
+                const warehouseId = await warehouseStore.fetchWarehouseByReference(warehouseRef)
                 if (warehouseId != null) {
                     resultsStore.setSelectedStore(String(warehouseId))
                 }
             }
 
-            // OPTIMISATION : Charger les magasins (instantané si dans l'inventaire, sinon via account_id)
-            // fetchStores vérifie d'abord inventory.value.warehouses (instantané)
             await fetchStores()
 
-            // ⚡ Sélectionner le magasin : déjà fait si référence URL, sinon premier disponible
             if (storeOptions.value.length > 0 && !selectedStore.value) {
                 const defaultStoreId = storeOptions.value[0].value
                 resultsStore.setSelectedStore(defaultStoreId)
             }
 
-            // Attendre que le DataTable ait fini de s'initialiser et de restaurer son état
-            await nextTick()
-            // Ajouter un délai pour être sûr que tous les événements sont capturés
-            // Le DataTable peut émettre query-model-changed après son onMounted
-            await new Promise(resolve => setTimeout(resolve, INITIALIZATION_DELAY_MS))
-
-            // ⚡ IMPORTANT : Marquer comme initialisé APRÈS avoir attendu que le DataTable émette ses événements
-            // Cela permet de capturer les événements de restauration dans la file d'attente
             isInitialized.value = true
-
-            // Traiter les événements DataTable mis en file d'attente
-            // ⚠️ Logique harmonisée avec useAffecter.ts
-            // Le DataTable émet automatiquement query-model-changed au montage avec l'état restauré
-            // Ces événements sont capturés dans pendingEventsQueue car isInitialized était false
-            if (pendingEventsQueue.value.length > 0) {
-                // Traiter le premier événement (celui de la restauration du DataTable)
-                const firstEvent = pendingEventsQueue.value[0]
-                await processEventDirectly(firstEvent.eventType, firstEvent.queryModel)
-                pendingEventsQueue.value.shift() // Retirer le premier événement traité
-
-                // Traiter les événements restants en file d'attente (s'il y en a)
-                if (pendingEventsQueue.value.length > 0) {
-                    for (const queuedEvent of pendingEventsQueue.value) {
-                        await processEventDirectly(queuedEvent.eventType, queuedEvent.queryModel)
-                    }
-                    pendingEventsQueue.value.length = 0 // Vider la file d'attente
-                }
-            } else {
-                // ⚡ CAS RARE : Aucun événement en file d'attente
-                // Cela peut arriver si :
-                // 1. Le DataTable n'a pas encore été monté (timing)
-                // 2. Le DataTable n'a pas d'état sauvegardé et n'émet pas d'événement par défaut
-                //
-                // Dans ce cas, charger avec les valeurs par défaut
-                // Si le DataTable émet un événement plus tard, il sera traité normalement
-                // (mais cela ne devrait pas arriver car le DataTable émet toujours query-model-changed au montage)
-                const defaultQueryModel: QueryModel = {
-                    page: DEFAULT_PAGE,
-                    pageSize: DEFAULT_PAGE_SIZE,
-                    sort: undefined,
-                    filters: {},
-                    search: undefined,
-                    customParams: resultsCustomParams.value
-                }
-                await loadResults(defaultQueryModel)
-            }
         } catch (error) {
             await alertService.error({ text: ERROR_MESSAGES.INITIALIZATION })
+        } finally {
+            isInitializing.value = false
         }
     }
 
@@ -1557,20 +1554,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     const reinitialize = async (reference: string) => {
         if (!reference) return
 
-        isInitialized.value = false
-        resultsStore.setSelectedStore(null)
         storeOptions.value = []
         usesWarehouseFallback.value = false
-
-        // ⚡ OPTIMISATION : Réinitialiser tous les caches lors de la réinitialisation
-        lastExecutedQueryModel.value = null
-        pendingEventsQueue.value.length = 0 // Vider la file d'attente
-        normalizedResultsCache.value = null
-        columnsCache.value = null
-        storesCache.value = null
-
         inventoryReference.value = reference
-        await initialize()
+        await initializeWithData(reference)
     }
 
     // ===== FONCTIONS POUR LANCER COMPTAGE =====
@@ -2295,10 +2282,12 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         inventoryId: computed(() => inventoryId.value),
         inventoryReference: computed(() => inventoryReference.value),
         isInitialized,
+        isDataLoaded,
         loading,
 
         // Données
         results,
+        resultsTableRows,
         stores: storeOptions,
         selectedStore,
         warehouses,
@@ -2319,6 +2308,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         handleStoreSelect,
         handleBulkValidate,
         initialize,
+        initializeWithData,
         reinitialize,
         fetchStores,
         loadResults,

@@ -57,7 +57,7 @@
                 :pageSizeProp="pagination.page_size"
                 :rowSelection="true"
                 :customDataTableParams="trackingCustomParams"
-                @query-model-changed="(queryModel) => onTrackingTableEvent('query-model-changed', queryModel)"
+                v-on="trackingTableEvents"
                 storageKey="job_tracking_table"
                 :loading="loading || trackingLoadingLocal"
                 :enableDynamicColumns="false"
@@ -119,6 +119,7 @@ import InventoryJobsPdfExportModal from '@/components/Inventory/InventoryJobsPdf
 
 // ===== IMPORTS COMPOSABLES =====
 import { useJobTracking, type JobTrackingRow } from '@/composables/useJobTracking'
+import { bindDataTableServerEvents } from '@/composables/dataTable/bindDataTableServerEvents'
 import { alertService } from '@/services/alertService'
 import { parsePositiveInventoryId } from '@/services/InventoryService'
 
@@ -180,6 +181,8 @@ const { warehouses, loading: warehousesLoading } = storeToRefs(warehouseStore)
         inventoryReference: referenceParam.value,
         initialWarehouseReference: warehouseRefFromUrl.value
     })
+
+const trackingTableEvents = bindDataTableServerEvents(onTrackingTableEvent)
 
 // ===== COMPUTED =====
 

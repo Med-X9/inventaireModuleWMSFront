@@ -35,41 +35,51 @@
             </div>
         </div>
 
-        <!-- DataTable (package) - même pattern que InventoryManagement.vue -->
-        <div v-if="selectedStore" class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
-            <DataTable
-                :key="resultsTableKey"
-                :columns="columns"
-                :rowDataProp="results"
-                :actions="actions as any"
-                :enableVirtualScrolling="undefined"
-                :currentPageProp="pagination.current_page"
-                :totalPagesProp="pagination.total_pages"
-                :totalItemsProp="pagination.total"
-                :pageSizeProp="pagination.page_size"
-                :customDataTableParams="resultsCustomParams"
-                @query-model-changed="(queryModel) => onResultsTableEvent('query-model-changed', queryModel)"
-                storageKey="inventory_results_table"
-                ref="resultsTableRef"
-                :loading="loading"
-                :enableDynamicColumns="false"
-                :debounceFilter="300"
-                :debounceSearch="300"
-                :pagination="true"
-                :enableFiltering="true"
-                :enableGlobalSearch="true"
-            />
+        <!-- DataTable (package) - chargé après résolution du contexte (pattern Planning/Affecter) -->
+        <div v-if="isDataLoaded">
+            <div v-if="selectedStore" class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
+                <DataTable
+                    :key="resultsTableKey"
+                    :columns="columns"
+                    :rowDataProp="resultsTableRows"
+                    :actions="actions as any"
+                    :enableVirtualScrolling="undefined"
+                    :currentPageProp="pagination.current_page"
+                    :totalPagesProp="pagination.total_pages"
+                    :totalItemsProp="pagination.total"
+                    :pageSizeProp="pagination.page_size"
+                    :customDataTableParams="resultsCustomParams"
+                    v-on="resultsTableEvents"
+                    storageKey="inventory_results_table"
+                    ref="resultsTableRef"
+                    :loading="loading"
+                    :enableDynamicColumns="false"
+                    :debounceFilter="300"
+                    :debounceSearch="300"
+                    :pagination="true"
+                    :enableFiltering="true"
+                    :enableGlobalSearch="true"
+                />
+            </div>
+
+            <!-- Message si aucun magasin sélectionné -->
+            <div v-else class="bg-white dark:bg-slate-800 rounded-2xl p-16 text-center shadow-lg border border-slate-200 dark:border-slate-700">
+                <div class="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-xl">
+                    <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                </div>
+                <h3 class="text-2xl font-bold text-slate-900 dark:text-slate-100 m-0 mb-2">Sélectionnez un magasin</h3>
+                <p class="text-base text-slate-600 dark:text-slate-400 m-0">Veuillez sélectionner un magasin pour afficher les résultats d'inventaire</p>
+            </div>
         </div>
 
-        <!-- Message si aucun magasin sélectionné -->
-        <div v-else class="bg-white dark:bg-slate-800 rounded-2xl p-16 text-center shadow-lg border border-slate-200 dark:border-slate-700">
-            <div class="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-xl">
-                <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
+        <!-- Chargement initial -->
+        <div v-else class="bg-white dark:bg-slate-800 rounded-2xl p-16 text-center shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center min-h-[320px]">
+            <div class="flex flex-col items-center gap-4">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+                <p class="text-base text-slate-600 dark:text-slate-400 m-0">Chargement des résultats...</p>
             </div>
-            <h3 class="text-2xl font-bold text-slate-900 dark:text-slate-100 m-0 mb-2">Sélectionnez un magasin</h3>
-            <p class="text-base text-slate-600 dark:text-slate-400 m-0">Veuillez sélectionner un magasin pour afficher les résultats d'inventaire</p>
         </div>
 
         <!-- Modal d'export des résultats -->
@@ -149,6 +159,7 @@ import Modal from '@/components/Modal.vue'
 
 // ===== IMPORTS COMPOSABLES =====
 import { useInventoryResults } from '@/composables/useInventoryResults'
+import { bindDataTableServerEvents } from '@/composables/dataTable/bindDataTableServerEvents'
 
 // ===== ROUTE =====
 const route = useRoute()
@@ -161,9 +172,13 @@ const router = useRouter()
 const inventoryReference = computed(() => route.params.reference as string)
 
 /**
- * Référence du warehouse depuis l'URL (?warehouse=...)
+ * Référence du warehouse depuis l'URL (param de route, fallback query legacy)
  */
-const warehouseRefFromUrl = computed(() => route.query.warehouse as string | undefined)
+const warehouseRefFromUrl = computed(() => {
+    const fromParams = route.params.warehouse as string | undefined
+    const fromQuery = route.query.warehouse as string | undefined
+    return fromParams || fromQuery
+})
 
 // ===== COMPOSABLE =====
 /**
@@ -181,6 +196,7 @@ const {
     loading,
     stores,
     results,
+    resultsTableRows,
     columns,
     actions,
     selectedStore,
@@ -188,8 +204,8 @@ const {
     pagination,
     resultsStore,
     handleStoreSelect,
-    initialize,
-    reinitialize,
+    initializeWithData,
+    isDataLoaded,
     reloadResults,
     showLaunchCountingModal,
     resultsCustomParams,
@@ -212,6 +228,8 @@ const {
     router
 })
 
+const resultsTableEvents = bindDataTableServerEvents(onResultsTableEvent)
+
 // ===== BOUTONS D'ACTION =====
 // Les boutons sont maintenant gérés par le composable useInventoryResults
 
@@ -220,31 +238,31 @@ const {
 
 // ===== LIFECYCLE =====
 
-/**
- * Initialisation au montage du composant
- */
-onMounted(async () => {
+const mountResults = async () => {
     try {
-        logger.debug('Initialisation de la page résultats', { reference: inventoryReference.value })
-        await initialize(inventoryReference.value)
+        logger.debug('Initialisation de la page résultats', {
+            reference: inventoryReference.value,
+            warehouse: warehouseRefFromUrl.value,
+        })
+        await initializeWithData(inventoryReference.value)
     } catch (error) {
         logger.error('Erreur lors de l\'initialisation', error)
+        isDataLoaded.value = true
     }
+}
+
+onMounted(() => {
+    void mountResults()
 })
 
-/**
- * Watch pour surveiller les changements de référence dans l'URL
- */
-watch(inventoryReference, async (newReference, oldReference) => {
-    if (!newReference || newReference === oldReference) return
-
-    try {
-        logger.debug('Changement de référence détecté', { old: oldReference, new: newReference })
-        await reinitialize(newReference)
-    } catch (error) {
-        logger.error('Erreur lors du changement de référence', error)
+watch(
+    () => [route.params.reference, route.params.warehouse] as const,
+    ([reference, warehouse], previous) => {
+        if (!previous) return
+        if (reference === previous[0] && warehouse === previous[1]) return
+        void mountResults()
     }
-})
+)
 </script>
 
 <style scoped>

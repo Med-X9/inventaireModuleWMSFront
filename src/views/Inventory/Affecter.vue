@@ -99,7 +99,7 @@
                 :rowSelection="true"
                 :loading="jobsLoading"
                 :customDataTableParams="jobsCustomParams"
-                @query-model-changed="(queryModel) => onJobsTableEvent('query-model-changed', queryModel)"
+                v-on="jobsTableEvents"
                 storageKey="affecter_table"
                 ref="jobsTableRef"
                 :enableDynamicColumns="false"
@@ -346,6 +346,7 @@ import JobStatusLegendTooltip from '@/components/JobStatusLegendTooltip.vue'
 
 // ===== IMPORTS COMPOSABLES =====
 import { useAffecter } from '@/composables/useAffecter'
+import { bindDataTableServerEvents } from '@/composables/dataTable/bindDataTableServerEvents'
 
 // ===== IMPORTS ICÔNES =====
 import MdiIcon from '@/components/MdiIcon.vue'
@@ -404,6 +405,8 @@ const {
     inventoryReference: route.params.reference as string,
     warehouseReference: route.params.warehouse as string,
 })
+
+const jobsTableEvents = bindDataTableServerEvents(onJobsTableEvent)
 
 const modalKey = ref(0)
 

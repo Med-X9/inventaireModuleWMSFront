@@ -255,6 +255,8 @@ export const useResultsStore = defineStore('results', () => {
         loading.value = false;
         error.value = null;
         currentInventoryId.value = null;
+        paginationMetadata.value = null;
+        totalCount.value = 0;
     };
 
     return {

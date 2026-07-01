@@ -56,7 +56,7 @@
                 :enableFiltering="true"
                 :enableGlobalSearch="true"
                 storageKey="job_management_table"
-                @query-model-changed="onPaginationChanged"
+                v-on="jobsTableEvents"
                 @selection-changed="onSelectionChanged"
             />
         </div>
@@ -126,6 +126,7 @@
 <script setup lang="ts">
 import { DataTable } from '@SMATCH-Digital-dev/vue-system-design'
 import { useJobManagementPage } from '@/composables/useJobManagementPage'
+import { bindDataTableServerEvents } from '@/composables/dataTable/bindDataTableServerEvents'
 
 // Utilisation du composable pour toute la logique
 const {
@@ -159,6 +160,8 @@ const {
     closeAssignModal,
     confirmAssign
 } = useJobManagementPage()
+
+const jobsTableEvents = bindDataTableServerEvents((_eventType, queryModel) => onPaginationChanged(queryModel))
 </script>
 
 <style scoped>

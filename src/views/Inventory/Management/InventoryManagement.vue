@@ -34,7 +34,7 @@
             :totalPagesProp="pagination.total_pages"
             :totalItemsProp="pagination.total"
             :pageSizeProp="pagination.page_size"
-            @query-model-changed="(queryModel) => onInventoryTableEvent('query-model-changed', queryModel)"
+            v-on="inventoryTableEvents"
             storageKey="inventory-management"
             ref="inventoryTableRef"
             :loading="inventoryLoading"
@@ -242,6 +242,7 @@ import { onMounted, ref, computed } from 'vue'
 import { DataTable, Card, Button, Alert, Dialog } from '@SMATCH-Digital-dev/vue-system-design'
 import FileInputUpload from '@/components/Upload/FileInputUpload.vue'
 import { useInventoryManagement } from '@/composables/useInventoryManagement'
+import { bindDataTableServerEvents } from '@/composables/dataTable/bindDataTableServerEvents'
 
 // ===== IMPORTS ICÔNES =====
 import MdiIcon from '@/components/MdiIcon.vue'
@@ -302,6 +303,8 @@ const {
     initializeInventoryTable,
     inventoryTableKey,
 } = useInventoryManagement()
+
+const inventoryTableEvents = bindDataTableServerEvents(onInventoryTableEvent)
 
 // Titres des modals fullscreen
 const importModalTitle = computed(() =>

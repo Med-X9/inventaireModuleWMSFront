@@ -92,7 +92,7 @@
                 :totalItemsProp="pagination.total"
                 :pageSizeProp="pagination.page_size"
                 :customDataTableParams="planningCustomParams"
-                @query-model-changed="handlePaginationChanged"
+                v-on="planningTableEvents"
                 storageKey="planning-management"
                 ref="planningTableRef"
                 :loading="loading"
@@ -146,6 +146,7 @@ import { DataTable } from '@SMATCH-Digital-dev/vue-system-design'
 import ToggleButtons from '@/components/ToggleButtons/ToggleButtons.vue'
 import GridView from '@/components/GridView/GridView.vue'
 import { usePlanningManagement } from '@/composables/usePlanningManagement'
+import { bindDataTableServerEvents } from '@/composables/dataTable/bindDataTableServerEvents'
 
 // ===== IMPORTS ICÔNES =====
 import MdiIcon from '@/components/MdiIcon.vue'
@@ -199,6 +200,8 @@ const {
     handleExportCsv,
     handleExportExcel
 } = usePlanningManagement(props.reference)
+
+const planningTableEvents = bindDataTableServerEvents((_eventType, queryModel) => handlePaginationChanged(queryModel))
 
 // ===== ÉTATS LOCAUX =====
 const viewMode = ref<'table' | 'grid'>('table')

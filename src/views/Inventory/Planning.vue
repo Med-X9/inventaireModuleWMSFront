@@ -42,7 +42,7 @@
                 :rowSelection="true"
                 :loading="jobsLoading"
                 :customDataTableParams="jobsCustomParams"
-                @query-model-changed="(queryModel) => onJobsTableEvent('query-model-changed', queryModel)"
+                v-on="jobsTableEvents"
                 storageKey="planning_jobs_table"
                 ref="jobsTableRef"
                 :enableDynamicColumns="false"
@@ -77,7 +77,7 @@
                 :rowSelection="true"
                 :loading="locationsLoading"
                 :customDataTableParams="locationsCustomParams"
-                @query-model-changed="(queryModel) => onLocationsTableEvent('query-model-changed', queryModel)"
+                v-on="locationsTableEvents"
                 storageKey="planning_locations_table"
                 ref="availableLocationsTableRef"
                 :enableDynamicColumns="false"
@@ -165,6 +165,7 @@ import JobStatusLegendTooltip from '@/components/JobStatusLegendTooltip.vue'
 
 // ===== IMPORTS ICÔNES =====
 import MdiIcon from '@/components/MdiIcon.vue'
+import { bindDataTableServerEvents } from '@/composables/dataTable/bindDataTableServerEvents'
 
 
 // ===== IMPORTS STYLES =====
@@ -209,6 +210,9 @@ const {
     inventoryReference: route.params.reference as string,
     warehouseReference: route.params.warehouse as string
 })
+
+const jobsTableEvents = bindDataTableServerEvents(onJobsTableEvent)
+const locationsTableEvents = bindDataTableServerEvents(onLocationsTableEvent)
 
 // ===== CHARGEMENT INITIAL DES DONNÉES =====
 const mountPlanning = async () => {
