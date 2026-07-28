@@ -1,7 +1,7 @@
 import axiosInstance from '@/utils/axiosConfig';
 import type { AxiosError, AxiosResponse } from 'axios';
 import type { CreateInventoryRequest, InventoryDetails, InventoryTable, ResponseInventoryDetails } from '@/models/Inventory';
-import type { InventoryDetail, InventoryDetailResponse } from '@/models/InventoryDetail';
+import type { InventoryDetail, InventoryDetailResponse, WarehouseSettingStatusResponse } from '@/models/InventoryDetail';
 import API from '@/api';
 import type { PlanningManagementResponse } from '@/models/PlanningManagement';
 import { logger } from '@/services/loggerService';
@@ -424,6 +424,28 @@ export class InventoryService {
         } catch (error) {
             logger.error(`Erreur lors de la suppression de l'inventaire ${id}`, error);
             throw error;
+        }
+    }
+
+    /**
+     * Statut Setting d'un magasin
+     * GET /web/api/inventory/{id}/warehouse/{wid}/setting-status/
+     */
+    static async getWarehouseSettingStatus(
+        inventoryId: number,
+        warehouseId: number
+    ): Promise<WarehouseSettingStatusResponse> {
+        try {
+            const response = await axiosInstance.get<WarehouseSettingStatusResponse>(
+                `${API.endpoints.inventory.base}${inventoryId}/warehouse/${warehouseId}/setting-status/`
+            )
+            return response.data
+        } catch (error) {
+            logger.error(
+                `Erreur récupération statut Setting inventaire ${inventoryId} magasin ${warehouseId}`,
+                error
+            )
+            throw error
         }
     }
 

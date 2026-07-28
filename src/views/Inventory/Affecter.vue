@@ -44,6 +44,7 @@
 
                     <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
                         <Dropdown
+                            v-if="showReadyButton"
                             v-model="showDropdown"
                             placement="bottom-end"
                             trigger="click"
@@ -397,6 +398,7 @@ const {
     eligibleJobsForManual,
     actionButtons,
     navigationButtons,
+    showReadyButton,
     adaptedStoreJobsColumns,
     jobsLoading,
     isDataLoaded,

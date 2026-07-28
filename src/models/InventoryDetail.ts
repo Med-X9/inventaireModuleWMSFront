@@ -41,6 +41,39 @@ export interface InventoryMagasin {
     status_date_cloture?: string | null
 }
 
+/** Statuts possibles du Setting magasin */
+export type WarehouseSettingStatusValue =
+    | 'EN ATTENTE'
+    | 'LANCEE'
+    | 'TERMINEE'
+    | 'ANALYSER'
+    | 'CLOTURE'
+
+/** Réponse GET .../warehouse/{wid}/setting-status/ */
+export interface WarehouseSettingStatusData {
+    setting_id: number
+    reference: string
+    status: WarehouseSettingStatusValue | string
+    inventory_id: number
+    inventory_reference?: string
+    inventory_label?: string
+    inventory_type?: string
+    warehouse_id: number
+    warehouse_name?: string
+    warehouse_reference?: string
+    warehouse_date?: string | null
+    status_date_lancement?: string | null
+    status_date_termine?: string | null
+    status_date_analyse?: string | null
+    status_date_cloture?: string | null
+}
+
+export interface WarehouseSettingStatusResponse {
+    success: boolean
+    message: string
+    data: WarehouseSettingStatusData
+}
+
 export interface InventoryRessource {
     id?: number;
     reference: string;

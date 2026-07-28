@@ -3,16 +3,19 @@ import type { ActionConfig } from '@SMATCH-Digital-dev/vue-system-design'
 import type { Job } from '@/models/Job'
 import type { Location } from '@/models/Location'
 import type { useJobStore } from '@/stores/job'
+import type { ComputedRef } from 'vue'
 
 export interface PlanningDataTableActionsDeps {
     jobStore: ReturnType<typeof useJobStore>
     resetAllSelections: () => void
     refreshData: () => Promise<void>
     bulkDeactivateLocations: (locationIds?: number[]) => Promise<void>
+    /** Setting EN ATTENTE → actions d'édition visibles */
+    canEditPlanning: ComputedRef<boolean>
 }
 
 export function createPlanningDataTableActions(deps: PlanningDataTableActionsDeps) {
-    const { jobStore, resetAllSelections, refreshData, bulkDeactivateLocations } = deps
+    const { jobStore, resetAllSelections, refreshData, bulkDeactivateLocations, canEditPlanning } = deps
 
     const jobsActions: ActionConfig<Job>[] = [
         {
@@ -36,7 +39,7 @@ export function createPlanningDataTableActions(deps: PlanningDataTableActionsDep
                     await alertService.error({ text: 'Erreur lors de la validation du job' })
                 }
             },
-            show: (job: Job) => job.status === 'EN ATTENTE',
+            show: (job: Job) => canEditPlanning.value && job.status === 'EN ATTENTE',
         },
         {
             label: 'Supprimer',
@@ -59,7 +62,7 @@ export function createPlanningDataTableActions(deps: PlanningDataTableActionsDep
                     await alertService.error({ text: 'Erreur lors de la suppression du job' })
                 }
             },
-            show: () => true,
+            show: () => canEditPlanning.value,
         },
     ]
 
@@ -85,7 +88,7 @@ export function createPlanningDataTableActions(deps: PlanningDataTableActionsDep
                     await alertService.error({ text: 'Erreur lors de la désactivation de la location' })
                 }
             },
-            show: () => true,
+            show: () => canEditPlanning.value,
         },
     ]
 

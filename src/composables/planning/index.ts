@@ -25,6 +25,7 @@ import { createPlanningDataTableActions } from '@/composables/planning/usePlanni
 import { resolvePlanningContextIds } from '@/composables/planning/usePlanningContext'
 import { usePlanningTableData } from '@/composables/planning/usePlanningTableData'
 import { usePlanningButtons } from '@/composables/planning/usePlanningButtons'
+import { useWarehouseSettingStatus } from '@/composables/useWarehouseSettingStatus'
 
 // ===== COMPOSABLE =====
 
@@ -98,6 +99,15 @@ export function usePlanning(options?: PlanningOptions) {
     /** ID de l'entrep?t (r?solu depuis la r?f?rence) */
     const warehouseId = ref<number | null>(null)
 
+    /** Statut Setting magasin — conditionne les actions d'édition */
+    const {
+        settingStatus,
+        settingStatusLoading,
+        isSettingEnAttente,
+        canEditPlanning,
+        fetchSettingStatus,
+    } = useWarehouseSettingStatus(inventoryId, warehouseId)
+
     /** ID du compte (r?cup?r? depuis l'inventaire) */
     const accountId = ref<number | null>(null)
 
@@ -162,6 +172,7 @@ export function usePlanning(options?: PlanningOptions) {
             warehouseStore,
             { inventoryId, warehouseId, accountId }
         )
+        await fetchSettingStatus()
     }
 
     // ===== M??THODES DE CHARGEMENT DES DONN??ES =====
@@ -201,6 +212,7 @@ export function usePlanning(options?: PlanningOptions) {
         resetAllSelections,
         refreshData,
         bulkDeactivateLocations,
+        canEditPlanning,
     })
 
     // ===== HANDLERS DATATABLE =====
@@ -600,6 +612,7 @@ export function usePlanning(options?: PlanningOptions) {
         selectedJobsCount,
         selectedAvailableCount,
         hasAvailableJobs,
+        canEditPlanning,
         onGoToDetail: handleGoToInventoryDetail,
         onGoToAffecter: handleGoToAffectation,
         validateAllJobs,
@@ -732,6 +745,10 @@ export function usePlanning(options?: PlanningOptions) {
         navigationButtons,
         jobsActionButtons,
         locationsActionButtons,
+        settingStatus,
+        settingStatusLoading,
+        isSettingEnAttente,
+        canEditPlanning,
         showAddToJobModal,
         selectedJobForModal,
         closeAddToJobModal,

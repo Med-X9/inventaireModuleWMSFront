@@ -343,6 +343,18 @@ export const useInventoryStore = defineStore('inventory', () => {
         }
     };
 
+    /**
+     * Statut Setting magasin (sans loading global — utilisé pour boutons Planning/Affecter)
+     */
+    const getWarehouseSettingStatus = async (idInventory: number, warehouseId: number) => {
+        try {
+            return await InventoryService.getWarehouseSettingStatus(idInventory, warehouseId);
+        } catch (err: any) {
+            handleError(err, 'Erreur lors de la récupération du statut Setting');
+            throw err;
+        }
+    };
+
     const termineWarehouse = async (idInventory: number, warehouseId: number) => {
         loading.value = true;
         error.value = null;
@@ -611,6 +623,7 @@ export const useInventoryStore = defineStore('inventory', () => {
         launchInventoryByWarehause,
         launchInventoryWarehouses,
         cancelWarehouseLaunch,
+        getWarehouseSettingStatus,
         termineWarehouse,
         termineWarehouses,
         analyserWarehouse,

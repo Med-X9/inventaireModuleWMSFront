@@ -43,6 +43,7 @@ import { useQueryModel, convertQueryModelToQueryParams, createQueryModelFromData
 import type { QueryModel, DataTableColumn, DataTableColumnAny, ActionConfig, ColumnDataType } from '@SMATCH-Digital-dev/vue-system-design'
 import type { InventoryDetails } from '@/models/Inventory'
 import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
+import { useWarehouseSettingStatus } from '@/composables/useWarehouseSettingStatus'
 
 // ===== CONSTANTES =====
 
@@ -120,6 +121,17 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
 
     /** ID de l'entrepôt récupéré depuis la référence */
     const warehouseId = ref<number | null>(null)
+
+    /** Statut Setting magasin (remplace inventoryStatus pour les boutons d'action) */
+    const {
+        settingStatus,
+        settingStatusData,
+        settingStatusLoading,
+        settingStatusError,
+        isSettingEnAttente,
+        isSettingLancee,
+        fetchSettingStatus,
+    } = useWarehouseSettingStatus(inventoryId, warehouseId)
 
     /** IDs des jobs sélectionnés dans le DataTable */
     const selectedJobs = ref<string[]>([])
@@ -323,6 +335,9 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
         if (!inventoryId.value || !warehouseId.value || inventoryId.value <= 0 || warehouseId.value <= 0) {
             throw new Error(`Échec de l'initialisation des IDs - Inventaire: ${inventoryId.value}, Entrepôt: ${warehouseId.value}`)
         }
+
+        // Statut Setting magasin pour les boutons (indépendant du statut inventaire)
+        await fetchSettingStatus()
     }
 
     /**
@@ -679,26 +694,22 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
     })
 
     /**
-     * Afficher le bouton de transfert si l'inventaire est en réalisation
+     * Afficher les boutons de transfert / validation / clôture si Setting = LANCEE
+     * (anciennement inventoryStatus === 'EN REALISATION')
      */
-    const showTransferButton = computed(() => {
-
-        return inventoryStatus.value === 'EN REALISATION'
-    })
+    const showTransferButton = computed(() => isSettingLancee.value)
 
     /**
-     * Afficher le bouton Manuel si l'inventaire est en réalisation
+     * Afficher le bouton Manuel si Setting = EN ATTENTE
+     * (anciennement inventoryStatus === 'EN PREPARATION')
      */
-    const showManualButton = computed(() => {
-        return inventoryStatus.value === 'EN PREPARATION'
-    })
+    const showManualButton = computed(() => isSettingEnAttente.value)
 
     /**
-     * Afficher le bouton prêt si l'inventaire est en préparation
+     * Afficher les boutons prêt / affecter tous si Setting = EN ATTENTE
+     * (anciennement inventoryStatus === 'EN PREPARATION')
      */
-    const showReadyButton = computed(() => {
-        return inventoryStatus.value === 'EN PREPARATION'
-    })
+    const showReadyButton = computed(() => isSettingEnAttente.value)
 
 
     /**
@@ -778,144 +789,115 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
      * Boutons d'action pour le ButtonGroup
      * ⚠️ Note: Le dropdown "Affecter" reste séparé car c'est un dropdown, pas un simple bouton
      *
-     * CONDITIONS DE VISIBILITÉ :
+     * CONDITIONS DE VISIBILITÉ (basées sur le Setting magasin, pas le statut inventaire) :
      *
-     * === EN PREPARATION ===
+     * === Setting EN ATTENTE ===
      * 1. Bouton "Affecter tous"
-     *    - visible: inventoryStatus === 'EN PREPARATION'
-     *    - Action: Affecte automatiquement tous les jobs depuis les location-jobs
+     * 2. Bouton "Pret" / "Prêt tous"
+     * 3. Bouton "Manuel"
      *
-     * 2. Bouton "Pret"
-     *    - visible: inventoryStatus === 'EN PREPARATION'
-     *    - Action: Met les jobs sélectionnés en statut "Prêt"
+     * === Setting LANCEE ===
+     * 4. Bouton "Transférer" / "Transférer tous"
+     * 5. Bouton "Valider tous"
+     * 6. Bouton "Clôturer"
      *
- * === EN REALISATION ===
-     * 4. Bouton "Manuel"
-     *    - visible: inventoryStatus === 'EN PREPARATION' (actuellement)
-     *    - Action: Lance manuellement les jobs sélectionnés
-     *
-     * 5. Bouton "Transférer"
-     *    - visible: inventoryStatus === 'EN REALISATION'
-     *    - Action: Transfère les jobs sélectionnés entre comptages
-     *
-     * 6. Bouton "Transférer tous"
-     *    - visible: inventoryStatus === 'EN REALISATION'
-     *    - Action: Transfère tous les jobs éligibles entre comptages
-     *
-     * 7. Bouton "Sauvegarder"
-     *    - visible: inventoryStatus === 'EN REALISATION'
-     *    - disabled: Si hasUnsavedChanges === false (pas de modifications en attente)
-     *    - Action: Sauvegarde toutes les modifications en attente
-     *
- * 8. Bouton "Clôturer"
- *    - visible: inventoryStatus === 'EN REALISATION'
- *    - Action: Clôture l'inventaire
- *
- * DEBUG: Pour vérifier pourquoi les boutons ne s'affichent pas :
- * - inventoryStatus actuel: ${inventoryStatus.value}
- * - showManualButton: ${showManualButton.value}
- * - showTransferButton: ${showTransferButton.value}
- * - showReadyButton: ${showReadyButton.value}
+     * DEBUG :
+     * - settingStatus actuel: ${settingStatus.value}
+     * - showManualButton: ${showManualButton.value}
+     * - showTransferButton: ${showTransferButton.value}
+     * - showReadyButton: ${showReadyButton.value}
      */
     const actionButtons = computed<ButtonGroupButton[]>(() => {
         const buttons: ButtonGroupButton[] = []
         const pendingChangesCount = Array.from(pendingChanges.value.values()).reduce((total, changes) => total + changes.size, 0)
 
 
-        // Bouton Affecter tous
-        // Condition: inventoryStatus === 'EN PREPARATION'
+        // Bouton Affecter tous — Setting EN ATTENTE
         buttons.push({
             id: 'affect-all',
             label: 'Affecter tous',
             icon: 'mdi-account-group-outline',
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
-            visible: showReadyButton.value, // inventoryStatus === 'EN PREPARATION'
+            visible: showReadyButton.value,
             onClick: () => { void handleAffectAll() }
         })
 
-        // Bouton Manuel
-        // Condition: inventoryStatus === 'EN REALISATION'
+        // Bouton Manuel — Setting EN ATTENTE
         buttons.push({
             id: 'manual',
             label: 'Manuel',
             icon: 'mdi-pencil-outline',
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
-            visible: showManualButton.value, // inventoryStatus === 'EN REALISATION'
+            visible: showManualButton.value,
             onClick: () => { void handleManualClick() }
         })
 
-        // Bouton Transférer
-        // Condition: inventoryStatus === 'EN REALISATION'
+        // Bouton Transférer — Setting LANCEE
         buttons.push({
             id: 'transfer',
             label: 'Transférer',
             icon: 'mdi-arrow-right',
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
-            visible: showTransferButton.value, // inventoryStatus === 'EN REALISATION'
+            visible: showTransferButton.value,
             onClick: () => { void handleTransferClick() }
         })
 
-        // Bouton Transférer tous
-        // Condition: inventoryStatus === 'EN REALISATION'
+        // Bouton Transférer tous — Setting LANCEE
         buttons.push({
             id: 'transfer-all',
             label: 'Transférer tous',
             icon: 'mdi-arrow-right',
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
-            visible: showTransferButton.value, // inventoryStatus === 'EN REALISATION'
+            visible: showTransferButton.value,
             onClick: () => { void handleTransferAllBulk() }
         })
 
 
-        // Bouton Valider tous
-        // Condition: inventoryStatus === 'EN REALISATION'
+        // Bouton Valider tous — Setting LANCEE
         buttons.push({
             id: 'validate-all',
             label: 'Valider tous',
             icon: 'mdi-check',
             variant: 'success',
             class: ACTION_BUTTON_CLASS,
-            visible: showTransferButton.value, // inventoryStatus === 'EN REALISATION'
+            visible: showTransferButton.value,
             onClick: () => { void handleValidateAllJobs() }
         })
 
-        // Bouton Clôturer
-        // Condition: inventoryStatus === 'EN REALISATION'
+        // Bouton Clôturer — Setting LANCEE
         buttons.push({
             id: 'close',
             label: 'Clôturer',
             icon: 'mdi-close-circle-outline',
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
-            visible: showTransferButton.value, // inventoryStatus === 'EN REALISATION'
+            visible: showTransferButton.value,
             onClick: () => { void handleCloturerClick() }
         })
 
-        // Bouton Pret
-        // Condition: inventoryStatus === 'EN PREPARATION'
+        // Bouton Pret — Setting EN ATTENTE
         buttons.push({
             id: 'ready',
             label: 'Pret',
             icon: 'mdi-check-circle-outline',
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
-            visible: showReadyButton.value, // inventoryStatus === 'EN PREPARATION'
+            visible: showReadyButton.value,
             onClick: () => { void handleReadyClick() }
         })
 
-        // Bouton Prêt tous
-        // Condition: inventoryStatus === 'EN PREPARATION'
+        // Bouton Prêt tous — Setting EN ATTENTE
         buttons.push({
             id: 'ready-all',
             label: 'Prêt tous',
             icon: 'mdi-check-circle-outline',
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
-            visible: showReadyButton.value, // inventoryStatus === 'EN PREPARATION'
+            visible: showReadyButton.value,
             onClick: () => { void handleReadyAll() }
         })
 
@@ -2859,10 +2841,19 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
         eligibleJobsForManual,
         actionButtons,
         navigationButtons,
+        showReadyButton,
+        showTransferButton,
+        showManualButton,
         adaptedStoreJobsColumns,
         jobsActions: resolvedJobsActions,
         isDataLoaded,
         initializeWithData,
         refreshJobs,
+        settingStatus,
+        settingStatusData,
+        settingStatusLoading,
+        settingStatusError,
+        isSettingEnAttente,
+        isSettingLancee,
     }
 }
