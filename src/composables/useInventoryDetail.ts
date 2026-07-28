@@ -913,6 +913,16 @@ export function useInventoryDetail(inventoryReference: string) {
             })
         } else if (inventory.value?.status === 'EN PREPARATION') {
             buttons.push({ id: 'edit', label: 'Modifier', icon: 'mdi-pencil-outline', onClick: editInventory, variant: 'default', class: ACTION_BUTTON_CLASS })
+            if (isInventoryTypeMagasin.value) {
+                buttons.push({
+                    id: 'import-planning',
+                    label: 'Importer planning',
+                    icon: 'mdi-file-upload-outline',
+                    onClick: openPlanningImportModal,
+                    variant: 'default',
+                    class: ACTION_BUTTON_CLASS,
+                })
+            }
         } else if (inventory.value?.status === 'EN REALISATION') {
             buttons.push(
                 { id: 'cancel', label: 'Annuler', icon: 'mdi-close-circle-outline', onClick: async () => { await cancelInventory() }, variant: 'default', class: ACTION_BUTTON_CLASS },
@@ -1555,6 +1565,172 @@ export function useInventoryDetail(inventoryReference: string) {
         })
     }
 
+    // ===== IMPORT PLANNING (MAGASIN) =====
+
+    const showPlanningModal = ref(false)
+    const planningFile = ref<File | null>(null)
+    const planningFileInput = ref<HTMLInputElement | null>(null)
+    const isDraggingPlanning = ref(false)
+    const isUploadingPlanning = ref(false)
+    const planningUploadProgress = ref(0)
+    const planningSuccess = ref(false)
+    const planningSuccessMessage = ref<string | null>(null)
+    const planningError = ref<string | null>(null)
+    const planningErrorDetails = ref<unknown>(null)
+    const planningInfoMessage = ref<string | null>(null)
+
+    const planningModalTitle = computed(() =>
+        inventory.value
+            ? `Import planning — ${inventory.value.label || inventory.value.reference}`
+            : 'Import planning'
+    )
+
+    const openPlanningImportModal = () => {
+        planningFile.value = null
+        planningError.value = null
+        planningErrorDetails.value = null
+        planningSuccess.value = false
+        planningSuccessMessage.value = null
+        planningInfoMessage.value = null
+        planningUploadProgress.value = 0
+        isDraggingPlanning.value = false
+        showPlanningModal.value = true
+    }
+
+    const closePlanningModal = () => {
+        if (isUploadingPlanning.value) return
+        showPlanningModal.value = false
+        planningFile.value = null
+        isDraggingPlanning.value = false
+        planningError.value = null
+        planningErrorDetails.value = null
+        planningSuccess.value = false
+        planningSuccessMessage.value = null
+        planningInfoMessage.value = null
+        planningUploadProgress.value = 0
+    }
+
+    const onPlanningModalVisibilityChange = (visible: boolean) => {
+        if (!visible) closePlanningModal()
+    }
+
+    const validateExcelFile = (file: File): boolean => {
+        const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+        if (!isExcel) {
+            void alertService.error({ text: 'Seuls les fichiers Excel (.xlsx, .xls) sont acceptés' })
+            return false
+        }
+        return true
+    }
+
+    const getFileType = (fileName: string): string => {
+        const ext = fileName.split('.').pop()?.toUpperCase()
+        return ext || 'Fichier'
+    }
+
+    const handlePlanningFileChange = (event: Event) => {
+        const target = event.target as HTMLInputElement
+        if (target.files && target.files.length > 0) {
+            const file = target.files[0]
+            if (validateExcelFile(file)) {
+                planningFile.value = file
+                planningError.value = null
+            }
+            target.value = ''
+        }
+    }
+
+    const handlePlanningDragOver = (event: DragEvent) => {
+        event.preventDefault()
+        isDraggingPlanning.value = true
+    }
+
+    const handlePlanningDragLeave = (event: DragEvent) => {
+        event.preventDefault()
+        isDraggingPlanning.value = false
+    }
+
+    const handlePlanningDrop = (event: DragEvent) => {
+        event.preventDefault()
+        isDraggingPlanning.value = false
+        if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+            const file = event.dataTransfer.files[0]
+            if (validateExcelFile(file)) {
+                planningFile.value = file
+                planningError.value = null
+            }
+        }
+    }
+
+    /**
+     * Import planning Excel (async) — même API que Gestion inventaire
+     * POST /web/api/inventory/{id}/location-jobs/import-async/
+     */
+    const processPlanningUpload = async (file: File) => {
+        const id = inventoryIdResolved.value
+        if (!id) {
+            await alertService.error({ text: 'Identifiant inventaire introuvable.' })
+            return
+        }
+
+        isUploadingPlanning.value = true
+        planningError.value = null
+        planningErrorDetails.value = null
+        planningSuccess.value = false
+        planningInfoMessage.value = 'Upload du fichier en cours...'
+        planningUploadProgress.value = 0
+
+        let progressInterval: ReturnType<typeof setInterval> | null = null
+        try {
+            const formData = new FormData()
+            formData.append('file', file)
+
+            progressInterval = setInterval(() => {
+                planningUploadProgress.value += Math.random() * 20
+                if (planningUploadProgress.value >= 80 && progressInterval) {
+                    clearInterval(progressInterval)
+                    progressInterval = null
+                }
+            }, 300)
+
+            planningInfoMessage.value = 'Traitement des données de planification...'
+            const response = await inventoryStore.importLocationJobsSync(id, formData)
+
+            if (progressInterval) clearInterval(progressInterval)
+            planningUploadProgress.value = 100
+            planningSuccess.value = true
+            planningSuccessMessage.value =
+                (response as { message?: string } | undefined)?.message
+                || 'Planification importée avec succès. Suivi de la tâche en cours…'
+
+            setTimeout(() => {
+                closePlanningModal()
+                handleGoToImportTracking()
+            }, 1500)
+        } catch (error: unknown) {
+            if (progressInterval) clearInterval(progressInterval)
+            planningUploadProgress.value = 0
+            const errData =
+                (error as { response?: { data?: { message?: string; errors?: unknown } } })?.response?.data
+            planningErrorDetails.value = errData || error
+            planningError.value =
+                errData?.message
+                || (error instanceof Error ? error.message : 'Erreur lors de l\'import du planning')
+        } finally {
+            isUploadingPlanning.value = false
+            planningInfoMessage.value = null
+        }
+    }
+
+    const handlePlanningUpload = () => {
+        if (!planningFile.value || isUploadingPlanning.value) return
+        void processPlanningUpload(planningFile.value)
+    }
+
+    const clearPlanningFile = () => {
+        planningFile.value = null
+    }
+
     // ===== RETURN =====
 
     return {
@@ -1656,6 +1832,30 @@ export function useInventoryDetail(inventoryReference: string) {
         // Export
         exportToPDF,
         exportJobsToPDF,
+
+        // Import planning (MAGASIN)
+        showPlanningModal,
+        planningModalTitle,
+        planningFile,
+        planningFileInput,
+        isDraggingPlanning,
+        isUploadingPlanning,
+        planningUploadProgress,
+        planningSuccess,
+        planningSuccessMessage,
+        planningError,
+        planningErrorDetails,
+        planningInfoMessage,
+        openPlanningImportModal,
+        closePlanningModal,
+        onPlanningModalVisibilityChange,
+        handlePlanningFileChange,
+        handlePlanningDragOver,
+        handlePlanningDragLeave,
+        handlePlanningDrop,
+        handlePlanningUpload,
+        clearPlanningFile,
+        getFileType,
 
         // Navigation
         handleGoToImportTracking

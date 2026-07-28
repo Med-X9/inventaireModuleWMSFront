@@ -338,6 +338,77 @@
                     :inventory-id="inventoryIdResolved"
                     :inventory-reference="inventory?.reference ?? null"
                 />
+
+                <!-- Modal import planning (MAGASIN) — même API que Gestion inventaire -->
+                <Dialog
+                    v-model="showPlanningModal"
+                    :title="planningModalTitle"
+                    :size="dialogSizeFullscreen"
+                    @update:model-value="onPlanningModalVisibilityChange"
+                >
+                    <div class="dialog-fullscreen-content inventory-detail-planning-dialog">
+                        <div v-if="inventory" class="inventory-context-bar">
+                            <span class="font-semibold text-gray-800 dark:text-gray-200">{{ inventory.label }}</span>
+                            <span v-if="inventory.date" class="text-sm text-gray-600 dark:text-gray-400">
+                                {{ formatDate(inventory.date) }}
+                            </span>
+                        </div>
+                        <div class="dialog-fullscreen-grid">
+                            <div class="dialog-main">
+                                <FileInputUpload
+                                    :is-dragging="isDraggingPlanning"
+                                    :is-uploading="isUploadingPlanning"
+                                    :selected-file="planningFile"
+                                    :upload-progress="planningUploadProgress"
+                                    uploading-label="Upload en cours..."
+                                    empty-title="Glissez-déposez votre fichier de planification ici"
+                                    empty-description="ou"
+                                    browse-button-label="Parcourir les fichiers"
+                                    accept-description="Formats acceptés : .xlsx, .xls"
+                                    :file-type-label="planningFile ? getFileType(planningFile.name) : ''"
+                                    @browse-click="() => planningFileInput?.click()"
+                                    @dragover="handlePlanningDragOver"
+                                    @dragleave="handlePlanningDragLeave"
+                                    @drop="handlePlanningDrop"
+                                    @clear-file="clearPlanningFile"
+                                />
+                                <Alert v-if="planningSuccess && planningSuccessMessage" type="success" class="mt-4" :message="planningSuccessMessage" title="Planification importée" />
+                                <Alert v-if="planningInfoMessage" type="info" class="mt-4" :message="planningInfoMessage" title="Import en cours" />
+                                <Alert v-if="planningError" type="error" class="mt-4" :message="planningError" title="Erreur" />
+                            </div>
+                            <div class="dialog-sidebar">
+                                <div class="instructions">
+                                    <h4>Instructions</h4>
+                                    <ul>
+                                        <li>Format Excel requis (.xlsx, .xls)</li>
+                                        <li>Import asynchrone (suivi disponible après lancement)</li>
+                                        <li>API : location-jobs/import-async</li>
+                                    </ul>
+                                </div>
+                                <div class="actions">
+                                    <Button variant="secondary" class="w-full" :disabled="isUploadingPlanning" @click="closePlanningModal">
+                                        Annuler
+                                    </Button>
+                                    <Button
+                                        variant="primary"
+                                        class="w-full"
+                                        :disabled="!planningFile || isUploadingPlanning"
+                                        @click="handlePlanningUpload"
+                                    >
+                                        {{ isUploadingPlanning ? 'Upload en cours...' : 'Lancer l\'upload' }}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                        <input
+                            ref="planningFileInput"
+                            type="file"
+                            accept=".xlsx,.xls"
+                            class="hidden"
+                            @change="handlePlanningFileChange"
+                        />
+                    </div>
+                </Dialog>
             </template>
 
             <Card v-else-if="error" class="p-6">
@@ -371,6 +442,7 @@ import {
 import ButtonGroup from '@/components/Form/ButtonGroup.vue'
 import FormBuilder from '@/components/Form/FormBuilder.vue'
 import ValidationAlert from '@/components/ValidationAlert.vue'
+import FileInputUpload from '@/components/Upload/FileInputUpload.vue'
 import { useInventoryDetail } from '@/composables/useInventoryDetail'
 import InventoryDetailSkeleton from '@/components/InventoryDetailSkeleton.vue'
 import InventoryJobsPdfExportModal from '@/components/Inventory/InventoryJobsPdfExportModal.vue'
@@ -379,6 +451,7 @@ import MdiIcon from '@/components/MdiIcon.vue'
 
 const route = useRoute()
 const inventoryReference = route.params.reference as string
+const dialogSizeFullscreen = 'fullscreen' as 'xl'
 
 const {
     inventory,
@@ -415,6 +488,26 @@ const {
     resourceFields,
     onAddResources,
     openAddResourceModal,
+    showPlanningModal,
+    planningModalTitle,
+    planningFile,
+    planningFileInput,
+    isDraggingPlanning,
+    isUploadingPlanning,
+    planningUploadProgress,
+    planningSuccess,
+    planningSuccessMessage,
+    planningError,
+    planningInfoMessage,
+    closePlanningModal,
+    onPlanningModalVisibilityChange,
+    handlePlanningFileChange,
+    handlePlanningDragOver,
+    handlePlanningDragLeave,
+    handlePlanningDrop,
+    handlePlanningUpload,
+    clearPlanningFile,
+    getFileType,
 } = useInventoryDetail(inventoryReference)
 
 const resourceStore = useResourceStore()
@@ -452,3 +545,113 @@ onMounted(async () => {
     await initializeInventory()
 })
 </script>
+
+<style scoped>
+.dialog-fullscreen-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-height: 60vh;
+    padding: 0.5rem;
+}
+@media (min-width: 1024px) {
+    .dialog-fullscreen-content {
+        padding: 1rem;
+    }
+}
+
+.inventory-context-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0.75rem 1rem;
+    background: var(--color-bg-subtle, #f3f4f6);
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+}
+.dark .inventory-context-bar {
+    background: rgba(30, 41, 59, 0.5);
+}
+
+.dialog-fullscreen-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    flex: 1;
+    min-height: 0;
+}
+@media (min-width: 1024px) {
+    .dialog-fullscreen-grid {
+        grid-template-columns: 1fr 360px;
+        gap: 1.5rem;
+    }
+}
+
+.dialog-main,
+.dialog-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 0;
+}
+
+.dialog-sidebar {
+    gap: 1rem;
+}
+
+.instructions {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 0.75rem;
+    padding: 1rem 1.25rem;
+    flex-shrink: 0;
+}
+.dark .instructions {
+    background: linear-gradient(135deg, rgba(30, 58, 138, 0.4) 0%, rgba(30, 64, 175, 0.3) 100%);
+    border-color: rgba(96, 165, 250, 0.3);
+}
+
+.instructions h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem 0;
+    color: #1e40af;
+}
+.dark .instructions h4 {
+    color: #93c5fd;
+}
+
+.instructions ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.instructions li {
+    font-size: 0.8125rem;
+    color: #1e3a8a;
+    padding-left: 1.25rem;
+    position: relative;
+}
+.dark .instructions li {
+    color: #bfdbfe;
+}
+
+.instructions li::before {
+    content: '•';
+    position: absolute;
+    left: 0.25rem;
+    color: #3b82f6;
+}
+
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: auto;
+}
+</style>
