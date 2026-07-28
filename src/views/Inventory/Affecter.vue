@@ -87,8 +87,9 @@
             </div>
 
             <!-- DataTable des jobs - config harmonisée avec InventoryResults.vue -->
+            <!-- ⚡ FIX : :key volatile supprimé (remount complet à chaque refresh, perte de
+                 scroll). Voir fix cellRendererPool côté package. -->
             <DataTable
-                :key="jobsTableKey"
                 :columns="adaptedStoreJobsColumns"
                 :rowDataProp="jobs"
                 :actions="[]"
@@ -360,7 +361,6 @@ const {
     pendingChanges,
     hasUnsavedChanges,
     jobsTableRef,
-    jobsTableKey,
     showDropdown,
     showTeamModal,
     showResourceModal,

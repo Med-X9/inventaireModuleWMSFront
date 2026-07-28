@@ -27,11 +27,17 @@ import { MODAL_CLOSE_DELAY_MS } from '../useInventoryResults.constants'
  * Détecte dynamiquement les champs contage_1, contage_2, contage_3, etc.
  *
  * @param results - Résultats d'inventaire normalisés
- * @returns Tableau des ordres de comptage disponibles (toujours inclure au moins 1 et 2)
+ * @param options.singleCounting - TOURNANT / MAGASIN : un seul comptage (ordre 1)
+ * @returns Tableau des ordres de comptage disponibles
  */
-export function getAvailableCountingOrders(results: InventoryResult[]): number[] {
+export function getAvailableCountingOrders(
+    results: InventoryResult[],
+    options?: { singleCounting?: boolean }
+): number[] {
+    const singleCounting = options?.singleCounting === true
+
     if (!results || results.length === 0) {
-        return [1, 2] // Par défaut, afficher au moins 1er et 2ème comptage
+        return singleCounting ? [1] : [1, 2]
     }
 
     const ordersSet = new Set<number>()
@@ -80,9 +86,16 @@ export function getAvailableCountingOrders(results: InventoryResult[]): number[]
         })
     })
 
-    const orders = Array.from(ordersSet).sort((a, b) => a - b)
+    let orders = Array.from(ordersSet).sort((a, b) => a - b)
 
-    // Toujours inclure au moins 1 et 2
+    // TOURNANT / MAGASIN : un seul comptage
+    if (singleCounting) {
+        if (orders.includes(1)) return [1]
+        if (orders.length > 0) return [orders[0]!]
+        return [1]
+    }
+
+    // GENERAL : toujours inclure au moins 1 et 2
     if (!orders.includes(1)) orders.unshift(1)
     if (!orders.includes(2)) {
         const index = orders.findIndex(o => o > 2)
@@ -97,9 +110,16 @@ export function getAvailableCountingOrders(results: InventoryResult[]): number[]
  * Retourne le label pour un ordre de comptage (1er, 2ème, 3ème, Nème)
  *
  * @param order - Ordre du comptage
- * @returns Label formaté (1er, 2ème, 3ème, etc.)
+ * @param options.singleCounting - Si true, libellé « Comptage » pour l'unique passe
+ * @returns Label formaté
  */
-export function getCountingOrderLabel(order: number): string {
+export function getCountingOrderLabel(
+    order: number,
+    options?: { singleCounting?: boolean }
+): string {
+    if (options?.singleCounting) {
+        return 'Comptage'
+    }
     if (order === 1) return '1er comptage'
     if (order === 2) return '2ème comptage'
     if (order === 3) return '3ème comptage'

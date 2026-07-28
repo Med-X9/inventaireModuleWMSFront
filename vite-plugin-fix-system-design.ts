@@ -30,6 +30,14 @@ export function fixSystemDesignImports(): Plugin {
             // Patcher le bundle principal du package (chargé via module virtuel)
             if (id === PATCHED_MODULE_ID) {
                 const pkgPath = resolve(process.cwd(), 'node_modules/@SMATCH-Digital-dev/vue-system-design/dist/index.js');
+                // ⚡ FIX CRITIQUE : sans addWatchFile, Vite ignore que ce module virtuel dépend
+                // de dist/index.js. Résultat : après `npm publish` + `npm install` d'une nouvelle
+                // version, ce load() n'est JAMAIS ré-exécuté par le serveur de dev (le module
+                // virtuel reste caché avec l'ancien contenu en mémoire) tant que le process
+                // `npm run dev` n'est pas totalement arrêté puis relancé. C'est très probablement
+                // la cause racine de "je republie mais le bug est toujours là" observé en boucle :
+                // le code patché servi au navigateur n'était pas le code du dist réinstallé.
+                this.addWatchFile(pkgPath);
                 let code = readFileSync(pkgPath, 'utf-8');
 
                 // 1. Alias iconSizes / iconStrokeWidth / colors pour IconBase (références nues dans le bundle)

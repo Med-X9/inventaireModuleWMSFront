@@ -67,5 +67,6 @@ export interface CreateInventoryRequest {
     inventory_type: string;
     account_id: number;
     warehouse: InventoryWarehouse[];
-    comptages: CreateCountRequest[];
+    /** Absent à la création : les comptages sont configurés via POST .../countings/ */
+    comptages?: CreateCountRequest[];
 }

@@ -30,6 +30,7 @@ import type { QueryModel, DataTableColumn, ActionConfig, ColumnDataType } from '
  * Options de statut disponibles pour les inventaires
  */
 const INVENTORY_STATUS_OPTIONS = [
+    { value: 'EN CONFIGURATION', label: 'EN CONFIGURATION' },
     { value: 'EN PREPARATION', label: 'EN PREPARATION' },
     { value: 'EN REALISATION', label: 'EN REALISATION' },
     { value: 'TERMINE', label: 'TERMINE' },
@@ -40,6 +41,10 @@ const INVENTORY_STATUS_OPTIONS = [
  * Styles des badges pour chaque statut
  */
 const STATUS_BADGE_STYLES = [
+    {
+        value: 'EN CONFIGURATION',
+        class: 'inline-flex items-center rounded-md bg-violet-50 px-2 py-1 text-xs font-medium text-violet-800 ring-1 ring-violet-600/20 ring-inset'
+    },
     {
         value: 'EN PREPARATION',
         class: 'inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-yellow-600/20 ring-inset'
@@ -89,9 +94,10 @@ export function useInventoryManagement() {
     const pendingTableEvents = ref<Array<{ eventType: string; queryModel: QueryModel }>>([])
     const lastExecutedQueryModel = ref<QueryModel | null>(null)
 
-    const inventoryTableKey = computed(
-        () => `inventory-management-${pagination.value.total}-${inventories.value.length}`,
-    )
+    // ⚡ FIX : inventoryTableKey (basé sur pagination.total/inventories.length) a été supprimé.
+    // Il servait de :key volatile sur <DataTable>, ce qui forçait un remount complet du
+    // composant à chaque refresh (perte de scroll, tri, filtres...). Voir
+    // DIAGNOSTIC-PERFORMANCE-DATATABLE.md et le fix cellRendererPool côté package.
 
     // ===== ÉTATS RÉACTIFS =====
 
@@ -280,6 +286,23 @@ export function useInventoryManagement() {
             onClick: (row: any) => handleDetail(row as InventoryTable),
         },
         {
+            label: 'KPI',
+            icon: 'mdi-chart-box-outline',
+            color: 'info',
+            onClick: (row: any) => handleKpi(row as InventoryTable),
+            show: (row: any) =>
+                ['EN PREPARATION', 'EN REALISATION', 'TERMINE', 'TERMINEE', 'CLOTURE', 'CLOTUREE'].includes(
+                    (row as InventoryTable).status
+                ),
+        },
+        {
+            label: 'Configurer',
+            icon: 'mdi-cog-outline',
+            color: 'primary',
+            onClick: (row: any) => handleConfigure(row as InventoryTable),
+            show: (row: any) => (row as InventoryTable).status === 'EN CONFIGURATION',
+        },
+        {
             label: 'Planifier',
             icon: 'mdi-calendar-outline',
             color: 'primary',
@@ -312,7 +335,7 @@ export function useInventoryManagement() {
             icon: 'mdi-delete-outline',
             color: 'danger',
             onClick: async (row: any) => await handleDelete(row as InventoryTable),
-            show: (row: any) => (row as InventoryTable).status === 'EN PREPARATION',
+            show: (row: any) => ['EN PREPARATION', 'EN CONFIGURATION'].includes((row as InventoryTable).status),
         },
     ]
 
@@ -323,6 +346,20 @@ export function useInventoryManagement() {
      */
     const handleDetail = (inventory: InventoryTable) => {
         router.push({ name: 'inventory-detail', params: { reference: inventory.reference } })
+    }
+
+    /**
+     * Navigation vers le dashboard KPI inventaire (tous magasins)
+     */
+    const handleKpi = (inventory: InventoryTable) => {
+        router.push({ name: 'inventory-level-kpi', params: { reference: inventory.reference } })
+    }
+
+    /**
+     * Navigation vers la page de configuration des comptages
+     */
+    const handleConfigure = (inventory: InventoryTable) => {
+        router.push({ name: 'inventory-configure', params: { reference: inventory.reference } })
     }
 
     /**
@@ -760,7 +797,6 @@ export function useInventoryManagement() {
         inventories,
         loadInventories,
         initializeInventoryTable,
-        inventoryTableKey,
 
         // ===== CONFIGURATION DATATABLE =====
         columns,

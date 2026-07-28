@@ -246,8 +246,6 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
     /** Référence au composant DataTable des jobs */
     const jobsTableRef = ref<any>(null)
 
-    const tableRenderGeneration = ref(0)
-
     /** Référence au dropdown d'actions */
     const dropdownRef = ref<HTMLElement | null>(null)
 
@@ -1174,19 +1172,11 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
         return Array.from(countingOrdersScratch).sort((a, b) => a - b)
     }
 
-    const jobsDynamicColumnsKey = computed(() => {
-        const orders = getAvailableCountingOrders().join(',')
-        const firstRowId = displayData.value[0]?.id ?? 'none'
-        return `${orders}-${displayData.value.length}-${firstRowId}`
-    })
-
-    const jobsTableKey = computed(
-        () =>
-            `affecter-jobs-${inventoryReference}-${warehouseReference}-` +
-            `g${tableRenderGeneration.value}-` +
-            `${jobPaginationMetadata.value?.total ?? 0}-` +
-            `${jobsDynamicColumnsKey.value}`,
-    )
+    // ⚡ FIX : jobsDynamicColumnsKey/jobsTableKey (et tableRenderGeneration qui ne servait
+    // qu'à ça) ont été supprimés. Ils alimentaient un :key volatile sur <DataTable>, forçant
+    // un remount complet à chaque refresh (perte de scroll, tri, filtres...). Le rendu de
+    // cellule figé qui motivait ce contournement était un bug de cache côté package
+    // (cellRendererPool basé sur row.id/reference plutôt que le contenu complet), corrigé.
 
     // Helper : retourne le label pour un ordre de comptage (1er, 2ème, 3ème, Nème)
     const getCountingOrderLabel = (order: number): string => {
@@ -2717,7 +2707,6 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
         fetchInventoryStatus().catch(() => {})
 
         updateDisplayData()
-        tableRenderGeneration.value += 1
     }
 
     const initializeWithData = async () => {
@@ -2833,7 +2822,6 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
         pendingChanges,
         hasUnsavedChanges,
         jobsTableRef,
-        jobsTableKey,
         showDropdown,
         showTeamModal,
         showResourceModal,

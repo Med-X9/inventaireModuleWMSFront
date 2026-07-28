@@ -46,6 +46,9 @@ const API = {
         inventoryResults: {
             base: '/web/api/inventory-results/'
         },
+        ecartStock: {
+            base: '/web/api/ecarts-stock/'
+        },
         article: {
             base: '/mobile/api/'
         },

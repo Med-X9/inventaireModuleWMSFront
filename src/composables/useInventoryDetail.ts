@@ -33,6 +33,15 @@ import { generatePDF } from '@/utils/pdfGenerator'
 // ===== IMPORTS TYPES =====
 import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
 import type { FieldConfig } from '@/interfaces/form'
+import type { InventoryMagasin } from '@/models/InventoryDetail'
+import type { ActionConfig, DataTableColumn, TabOption } from '@SMATCH-Digital-dev/vue-system-design'
+
+interface MagasinTableRow extends InventoryMagasin {
+    _rowId: string | number
+    status_label: string
+    date_label: string
+    status_date_lancement_label: string
+}
 
 // ===== INTERFACES =====
 
@@ -198,6 +207,8 @@ export function useInventoryDetail(inventoryReference: string) {
         if (!status) return 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
 
         switch (status) {
+            case 'EN CONFIGURATION':
+                return 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300'
             case 'EN PREPARATION':
                 return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
             case 'EN REALISATION':
@@ -225,12 +236,21 @@ export function useInventoryDetail(inventoryReference: string) {
     const getStatusBadgeVariant = (status?: string): 'primary' | 'success' | 'error' | 'warning' | 'info' => {
         if (!status) return 'primary'
         switch (status.toUpperCase()) {
+            case 'EN CONFIGURATION':
+                return 'info'
             case 'EN PREPARATION':
                 return 'info'
+            case 'EN ATTENTE':
+                return 'warning'
+            case 'LANCEE':
+                return 'success'
+            case 'TERMINEE':
+            case 'TERMINE':
+                return 'info'
+            case 'ANALYSER':
+                return 'warning'
             case 'EN REALISATION':
                 return 'warning'
-            case 'TERMINE':
-                return 'success'
             case 'CLOTURE':
             case 'CLOTUREE':
                 return 'primary'
@@ -324,6 +344,415 @@ export function useInventoryDetail(inventoryReference: string) {
         return Math.ceil(teamList.length / teamItemsPerPage.value)
     })
 
+    // ===== ONGLETS DÉTAIL =====
+    const activeTab = ref<string | number>('detail')
+
+    const detailTabs: TabOption[] = [
+        { label: 'Détail', value: 'detail' },
+        { label: 'Magasins', value: 'magasins' },
+        { label: 'Équipes', value: 'equipes' },
+        { label: 'Ressources', value: 'resources' },
+    ]
+
+    const MAGASIN_STATUS_BADGE_STYLES = [
+        {
+            value: 'EN ATTENTE',
+            class: 'inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-500/30 dark:bg-amber-900/40 dark:text-amber-200',
+        },
+        {
+            value: 'LANCEE',
+            class: 'inline-flex items-center rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-500/30 dark:bg-emerald-900/40 dark:text-emerald-200',
+        },
+        {
+            value: 'TERMINEE',
+            class: 'inline-flex items-center rounded-md bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-800 ring-1 ring-sky-500/30 dark:bg-sky-900/40 dark:text-sky-200',
+        },
+        {
+            value: 'ANALYSER',
+            class: 'inline-flex items-center rounded-md bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800 ring-1 ring-violet-500/30 dark:bg-violet-900/40 dark:text-violet-200',
+        },
+        {
+            value: 'CLOTURE',
+            class: 'inline-flex items-center rounded-md bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-400/40 dark:bg-slate-700 dark:text-slate-200',
+        },
+    ] as const
+
+    const getMagasinStatus = (row: { status?: string } | null | undefined): string =>
+        (row?.status || 'EN ATTENTE').toUpperCase()
+
+    const isInventoryTypeMagasin = computed(
+        () => (inventory.value?.inventory_type || '').toUpperCase() === 'MAGASIN'
+    )
+
+    const resolveWarehouseId = (row: MagasinTableRow | InventoryMagasin): number | null => {
+        const id = row.id
+        return typeof id === 'number' && id > 0 ? id : null
+    }
+
+    const handleWarehouseSettingError = async (error: unknown, fallbackMessage: string) => {
+        logger.error(fallbackMessage, error)
+        if (error && typeof error === 'object') {
+            const backendError = (error as { response?: { data?: unknown } }).response?.data
+            if (backendError) {
+                validationAlertService.showLaunchErrors(backendError)
+                return
+            }
+        }
+        await alertService.error({
+            title: 'Erreur',
+            text: fallbackMessage,
+        })
+    }
+
+    const magasinsTableRows = computed(() =>
+        (inventory.value?.magasins ?? []).map((magasin, index) => ({
+            ...magasin,
+            _rowId: magasin.id ?? magasin.reference ?? index,
+            status_label: magasin.status || 'EN ATTENTE',
+            date_label: magasin.date ? formatDate(magasin.date) : 'Date non définie',
+            status_date_lancement_label: magasin.status_date_lancement
+                ? formatDate(magasin.status_date_lancement)
+                : '—',
+        }))
+    )
+
+    const equipesTableRows = computed(() =>
+        (inventory.value?.equipe ?? []).map((team, index) => ({
+            ...team,
+            _rowId: team.reference ?? team.user ?? index,
+            utilisateur: getTeamUserName(team),
+            nombre_comptage_label: team.nombre_comptage
+                ? `${team.nombre_comptage} comptage${team.nombre_comptage > 1 ? 's' : ''}`
+                : '—',
+        }))
+    )
+
+    const resourcesTableRows = computed(() =>
+        (inventory.value?.ressources ?? []).map((ressource, index) => ({
+            ...ressource,
+            _rowId: ressource.id ?? ressource.reference ?? index,
+            nom_label: ressource.ressource_nom || 'Ressource sans nom',
+            reference_label: ressource.reference || 'Référence non définie',
+        }))
+    )
+
+    const magasinsColumns = computed<DataTableColumn[]>(() => [
+        {
+            field: 'nom',
+            headerName: 'Magasin',
+            sortable: true,
+            filterable: true,
+            dataType: 'text',
+            width: 200,
+            icon: 'mdi-package-variant',
+        },
+        {
+            field: 'reference',
+            headerName: 'Référence',
+            sortable: true,
+            filterable: true,
+            dataType: 'text',
+            width: 160,
+            icon: 'mdi-identifier',
+        },
+        {
+            field: 'status_label',
+            headerName: 'Statut',
+            sortable: true,
+            filterable: true,
+            dataType: 'select',
+            width: 140,
+            icon: 'mdi-tag-outline',
+            badgeStyles: [...MAGASIN_STATUS_BADGE_STYLES],
+        },
+        {
+            field: 'date_label',
+            headerName: 'Date inventaire',
+            sortable: true,
+            filterable: true,
+            dataType: 'text',
+            width: 150,
+            icon: 'mdi-calendar-outline',
+        },
+        {
+            field: 'status_date_lancement_label',
+            headerName: 'Date lancement',
+            sortable: true,
+            filterable: true,
+            dataType: 'text',
+            width: 150,
+            icon: 'mdi-play-outline',
+        },
+    ])
+
+    const equipesColumns = computed<DataTableColumn[]>(() => [
+        {
+            field: 'utilisateur',
+            headerName: 'Utilisateur',
+            sortable: true,
+            filterable: true,
+            dataType: 'text',
+            width: 220,
+            icon: 'mdi-account-outline',
+        },
+        {
+            field: 'reference',
+            headerName: 'Référence',
+            sortable: true,
+            filterable: true,
+            dataType: 'text',
+            width: 180,
+            icon: 'mdi-identifier',
+        },
+        {
+            field: 'nombre_comptage_label',
+            headerName: 'Comptages',
+            sortable: true,
+            filterable: true,
+            dataType: 'text',
+            width: 140,
+            icon: 'mdi-numeric',
+        },
+    ])
+
+    const resourcesColumns = computed<DataTableColumn[]>(() => [
+        {
+            field: 'nom_label',
+            headerName: 'Ressource',
+            sortable: true,
+            filterable: true,
+            dataType: 'text',
+            width: 220,
+            icon: 'mdi-cube-outline',
+        },
+        {
+            field: 'reference_label',
+            headerName: 'Référence',
+            sortable: true,
+            filterable: true,
+            dataType: 'text',
+            width: 180,
+            icon: 'mdi-identifier',
+        },
+        {
+            field: 'quantity',
+            headerName: 'Quantité',
+            sortable: true,
+            filterable: true,
+            dataType: 'number',
+            width: 120,
+            icon: 'mdi-counter',
+        },
+    ])
+
+    const cancelWarehouseLaunchByRow = async (row: MagasinTableRow) => {
+        if (!inventoryId.value) return false
+        const warehouseId = resolveWarehouseId(row)
+        if (!warehouseId) {
+            await alertService.error({ title: 'Erreur', text: `ID magasin introuvable pour "${row.nom}"` })
+            return false
+        }
+        try {
+            const result = await alertService.confirm({
+                title: 'Annuler le lancement',
+                text: `Annuler le lancement du magasin "${row.nom}" ? Il repassera en EN ATTENTE.`,
+            })
+            if (!result.isConfirmed) return false
+            await inventoryStore.cancelWarehouseLaunch(inventoryId.value, warehouseId)
+            await loadDetailData()
+            await alertService.success({ text: `Lancement annulé pour "${row.nom}"` })
+            return true
+        } catch (error) {
+            await handleWarehouseSettingError(error, 'Impossible d\'annuler le lancement')
+            return false
+        }
+    }
+
+    const termineWarehouseByRow = async (row: MagasinTableRow) => {
+        if (!inventoryId.value) return false
+        const warehouseId = resolveWarehouseId(row)
+        if (!warehouseId) {
+            await alertService.error({ title: 'Erreur', text: `ID magasin introuvable pour "${row.nom}"` })
+            return false
+        }
+        try {
+            const result = await alertService.confirm({
+                title: 'Terminer le magasin',
+                text: `Terminer le magasin "${row.nom}" ? Tous les jobs doivent être TERMINE.`,
+            })
+            if (!result.isConfirmed) return false
+            await inventoryStore.termineWarehouse(inventoryId.value, warehouseId)
+            await loadDetailData()
+            await alertService.success({ text: `Magasin "${row.nom}" terminé` })
+            return true
+        } catch (error) {
+            await handleWarehouseSettingError(error, 'Impossible de terminer le magasin')
+            return false
+        }
+    }
+
+    const analyserWarehouseByRow = async (row: MagasinTableRow) => {
+        if (!inventoryId.value) return false
+        const warehouseId = resolveWarehouseId(row)
+        if (!warehouseId) {
+            await alertService.error({ title: 'Erreur', text: `ID magasin introuvable pour "${row.nom}"` })
+            return false
+        }
+        try {
+            const result = await alertService.confirm({
+                title: 'Analyser le magasin',
+                text: `Analyser le magasin "${row.nom}" ? Les écarts stock seront calculés et enregistrés.`,
+            })
+            if (!result.isConfirmed) return false
+            await inventoryStore.analyserWarehouse(inventoryId.value, warehouseId)
+            await loadDetailData()
+            await alertService.success({ text: `Analyse terminée pour "${row.nom}"` })
+            return true
+        } catch (error) {
+            await handleWarehouseSettingError(error, 'Impossible d\'analyser le magasin')
+            return false
+        }
+    }
+
+    const closeWarehouseByRow = async (row: MagasinTableRow) => {
+        if (!inventoryId.value) return false
+        const warehouseId = resolveWarehouseId(row)
+        if (!warehouseId) {
+            await alertService.error({ title: 'Erreur', text: `ID magasin introuvable pour "${row.nom}"` })
+            return false
+        }
+        try {
+            const result = await alertService.confirm({
+                title: 'Clôturer le magasin',
+                text: `Clôturer le magasin "${row.nom}" ? Cette action est définitive.`,
+            })
+            if (!result.isConfirmed) return false
+            await inventoryStore.closeWarehouse(inventoryId.value, warehouseId)
+            await loadDetailData()
+            await alertService.success({ text: `Magasin "${row.nom}" clôturé` })
+            return true
+        } catch (error) {
+            await handleWarehouseSettingError(error, 'Impossible de clôturer le magasin')
+            return false
+        }
+    }
+
+    /**
+     * Actions magasin selon le cycle Setting :
+     * EN ATTENTE → planif / affectation / import / lancer
+     * LANCEE → annuler lancement / terminer / suivi / KPI / résultats / monitoring
+     * TERMINEE → analyser
+     * ANALYSER → écarts stock / clôturer (MAGASIN)
+     * GENERAL/TOURNANT → clôturer depuis LANCEE
+     */
+    const magasinsActions = computed<ActionConfig<MagasinTableRow>[]>(() => [
+        {
+            label: 'Planification',
+            icon: 'mdi-calendar-outline',
+            color: 'info',
+            onClick: (row) => goToWarehousePlanning(row.reference || ''),
+            show: (row) => getMagasinStatus(row) === 'EN ATTENTE',
+        },
+        {
+            label: 'Affectation',
+            icon: 'mdi-account-group-outline',
+            color: 'info',
+            onClick: (row) => goToWarehouseAffectation(row.reference || ''),
+            show: (row) => getMagasinStatus(row) === 'EN ATTENTE',
+        },
+        {
+            label: 'Import stock',
+            icon: 'mdi-file-excel-outline',
+            color: 'secondary',
+            onClick: (row) => goToWarehouseStockImport(row.reference || ''),
+            show: (row) => getMagasinStatus(row) === 'EN ATTENTE',
+        },
+        {
+            label: 'Lancer',
+            icon: 'mdi-play-outline',
+            color: 'success',
+            onClick: async (row) => {
+                await launchInventoryByWarehouseName(row.nom)
+            },
+            show: (row) => getMagasinStatus(row) === 'EN ATTENTE',
+        },
+        {
+            label: 'Annuler lancement',
+            icon: 'mdi-close-circle-outline',
+            color: 'danger',
+            onClick: async (row) => {
+                await cancelWarehouseLaunchByRow(row)
+            },
+            show: (row) => getMagasinStatus(row) === 'LANCEE',
+        },
+        {
+            label: 'Terminer',
+            icon: 'mdi-check-circle-outline',
+            color: 'success',
+            onClick: async (row) => {
+                await termineWarehouseByRow(row)
+            },
+            show: (row) => getMagasinStatus(row) === 'LANCEE',
+        },
+        {
+            label: 'Suivi',
+            icon: 'mdi-clipboard-text-outline',
+            color: 'info',
+            onClick: (row) => goToWarehouseTracking(row.reference || ''),
+            show: (row) => getMagasinStatus(row) === 'LANCEE',
+        },
+        {
+            label: 'KPI',
+            icon: 'mdi-view-dashboard-outline',
+            color: 'primary',
+            onClick: (row) => goToWarehouseKpiDashboard(row.reference || ''),
+            show: (row) => getMagasinStatus(row) === 'LANCEE',
+        },
+        {
+            label: 'Résultats',
+            icon: 'mdi-chart-bar',
+            color: 'primary',
+            onClick: (row) => goToWarehouseResults(row.reference || ''),
+            show: (row) => ['LANCEE', 'TERMINEE', 'ANALYSER', 'CLOTURE'].includes(getMagasinStatus(row)),
+        },
+        {
+            label: 'Monitoring',
+            icon: 'mdi-chart-box-outline',
+            color: 'info',
+            onClick: (row) => goToWarehouseMonitoring(row.reference || ''),
+            show: (row) => getMagasinStatus(row) === 'LANCEE',
+        },
+        {
+            label: 'Analyser',
+            icon: 'mdi-chart-timeline-variant',
+            color: 'warning',
+            onClick: async (row) => {
+                await analyserWarehouseByRow(row)
+            },
+            show: (row) => getMagasinStatus(row) === 'TERMINEE',
+        },
+        {
+            label: 'Écarts stock',
+            icon: 'mdi-scale-balance',
+            color: 'warning',
+            onClick: (row) => goToWarehouseStockGaps(row.reference || ''),
+            show: (row) => ['ANALYSER', 'CLOTURE'].includes(getMagasinStatus(row)),
+        },
+        {
+            label: 'Clôturer',
+            icon: 'mdi-lock-outline',
+            color: 'secondary',
+            onClick: async (row) => {
+                await closeWarehouseByRow(row)
+            },
+            show: (row) => {
+                const status = getMagasinStatus(row)
+                if (isInventoryTypeMagasin.value) return status === 'ANALYSER'
+                return status === 'LANCEE'
+            },
+        },
+    ])
+
     // ===== NAVIGATION WAREHOUSE =====
     const goToWarehousePlanning = (warehouseReference: string) => {
         router.push({
@@ -367,38 +796,104 @@ export function useInventoryDetail(inventoryReference: string) {
             params: { reference: inventoryReference, warehouse: warehouseReference }
         })
     }
+    const goToWarehouseStockImport = (warehouseReference: string) => {
+        router.push({
+            name: 'inventory-stock-import',
+            params: { reference: inventoryReference, warehouse: warehouseReference }
+        })
+    }
+    const goToWarehouseStockGaps = (warehouseReference: string) => {
+        router.push({
+            name: 'inventory-stock-gaps',
+            params: { reference: inventoryReference, warehouse: warehouseReference }
+        })
+    }
 
     /**
-     * Génère les boutons d'action pour un magasin (planning, affectation, résultats, etc.)
+     * Boutons magasin (legacy ButtonGroup) — alignés sur le cycle Setting, sans réaffectation
      */
-    const getWarehouseButtons = (magasin: any): ButtonGroupButton[] => {
+    const getWarehouseButtons = (magasin: InventoryMagasin): ButtonGroupButton[] => {
         const warehouseName = magasin?.nom
-        const warehouseReference = magasin?.reference
+        const warehouseReference = magasin?.reference || ''
+        const status = getMagasinStatus(magasin)
+        const row = magasin as MagasinTableRow
+        const buttons: ButtonGroupButton[] = []
 
-        const buttons: ButtonGroupButton[] = [
-            { id: 'planning', label: '', title: 'Planification', icon: 'mdi-calendar-outline', onClick: () => goToWarehousePlanning(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
-            { id: 'affectation', label: '', title: 'Affectation', icon: 'mdi-account-group-outline', onClick: () => goToWarehouseAffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
-            { id: 'reaffectation', label: '', title: 'Réaffectation', icon: 'mdi-account-switch-outline', onClick: () => goToWarehouseReaffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
-            { id: 'tracking', label: '', title: 'Suivi', icon: 'mdi-clipboard-text-outline', onClick: () => goToWarehouseTracking(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS }
-        ]
-        if (inventory.value?.status === 'EN REALISATION') {
+        if (status === 'EN ATTENTE') {
             buttons.push(
+                { id: 'planning', label: '', title: 'Planification', icon: 'mdi-calendar-outline', onClick: () => goToWarehousePlanning(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+                { id: 'affectation', label: '', title: 'Affectation', icon: 'mdi-account-group-outline', onClick: () => goToWarehouseAffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+                { id: 'stock-import', label: '', title: 'Import stock théorique', icon: 'mdi-file-excel-outline', onClick: () => goToWarehouseStockImport(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+                {
+                    id: 'launch',
+                    label: '',
+                    title: "Lancer l'inventaire pour ce magasin",
+                    icon: 'mdi-play-outline',
+                    onClick: async () => { await launchInventoryByWarehouseName(warehouseName) },
+                    variant: 'default',
+                    class: ACTION_BUTTON_CLASS,
+                }
+            )
+        }
+
+        if (status === 'LANCEE') {
+            buttons.push(
+                { id: 'cancel-launch', label: '', title: 'Annuler le lancement', icon: 'mdi-close-circle-outline', onClick: async () => { await cancelWarehouseLaunchByRow(row) }, variant: 'default', class: ACTION_BUTTON_CLASS },
+                { id: 'termine', label: '', title: 'Terminer', icon: 'mdi-check-circle-outline', onClick: async () => { await termineWarehouseByRow(row) }, variant: 'default', class: ACTION_BUTTON_CLASS },
+                { id: 'tracking', label: '', title: 'Suivi', icon: 'mdi-clipboard-text-outline', onClick: () => goToWarehouseTracking(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
                 { id: 'kpi-dashboard', label: '', title: 'Tableau de bord KPI', icon: 'mdi-view-dashboard-outline', onClick: () => goToWarehouseKpiDashboard(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
                 { id: 'results', label: '', title: 'Résultats', icon: 'mdi-chart-bar', onClick: () => goToWarehouseResults(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
                 { id: 'monitoring', label: '', title: 'Monitoring zones', icon: 'mdi-chart-box-outline', onClick: () => goToWarehouseMonitoring(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS }
             )
+            if (!isInventoryTypeMagasin.value) {
+                buttons.push({
+                    id: 'close',
+                    label: '',
+                    title: 'Clôturer',
+                    icon: 'mdi-lock-outline',
+                    onClick: async () => { await closeWarehouseByRow(row) },
+                    variant: 'default',
+                    class: ACTION_BUTTON_CLASS,
+                })
+            }
         }
-        if (inventory.value?.status === 'EN PREPARATION') {
+
+        if (status === 'TERMINEE') {
             buttons.push({
-                id: 'launch',
+                id: 'analyser',
                 label: '',
-                title: "Lancer l'inventaire pour ce magasin",
-                icon: 'mdi-play-outline',
-                onClick: async () => { await launchInventoryByWarehouseName(warehouseName) },
+                title: 'Analyser',
+                icon: 'mdi-chart-timeline-variant',
+                onClick: async () => { await analyserWarehouseByRow(row) },
                 variant: 'default',
-                class: ACTION_BUTTON_CLASS
+                class: ACTION_BUTTON_CLASS,
             })
         }
+
+        if (status === 'ANALYSER' || status === 'CLOTURE') {
+            buttons.push({
+                id: 'stock-gaps',
+                label: '',
+                title: 'Écarts stock',
+                icon: 'mdi-scale-balance',
+                onClick: () => goToWarehouseStockGaps(warehouseReference),
+                variant: 'default',
+                class: ACTION_BUTTON_CLASS,
+            })
+        }
+
+        if (status === 'ANALYSER' && isInventoryTypeMagasin.value) {
+            buttons.push({
+                id: 'close',
+                label: '',
+                title: 'Clôturer',
+                icon: 'mdi-lock-outline',
+                onClick: async () => { await closeWarehouseByRow(row) },
+                variant: 'default',
+                class: ACTION_BUTTON_CLASS,
+            })
+        }
+
         return buttons
     }
 
@@ -407,7 +902,16 @@ export function useInventoryDetail(inventoryReference: string) {
      */
     const actionButtons = computed<ButtonGroupButton[]>(() => {
         const buttons: ButtonGroupButton[] = []
-        if (inventory.value?.status === 'EN PREPARATION') {
+        if (inventory.value?.status === 'EN CONFIGURATION') {
+            buttons.push({
+                id: 'configure',
+                label: 'Configurer',
+                icon: 'mdi-cog-outline',
+                onClick: configureInventory,
+                variant: 'default',
+                class: ACTION_BUTTON_CLASS,
+            })
+        } else if (inventory.value?.status === 'EN PREPARATION') {
             buttons.push({ id: 'edit', label: 'Modifier', icon: 'mdi-pencil-outline', onClick: editInventory, variant: 'default', class: ACTION_BUTTON_CLASS })
         } else if (inventory.value?.status === 'EN REALISATION') {
             buttons.push(
@@ -441,69 +945,31 @@ export function useInventoryDetail(inventoryReference: string) {
     /**
      * Lance l'inventaire pour un warehouse spécifique
      *
-     * @param warehouseId - ID du warehouse (optionnel, si non fourni lance pour tous les warehouses)
+     * @param warehouseId - ID du warehouse (optionnel, si non fourni lance tous les magasins EN ATTENTE)
      */
     const launchInventoryByWarehause = async (warehouseId?: number) => {
         if (!inventory.value || !inventoryId.value) return false
 
-        // Capturer la valeur de inventoryId dans une variable locale pour éviter les problèmes de type dans les closures
         const currentInventoryId: number = inventoryId.value
 
         try {
-            const result = await alertService.confirm({
-                title: 'Lancer l\'inventaire',
-                text: warehouseId
-                    ? `Voulez-vous vraiment lancer l'inventaire "${inventory.value.label}" pour ce magasin ?`
-                    : `Voulez-vous vraiment lancer l'inventaire "${inventory.value.label}" ?`
-            })
+            if (warehouseId) {
+                const result = await alertService.confirm({
+                    title: 'Lancer l\'inventaire',
+                    text: `Voulez-vous vraiment lancer l'inventaire "${inventory.value.label}" pour ce magasin ?`,
+                })
 
-            if (result.isConfirmed) {
-                if (warehouseId) {
-                    // Lancer pour un warehouse spécifique
-                    await inventoryStore.launchInventoryByWarehause(currentInventoryId, warehouseId)
-                } else {
-                    // Si aucun warehouseId n'est fourni, lancer pour tous les warehouses
-                    // Itérer sur tous les magasins de l'inventaire
-                    const warehouses = inventory.value?.magasins || []
-                    if (warehouses.length === 0) {
-                        await alertService.error({
-                            title: 'Erreur',
-                            text: 'Aucun magasin associé à cet inventaire'
-                        })
-                        return false
-                    }
+                if (!result.isConfirmed) return false
 
-                    // Lancer pour chaque warehouse
-                    const launchPromises = warehouses.map(async (magasin) => {
-                        try {
-                            // Les informations des magasins (dont potentiellement l'ID) viennent déjà de l'API
-                            // GET /inventory/{id}/warehouses/ via InventoryService.getInventoryWarehouses
-                            const whId = (magasin as any).id
-
-                            if (typeof whId === 'number' && whId > 0) {
-                                return inventoryStore.launchInventoryByWarehause(currentInventoryId, whId)
-                            }
-                            logger.warn(`Warehouse ID invalide pour le magasin ${magasin.nom}: ${whId}`)
-                            return null
-                        } catch (error) {
-                            logger.error(`Erreur lors du lancement pour le magasin ${magasin.nom}`, error)
-                            return null
-                        }
-                    })
-
-                    await Promise.all(launchPromises)
-                }
+                await inventoryStore.launchInventoryByWarehause(currentInventoryId, warehouseId)
                 await loadDetailData()
-
                 await alertService.success({
-                    text: warehouseId
-                        ? 'L\'inventaire a été lancé avec succès pour ce magasin'
-                        : 'L\'inventaire a été lancé avec succès'
+                    text: 'L\'inventaire a été lancé avec succès pour ce magasin',
                 })
                 return true
             }
 
-            return false
+            return await launchMultipleWarehouses()
         } catch (error) {
             logger.error('Erreur lors du lancement', error)
 
@@ -517,8 +983,173 @@ export function useInventoryDetail(inventoryReference: string) {
 
             await alertService.error({
                 title: 'Erreur de lancement',
-                text: 'Une erreur est survenue lors du lancement de l\'inventaire'
+                text: 'Une erreur est survenue lors du lancement de l\'inventaire',
             })
+            return false
+        }
+    }
+
+    /** IDs des magasins sélectionnés dans le DataTable (lancement multi) */
+    const selectedMagasinIds = ref<Array<string | number>>([])
+
+    const onMagasinsSelectionChanged = (selectedRows: Set<string> | MagasinTableRow[]) => {
+        if (selectedRows instanceof Set) {
+            selectedMagasinIds.value = Array.from(selectedRows)
+            return
+        }
+        if (Array.isArray(selectedRows)) {
+            selectedMagasinIds.value = selectedRows
+                .map((row) => row.id ?? row._rowId)
+                .filter((id): id is string | number => id !== undefined && id !== null && id !== '')
+            return
+        }
+        selectedMagasinIds.value = []
+    }
+
+    const selectedMagasins = computed(() => {
+        const ids = new Set(selectedMagasinIds.value.map(String))
+        if (ids.size === 0) return []
+        return magasinsTableRows.value.filter((m) =>
+            ids.has(String(m.id)) || ids.has(String(m._rowId)) || (m.reference != null && ids.has(String(m.reference)))
+        )
+    })
+
+    /** Magasins encore lançables (EN ATTENTE) */
+    const magasinsEnAttente = computed(() =>
+        magasinsTableRows.value.filter(
+            (m) => getMagasinStatus(m) === 'EN ATTENTE' && typeof m.id === 'number' && m.id > 0
+        )
+    )
+
+    /** Magasins lançables pour terminaison (LANCEE) */
+    const magasinsLancee = computed(() =>
+        magasinsTableRows.value.filter(
+            (m) => getMagasinStatus(m) === 'LANCEE' && typeof m.id === 'number' && m.id > 0
+        )
+    )
+
+    const canLaunchMultipleWarehouses = computed(() => magasinsEnAttente.value.length > 0)
+    const canTermineMultipleWarehouses = computed(() => magasinsLancee.value.length > 0)
+
+    /**
+     * Lance plusieurs magasins via POST .../warehouses/launch/
+     * Utilise la sélection DataTable si présente, sinon tous les magasins EN ATTENTE.
+     */
+    const launchMultipleWarehouses = async () => {
+        if (!inventory.value || !inventoryId.value) return false
+
+        const currentInventoryId = inventoryId.value
+
+        const selectedPending = selectedMagasins.value.filter(
+            (m) => (m.status || 'EN ATTENTE').toUpperCase() === 'EN ATTENTE' && typeof m.id === 'number' && m.id > 0
+        )
+
+        const targets = selectedPending.length > 0 ? selectedPending : magasinsEnAttente.value
+
+        if (targets.length === 0) {
+            await alertService.error({
+                title: 'Aucun magasin',
+                text: 'Aucun magasin en attente à lancer.',
+            })
+            return false
+        }
+
+        const warehouseIds = targets.map((m) => m.id as number)
+        const namesPreview = targets
+            .slice(0, 5)
+            .map((m) => m.nom)
+            .join(', ')
+        const more = targets.length > 5 ? ` (+${targets.length - 5})` : ''
+
+        try {
+            const result = await alertService.confirm({
+                title: 'Lancer les magasins',
+                text: `Voulez-vous lancer l'inventaire "${inventory.value.label}" pour ${targets.length} magasin(s) : ${namesPreview}${more} ?`,
+            })
+
+            if (!result.isConfirmed) return false
+
+            await inventoryStore.launchInventoryWarehouses(currentInventoryId, warehouseIds)
+            selectedMagasinIds.value = []
+            await loadDetailData()
+
+            await alertService.success({
+                text: `${targets.length} magasin(s) lancé(s) avec succès`,
+            })
+            return true
+        } catch (error) {
+            logger.error('Erreur lors du lancement multi-magasins', error)
+
+            if (error && typeof error === 'object') {
+                const backendError = (error as any).response?.data
+                if (backendError) {
+                    validationAlertService.showLaunchErrors(backendError)
+                    return false
+                }
+            }
+
+            await alertService.error({
+                title: 'Erreur de lancement',
+                text: 'Une erreur est survenue lors du lancement des magasins',
+            })
+            return false
+        }
+    }
+
+    /**
+     * Termine plusieurs magasins via POST .../warehouses/termine/
+     * Sélection DataTable si présente, sinon tous les magasins LANCEE.
+     */
+    const termineMultipleWarehouses = async () => {
+        if (!inventory.value || !inventoryId.value) return false
+
+        const currentInventoryId = inventoryId.value
+        const selectedLancee = selectedMagasins.value.filter(
+            (m) => getMagasinStatus(m) === 'LANCEE' && typeof m.id === 'number' && m.id > 0
+        )
+        const targets = selectedLancee.length > 0 ? selectedLancee : magasinsLancee.value
+
+        if (targets.length === 0) {
+            await alertService.error({
+                title: 'Aucun magasin',
+                text: 'Aucun magasin lancé à terminer.',
+            })
+            return false
+        }
+
+        const warehouseIds = targets.map((m) => m.id as number)
+        const namesPreview = targets
+            .slice(0, 5)
+            .map((m) => m.nom)
+            .join(', ')
+        const more = targets.length > 5 ? ` (+${targets.length - 5})` : ''
+
+        try {
+            const result = await alertService.confirm({
+                title: 'Terminer les magasins',
+                text: `Terminer ${targets.length} magasin(s) : ${namesPreview}${more} ? Tous leurs jobs doivent être TERMINE.`,
+            })
+
+            if (!result.isConfirmed) return false
+
+            const response = await inventoryStore.termineWarehouses(currentInventoryId, warehouseIds)
+            selectedMagasinIds.value = []
+            await loadDetailData()
+
+            const failedCount = (response as { failed_count?: number } | undefined)?.failed_count ?? 0
+            if (failedCount > 0) {
+                await alertService.error({
+                    title: 'Terminaison partielle',
+                    text: `${(response as { completed_count?: number })?.completed_count ?? 0} magasin(s) terminé(s), ${failedCount} échec(s).`,
+                })
+            } else {
+                await alertService.success({
+                    text: `${targets.length} magasin(s) terminé(s) avec succès`,
+                })
+            }
+            return failedCount === 0
+        } catch (error) {
+            await handleWarehouseSettingError(error, 'Impossible de terminer les magasins')
             return false
         }
     }
@@ -568,6 +1199,13 @@ export function useInventoryDetail(inventoryReference: string) {
      */
     const editInventory = () => {
         router.push({ name: 'inventory-edit', params: { reference: inventoryReference } })
+    }
+
+    /**
+     * Redirige vers la page de configuration des comptages
+     */
+    const configureInventory = () => {
+        router.push({ name: 'inventory-configure', params: { reference: inventoryReference } })
     }
 
     /**
@@ -935,12 +1573,31 @@ export function useInventoryDetail(inventoryReference: string) {
         resourcesLoading,
         resourcesError,
 
-        // Pagination équipe
+        // Pagination équipe (legacy)
         teamCurrentPage,
         teamItemsPerPage,
         paginatedTeam,
         teamTotalPages,
         getTeamUserName,
+
+        // Onglets et DataTables
+        activeTab,
+        detailTabs,
+        magasinsTableRows,
+        equipesTableRows,
+        resourcesTableRows,
+        magasinsColumns,
+        equipesColumns,
+        resourcesColumns,
+        magasinsActions,
+
+        // Lancement multi-magasins
+        selectedMagasins,
+        onMagasinsSelectionChanged,
+        canLaunchMultipleWarehouses,
+        canTermineMultipleWarehouses,
+        launchMultipleWarehouses,
+        termineMultipleWarehouses,
 
         // Boutons et navigation warehouse
         actionButtons,
@@ -953,6 +1610,8 @@ export function useInventoryDetail(inventoryReference: string) {
         goToWarehouseTracking,
         goToWarehouseMonitoring,
         goToWarehouseKpiDashboard,
+        goToWarehouseStockImport,
+        goToWarehouseStockGaps,
 
         // Helpers affichage
         getStatusBadgeVariant,
@@ -965,6 +1624,7 @@ export function useInventoryDetail(inventoryReference: string) {
         launchInventoryByWarehouseName,
         launchInventory: launchInventoryByWarehause,
         editInventory,
+        configureInventory,
         cancelInventory,
         terminateInventory,
         closeInventory,

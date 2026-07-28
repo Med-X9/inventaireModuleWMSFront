@@ -42,7 +42,8 @@ export class Formatters {
     static formatInventoryType(type: string | undefined): string {
         const types: Record<string, string> = {
             'GENERAL': 'Général',
-            'TOURNANT': 'Tournant'
+            'TOURNANT': 'Tournant',
+            'MAGASIN': 'Magasin'
         };
         return types[type || ''] || type || 'Non défini';
     }

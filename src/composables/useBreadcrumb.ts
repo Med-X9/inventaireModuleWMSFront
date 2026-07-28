@@ -66,11 +66,22 @@ const breadcrumbConfig: BreadcrumbConfig = {
         { label: params.reference || '' }
     ],
 
+    // Route de configuration d'inventaire
+    'inventory-configure': (params) => [
+        { label: 'Gestion d\'inventaire', path: '/inventory/management' },
+        { label: 'Configuration d\'inventaire', isActive: true },
+        { label: params.reference || '' }
+    ],
+
     // Route des résultats d'inventaire
     'inventory-results': (params) => [
         { label: 'Gestion d\'inventaire', path: '/inventory/management' },
+        ...(params.warehouse
+            ? [{ label: 'Analyse stock', path: `/inventory/${params.reference}/${params.warehouse}/stock-gaps` }]
+            : []),
         { label: 'Résultats d\'inventaire', isActive: true },
-        { label: params.reference || '' }
+        { label: params.reference || '' },
+        ...(params.warehouse ? [{ label: params.warehouse }] : [])
     ],
 
     // Dashboard KPI magasin
@@ -78,6 +89,34 @@ const breadcrumbConfig: BreadcrumbConfig = {
         { label: 'Gestion d\'inventaire', path: '/inventory/management' },
         { label: 'Détail inventaire', path: `/inventory/${params.reference}/detail` },
         { label: 'Tableau de bord KPI', isActive: true },
+        { label: params.reference || '' },
+        ...(params.warehouse ? [{ label: params.warehouse }] : [])
+    ],
+
+    // Dashboard KPI inventaire (tous magasins)
+    'inventory-level-kpi': (params) => [
+        { label: 'Gestion d\'inventaire', path: '/inventory/management' },
+        { label: 'KPI inventaire', isActive: true },
+        { label: params.reference || '' }
+    ],
+
+    // Import stock théorique
+    'inventory-stock-import': (params) => [
+        { label: 'Gestion d\'inventaire', path: '/inventory/management' },
+        { label: 'Détail inventaire', path: `/inventory/${params.reference}/detail` },
+        { label: 'Import stock théorique', isActive: true },
+        { label: params.reference || '' },
+        ...(params.warehouse ? [{ label: params.warehouse }] : [])
+    ],
+
+    // Écarts stock théorique
+    'inventory-stock-gaps': (params) => [
+        { label: 'Gestion d\'inventaire', path: '/inventory/management' },
+        { label: 'Détail inventaire', path: `/inventory/${params.reference}/detail` },
+        ...(params.warehouse
+            ? [{ label: 'Résultats', path: `/inventory/${params.reference}/${params.warehouse}/results` }]
+            : []),
+        { label: 'Analyse stock', isActive: true },
         { label: params.reference || '' },
         ...(params.warehouse ? [{ label: params.warehouse }] : [])
     ],

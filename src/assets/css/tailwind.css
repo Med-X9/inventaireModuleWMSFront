@@ -52,6 +52,10 @@
 
 
 @layer components {
+    .container-fluid {
+        @apply w-full px-4 md:px-6 lg:px-8;
+    }
+
     html {
         @apply scroll-smooth;
     }

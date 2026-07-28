@@ -11,7 +11,6 @@ import {
     fetchWarehouseIdByReference,
 } from '@/composables/affecter/helpers'
 import { InventoryKpiService } from '@/services/InventoryKpiService'
-import { parseInventoryKpiResponse } from '@/utils/inventoryKpiResponseParser'
 import type {
     AssignmentsByCounting,
     InventoryKpiData,
@@ -94,7 +93,10 @@ export function useInventoryKpiDashboard(config: UseInventoryKpiDashboardConfig)
                 inventoryId.value,
                 warehouseId.value
             )
-            const { meta: responseMeta, data } = parseInventoryKpiResponse(response.data)
+            // Le service assemble déjà InventoryKpiData ; on lit directement le payload.
+            const apiPayload = response.data
+            const responseMeta = apiPayload.meta
+            const data = apiPayload.data ?? null
 
             const warehouseFromStore = warehouseStore.warehouses.find(
                 (w) => w.reference === warehouseReference.value,
@@ -103,11 +105,11 @@ export function useInventoryKpiDashboard(config: UseInventoryKpiDashboardConfig)
             meta.value = {
                 inventory_id: inventoryId.value,
                 warehouse_id: warehouseId.value,
-                ...responseMeta,
                 warehouse_name:
                     responseMeta?.warehouse_name
                     ?? warehouseFromStore?.warehouse_name
                     ?? warehouseReference.value,
+                generated_at: responseMeta?.generated_at,
             }
             kpiData.value = data
         } catch (err: unknown) {

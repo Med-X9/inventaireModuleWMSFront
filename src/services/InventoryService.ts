@@ -17,6 +17,13 @@ interface PaginatedResponse<T> {
 }
 
 import type { DataTableResponse, DataTableParams } from '@/utils/dataTableUtils';
+import type {
+    EcartStockBulkValidateResponse,
+    EcartStockMutationResponse,
+    StockGapResponse,
+    StockImportStartResponse,
+    StockImportStatusResponse,
+} from '@/models/TheoreticalStock';
 
 // ---------------------------------------------------------------------------
 // PDF jobs inventaire — POST /web/api/inventory/<id>/jobs/pdf/ (API_PDF_INVENTAIRE.md)
@@ -331,6 +338,23 @@ export class InventoryService {
     }
 
     /**
+     * Configurer les comptages d'un inventaire (EN CONFIGURATION → EN PREPARATION)
+     * @param id - ID de l'inventaire
+     * @param data - Payload des comptages selon le type d'inventaire
+     */
+    static async configureCountings(
+        id: number | string,
+        data: Record<string, unknown>
+    ): Promise<AxiosResponse<unknown>> {
+        try {
+            return await axiosInstance.post(`${API.endpoints.inventory.base}${id}/countings/`, data);
+        } catch (error) {
+            logger.error(`Erreur lors de la configuration des comptages de l'inventaire ${id}`, error);
+            throw error;
+        }
+    }
+
+    /**
      * Récupérer l'équipe assignée à l'inventaire
      * @param id - ID de l'inventaire
      * @returns Promise avec l'équipe assignée
@@ -404,8 +428,9 @@ export class InventoryService {
     }
 
     /**
-     * Lancer un inventaire
-     * @param id - ID de l'inventaire
+     * Lancer un inventaire pour un magasin
+     * @param idInentory - ID de l'inventaire
+     * @param idWarehouse - ID du magasin
      * @returns Promise avec la réponse de lancement
      */
     static async launchByWarehause(idInentory: number, idWarehouse: number): Promise<AxiosResponse<LaunchResponse>> {
@@ -415,6 +440,135 @@ export class InventoryService {
         } catch (error) {
             logger.error(`Erreur lors du lancement de l'inventaire ${idInentory} pour le magasin ${idWarehouse}`, error);
             throw error;
+        }
+    }
+
+    /**
+     * Lancer l'inventaire pour plusieurs magasins
+     * POST /web/api/inventory/{inventory_id}/warehouses/launch/
+     * Body: { warehouse_ids: number[] }
+     */
+    static async launchWarehouses(
+        inventoryId: number,
+        warehouseIds: number[]
+    ): Promise<AxiosResponse<LaunchResponse>> {
+        try {
+            return await axiosInstance.post<LaunchResponse>(
+                `${API.endpoints.inventory.base}${inventoryId}/warehouses/launch/`,
+                { warehouse_ids: warehouseIds }
+            )
+        } catch (error) {
+            logger.error(
+                `Erreur lors du lancement multi-magasins de l'inventaire ${inventoryId}`,
+                error
+            )
+            throw error
+        }
+    }
+
+    /**
+     * Annuler le lancement d'un magasin (LANCEE → EN ATTENTE)
+     * POST /inventory/{id}/warehouse/{wid}/cancel-launch/
+     */
+    static async cancelWarehouseLaunch(
+        inventoryId: number,
+        warehouseId: number
+    ): Promise<AxiosResponse<LaunchResponse>> {
+        try {
+            return await axiosInstance.post<LaunchResponse>(
+                `${API.endpoints.inventory.base}${inventoryId}/warehouse/${warehouseId}/cancel-launch/`
+            )
+        } catch (error) {
+            logger.error(
+                `Erreur annulation lancement inventaire ${inventoryId} magasin ${warehouseId}`,
+                error
+            )
+            throw error
+        }
+    }
+
+    /**
+     * Terminer un magasin (LANCEE → TERMINEE)
+     * POST /inventory/{id}/warehouse/{wid}/termine/
+     */
+    static async termineWarehouse(
+        inventoryId: number,
+        warehouseId: number
+    ): Promise<AxiosResponse<LaunchResponse>> {
+        try {
+            return await axiosInstance.post<LaunchResponse>(
+                `${API.endpoints.inventory.base}${inventoryId}/warehouse/${warehouseId}/termine/`
+            )
+        } catch (error) {
+            logger.error(
+                `Erreur terminaison inventaire ${inventoryId} magasin ${warehouseId}`,
+                error
+            )
+            throw error
+        }
+    }
+
+    /**
+     * Terminer plusieurs magasins
+     * POST /inventory/{id}/warehouses/termine/
+     */
+    static async termineWarehouses(
+        inventoryId: number,
+        warehouseIds: number[]
+    ): Promise<AxiosResponse<LaunchResponse>> {
+        try {
+            return await axiosInstance.post<LaunchResponse>(
+                `${API.endpoints.inventory.base}${inventoryId}/warehouses/termine/`,
+                { warehouse_ids: warehouseIds }
+            )
+        } catch (error) {
+            logger.error(
+                `Erreur terminaison multi-magasins inventaire ${inventoryId}`,
+                error
+            )
+            throw error
+        }
+    }
+
+    /**
+     * Analyser un magasin (TERMINEE → ANALYSER + sync écarts)
+     * POST /inventory/{id}/warehouse/{wid}/analyser/
+     */
+    static async analyserWarehouse(
+        inventoryId: number,
+        warehouseId: number
+    ): Promise<AxiosResponse<LaunchResponse>> {
+        try {
+            return await axiosInstance.post<LaunchResponse>(
+                `${API.endpoints.inventory.base}${inventoryId}/warehouse/${warehouseId}/analyser/`
+            )
+        } catch (error) {
+            logger.error(
+                `Erreur analyse inventaire ${inventoryId} magasin ${warehouseId}`,
+                error
+            )
+            throw error
+        }
+    }
+
+    /**
+     * Clôturer un magasin
+     * POST /inventory/{id}/warehouse/{wid}/close/
+     */
+    static async closeWarehouse(
+        inventoryId: number,
+        warehouseId: number
+    ): Promise<AxiosResponse<LaunchResponse>> {
+        try {
+            return await axiosInstance.post<LaunchResponse>(
+                `${API.endpoints.inventory.base}${inventoryId}/warehouse/${warehouseId}/close/`
+            )
+        } catch (error) {
+            logger.error(
+                `Erreur clôture inventaire ${inventoryId} magasin ${warehouseId}`,
+                error
+            )
+            throw error
         }
     }
 
@@ -498,6 +652,146 @@ export class InventoryService {
         } catch (error) {
             logger.error('Erreur lors de l\'import des stocks', error);
             throw error;
+        }
+    }
+
+    /**
+     * Import asynchrone du stock théorique (Excel) pour un inventaire + magasin
+     * POST /web/api/inventory/{id}/warehouses/{wid}/stocks/import/
+     */
+    static async importTheoreticalStocks(
+        inventoryId: number,
+        warehouseId: number,
+        formData: FormData
+    ): Promise<AxiosResponse<StockImportStartResponse>> {
+        try {
+            return await axiosInstance.post<StockImportStartResponse>(
+                `${API.endpoints.inventory.base}${inventoryId}/warehouses/${warehouseId}/stocks/import/`,
+                formData,
+                {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    validateStatus: (status) => (status >= 200 && status < 300) || status === 202,
+                }
+            )
+        } catch (error) {
+            logger.error('Erreur lors de l\'import du stock théorique', error)
+            throw error
+        }
+    }
+
+    /**
+     * Statut d'un import de stock théorique
+     * GET /web/api/inventory/stocks/import/{task_id}/status/
+     */
+    static async getTheoreticalStockImportStatus(
+        importTaskId: number
+    ): Promise<AxiosResponse<StockImportStatusResponse>> {
+        try {
+            return await axiosInstance.get<StockImportStatusResponse>(
+                `${API.endpoints.inventory.base}stocks/import/${importTaskId}/status/`
+            )
+        } catch (error) {
+            logger.error(`Erreur statut import stock théorique ${importTaskId}`, error)
+            throw error
+        }
+    }
+
+    /**
+     * Dernier import de stock théorique pour inventaire + magasin
+     * GET /web/api/inventory/{id}/warehouses/{wid}/stocks/import/latest/
+     */
+    static async getLatestTheoreticalStockImport(
+        inventoryId: number,
+        warehouseId: number
+    ): Promise<AxiosResponse<StockImportStatusResponse>> {
+        try {
+            return await axiosInstance.get<StockImportStatusResponse>(
+                `${API.endpoints.inventory.base}${inventoryId}/warehouses/${warehouseId}/stocks/import/latest/`
+            )
+        } catch (error) {
+            logger.error('Erreur récupération dernier import stock théorique', error)
+            throw error
+        }
+    }
+
+    /**
+     * Écarts stock théorique vs inventorié (paginé)
+     * GET /web/api/inventory/{id}/warehouses/{wid}/stock-gaps/?page=1&pageSize=20
+     */
+    static async getStockGaps(
+        inventoryId: number,
+        warehouseId: number,
+        params?: Record<string, unknown>
+    ): Promise<StockGapResponse> {
+        try {
+            const response = await axiosInstance.get<StockGapResponse>(
+                `${API.endpoints.inventory.base}${inventoryId}/warehouses/${warehouseId}/stock-gaps/`,
+                {
+                    params: params || {},
+                    headers: { 'Content-Type': 'application/json' },
+                }
+            )
+            return response.data
+        } catch (error) {
+            logger.error('Erreur lors du calcul des écarts stock', error)
+            throw error
+        }
+    }
+
+    /**
+     * Modifier le résultat final d'une ligne écart stock
+     * PATCH /web/api/ecarts-stock/{ecart_id}/
+     */
+    static async updateEcartStockResultatFinal(
+        ecartId: number,
+        resultatFinal: number
+    ): Promise<EcartStockMutationResponse> {
+        try {
+            const response = await axiosInstance.patch<EcartStockMutationResponse>(
+                `${API.endpoints.ecartStock.base}${ecartId}/`,
+                { resultat_final: resultatFinal },
+                { headers: { 'Content-Type': 'application/json' } }
+            )
+            return response.data
+        } catch (error) {
+            logger.error(`Erreur modification résultat final écart stock ${ecartId}`, error)
+            throw error
+        }
+    }
+
+    /**
+     * Valider une ligne écart stock
+     * POST /web/api/ecarts-stock/{ecart_id}/valider/
+     */
+    static async validerEcartStock(ecartId: number): Promise<EcartStockMutationResponse> {
+        try {
+            const response = await axiosInstance.post<EcartStockMutationResponse>(
+                `${API.endpoints.ecartStock.base}${ecartId}/valider/`
+            )
+            return response.data
+        } catch (error) {
+            logger.error(`Erreur validation écart stock ${ecartId}`, error)
+            throw error
+        }
+    }
+
+    /**
+     * Valider plusieurs lignes écart stock
+     * POST /web/api/ecarts-stock/valider/
+     */
+    static async validerEcartStockBulk(
+        ecartIds: number[]
+    ): Promise<EcartStockBulkValidateResponse> {
+        try {
+            const response = await axiosInstance.post<EcartStockBulkValidateResponse>(
+                `${API.endpoints.ecartStock.base}valider/`,
+                { ecart_ids: ecartIds },
+                { headers: { 'Content-Type': 'application/json' } }
+            )
+            return response.data
+        } catch (error) {
+            logger.error('Erreur validation multi écarts stock', error)
+            throw error
         }
     }
 

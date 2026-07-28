@@ -38,9 +38,10 @@
 
             <!-- DataTable des jobs avec actions (Valider, Réaffecter) -->
             <!-- Monté uniquement quand le total serveur est connu pour afficher "1-50 sur 75" -->
+            <!-- ⚡ FIX : :key volatile supprimé (remount complet à chaque refresh, perte de
+                 scroll). Voir fix cellRendererPool côté package. -->
             <DataTable
                 v-if="hasServerTotal"
-                :key="`${jobsTableKey}-total-${jobsTableTotalItems}`"
                 :columns="adaptedStoreJobsColumns"
                 :rowDataProp="jobs"
                 :actions="jobsActions"
@@ -307,7 +308,6 @@ const {
     pendingChanges,
     hasUnsavedChanges,
     jobsTableRef,
-    jobsTableKey,
     jobsLoading,
     showDropdown,
     showTeamModal,

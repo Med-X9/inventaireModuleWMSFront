@@ -461,29 +461,16 @@ export function useInventoryCreation() {
                 return { id: 0, date: '' };
             }).filter(w => w.id > 0); // Filtrer les warehouses invalides
 
-            // Créer les comptages
-            const comptages = state.comptages
-                .filter(c => c.mode) // Filtrer les comptages vides
-                .map((comptage, index) => createCountRequest(comptage, index + 1));
-
-            // Valider les comptages avant création
-            try {
-                inventoryCreationService.validateAllCounts(comptages);
-            } catch (validationError) {
-                logger.error('Erreur de validation des comptages', validationError);
-                throw new Error(`Validation des comptages échouée: ${validationError instanceof Error ? validationError.message : 'Erreur inconnue'}`);
-            }
-
+            // Création : payload minimal sans comptages (statut EN CONFIGURATION)
             const inventoryData: CreateInventoryRequest = {
                 label: state.header.libelle,
                 date: state.header.date,
                 inventory_type: state.header.inventory_type,
                 account_id: Number(state.header.compte),
                 warehouse: warehouseData,
-                comptages: comptages
             };
 
-            // Validation métier stricte complète
+            // Validation métier (header + magasins uniquement)
             try {
                 inventoryCreationService.validateInventoryData(inventoryData);
             } catch (validationError) {

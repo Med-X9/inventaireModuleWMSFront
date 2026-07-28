@@ -495,8 +495,10 @@ export const inventoryCreationService = {
         // 2. Validation des entités (sera fait côté serveur)
         // this._validateEntities(data, errors);
 
-        // 3. Validation des comptages
-        this._validateCountings(data.comptages, errors);
+        // 3. Validation des comptages (uniquement s'ils sont fournis — sinon config via /countings/)
+        if (data.comptages && data.comptages.length > 0) {
+            this._validateCountings(data.comptages, errors);
+        }
 
         if (errors.length > 0) {
             const errorMessage = `Erreurs de validation:\n${errors.join('\n')}`;
@@ -539,9 +541,9 @@ export const inventoryCreationService = {
         }
 
         // Validation du type d'inventaire
-        const validTypes = ['GENERAL', 'TOURNANT'];
+        const validTypes = ['GENERAL', 'TOURNANT', 'MAGASIN'];
         if (!data.inventory_type || !validTypes.includes(data.inventory_type)) {
-            errors.push(`L'inventory_type doit être 'GENERAL' ou 'TOURNANT' (reçu: ${data.inventory_type})`);
+            errors.push(`L'inventory_type doit être 'GENERAL', 'TOURNANT' ou 'MAGASIN' (reçu: ${data.inventory_type})`);
         }
 
         // Validation des entrepôts

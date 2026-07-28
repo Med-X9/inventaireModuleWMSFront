@@ -264,6 +264,20 @@ export const useInventoryStore = defineStore('inventory', () => {
         }
     };
 
+    const configureCountings = async (id: number | string, data: Record<string, unknown>) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await InventoryService.configureCountings(id, data);
+            return response.data;
+        } catch (err: any) {
+            handleError(err, 'Erreur lors de la configuration des comptages');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
     const deleteInventory = async (id: number | string) => {
         loading.value = true;
         error.value = null;
@@ -289,6 +303,101 @@ export const useInventoryStore = defineStore('inventory', () => {
             await fetchInventories();
         } catch (err: any) {
             handleError(err, 'Erreur lors du lancement de l\'inventaire');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    /**
+     * Lance l'inventaire pour plusieurs magasins
+     * POST /inventory/{id}/warehouses/launch/ { warehouse_ids }
+     */
+    const launchInventoryWarehouses = async (idInventory: number, warehouseIds: number[]) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await InventoryService.launchWarehouses(idInventory, warehouseIds);
+            await fetchInventories();
+            return response.data;
+        } catch (err: any) {
+            handleError(err, 'Erreur lors du lancement multi-magasins');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    const cancelWarehouseLaunch = async (idInventory: number, warehouseId: number) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await InventoryService.cancelWarehouseLaunch(idInventory, warehouseId);
+            await fetchInventories();
+            return response.data;
+        } catch (err: any) {
+            handleError(err, 'Erreur lors de l\'annulation du lancement');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    const termineWarehouse = async (idInventory: number, warehouseId: number) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await InventoryService.termineWarehouse(idInventory, warehouseId);
+            await fetchInventories();
+            return response.data;
+        } catch (err: any) {
+            handleError(err, 'Erreur lors de la terminaison du magasin');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    const termineWarehouses = async (idInventory: number, warehouseIds: number[]) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await InventoryService.termineWarehouses(idInventory, warehouseIds);
+            await fetchInventories();
+            return response.data;
+        } catch (err: any) {
+            handleError(err, 'Erreur lors de la terminaison multi-magasins');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    const analyserWarehouse = async (idInventory: number, warehouseId: number) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await InventoryService.analyserWarehouse(idInventory, warehouseId);
+            await fetchInventories();
+            return response.data;
+        } catch (err: any) {
+            handleError(err, 'Erreur lors de l\'analyse du magasin');
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    const closeWarehouse = async (idInventory: number, warehouseId: number) => {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await InventoryService.closeWarehouse(idInventory, warehouseId);
+            await fetchInventories();
+            return response.data;
+        } catch (err: any) {
+            handleError(err, 'Erreur lors de la clôture du magasin');
+            throw err;
         } finally {
             loading.value = false;
         }
@@ -500,9 +609,16 @@ export const useInventoryStore = defineStore('inventory', () => {
         updateInventory,
         deleteInventory,
         launchInventoryByWarehause,
+        launchInventoryWarehouses,
+        cancelWarehouseLaunch,
+        termineWarehouse,
+        termineWarehouses,
+        analyserWarehouse,
+        closeWarehouse,
         cancelInventory,
         terminateInventory,
         closeInventory,
+        configureCountings,
         fetchPlanningManagement,
         importStockImage,
         importLocationJobsSync,

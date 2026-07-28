@@ -28,9 +28,17 @@ export interface InventoryMagasin {
      * ID du magasin tel que renvoyé par l'API
      * (endpoint: /inventory/{id}/warehouses/)
      */
-    id?: number;
-    nom: string;
-    date: string | null;
+    id?: number
+    setting_id?: number
+    reference?: string
+    nom: string
+    date: string | null
+    /** Statut Setting magasin : EN ATTENTE | LANCEE | TERMINEE | ANALYSER | CLOTURE */
+    status?: string
+    status_date_lancement?: string | null
+    status_date_termine?: string | null
+    status_date_analyse?: string | null
+    status_date_cloture?: string | null
 }
 
 export interface InventoryRessource {

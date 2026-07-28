@@ -24,8 +24,11 @@
         </Card>
 
         <!-- Table des inventaires -->
+        <!-- ⚡ FIX : pas de :key ici. Un :key volatile force Vue à détruire/recréer tout le
+             composant à chaque action (perte du scroll, du tri, des filtres ouverts...). Le
+             composant DataTable patche déjà réactivement `rowDataProp` sans avoir besoin d'être
+             remonté ; voir DIAGNOSTIC-PERFORMANCE-DATATABLE.md et le fix cellRendererPool. -->
         <DataTable
-            :key="inventoryTableKey"
             :columns="columns"
             :rowDataProp="inventories"
             :actions="actions"
@@ -301,7 +304,6 @@ const {
     alertService,
     inventories,
     initializeInventoryTable,
-    inventoryTableKey,
 } = useInventoryManagement()
 
 const inventoryTableEvents = bindDataTableServerEvents(onInventoryTableEvent)

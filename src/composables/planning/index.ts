@@ -290,24 +290,11 @@ export function usePlanning(options?: PlanningOptions) {
     const availableLocationsTableRef = ref<any>(null)
     const jobsTableRef = ref<any>(null)
 
-    const tableRenderGeneration = ref(0)
-
-    const jobsTableKey = computed(
-        () =>
-            `planning-jobs-${inventoryReference}-${warehouseReference}-` +
-            `g${tableRenderGeneration.value}-` +
-            `${jobPaginationMetadata.value?.total ?? 0}-` +
-            `${storeJobs.value.length}-` +
-            `${jobs.value.length}`,
-    )
-    const locationsTableKey = computed(
-        () =>
-            `planning-locations-${inventoryReference}-${warehouseReference}-` +
-            `g${tableRenderGeneration.value}-` +
-            `${locationPaginationMetadata.value?.total ?? 0}-` +
-            `${storeLocations.value.length}-` +
-            `${locations.value.length}`,
-    )
+    // ⚡ FIX : jobsTableKey/locationsTableKey (et tableRenderGeneration qui ne servait qu'à
+    // elles) ont été supprimés. Ils alimentaient un :key volatile sur les deux <DataTable>,
+    // forçant un remount complet à chaque refresh (perte de scroll, tri, filtres...). Le
+    // rendu de cellule figé qui motivait ce contournement était un bug de cache côté package
+    // (cellRendererPool basé sur row.id/reference plutôt que le contenu complet), corrigé.
 
     // ===== COMPUTED PROPERTIES =====
 
@@ -704,7 +691,6 @@ export function usePlanning(options?: PlanningOptions) {
 
         syncJobsTableRows()
         syncLocationsTableRows()
-        tableRenderGeneration.value += 1
     }
 
     /**
@@ -753,8 +739,6 @@ export function usePlanning(options?: PlanningOptions) {
         initializeWithData,
         availableLocationsTableRef,
         jobsTableRef,
-        locationsTableKey,
-        jobsTableKey,
         jobPaginationMetadata,
         locationPaginationMetadata,
         jobsCustomParams,

@@ -38,8 +38,11 @@
         <!-- DataTable (package) - chargé après résolution du contexte (pattern Planning/Affecter) -->
         <div v-if="isDataLoaded">
             <div v-if="selectedStore" class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
+                <!-- ⚡ FIX : :key volatile supprimé (forçait un remount complet à chaque
+                     refresh, perte de scroll). rowDataProp se met à jour réactivement ; le
+                     bug de rendu figé qui motivait ce contournement était côté cache
+                     cellRendererPool (corrigé côté package). -->
                 <DataTable
-                    :key="resultsTableKey"
                     :columns="columns"
                     :rowDataProp="resultsTableRows"
                     :actions="actions as any"
@@ -218,7 +221,6 @@ const {
     exportResultsModalMessage,
     onStoreChanged,
     resultsKey,
-    resultsTableKey,
     resultsTableRef,
     resultsQueryModel
 } = useInventoryResults({

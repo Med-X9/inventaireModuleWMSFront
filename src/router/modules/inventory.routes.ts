@@ -95,6 +95,13 @@ export const inventoryRoutes: RouteRecordRaw[] = [
         meta: { requiresAuth: true },
     },
     {
+        path: '/inventory/:reference/configure',
+        name: 'inventory-configure',
+        component: () => import(/* webpackChunkName: "inventory-configure" */ '@/views/Inventory/InventoryConfiguration.vue'),
+        props: (route) => ({ reference: route.params.reference as string }),
+        meta: { requiresAuth: true },
+    },
+    {
         path: '/inventory/:reference/planning-management',
         name: 'planning-management',
         component: () => import(/* webpackChunkName: "planning-management" */ '@/views/Inventory/PlanningManagement.vue'),
@@ -143,6 +150,35 @@ export const inventoryRoutes: RouteRecordRaw[] = [
         path: '/inventory/:reference/:warehouse/kpi-dashboard',
         name: 'inventory-kpi-dashboard',
         component: () => import(/* webpackChunkName: "inventory-kpi-dashboard" */ '@/views/Inventory/InventoryKpiDashboard.vue'),
+        props: (route) => ({
+            reference: route.params.reference as string,
+            warehouse: route.params.warehouse as string,
+        }),
+        meta: { requiresAuth: true },
+    },
+    {
+        path: '/inventory/:reference/kpi-dashboard',
+        name: 'inventory-level-kpi',
+        component: () => import(/* webpackChunkName: "inventory-level-kpi" */ '@/views/Inventory/InventoryLevelKpiDashboard.vue'),
+        props: (route) => ({
+            reference: route.params.reference as string,
+        }),
+        meta: { requiresAuth: true },
+    },
+    {
+        path: '/inventory/:reference/:warehouse/stock-import',
+        name: 'inventory-stock-import',
+        component: () => import(/* webpackChunkName: "inventory-stock-import" */ '@/views/Inventory/TheoreticalStockImport.vue'),
+        props: (route) => ({
+            reference: route.params.reference as string,
+            warehouse: route.params.warehouse as string,
+        }),
+        meta: { requiresAuth: true },
+    },
+    {
+        path: '/inventory/:reference/:warehouse/stock-gaps',
+        name: 'inventory-stock-gaps',
+        component: () => import(/* webpackChunkName: "inventory-stock-gaps" */ '@/views/Inventory/StockGaps.vue'),
         props: (route) => ({
             reference: route.params.reference as string,
             warehouse: route.params.warehouse as string,

@@ -142,8 +142,6 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     const isInitialized = ref(false)
     const isInitializing = ref(false)
     const isDataLoaded = ref(false)
-    const tableRenderGeneration = ref(0)
-    const resultsDataRevision = ref(0)
     const resultsTableRows = shallowRef<NormalizedInventoryResult[]>([])
     let resultsPageRecoveryAttempted = false
 
@@ -151,6 +149,21 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         const fromParams = routeInstance?.params?.warehouse as string | undefined
         const fromQuery = routeInstance?.query?.warehouse as string | undefined
         return fromParams || fromQuery || config?.initialWarehouseReference
+    }
+
+    const getSelectedWarehouseReference = (): string | undefined => {
+        const fromRoute = getWarehouseReferenceFromRoute()
+        if (fromRoute) return fromRoute
+
+        if (selectedStore.value && warehouses.value && warehouses.value.length > 0) {
+            const warehouseId = parseInt(String(selectedStore.value), 10)
+            const warehouse = warehouses.value.find((w) => w.id === warehouseId)
+            if (warehouse) {
+                return warehouse.reference || warehouse.warehouse_name || undefined
+            }
+        }
+
+        return undefined
     }
 
     // Paramètres personnalisés pour les appels API
@@ -202,6 +215,16 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
 
     /** Objet inventaire complet (pour accéder rapidement aux warehouses) */
     const inventory = ref<any | null>(null)
+
+    /** Type d'inventaire (GENERAL | TOURNANT | MAGASIN) */
+    const inventoryType = computed(() =>
+        String(inventory.value?.inventory_type || 'GENERAL').toUpperCase()
+    )
+
+    /** TOURNANT / MAGASIN : un seul comptage (pas d'écarts multi-passes) */
+    const isSingleCountingInventory = computed(() =>
+        inventoryType.value === 'TOURNANT' || inventoryType.value === 'MAGASIN'
+    )
 
     // Mode de sortie pour les requêtes
     // ⚠️ Le DataTable utilise maintenant uniquement QueryModel selon FRONTEND_QUERYMODEL_GUIDE.md
@@ -259,7 +282,6 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         if (!rawResults.value || rawLen === 0 || !hasIds) {
             resultsTableRows.value = []
             normalizedResultsCache.value = null
-            resultsDataRevision.value += 1
             return
         }
 
@@ -279,10 +301,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             storeId: selectedStore.value,
         }
 
-        // Nouvelle référence tableau + revision : le TableBody SMATCH ne se met à jour
-        // que si la longueur change (bug package) — la :key force le rafraîchissement.
+        // Nouvelle référence tableau : suffisant pour que rowDataProp se mette à jour
+        // réactivement. Le rendu de cellule figé qui justifiait auparavant un remount
+        // complet via :key était un bug de cache côté package (cellRendererPool), corrigé.
         resultsTableRows.value = normalized.map((row) => ({ ...row }))
-        resultsDataRevision.value += 1
     }
 
     const recoverEmptyResultsPage = async (requestedPage?: number) => {
@@ -407,14 +429,12 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
      */
     const hasResults = computed(() => resultsTableRows.value.length > 0)
 
-    /**
-     * Clé stable : ne pas inclure le total (évite un remontage à chaque recherche/filtre).
-     */
-    const resultsTableKey = computed(
-        () =>
-            `results-g${tableRenderGeneration.value}-d${resultsDataRevision.value}-` +
-            `${inventoryId.value ?? 'x'}-${selectedStore.value ?? 'x'}`,
-    )
+    // ⚡ FIX : resultsTableKey (et les compteurs tableRenderGeneration/resultsDataRevision qui
+    // ne servaient qu'à elle) ont été supprimés. Cette clé était posée sur <DataTable> pour
+    // contourner un rendu de cellule figé (cache cellRendererPool basé uniquement sur
+    // row.id/reference), au prix d'un remount complet à chaque refresh (perte de scroll,
+    // tri, filtres...). Le cache est désormais invalidé correctement côté package sur tout
+    // changement de contenu de ligne — plus besoin de ce contournement.
 
     /**
      * Pagination calculée pour les résultats
@@ -502,10 +522,13 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     const columns = computed<DataTableColumn[]>(() => {
         // ⚡ OPTIMISATION : Utiliser le cache si les résultats n'ont pas changé
         const currentResults = results.value
-        const ordersKey = getAvailableCountingOrders(currentResults as InventoryResult[]).join('-')
+        const singleCounting = isSingleCountingInventory.value
+        const ordersKey = getAvailableCountingOrders(currentResults as InventoryResult[], {
+            singleCounting,
+        }).join('-')
         const resultsHash = currentResults.length > 0
-            ? `${currentResults.length}-${ordersKey}-${currentResults[0]?.id || ''}-${currentResults[currentResults.length - 1]?.id || ''}`
-            : `empty-${ordersKey}`
+            ? `${inventoryType.value}-${currentResults.length}-${ordersKey}-${currentResults[0]?.id || ''}-${currentResults[currentResults.length - 1]?.id || ''}`
+            : `empty-${inventoryType.value}-${ordersKey}`
 
         if (columnsCache.value &&
             columnsCache.value.resultsLength === currentResults.length &&
@@ -688,7 +711,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         ]
 
         // 4-5. Colonnes dynamiques de comptage et écarts intercalés
-        const availableOrders = getAvailableCountingOrders(results.value)
+        const availableOrders = getAvailableCountingOrders(results.value, {
+            singleCounting: isSingleCountingInventory.value,
+        })
+        const countingLabelOptions = { singleCounting: isSingleCountingInventory.value }
         const badgeStylesCommon = [
             {
                 value: 'EN ATTENTE',
@@ -729,7 +755,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             const priority = 10 - order // Priorité décroissante avec l'ordre
 
             cols.push({
-                headerName: getCountingOrderLabel(order),
+                headerName: getCountingOrderLabel(order, countingLabelOptions),
                 field: fieldName,
                 sortable: true,
                 dataType: 'number' as ColumnDataType,
@@ -740,7 +766,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 draggable: true,
                 autoSize: true,
                 icon: 'icon-calculator',
-                description: `Valeur du ${getCountingOrderLabel(order)}`,
+                description: `Valeur du ${getCountingOrderLabel(order, countingLabelOptions)}`,
                 priority: priority,
                 align: 'center',
                 badgeStyles: badgeStylesCommon,
@@ -778,8 +804,12 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 }) as any
             })
 
-            // Un seul écart affiché : 1er ↔ 2e comptage (ecart_1_2) — pas d’Écart 1-3, 2-3, etc.
-            if (order === 1 && availableOrders[index + 1] === 2) {
+            // Écart 1-2 uniquement pour inventaire GENERAL (plusieurs comptages)
+            if (
+                !isSingleCountingInventory.value
+                && order === 1
+                && availableOrders[index + 1] === 2
+            ) {
                 const ecartFieldName = 'ecart_1_2'
                 const ecartPriority = priority - 0.5
 
@@ -1289,6 +1319,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 // Stocker l'inventaire complet pour accéder rapidement aux warehouses
                 inventory.value = fetchedInventory
                 inventoryId.value = fetchedInventory.id
+                columnsCache.value = null
                 const newAccountId = fetchedInventory.account_id || null
                 accountId.value = newAccountId
 
@@ -1454,7 +1485,6 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
 
         await recoverEmptyResultsPage()
         syncResultsTableRows()
-        tableRenderGeneration.value += 1
     }
 
     /**
@@ -2206,6 +2236,29 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     }
 
     /**
+     * Navigation vers l'analyse des écarts stock (stock-gaps)
+     */
+    const handleGoToStockGaps = async () => {
+        if (!routerInstance || !inventoryReference.value) return
+
+        const warehouseRef = getSelectedWarehouseReference()
+        if (!warehouseRef) {
+            await alertService.warning({
+                text: 'Sélectionnez un magasin pour accéder à l\'analyse stock.',
+            })
+            return
+        }
+
+        void routerInstance.push({
+            name: 'inventory-stock-gaps',
+            params: {
+                reference: inventoryReference.value,
+                warehouse: warehouseRef,
+            },
+        })
+    }
+
+    /**
      * Configuration des boutons d'action
      */
     const actionButtons = computed<ButtonGroupButton[]>(() => {
@@ -2223,13 +2276,25 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         })
 
         buttons.push({
+            id: 'stock-gaps',
+            label: 'Analyse stock',
+            icon: 'mdi-scale-balance',
+            variant: 'default',
+            class: ACTION_BUTTON_CLASS,
+            disabled: !inventoryReference.value || !selectedStore.value,
+            visible: !!inventoryReference.value && !!selectedStore.value,
+            onClick: () => { void handleGoToStockGaps() }
+        })
+
+        buttons.push({
             id: 'launch-counting',
             label: 'Lancer comptage',
             icon: 'mdi-play-outline',
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
             disabled: !selectedStore.value,
-            visible: !!selectedStore.value,
+            // Comptages suivants (3e+) : réservés aux inventaires GENERAL
+            visible: !!selectedStore.value && !isSingleCountingInventory.value,
             onClick: () => { void handleLaunchCounting() }
         })
 
@@ -2275,7 +2340,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
      * API exposée à la vue (InventoryResults.vue).
      * Regroupe : état (inventoryId, loading, …), données (results, stores, pagination), configuration
      * DataTable (columns, actions, resultsCustomParams), handlers (onResultsTableEvent, handleStoreSelect, …)
-     * et refs (resultsTableRef, resultsTableKey). Voir le bloc return ci-dessous pour la liste complète.
+     * et refs (resultsTableRef). Voir le bloc return ci-dessous pour la liste complète.
      */
     return {
         // État
@@ -2340,7 +2405,6 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         handleGoToJobTracking,
         resultsLoadingLocal: computed(() => resultsLoadingLocal.value),
         resultsKey,
-        resultsTableKey,
         resultsTableRef,
         resultsQueryModel: resultsQueryModelRef,
         resultsCustomParams

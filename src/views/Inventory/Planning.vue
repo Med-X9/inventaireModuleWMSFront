@@ -30,8 +30,9 @@
             </div>
 
             <!-- DataTable des jobs - config harmonisée avec InventoryResults.vue -->
+            <!-- ⚡ FIX : :key volatile supprimé (remount complet à chaque refresh, perte de
+                 scroll). Voir fix cellRendererPool côté package. -->
             <DataTable
-                :key="jobsTableKey"
                 :columns="adaptedStoreJobsColumns"
                 :rowDataProp="jobs"
                 :actions="jobsActions as any"
@@ -65,8 +66,9 @@
             </div>
 
             <!-- DataTable des locations - config harmonisée avec InventoryResults.vue -->
+            <!-- ⚡ FIX : :key volatile supprimé (remount complet à chaque refresh, perte de
+                 scroll). Voir fix cellRendererPool côté package. -->
             <DataTable
-                :key="locationsTableKey"
                 :columns="adaptedAvailableLocationColumns"
                 :rowDataProp="locations"
                 :actions="locationsActions as any"
@@ -200,8 +202,6 @@ const {
     initializeWithData,
     availableLocationsTableRef,
     jobsTableRef,
-    locationsTableKey,
-    jobsTableKey,
     jobPaginationMetadata,
     locationPaginationMetadata,
     jobsCustomParams,
