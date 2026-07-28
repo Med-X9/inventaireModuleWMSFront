@@ -668,6 +668,15 @@ export function useInventoryDetail(inventoryReference: string) {
             show: (row) => getMagasinStatus(row) === 'EN ATTENTE',
         },
         {
+            label: 'Import planning',
+            icon: 'mdi-file-upload-outline',
+            color: 'primary',
+            onClick: () => {
+                openPlanningImportModal()
+            },
+            show: (row) => getMagasinStatus(row) === 'EN ATTENTE',
+        },
+        {
             label: 'Lancer',
             icon: 'mdi-play-outline',
             color: 'success',
@@ -824,6 +833,7 @@ export function useInventoryDetail(inventoryReference: string) {
                 { id: 'planning', label: '', title: 'Planification', icon: 'mdi-calendar-outline', onClick: () => goToWarehousePlanning(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
                 { id: 'affectation', label: '', title: 'Affectation', icon: 'mdi-account-group-outline', onClick: () => goToWarehouseAffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
                 { id: 'stock-import', label: '', title: 'Import stock théorique', icon: 'mdi-file-excel-outline', onClick: () => goToWarehouseStockImport(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
+                { id: 'import-planning', label: '', title: 'Import planning', icon: 'mdi-file-upload-outline', onClick: () => openPlanningImportModal(), variant: 'default', class: ACTION_BUTTON_CLASS },
                 {
                     id: 'launch',
                     label: '',
@@ -913,16 +923,6 @@ export function useInventoryDetail(inventoryReference: string) {
             })
         } else if (inventory.value?.status === 'EN PREPARATION') {
             buttons.push({ id: 'edit', label: 'Modifier', icon: 'mdi-pencil-outline', onClick: editInventory, variant: 'default', class: ACTION_BUTTON_CLASS })
-            if (isInventoryTypeMagasin.value) {
-                buttons.push({
-                    id: 'import-planning',
-                    label: 'Importer planning',
-                    icon: 'mdi-file-upload-outline',
-                    onClick: openPlanningImportModal,
-                    variant: 'default',
-                    class: ACTION_BUTTON_CLASS,
-                })
-            }
         } else if (inventory.value?.status === 'EN REALISATION') {
             buttons.push(
                 { id: 'cancel', label: 'Annuler', icon: 'mdi-close-circle-outline', onClick: async () => { await cancelInventory() }, variant: 'default', class: ACTION_BUTTON_CLASS },
