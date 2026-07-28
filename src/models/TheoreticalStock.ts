@@ -58,6 +58,7 @@ export interface StockGapRow {
     /** Identifiants DataTable (sélection / actions) */
     id?: number
     _rowId?: string
+    valide_label?: string
 }
 
 export interface StockGapTotaux {

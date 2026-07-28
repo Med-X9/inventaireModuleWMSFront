@@ -13,7 +13,7 @@ import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 import type {
     ActionConfig,
-    DataTableColumn,
+    DataTableColumnAny,
     QueryModel,
     ColumnDataType,
 } from '@SMATCH-Digital-dev/vue-system-design'
@@ -88,7 +88,7 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
         warehouse_id: warehouseId.value,
     }))
 
-    const columns = computed<DataTableColumn[]>(() => [
+    const columns = computed((): DataTableColumnAny[] => [
         {
             field: 'cle',
             headerName: 'Clé',
@@ -144,26 +144,24 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
             icon: 'mdi-check-decagram-outline',
         },
         {
-            field: 'valide',
+            field: 'valide_label',
             headerName: 'Validé',
             sortable: true,
             filterable: true,
-            dataType: 'boolean' as ColumnDataType,
+            dataType: 'text' as ColumnDataType,
             width: 120,
             icon: 'mdi-shield-check-outline',
-            rendererType: 'badge',
             badgeStyles: [
                 {
-                    value: true,
-                    class: 'bg-emerald-100 border-emerald-200 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
+                    value: 'Oui',
+                    class: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border bg-emerald-100 border-emerald-200 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
                 },
                 {
-                    value: false,
-                    class: 'bg-amber-100 border-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+                    value: 'Non',
+                    class: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border bg-amber-100 border-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
                 },
             ],
-            badgeBaseClass: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border',
-            badgeDefaultClass: 'bg-gray-100 border-gray-200 text-gray-800',
+            badgeDefaultClass: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border bg-gray-100 border-gray-200 text-gray-800',
         },
     ])
 
@@ -205,6 +203,7 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
             ...row,
             id: row.ecart_id,
             _rowId: String(row.ecart_id),
+            valide_label: row.valide ? 'Oui' : 'Non',
         }))
         totaux.value = response.totaux ?? null
         source.value = response.source ?? null
@@ -258,11 +257,14 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
     }
 
     const applyLocalRowUpdate = (ecartId: number, patch: Partial<StockGapRow>) => {
-        rows.value = rows.value.map((row) =>
-            row.ecart_id === ecartId
-                ? { ...row, ...patch, id: ecartId, _rowId: String(ecartId) }
-                : row
-        )
+        rows.value = rows.value.map((row) => {
+            if (row.ecart_id !== ecartId) return row
+            const next = { ...row, ...patch, id: ecartId, _rowId: String(ecartId) }
+            if ('valide' in patch) {
+                next.valide_label = patch.valide ? 'Oui' : 'Non'
+            }
+            return next
+        })
     }
 
     const onSelectionChanged = (selectedRows: Set<string> | StockGapRow[]) => {
