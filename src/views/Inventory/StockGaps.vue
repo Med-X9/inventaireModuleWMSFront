@@ -28,6 +28,34 @@
                                 Résultats
                             </Button>
                             <Button
+                                variant="primary"
+                                size="sm"
+                                :disabled="exporting || initializing"
+                                @click="handleExportExcel"
+                            >
+                                <MdiIcon
+                                    :name="exporting ? 'mdi-loading' : 'mdi-file-excel-outline'"
+                                    size="sm"
+                                    class="mr-1"
+                                    :class="exporting ? 'animate-spin' : ''"
+                                />
+                                {{ exporting ? 'Export en cours...' : 'Exporter Excel' }}
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                :disabled="exportingPdf || initializing"
+                                @click="handleExportPdf"
+                            >
+                                <MdiIcon
+                                    :name="exportingPdf ? 'mdi-loading' : 'mdi-file-pdf-box'"
+                                    size="sm"
+                                    class="mr-1"
+                                    :class="exportingPdf ? 'animate-spin' : ''"
+                                />
+                                {{ exportingPdf ? 'Export en cours...' : 'Exporter PDF' }}
+                            </Button>
+                            <Button
                                 variant="success"
                                 size="sm"
                                 :disabled="!canValiderSelection || loading || mutating"
@@ -133,6 +161,8 @@ const {
     loading,
     initializing,
     mutating,
+    exporting,
+    exportingPdf,
     error,
     rows,
     totaux,
@@ -146,6 +176,8 @@ const {
     canValiderSelection,
     onSelectionChanged,
     handleValiderSelection,
+    handleExportExcel,
+    handleExportPdf,
     onTableEvent,
     goToResults,
 } = useStockGaps(inventoryReference, warehouseReference)

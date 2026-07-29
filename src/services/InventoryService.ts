@@ -761,6 +761,52 @@ export class InventoryService {
     }
 
     /**
+     * Exporte l'analyse (écarts stock) d'un magasin en Excel
+     * GET /web/api/inventory/{inventory_id}/warehouse/{warehouse_id}/analyse/export/excel/
+     * @returns Promise avec la réponse contenant le blob du fichier .xlsx
+     */
+    static async exportAnalyseExcel(
+        inventoryId: number,
+        warehouseId: number
+    ): Promise<AxiosResponse<Blob>> {
+        try {
+            return await axiosInstance.get<Blob>(
+                `${API.endpoints.inventory.base}${inventoryId}/warehouse/${warehouseId}/analyse/export/excel/`,
+                { responseType: 'blob' }
+            )
+        } catch (error) {
+            logger.error(
+                `Erreur export Excel analyse inventaire ${inventoryId} magasin ${warehouseId}`,
+                error
+            )
+            throw error
+        }
+    }
+
+    /**
+     * Exporte en PDF les lignes d'analyse avec écart (recomptage)
+     * GET /web/api/inventory/{inventory_id}/warehouse/{warehouse_id}/analyse/export/pdf/
+     * @returns Promise avec la réponse contenant le blob du fichier .pdf
+     */
+    static async exportAnalysePdf(
+        inventoryId: number,
+        warehouseId: number
+    ): Promise<AxiosResponse<Blob>> {
+        try {
+            return await axiosInstance.get<Blob>(
+                `${API.endpoints.inventory.base}${inventoryId}/warehouse/${warehouseId}/analyse/export/pdf/`,
+                { responseType: 'blob' }
+            )
+        } catch (error) {
+            logger.error(
+                `Erreur export PDF analyse inventaire ${inventoryId} magasin ${warehouseId}`,
+                error
+            )
+            throw error
+        }
+    }
+
+    /**
      * Modifier le résultat final d'une ligne écart stock
      * PATCH /web/api/ecarts-stock/{ecart_id}/
      */

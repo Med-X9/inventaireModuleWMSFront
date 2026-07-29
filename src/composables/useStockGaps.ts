@@ -24,6 +24,7 @@ import { useWarehouseStore } from '@/stores/warehouse'
 import { fetchInventoryIdByReference, fetchWarehouseIdByReference } from '@/composables/affecter/helpers'
 import { createDataTableOperationHandler } from '@/composables/dataTable/createDataTableOperationHandler'
 import { sanitizeQueryModel } from '@/composables/dataTable/sanitizeQueryModel'
+import { downloadBlob, generateExportFilename } from '@/composables/helpers/useInventoryResults.helpers'
 import { alertService } from '@/services/alertService'
 import { logger } from '@/services/loggerService'
 import type { StockGapRow, StockGapTotaux } from '@/models/TheoreticalStock'
@@ -51,6 +52,24 @@ function extractApiErrorMessage(error: unknown, fallback: string): string {
     return fallback
 }
 
+/**
+ * Les réponses d'erreur d'un appel `responseType: 'blob'` arrivent sous forme de Blob :
+ * il faut le relire en texte pour retrouver le message JSON de l'API.
+ */
+async function extractBlobErrorMessage(error: unknown, fallback: string): Promise<string> {
+    const data = (error as { response?: { data?: unknown } })?.response?.data
+    if (data instanceof Blob) {
+        try {
+            const parsed = JSON.parse(await data.text()) as { message?: string }
+            if (typeof parsed?.message === 'string' && parsed.message) return parsed.message
+        } catch {
+            return fallback
+        }
+        return fallback
+    }
+    return extractApiErrorMessage(error, fallback)
+}
+
 export function useStockGaps(inventoryReference: string, warehouseReference: string) {
     const router = useRouter()
     const inventoryStore = useInventoryStore()
@@ -61,6 +80,8 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
     const loading = ref(false)
     const initializing = ref(true)
     const mutating = ref(false)
+    const exporting = ref(false)
+    const exportingPdf = ref(false)
     const error = ref<string | null>(null)
     const rows = shallowRef<StockGapRow[]>([])
     const selectedEcartIds = ref<Array<string | number>>([])
@@ -485,6 +506,70 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
         }
     }
 
+    const handleExportExcel = async () => {
+        if (!inventoryId.value || !warehouseId.value) {
+            await alertService.warning({ text: 'Inventaire ou magasin non résolu.' })
+            return
+        }
+
+        exporting.value = true
+        try {
+            const response = await InventoryService.exportAnalyseExcel(
+                inventoryId.value,
+                warehouseId.value
+            )
+            const blob = response.data
+            if (!(blob instanceof Blob) || blob.size === 0) {
+                throw new Error('Fichier vide reçu du serveur')
+            }
+
+            downloadBlob(
+                blob,
+                generateExportFilename('Analyse_Ecarts', `${inventoryReference}_${warehouseReference}`, 'xlsx')
+            )
+            await alertService.success({ text: 'Export Excel réussi' })
+        } catch (err) {
+            logger.error('Erreur export Excel analyse', err)
+            await alertService.error({
+                text: await extractBlobErrorMessage(err, "Impossible d'exporter l'analyse en Excel"),
+            })
+        } finally {
+            exporting.value = false
+        }
+    }
+
+    const handleExportPdf = async () => {
+        if (!inventoryId.value || !warehouseId.value) {
+            await alertService.warning({ text: 'Inventaire ou magasin non résolu.' })
+            return
+        }
+
+        exportingPdf.value = true
+        try {
+            const response = await InventoryService.exportAnalysePdf(
+                inventoryId.value,
+                warehouseId.value
+            )
+            const blob = response.data
+            if (!(blob instanceof Blob) || blob.size === 0) {
+                throw new Error('Fichier vide reçu du serveur')
+            }
+
+            downloadBlob(
+                blob,
+                generateExportFilename('Recomptage_Ecarts', `${inventoryReference}_${warehouseReference}`, 'pdf')
+            )
+            await alertService.success({ text: 'Export PDF réussi' })
+        } catch (err) {
+            logger.error('Erreur export PDF analyse', err)
+            await alertService.error({
+                text: await extractBlobErrorMessage(err, "Impossible d'exporter les écarts en PDF"),
+            })
+        } finally {
+            exportingPdf.value = false
+        }
+    }
+
     const actions = computed<ActionConfig<StockGapRow>[]>(() => [
         {
             label: 'Modifier',
@@ -560,6 +645,8 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
         loading,
         initializing,
         mutating,
+        exporting,
+        exportingPdf,
         error,
         rows,
         totaux,
@@ -573,6 +660,8 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
         canValiderSelection,
         onSelectionChanged,
         handleValiderSelection,
+        handleExportExcel,
+        handleExportPdf,
         onTableEvent,
         reload,
         initialize,
