@@ -163,13 +163,19 @@ export const useResultsStore = defineStore('results', () => {
     };
 
     /**
-     * Résoudre tous les écarts de comptage d'un inventaire en masse
+     * Résoudre tous les écarts de comptage d'un magasin en masse
      */
-    const bulkResolveEcarts = async (inventoryId: number): Promise<AxiosResponse<BulkResolveEcartsResponse>> => {
+    const bulkResolveEcarts = async (
+        inventoryId: number,
+        warehouseId: number
+    ): Promise<AxiosResponse<BulkResolveEcartsResponse>> => {
         loading.value = true;
         error.value = null;
         try {
-            const response = await EcartComptageService.bulkResolveEcarts(inventoryId);
+            const response = await EcartComptageService.bulkResolveEcarts(
+                inventoryId,
+                warehouseId
+            );
 
             // Ne pas forcer resolved: true - laisser l'API décider du statut réel
             // Le rechargement des données mettra à jour les statuts correctement

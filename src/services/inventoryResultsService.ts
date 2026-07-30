@@ -164,13 +164,17 @@ export class InventoryResultsService {
     }
 
     /**
-     * Exporter les articles consolidés d'un inventaire en Excel
+     * Exporter les articles consolidés d'un magasin en Excel
      * @param inventoryId - ID de l'inventaire
+     * @param warehouseId - ID du magasin
      * @returns Promise avec la réponse contenant le blob du fichier Excel
      */
-    static async exportConsolidatedArticles(inventoryId: number): Promise<AxiosResponse<Blob>> {
+    static async exportConsolidatedArticles(
+        inventoryId: number,
+        warehouseId: number
+    ): Promise<AxiosResponse<Blob>> {
         return await axiosInstance.get(
-            `${this.baseUrl}${inventoryId}/articles-consolides/export/`,
+            `${this.baseUrl}${inventoryId}/warehouse/${warehouseId}/articles-consolides/export/`,
             {
                 responseType: 'blob'
             }

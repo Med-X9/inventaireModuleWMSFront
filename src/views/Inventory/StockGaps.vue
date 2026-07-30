@@ -23,6 +23,10 @@
                             </p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2 shrink-0">
+                            <Button variant="secondary" size="sm" @click="goToJobs">
+                                <MdiIcon name="mdi-clipboard-text-outline" size="sm" class="mr-1" />
+                                Jobs
+                            </Button>
                             <Button variant="secondary" size="sm" @click="goToResults">
                                 <MdiIcon name="mdi-chart-bar" size="sm" class="mr-1" />
                                 Résultats
@@ -180,6 +184,7 @@ const {
     handleExportPdf,
     onTableEvent,
     goToResults,
+    goToJobs,
 } = useStockGaps(inventoryReference, warehouseReference)
 
 const tableEvents = bindDataTableServerEvents(onTableEvent)

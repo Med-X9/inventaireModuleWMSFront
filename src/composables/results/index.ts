@@ -2130,6 +2130,12 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             return
         }
 
+        const warehouseId = Number(selectedStore.value)
+        if (!Number.isInteger(warehouseId) || warehouseId <= 0) {
+            await alertService.warning({ text: 'Aucun magasin sélectionné' })
+            return
+        }
+
         // Vérifier s'il y a des résultats non résolus
         const unresolvedResults = results.value.filter(result => !result.resolved)
         if (unresolvedResults.length === 0) {
@@ -2170,7 +2176,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         try {
             // Appeler l'API de résolution en masse
             // ⚠️ NE MODIFIE PAS le statut 'resolved' localement - laisse l'API décider
-            const response = await resultsStore.bulkResolveEcarts(inventoryId.value)
+            const response = await resultsStore.bulkResolveEcarts(
+                inventoryId.value,
+                warehouseId
+            )
 
             // Afficher le message de succès avec les détails
             const resolvedCount = response.data.data.resolved_count

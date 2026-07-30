@@ -106,15 +106,23 @@ export function useResultsExport(deps: ResultsExportDeps) {
     }
 
     const handleExportConsolidatedArticles = async () => {
-        if (!inventoryId.value) {
-            await alertService.warning({ text: 'Aucun inventaire sélectionné' })
+        if (!inventoryId.value || !selectedStore.value) {
+            await alertService.warning({ text: 'Aucun inventaire ou magasin sélectionné' })
+            return
+        }
+
+        const warehouseId = Number(selectedStore.value)
+        if (!Number.isInteger(warehouseId) || warehouseId <= 0) {
+            await alertService.warning({ text: 'Magasin sélectionné invalide' })
             return
         }
 
         exportLoading.value = true
 
         try {
-            await Swal.fire({
+            // Pas de `await` : la promesse de Swal.fire ne se résout qu'à la fermeture
+            // de la popup, ce qui bloquerait l'appel API juste en dessous.
+            void Swal.fire({
                 title: 'Export en cours...',
                 text: 'Le fichier Excel est en cours de préparation. Veuillez patienter.',
                 icon: 'info',
@@ -125,7 +133,10 @@ export function useResultsExport(deps: ResultsExportDeps) {
                 },
             })
 
-            const response = await InventoryResultsService.exportConsolidatedArticles(inventoryId.value)
+            const response = await InventoryResultsService.exportConsolidatedArticles(
+                inventoryId.value,
+                warehouseId
+            )
 
             if (!response.data || !(response.data instanceof Blob)) {
                 throw new Error('Aucune donnée reçue du backend')
@@ -134,20 +145,20 @@ export function useResultsExport(deps: ResultsExportDeps) {
             const blob = response.data as Blob
             const filename = generateExportFilename(
                 'Articles_Consolides',
-                String(inventoryReference.value || inventoryId.value),
+                `${inventoryReference.value || inventoryId.value}_${warehouseId}`,
                 'xlsx'
             )
 
             downloadBlob(blob, filename)
 
-            await Swal.close()
+            Swal.close()
             await alertService.success({ text: 'Export Excel réussi' })
             logger.debug('Export des articles consolidés réussi', { filename })
         } catch (error: any) {
             logger.error("Erreur lors de l'export des articles consolidés", error)
             const errorMessage =
                 error?.response?.data?.message || error?.message || "Erreur lors de l'export Excel"
-            await Swal.close()
+            Swal.close()
             await alertService.error({ text: errorMessage })
         } finally {
             exportLoading.value = false

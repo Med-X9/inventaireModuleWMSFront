@@ -635,6 +635,16 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
         })
     }
 
+    const goToJobs = () => {
+        router.push({
+            name: 'inventory-job-tracking',
+            params: {
+                reference: inventoryReference,
+                warehouse: warehouseReference,
+            },
+        })
+    }
+
     onMounted(() => {
         void initialize()
     })
@@ -667,5 +677,6 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
         initialize,
         goBack,
         goToResults,
+        goToJobs,
     }
 }
