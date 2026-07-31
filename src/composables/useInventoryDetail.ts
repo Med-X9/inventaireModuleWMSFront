@@ -639,9 +639,9 @@ export function useInventoryDetail(inventoryReference: string) {
 
     /**
      * Actions magasin selon le cycle Setting :
-     * EN ATTENTE → planif / affectation / import / lancer
+     * EN ATTENTE → planif / affectation / import planning / lancer
      * LANCEE → annuler lancement / terminer / suivi / KPI / résultats / monitoring
-     * TERMINEE → analyser
+     * TERMINEE → import stock / analyser
      * ANALYSER → écarts stock / clôturer (MAGASIN)
      * GENERAL/TOURNANT → clôturer depuis LANCEE
      */
@@ -665,7 +665,7 @@ export function useInventoryDetail(inventoryReference: string) {
             icon: 'mdi-file-excel-outline',
             color: 'secondary',
             onClick: (row) => goToWarehouseStockImport(row.reference || ''),
-            show: (row) => getMagasinStatus(row) === 'EN ATTENTE',
+            show: (row) => getMagasinStatus(row) === 'TERMINEE',
         },
         {
             label: 'Import planning',
@@ -832,7 +832,6 @@ export function useInventoryDetail(inventoryReference: string) {
             buttons.push(
                 { id: 'planning', label: '', title: 'Planification', icon: 'mdi-calendar-outline', onClick: () => goToWarehousePlanning(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
                 { id: 'affectation', label: '', title: 'Affectation', icon: 'mdi-account-group-outline', onClick: () => goToWarehouseAffectation(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
-                { id: 'stock-import', label: '', title: 'Import stock théorique', icon: 'mdi-file-excel-outline', onClick: () => goToWarehouseStockImport(warehouseReference), variant: 'default', class: ACTION_BUTTON_CLASS },
                 { id: 'import-planning', label: '', title: 'Import planning', icon: 'mdi-file-upload-outline', onClick: () => openPlanningImportModal(), variant: 'default', class: ACTION_BUTTON_CLASS },
                 {
                     id: 'launch',
@@ -869,15 +868,26 @@ export function useInventoryDetail(inventoryReference: string) {
         }
 
         if (status === 'TERMINEE') {
-            buttons.push({
-                id: 'analyser',
-                label: '',
-                title: 'Analyser',
-                icon: 'mdi-chart-timeline-variant',
-                onClick: async () => { await analyserWarehouseByRow(row) },
-                variant: 'default',
-                class: ACTION_BUTTON_CLASS,
-            })
+            buttons.push(
+                {
+                    id: 'stock-import',
+                    label: '',
+                    title: 'Import stock théorique',
+                    icon: 'mdi-file-excel-outline',
+                    onClick: () => goToWarehouseStockImport(warehouseReference),
+                    variant: 'default',
+                    class: ACTION_BUTTON_CLASS,
+                },
+                {
+                    id: 'analyser',
+                    label: '',
+                    title: 'Analyser',
+                    icon: 'mdi-chart-timeline-variant',
+                    onClick: async () => { await analyserWarehouseByRow(row) },
+                    variant: 'default',
+                    class: ACTION_BUTTON_CLASS,
+                }
+            )
         }
 
         if (status === 'ANALYSER' || status === 'CLOTURE') {
