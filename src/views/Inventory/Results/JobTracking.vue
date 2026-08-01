@@ -135,7 +135,14 @@ import type { DataTableColumn } from '@SMATCH-Digital-dev/vue-system-design'
 const route = useRoute()
 const router = useRouter()
 const referenceParam = computed(() => route.params.reference as string)
-const warehouseRefFromUrl = computed(() => route.query.warehouse as string | undefined)
+/**
+ * Référence du warehouse depuis l'URL (param de route, fallback query legacy)
+ */
+const warehouseRefFromUrl = computed(() => {
+    const fromParams = route.params.warehouse as string | undefined
+    const fromQuery = route.query.warehouse as string | undefined
+    return fromParams || fromQuery
+})
 
 // ===== STORES =====
 const warehouseStore = useWarehouseStore()
@@ -179,7 +186,7 @@ const { warehouses, loading: warehousesLoading } = storeToRefs(warehouseStore)
         trackingLoadingLocal
     } = useJobTracking({
         inventoryReference: referenceParam.value,
-        initialWarehouseReference: warehouseRefFromUrl.value
+        initialWarehouseReference: warehouseRefFromUrl.value,
     })
 
 const trackingTableEvents = bindDataTableServerEvents(onTrackingTableEvent)
@@ -359,21 +366,26 @@ const actionButtons = computed<ButtonGroupButton[]>(() => {
 /**
  * Initialisation au montage du composant
  */
-onMounted(async () => {
+const mountTracking = async () => {
     await initialize(referenceParam.value)
+}
+
+onMounted(() => {
+    void mountTracking()
 })
 
 /**
- * Watcher sur la référence de l'inventaire
- * Réinitialise le composable quand la référence change
+ * Watcher sur la référence inventaire / magasin (comme InventoryResults)
  */
-watch(referenceParam, async newReference => {
-    if (!newReference) {
-        return
+watch(
+    () => [route.params.reference, route.params.warehouse] as const,
+    ([reference, warehouse], previous) => {
+        if (!previous) return
+        if (reference === previous[0] && warehouse === previous[1]) return
+        if (!reference) return
+        void reinitialize(String(reference))
     }
-
-    await reinitialize(newReference)
-})
+)
 
 </script>
 

@@ -13,6 +13,7 @@
 
 // ===== IMPORTS VUE =====
 import { ref, computed, watch, markRaw, onMounted, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 
 // ===== IMPORTS PINIA =====
 import { storeToRefs } from 'pinia'
@@ -55,7 +56,7 @@ export interface UseJobTrackingConfig {
     inventoryReference?: string
     /** ID du magasin initial (warehouse_id sous forme de string) */
     initialStoreId?: string
-    /** Référence du magasin initial (warehouse.reference ou warehouse_name depuis l'URL) */
+    /** Référence du magasin initial (warehouse.reference depuis l'URL) */
     initialWarehouseReference?: string
     /** Ordre du comptage initial */
     initialCountingOrder?: number
@@ -119,6 +120,9 @@ type AssignmentWithDates = JobAssignment & {
  * @returns Objet contenant l'état, les méthodes et les données pour le suivi des jobs
  */
 export function useJobTracking(config?: UseJobTrackingConfig) {
+    // ===== ROUTE =====
+    const route = useRoute()
+
     // ===== STORES =====
     const inventoryStore = useInventoryStore()
     const warehouseStore = useWarehouseStore()
@@ -153,8 +157,14 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
     /** Magasin sélectionné (warehouse_id au format string) */
     const selectedStore = ref<string | null>(config?.initialStoreId ?? null)
 
-    /** Référence du magasin initial (ex. depuis l'URL ?warehouse=REF) */
+    /** Référence du magasin initial (ex. depuis l'URL /:warehouse/ ou ?warehouse=) */
     const initialWarehouseReference = ref<string | null>(config?.initialWarehouseReference ?? null)
+
+    const getWarehouseReferenceFromRoute = (): string | undefined => {
+        const fromParams = route.params.warehouse as string | undefined
+        const fromQuery = route.query.warehouse as string | undefined
+        return fromParams || fromQuery || initialWarehouseReference.value || undefined
+    }
 
     // Paramètres personnalisés pour les appels API
     const trackingCustomParams = computed(() => ({
@@ -1165,36 +1175,23 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             // 1. Charger l'inventaire
             await fetchInventory(inventoryReference.value)
 
-            // 2. Charger les magasins (instantané si dans l'inventaire, sinon via account_id)
-            // Si l'inventaire contient déjà les warehouses, fetchStores sera instantané
+            // 2. Résoudre l'ID magasin comme InventoryResults :
+            //    référence URL → fetchWarehouseByReference → selectedStore
+            const warehouseRef = getWarehouseReferenceFromRoute()
+            if (warehouseRef) {
+                initialWarehouseReference.value = warehouseRef
+                const warehouseId = await warehouseStore.fetchWarehouseByReference(warehouseRef)
+                if (warehouseId != null) {
+                    selectedStore.value = String(warehouseId)
+                }
+            }
+
+            // 3. Charger les magasins (instantané si dans l'inventaire, sinon via account_id)
             await fetchStores()
 
-            // 3. Charger les jobs immédiatement si un magasin est disponible
-            // Sélectionner automatiquement le magasin provenant de l'URL si présent,
-            // sinon fallback sur le premier magasin disponible
+            // Fallback : si toujours rien de sélectionné, prendre le premier magasin disponible
             if (!selectedStore.value && storeOptions.value.length > 0) {
-                // Si une référence de warehouse est fournie (via URL), la faire correspondre
-                if (initialWarehouseReference.value) {
-                    const targetRef = initialWarehouseReference.value
-                    // Chercher par référence ou nom
-                    const matchingStore = storeOptions.value.find(opt => {
-                        const warehouse = warehouses.value.find(w => String(w.id) === opt.value)
-                        return warehouse && (
-                            warehouse.reference === targetRef ||
-                            warehouse.warehouse_name === targetRef ||
-                            opt.label === targetRef
-                        )
-                    })
-
-                    if (matchingStore) {
-                        selectedStore.value = matchingStore.value
-                    }
-                }
-
-                // Fallback : si toujours rien de sélectionné, prendre le premier
-                if (!selectedStore.value) {
-                    selectedStore.value = storeOptions.value[0].value
-                }
+                selectedStore.value = storeOptions.value[0].value
             }
 
             // Charger les données immédiatement (non-bloquant)
@@ -1316,6 +1313,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         trackingRows.value = []
         storeOptions.value = []
         selectedStore.value = config?.initialStoreId ?? null
+        initialWarehouseReference.value = getWarehouseReferenceFromRoute() ?? null
 
         // Réinitialiser le cache des requêtes
         lastExecutedQueryModel = null
