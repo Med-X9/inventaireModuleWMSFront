@@ -24,7 +24,7 @@ export function useInventoryCreation() {
             libelle: '',
             date: '',
             inventory_type: '',
-            max_entame_assignments: '' as string | number | null,
+            max_entame_assignments: '' as string | number | undefined,
             compte: '',
             magasin: []
         },
