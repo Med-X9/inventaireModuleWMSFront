@@ -79,8 +79,14 @@ const props = withDefaults(
         warehouseId?: number | null
         /** Filtre jobs côté API (mode `inventory` uniquement) */
         jobIds?: number[]
+        /** Transfert du Ne comptage : uniquement les assignments de cet ordre (mode `inventory`) */
+        countingOrder?: number | null
+        /** Statuts d'assignment à exporter (mode `inventory`, défaut serveur : PRET, TRANSFERT) */
+        assignmentStatuses?: string[]
+        /** Statuts de job (mode `inventory`, [] = pas de filtre) */
+        jobStatuses?: string[]
     }>(),
-    { exportMode: 'inventory', warehouseId: null }
+    { exportMode: 'inventory', warehouseId: null, countingOrder: null }
 )
 
 const emit = defineEmits<{
@@ -187,7 +193,10 @@ async function startFlow() {
             res = await run({
                 mode: 'inventory',
                 inventoryId: invId,
-                jobIds: props.jobIds?.length ? props.jobIds : undefined
+                jobIds: props.jobIds?.length ? props.jobIds : undefined,
+                countingOrder: props.countingOrder,
+                assignmentStatuses: props.assignmentStatuses,
+                jobStatuses: props.jobStatuses
             })
         }
         if (phase.value === 'cancelled') {

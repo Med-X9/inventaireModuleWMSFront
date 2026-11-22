@@ -14,13 +14,15 @@
                         </div>
                         <div>
                             <h1 class="text-3xl font-bold text-slate-900 dark:text-slate-100 m-0 mb-2 leading-tight">
-                                Résultats d'inventaire
+                                {{ isDetailView ? 'Détail par article' : 'Résultats d\'inventaire' }}
                                 <span v-if="inventoryReference" class="text-xl font-semibold text-primary ml-3">
                                     {{ inventoryReference }}
                                 </span>
                             </h1>
                                 <p class="text-base text-slate-600 dark:text-slate-400 m-0 leading-relaxed">
-                                    Consultez et validez les résultats des comptages par magasin
+                                    {{ isDetailView
+                                        ? 'Quantités par article et résultat final retenu pour chaque emplacement (lecture seule)'
+                                        : 'Consultez et validez les résultats des comptages par magasin' }}
                                 </p>
                             </div>
                         </div>
@@ -37,6 +39,24 @@
 
         <!-- DataTable (package) - chargé après résolution du contexte (pattern Planning/Affecter) -->
         <div v-if="isDataLoaded">
+            <!-- Onglets : MAGASIN à 3 comptages (par emplacement / détail par article) -->
+            <div v-if="selectedStore && isLocationEcartInventory" class="flex gap-2 mb-4" role="tablist">
+                <button
+                    v-for="tab in resultsTabs"
+                    :key="tab.value"
+                    type="button"
+                    role="tab"
+                    :aria-selected="resultsView === tab.value"
+                    class="px-5 py-2.5 text-sm font-semibold rounded-xl border transition"
+                    :class="resultsView === tab.value
+                        ? 'bg-primary-600 text-white border-primary-600 shadow'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'"
+                    @click="setResultsView(tab.value)"
+                >
+                    {{ tab.label }}
+                </button>
+            </div>
+
             <div v-if="selectedStore" class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
                 <!-- ⚡ FIX : :key volatile supprimé (forçait un remount complet à chaque
                      refresh, perte de scroll). rowDataProp se met à jour réactivement ; le
@@ -45,7 +65,7 @@
                 <DataTable
                     :columns="columns"
                     :rowDataProp="resultsTableRows"
-                    :actions="actions as any"
+                    :actions="(isDetailView ? [] : actions) as any"
                     :enableVirtualScrolling="undefined"
                     :currentPageProp="pagination.current_page"
                     :totalPagesProp="pagination.total_pages"
@@ -53,7 +73,7 @@
                     :pageSizeProp="pagination.page_size"
                     :customDataTableParams="resultsCustomParams"
                     v-on="resultsTableEvents"
-                    storageKey="inventory_results_table"
+                    :storageKey="isDetailView ? 'inventory_results_detail_table' : 'inventory_results_table'"
                     ref="resultsTableRef"
                     :loading="loading"
                     :enableDynamicColumns="false"
@@ -222,7 +242,11 @@ const {
     onStoreChanged,
     resultsKey,
     resultsTableRef,
-    resultsQueryModel
+    resultsQueryModel,
+    resultsView,
+    isDetailView,
+    isLocationEcartInventory,
+    setResultsView
 } = useInventoryResults({
     inventoryReference: inventoryReference.value,
     initialWarehouseReference: warehouseRefFromUrl.value,
@@ -231,6 +255,11 @@ const {
 })
 
 const resultsTableEvents = bindDataTableServerEvents(onResultsTableEvent)
+
+const resultsTabs = [
+    { value: 'emplacement' as const, label: 'Par emplacement' },
+    { value: 'detail' as const, label: 'Détail par article' }
+]
 
 // ===== BOUTONS D'ACTION =====
 // Les boutons sont maintenant gérés par le composable useInventoryResults

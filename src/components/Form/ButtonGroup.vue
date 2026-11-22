@@ -10,8 +10,9 @@
             :type="button.type || 'button'"
             :title="button.title"
             :aria-label="button.title || button.ariaLabel || (typeof button.label === 'string' && button.label ? button.label : undefined)"
-            :disabled="button.disabled"
-            @click="button.onClick"
+            :disabled="button.disabled || isPending(button, index)"
+            :aria-busy="isPending(button, index) || undefined"
+            @click="onButtonClick(button, index)"
             :class="[
                 'flex items-center gap-2 px-4 py-2 font-medium shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 relative',
                 // Coins arrondis seulement sur les bords extérieurs
@@ -35,7 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { Component } from 'vue'
 import MdiIcon from '@/components/MdiIcon.vue'
 
@@ -51,7 +52,8 @@ export interface ButtonGroupButton {
     ariaLabel?: string
     /** Composant Vue ou nom d'icône MDI (`mdi-eye-outline`, etc.) */
     icon?: Component | string
-    onClick: () => void | Promise<void>
+    /** Si l'action retourne une promesse, le bouton reste désactivé jusqu'à sa résolution */
+    onClick: () => unknown
     variant?: 'primary' | 'success' | 'danger' | 'warning' | 'info' | 'default'
     type?: 'button' | 'submit' | 'reset'
     disabled?: boolean
@@ -72,6 +74,27 @@ const props = withDefaults(defineProps<Props>(), {
     justify: 'end',
     className: ''
 })
+
+/**
+ * Anti multi-clic : un bouton dont l'action est en cours (promesse non résolue)
+ * est désactivé et ignore les clics suivants jusqu'à la fin de l'action.
+ */
+const pendingKeys = ref(new Set<string | number>())
+const keyOf = (button: ButtonGroupButton, index: number) => button.id ?? index
+const isPending = (button: ButtonGroupButton, index: number) => pendingKeys.value.has(keyOf(button, index))
+
+const onButtonClick = async (button: ButtonGroupButton, index: number) => {
+    const key = keyOf(button, index)
+    if (button.disabled || pendingKeys.value.has(key)) return
+    pendingKeys.value = new Set(pendingKeys.value).add(key)
+    try {
+        await button.onClick()
+    } finally {
+        const next = new Set(pendingKeys.value)
+        next.delete(key)
+        pendingKeys.value = next
+    }
+}
 
 /**
  * Filtre les boutons visibles

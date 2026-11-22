@@ -1057,7 +1057,15 @@ export class InventoryService {
 
     static async startInventoryJobsPdfAsync(
         id: number | string,
-        options?: { jobIds?: number[] }
+        options?: {
+            jobIds?: number[]
+            /** Transfert du Ne comptage : uniquement les assignments de cet ordre */
+            countingOrder?: number | null
+            /** Statuts d'assignment à exporter (défaut serveur : PRET, TRANSFERT) */
+            assignmentStatuses?: string[]
+            /** Statuts de job ([] = ne pas filtrer ; défaut serveur : PRET, TRANSFERT) */
+            jobStatuses?: string[]
+        }
     ): Promise<InventoryJobsPdfAsyncStartResponse> {
         const iid = parsePositiveInventoryId(id)
         if (iid == null) {
@@ -1066,6 +1074,15 @@ export class InventoryService {
         const body: Record<string, unknown> = {}
         if (options?.jobIds?.length) {
             body.job = options.jobIds
+        }
+        if (options?.countingOrder) {
+            body.counting_order = options.countingOrder
+        }
+        if (options?.assignmentStatuses?.length) {
+            body.assignment_statuses = options.assignmentStatuses
+        }
+        if (options?.jobStatuses) {
+            body.job_statuses = options.jobStatuses
         }
         const response = await axiosInstance.post<InventoryJobsPdfAsyncStartResponse>(
             `${API.endpoints.inventory.base}${iid}/jobs/pdf/async/`,

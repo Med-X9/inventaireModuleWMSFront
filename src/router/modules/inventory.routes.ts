@@ -24,6 +24,36 @@ export const inventoryRoutes: RouteRecordRaw[] = [
         meta: { requiresAuth: true },
     },
     {
+        path: '/inventory/:reference/:warehouse/launch-counting',
+        name: 'inventory-launch-counting',
+        component: () => import(/* webpackChunkName: "inventory-launch-counting" */ '@/views/Inventory/Results/CountingLaunch.vue'),
+        props: (route) => ({
+            reference: route.params.reference as string,
+            warehouse: route.params.warehouse as string,
+        }),
+        meta: { requiresAuth: true },
+    },
+    {
+        path: '/inventory/:reference/:warehouse/pdf-finished',
+        name: 'inventory-pdf-finished',
+        component: () => import(/* webpackChunkName: "inventory-pdf-finished" */ '@/views/Inventory/Results/FinishedAssignmentsPdf.vue'),
+        props: (route) => ({
+            reference: route.params.reference as string,
+            warehouse: route.params.warehouse as string,
+        }),
+        meta: { requiresAuth: true },
+    },
+    {
+        path: '/inventory/:reference/:warehouse/pdf-transfer',
+        name: 'inventory-pdf-transfer',
+        component: () => import(/* webpackChunkName: "inventory-pdf-transfer" */ '@/views/Inventory/Results/CountingTransferPdf.vue'),
+        props: (route) => ({
+            reference: route.params.reference as string,
+            warehouse: route.params.warehouse as string,
+        }),
+        meta: { requiresAuth: true },
+    },
+    {
         path: '/inventory/:reference/:warehouse/job-tracking',
         name: 'inventory-job-tracking',
         component: () => import(/* webpackChunkName: "inventory-job-tracking" */ '@/views/Inventory/Results/JobTracking.vue'),

@@ -1,6 +1,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { alertService } from '@/services/alertService'
 import type { DataTableColumn, ColumnDataType } from '@SMATCH-Digital-dev/vue-system-design'
+import { singleFlight } from '@/composables/useAsyncAction'
 
 // Types
 interface Job {
@@ -405,7 +406,7 @@ export function useJobManagementPage() {
     /**
      * Confirme l'affectation des opérateurs
      */
-    const confirmAssign = async (): Promise<void> => {
+    const confirmAssign = singleFlight(async (): Promise<void> => {
         if (!assignForm.value.firstOperator) {
             await alertService.warning({ text: 'Veuillez sélectionner au moins le premier opérateur' })
             return
@@ -419,7 +420,7 @@ export function useJobManagementPage() {
         closeAssignModal()
         selectedJobs.value = []
         loadJobs()
-    }
+    })
 
     // ===== INITIALISATION =====
 

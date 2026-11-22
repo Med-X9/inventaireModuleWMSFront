@@ -30,7 +30,14 @@ const POLL_TIMEOUT_MS = 5 * 60 * 1000
 
 /** Même poll GET pour toutes les tâches PDF d’inventaire */
 export type RunInventoryJobsPdfParams =
-    | { mode: 'inventory'; inventoryId: number; jobIds?: number[] }
+    | {
+          mode: 'inventory'
+          inventoryId: number
+          jobIds?: number[]
+          countingOrder?: number | null
+          assignmentStatuses?: string[]
+          jobStatuses?: string[]
+      }
     | { mode: 'finished'; inventoryId: number; warehouseId: number }
 
 export function useInventoryJobsPdfAsyncRunner() {
@@ -97,7 +104,10 @@ export function useInventoryJobsPdfAsyncRunner() {
                           params.warehouseId
                       )
                     : await InventoryService.startInventoryJobsPdfAsync(params.inventoryId, {
-                          jobIds: params.jobIds
+                          jobIds: params.jobIds,
+                          countingOrder: params.countingOrder,
+                          assignmentStatuses: params.assignmentStatuses,
+                          jobStatuses: params.jobStatuses
                       })
             if (cancelled.value || myToken !== runToken) {
                 return null

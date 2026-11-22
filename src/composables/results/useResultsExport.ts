@@ -6,6 +6,7 @@ import { InventoryResultsService } from '@/services/inventoryResultsService'
 import { downloadBlob, generateExportFilename } from '@/composables/helpers/useInventoryResults.helpers'
 import type { Warehouse } from '@/models/Warehouse'
 import type { useWarehouseStore } from '@/stores/warehouse'
+import { singleFlight } from '@/composables/useAsyncAction'
 
 export interface ResultsExportDeps {
     inventoryId: Ref<number | null>
@@ -34,7 +35,7 @@ export function useResultsExport(deps: ResultsExportDeps) {
         exportResultsModalMessage,
     } = deps
 
-    const handleExportResultsData = async () => {
+    const handleExportResultsData = singleFlight(async () => {
         if (!inventoryId.value || !selectedStore.value) {
             alertService.warning({ text: "ID d'inventaire ou magasin non disponible" })
             return
@@ -103,9 +104,9 @@ export function useResultsExport(deps: ResultsExportDeps) {
                 showExportResultsModal.value = false
             }
         }
-    }
+    })
 
-    const handleExportConsolidatedArticles = async () => {
+    const handleExportConsolidatedArticles = singleFlight(async () => {
         if (!inventoryId.value || !selectedStore.value) {
             await alertService.warning({ text: 'Aucun inventaire ou magasin sélectionné' })
             return
@@ -163,7 +164,7 @@ export function useResultsExport(deps: ResultsExportDeps) {
         } finally {
             exportLoading.value = false
         }
-    }
+    })
 
     return {
         handleExportResultsData,

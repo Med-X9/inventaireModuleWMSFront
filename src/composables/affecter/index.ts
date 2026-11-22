@@ -70,6 +70,7 @@ import {
 
 // ===== IMPORTS EXTERNES =====
 import Swal from 'sweetalert2'
+import { singleFlight } from '@/composables/useAsyncAction'
 
 
 // ===== COMPOSABLE PRINCIPAL =====
@@ -820,7 +821,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
             visible: showReadyButton.value,
-            onClick: () => { void handleAffectAll() }
+            onClick: () => handleAffectAll()
         })
 
         // Bouton Manuel — Setting EN ATTENTE
@@ -831,7 +832,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
             visible: showManualButton.value,
-            onClick: () => { void handleManualClick() }
+            onClick: () => handleManualClick()
         })
 
         // Bouton Transférer — Setting LANCEE
@@ -842,7 +843,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
             visible: showTransferButton.value,
-            onClick: () => { void handleTransferClick() }
+            onClick: () => handleTransferClick()
         })
 
         // Bouton Transférer tous — Setting LANCEE
@@ -853,7 +854,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
             visible: showTransferButton.value,
-            onClick: () => { void handleTransferAllBulk() }
+            onClick: () => handleTransferAllBulk()
         })
 
 
@@ -865,7 +866,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
             variant: 'success',
             class: ACTION_BUTTON_CLASS,
             visible: showTransferButton.value,
-            onClick: () => { void handleValidateAllJobs() }
+            onClick: () => handleValidateAllJobs()
         })
 
         // Bouton Clôturer — Setting LANCEE
@@ -876,7 +877,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
             visible: showTransferButton.value,
-            onClick: () => { void handleCloturerClick() }
+            onClick: () => handleCloturerClick()
         })
 
         // Bouton Pret — Setting EN ATTENTE
@@ -887,7 +888,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
             visible: showReadyButton.value,
-            onClick: () => { void handleReadyClick() }
+            onClick: () => handleReadyClick()
         })
 
         // Bouton Prêt tous — Setting EN ATTENTE
@@ -898,7 +899,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
             variant: 'default',
             class: ACTION_BUTTON_CLASS,
             visible: showReadyButton.value,
-            onClick: () => { void handleReadyAll() }
+            onClick: () => handleReadyAll()
         })
 
 
@@ -1716,7 +1717,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
     /**
      * Handler pour la fin de l'affectation dans JobAffectationModal
      */
-    const handleJobAffectationModalFinish = async () => {
+    const handleJobAffectationModalFinish = singleFlight(async () => {
         showJobAffectationModal.value = false
         selectedJobForModal.value = null
 
@@ -1724,7 +1725,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
         await refreshJobs(lastExecutedQueryModel ?? undefined)
         await nextTick()
         resetDataTableSelections()
-    }
+    })
 
     /**
      * Réinitialise toutes les sélections (jobs)
@@ -2199,7 +2200,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
      * Handler pour affecter automatiquement tous les jobs depuis les location-jobs
      * Utilise l'endpoint d'auto-affectation automatique
      */
-    const handleValidateAllJobs = async () => {
+    const handleValidateAllJobs = singleFlight(async () => {
         // Vérifier que les IDs requis sont disponibles
         if (!inventoryId.value || !warehouseId.value) {
             await alertService.warning({ text: 'Inventaire ou entrepôt non disponible' })
@@ -2269,9 +2270,9 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
 
             await alertService.error({ text: errorMessage })
         }
-    }
+    })
 
-    const handleAffectAll = async () => {
+    const handleAffectAll = singleFlight(async () => {
         // Vérifier que l'inventaire ID est disponible
         if (!inventoryId.value) {
             alertService.error({
@@ -2341,14 +2342,14 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
                 })
             }
         }
-    }
+    })
 
     /**
      * Handler pour la soumission du formulaire de transfert
      *
      * @param data - Données du formulaire (comptages: string[])
      */
-    const handleTransferSubmit = async (data: Record<string, unknown>) => {
+    const handleTransferSubmit = singleFlight(async (data: Record<string, unknown>) => {
         const { comptages } = data as { comptages: string[] }
 
         // Déterminer les ordres de comptage à transférer
@@ -2387,14 +2388,14 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
                 text: 'Erreur lors du transfert des jobs'
             })
         }
-    }
+    })
 
     /**
      * Handler pour la soumission du formulaire d'action manuelle
      *
      * @param data - Données du formulaire (premierComptage, deuxiemeComptage)
      */
-    const handleManualSubmit = async (data: Record<string, unknown>) => {
+    const handleManualSubmit = singleFlight(async (data: Record<string, unknown>) => {
         const { premierComptage, deuxiemeComptage } = data as { premierComptage: boolean; deuxiemeComptage: boolean }
 
         // Déterminer les ordres de comptage à transférer
@@ -2431,7 +2432,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
                 text: 'Erreur lors de l\'action manuelle des jobs'
             })
         }
-    }
+    })
 
     /**
      * Handler pour la soumission du formulaire d'affectation de ressources
@@ -2708,7 +2709,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
     /**
      * Handler pour l'export CSV
      */
-    const handleExportCsv = async () => {
+    const handleExportCsv = singleFlight(async () => {
         try {
             if (!inventoryId.value || !warehouseId.value) {
                 await alertService.error({ text: 'ID d\'inventaire ou d\'entrepôt non disponible' })
@@ -2749,12 +2750,12 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
         } catch (error: any) {
             alertService.error({ text: error?.message || 'Erreur lors de l\'export CSV' })
         }
-    }
+    })
 
     /**
      * Handler pour l'export Excel
      */
-    const handleExportExcel = async () => {
+    const handleExportExcel = singleFlight(async () => {
         try {
             if (!inventoryId.value || !warehouseId.value) {
                 await alertService.error({ text: 'ID d\'inventaire ou d\'entrepôt non disponible' })
@@ -2795,7 +2796,7 @@ export function useAffecter(options?: { inventoryReference?: string; warehouseRe
         } catch (error: any) {
             alertService.error({ text: error?.message || 'Erreur lors de l\'export Excel' })
         }
-    }
+    })
 
     return {
         jobs,

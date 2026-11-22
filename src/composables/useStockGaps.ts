@@ -28,6 +28,7 @@ import { downloadBlob, generateExportFilename } from '@/composables/helpers/useI
 import { alertService } from '@/services/alertService'
 import { logger } from '@/services/loggerService'
 import type { StockGapRow, StockGapTotaux } from '@/models/TheoreticalStock'
+import { rowKey, singleFlight, singleFlightByKey } from '@/composables/useAsyncAction'
 
 const DEFAULT_PAGE = 1
 const DEFAULT_PAGE_SIZE = 20
@@ -326,7 +327,7 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
     const canValiderSelection = computed(() => selectedValidables.value.length > 0)
     const selectedValidablesCount = computed(() => selectedValidables.value.length)
 
-    const handleModifierResultatFinal = async (row: StockGapRow) => {
+    const handleModifierResultatFinal = singleFlightByKey(rowKey, async (row: StockGapRow) => {
         if (row.valide) {
             await alertService.warning({
                 text: 'Impossible de modifier le résultat final : la ligne est validée.',
@@ -405,9 +406,9 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
         } finally {
             mutating.value = false
         }
-    }
+    })
 
-    const handleValiderEcart = async (row: StockGapRow) => {
+    const handleValiderEcart = singleFlightByKey(rowKey, async (row: StockGapRow) => {
         if (row.valide) {
             await alertService.warning({ text: 'Cette ligne est déjà validée.' })
             return
@@ -450,9 +451,9 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
         } finally {
             mutating.value = false
         }
-    }
+    })
 
-    const handleValiderSelection = async () => {
+    const handleValiderSelection = singleFlight(async () => {
         const targets = selectedValidables.value
         if (targets.length === 0) {
             const selectedButInvalid = selectedRows.value.filter((row) => !row.valide)
@@ -504,9 +505,9 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
         } finally {
             mutating.value = false
         }
-    }
+    })
 
-    const handleExportExcel = async () => {
+    const handleExportExcel = singleFlight(async () => {
         if (!inventoryId.value || !warehouseId.value) {
             await alertService.warning({ text: 'Inventaire ou magasin non résolu.' })
             return
@@ -536,9 +537,9 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
         } finally {
             exporting.value = false
         }
-    }
+    })
 
-    const handleExportPdf = async () => {
+    const handleExportPdf = singleFlight(async () => {
         if (!inventoryId.value || !warehouseId.value) {
             await alertService.warning({ text: 'Inventaire ou magasin non résolu.' })
             return
@@ -568,7 +569,7 @@ export function useStockGaps(inventoryReference: string, warehouseReference: str
         } finally {
             exportingPdf.value = false
         }
-    }
+    })
 
     const actions = computed<ActionConfig<StockGapRow>[]>(() => [
         {

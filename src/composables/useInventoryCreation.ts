@@ -10,6 +10,13 @@ import type { CreateInventoryRequest } from '@/models/Inventory';
 import { logger } from '@/services/loggerService';
 import { Validators } from '@/utils/validators';
 
+// Limite mobile d'assignments lancés (vide = valeur par défaut du serveur)
+function toMaxEntame(value: string | number | null | undefined): number | null {
+    if (value === '' || value === null || value === undefined) return null;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
+}
+
 export function useInventoryCreation() {
     const state = reactive({
         step: 0,
@@ -17,6 +24,7 @@ export function useInventoryCreation() {
             libelle: '',
             date: '',
             inventory_type: '',
+            max_entame_assignments: '' as string | number | null,
             compte: '',
             magasin: []
         },
@@ -466,6 +474,7 @@ export function useInventoryCreation() {
                 label: state.header.libelle,
                 date: state.header.date,
                 inventory_type: state.header.inventory_type,
+                max_entame_assignments: toMaxEntame(state.header.max_entame_assignments),
                 account_id: Number(state.header.compte),
                 warehouse: warehouseData,
             };
@@ -503,6 +512,7 @@ export function useInventoryCreation() {
                 label: state.header.libelle,
                 date: state.header.date,
                 inventory_type: state.header.inventory_type,
+                max_entame_assignments: toMaxEntame(state.header.max_entame_assignments),
                 account_id: Number(state.header.compte),
                 warehouse: state.header.magasin.map((m: any) => {
 
@@ -751,6 +761,7 @@ export function useInventoryCreation() {
             libelle: 'Inventaire ' + new Date().toLocaleDateString('fr-FR'),
             date: new Date().toISOString().split('T')[0],
             inventory_type: 'GENERAL',
+            max_entame_assignments: '',
             compte: '',
             magasin: []
         };
@@ -771,6 +782,7 @@ export function useInventoryCreation() {
             libelle: inventoryData.libelle || '',
             date: inventoryData.date || '',
             inventory_type: inventoryData.inventory_type || '',
+            max_entame_assignments: inventoryData.max_entame_assignments ?? '',
             compte: inventoryData.account_id?.toString() || '',
             magasin: inventoryData.warehouses || []
         };

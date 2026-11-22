@@ -46,11 +46,9 @@
         <div v-if="selectedStore" class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
             <DataTable
                 ref="trackingTableRef"
-                :key="trackingKey"
                 :columns="columns"
                 :rowDataProp="rows"
                 :actions="[]"
-                :enableVirtualScrolling="undefined"
                 :currentPageProp="pagination.current_page"
                 :totalPagesProp="pagination.total_pages"
                 :totalItemsProp="trackingTotalItems"
@@ -63,6 +61,7 @@
                 :enableDynamicColumns="false"
                 :debounceFilter="300"
                 :debounceSearch="300"
+                :pagination="true"
                 emptyMessage="Aucune donnée disponible pour ces critères"
                 @selection-changed="onSelectionChanged"
             />
@@ -181,7 +180,6 @@ const { warehouses, loading: warehousesLoading } = storeToRefs(warehouseStore)
         onTrackingTableEvent,
         trackingCustomParams,
         // Clés pour forcer le re-render
-        trackingKey,
         trackingTableRef,
         trackingLoadingLocal
     } = useJobTracking({
@@ -323,6 +321,38 @@ const actionButtons = computed<ButtonGroupButton[]>(() => {
         }
     })
 
+    const goToPdfPage = (routeName: 'inventory-pdf-finished' | 'inventory-pdf-transfer') => {
+        const warehouseRef =
+            selectedWarehouse.value?.reference || selectedWarehouse.value?.warehouse_name
+        if (!inventoryReference.value || !warehouseRef) {
+            return
+        }
+        void router.push({
+            name: routeName,
+            params: { reference: inventoryReference.value, warehouse: warehouseRef }
+        })
+    }
+
+    buttons.push({
+        id: 'pdf-finished-assignments-page',
+        label: 'Assignments terminés (PDF)',
+        variant: 'default',
+        class: ACTION_BUTTON_CLASS,
+        disabled: !inventoryReference.value || !selectedWarehouse.value,
+        visible: true,
+        onClick: () => goToPdfPage('inventory-pdf-finished')
+    })
+
+    buttons.push({
+        id: 'pdf-counting-transfer-page',
+        label: 'Transfert des comptages (PDF)',
+        variant: 'default',
+        class: ACTION_BUTTON_CLASS,
+        disabled: !inventoryReference.value || !selectedWarehouse.value,
+        visible: true,
+        onClick: () => goToPdfPage('inventory-pdf-transfer')
+    })
+
     buttons.push({
         id: 'export-finished-jobs',
         label: 'Exporter jobs terminés',
@@ -355,7 +385,7 @@ const actionButtons = computed<ButtonGroupButton[]>(() => {
         class: ACTION_BUTTON_CLASS,
         disabled: storeLoading.value,
         visible: true,
-        onClick: () => { void printJobs() }
+        onClick: () => printJobs()
     })
 
     return buttons

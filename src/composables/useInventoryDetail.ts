@@ -35,6 +35,7 @@ import type { ButtonGroupButton } from '@/components/Form/ButtonGroup.vue'
 import type { FieldConfig } from '@/interfaces/form'
 import type { InventoryMagasin } from '@/models/InventoryDetail'
 import type { ActionConfig, DataTableColumn, TabOption } from '@SMATCH-Digital-dev/vue-system-design'
+import { singleFlight } from '@/composables/useAsyncAction'
 
 interface MagasinTableRow extends InventoryMagasin {
     _rowId: string | number
@@ -968,7 +969,7 @@ export function useInventoryDetail(inventoryReference: string) {
      *
      * @param warehouseId - ID du warehouse (optionnel, si non fourni lance tous les magasins EN ATTENTE)
      */
-    const launchInventoryByWarehause = async (warehouseId?: number) => {
+    const launchInventoryByWarehause = singleFlight(async (warehouseId?: number) => {
         if (!inventory.value || !inventoryId.value) return false
 
         const currentInventoryId: number = inventoryId.value
@@ -1008,7 +1009,7 @@ export function useInventoryDetail(inventoryReference: string) {
             })
             return false
         }
-    }
+    })
 
     /** IDs des magasins sélectionnés dans le DataTable (lancement multi) */
     const selectedMagasinIds = ref<Array<string | number>>([])
@@ -1056,7 +1057,7 @@ export function useInventoryDetail(inventoryReference: string) {
      * Lance plusieurs magasins via POST .../warehouses/launch/
      * Utilise la sélection DataTable si présente, sinon tous les magasins EN ATTENTE.
      */
-    const launchMultipleWarehouses = async () => {
+    const launchMultipleWarehouses = singleFlight(async () => {
         if (!inventory.value || !inventoryId.value) return false
 
         const currentInventoryId = inventoryId.value
@@ -1115,7 +1116,7 @@ export function useInventoryDetail(inventoryReference: string) {
             })
             return false
         }
-    }
+    })
 
     /**
      * Termine plusieurs magasins via POST .../warehouses/termine/
@@ -1181,7 +1182,7 @@ export function useInventoryDetail(inventoryReference: string) {
      *
      * @param warehouseName - Nom du warehouse
      */
-    const launchInventoryByWarehouseName = async (warehouseName: string) => {
+    const launchInventoryByWarehouseName = singleFlight(async (warehouseName: string) => {
         if (!inventory.value || !inventoryId.value) return false
 
         try {
@@ -1213,7 +1214,7 @@ export function useInventoryDetail(inventoryReference: string) {
             })
             return false
         }
-    }
+    })
 
     /**
      * Redirige vers la page d'édition de l'inventaire
@@ -1504,7 +1505,7 @@ export function useInventoryDetail(inventoryReference: string) {
     /**
      * Exporte l'inventaire en PDF
      */
-    const exportToPDF = async () => {
+    const exportToPDF = singleFlight(async () => {
         if (!inventory.value) return
 
         const data: any = {
@@ -1521,7 +1522,7 @@ export function useInventoryDetail(inventoryReference: string) {
         }
 
         await generatePDF(data, `Inventaire_${inventory.value.reference}`)
-    }
+    })
 
     /**
      * Ouvre la modale de suivi d’export PDF des jobs (POST …/jobs/pdf/async/ + poll …/pdf-tasks/&lt;uuid&gt;/).

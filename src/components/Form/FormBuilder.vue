@@ -34,7 +34,7 @@
 
             <!-- Submit button -->
             <div v-if="!hideSubmit" class="col-span-full mt-3 flex justify-end">
-                <SubmitButton type="button" :loading="isSubmitting" :disabled="submitted && !isValid"
+                <SubmitButton type="button" :loading="isSubmitting" :disabled="isSubmitting || (submitted && !isValid)"
                     :label="submitLabel || 'Enregistrer'" @click="handleSubmit" />
             </div>
         </form>
@@ -70,6 +70,12 @@ const props = defineProps<{
     submitLabel?: string;
     title?: string;
     columns?: number;
+    /**
+     * Handler de soumission (lié automatiquement par `@submit="..."` chez le parent).
+     * Déclaré en prop — et non en emit — pour pouvoir ATTENDRE la promesse du parent :
+     * le bouton reste désactivé jusqu'à la fin de l'appel API (anti multi-clic).
+     */
+    onSubmit?: (data: Record<string, unknown>) => unknown;
 }>();
 
 // Forcer columns à 3 si non défini (3 champs par ligne)
@@ -77,7 +83,6 @@ const columns = computed(() => props.columns ?? 3);
 
 // Émettre les événements
 const emit = defineEmits<{
-    (e: 'submit', data: Record<string, unknown>): void;
     (e: 'update:modelValue', data: Record<string, unknown>): void;
     (e: 'validation-change', isValid: boolean): void;
 }>();
@@ -123,14 +128,21 @@ const onFieldChange = (field: FieldConfig) => {
 
 // Gestion de la soumission
 const handleSubmit = async () => {
+    // Anti multi-clic : une soumission à la fois
+    if (isSubmitting.value) return;
+
     submitted.value = true;
     props.fields.forEach(field => validateField(field));
 
     if (!isValid.value) return;
 
     isSubmitting.value = true;
-    await emit('submit', { ...formData });
-    isSubmitting.value = false;
+    try {
+        // emit() n'attend pas le handler async du parent : on appelle la prop directement
+        await props.onSubmit?.({ ...formData });
+    } finally {
+        isSubmitting.value = false;
+    }
 };
 
 // Exposer la méthode validate

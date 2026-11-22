@@ -41,7 +41,7 @@
                 />
 
                 <Card>
-                    <template v-if="isGeneral" #header>
+                    <template v-if="isWizard" #header>
                         <Steps
                             :steps="stepsData"
                             size="md"
@@ -54,13 +54,42 @@
                             <template v-if="isSingleCounting">
                                 Configuration du comptage
                             </template>
+                            <template v-else-if="isMagasinMulti">
+                                Comptage {{ currentStep }} : {{ MAGASIN_STEP_LABELS[activeIndex] }}
+                            </template>
                             <template v-else>
                                 Comptage {{ currentStep }}
                             </template>
                         </h2>
 
                         <Form>
-                            <FormGroup>
+                            <FormGroup v-if="isMagasin && currentStep === 1">
+                                <FormLabel>Nombre de comptages <span class="text-red-500 dark:text-red-400">*</span></FormLabel>
+                                <div class="flex gap-6">
+                                    <Radio
+                                        v-model="comptagesChoice"
+                                        value="1"
+                                        label="1 comptage"
+                                        name="comptagesChoice"
+                                    />
+                                    <Radio
+                                        v-model="comptagesChoice"
+                                        value="3"
+                                        label="3 comptages"
+                                        name="comptagesChoice"
+                                    />
+                                </div>
+                            </FormGroup>
+
+                            <div
+                                v-if="isMagasinMulti"
+                                class="mb-4 rounded-md bg-violet-50 dark:bg-violet-900/20 p-4 text-sm text-gray-700 dark:text-gray-300"
+                            >
+                                <p class="font-medium">Mode en vrac</p>
+                                <p class="mt-1">{{ MAGASIN_STEP_LABELS[activeIndex] }}</p>
+                            </div>
+
+                            <FormGroup v-if="!isMagasinMulti">
                                 <FormLabel>Mode de comptage <span class="text-red-500 dark:text-red-400">*</span></FormLabel>
                                 <Autocomplete
                                     :options="modeOptions"
@@ -73,7 +102,7 @@
                                 </FormError>
                             </FormGroup>
 
-                            <template v-if="activeComptage.mode === 'en vrac'">
+                            <template v-if="activeComptage.mode === 'en vrac' && !isMagasinMulti">
                                 <FormGroup>
                                     <FormLabel>Méthode opératoire <span class="text-red-500 dark:text-red-400">*</span></FormLabel>
                                     <div class="flex gap-6">
@@ -132,7 +161,7 @@
 
                     <div class="border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div class="text-sm text-gray-500 dark:text-gray-400">
-                            <template v-if="isGeneral">
+                            <template v-if="isWizard">
                                 Étape {{ currentStep }} sur {{ totalSteps }}
                             </template>
                             <template v-else>
@@ -141,7 +170,7 @@
                         </div>
                         <div class="flex items-center gap-3">
                             <Button
-                                v-if="isGeneral"
+                                v-if="isWizard"
                                 variant="secondary"
                                 :disabled="currentStep === 1 || saving"
                                 @click="goToPreviousStep"
@@ -149,7 +178,7 @@
                                 Précédent
                             </Button>
                             <Button
-                                v-if="isGeneral && !isLastStep"
+                                v-if="isWizard && !isLastStep"
                                 variant="primary"
                                 @click="goToNextStep"
                             >
@@ -209,6 +238,11 @@ const {
     comptages,
     isGeneral,
     isSingleCounting,
+    isMagasin,
+    isMagasinMulti,
+    MAGASIN_STEP_LABELS,
+    comptagesChoice,
+    isWizard,
     totalSteps,
     isLastStep,
     availableModesForStep,
@@ -222,7 +256,7 @@ const {
     submitConfiguration,
 } = useInventoryConfiguration(props.reference)
 
-const activeIndex = computed(() => (isGeneral.value ? currentStep.value - 1 : 0))
+const activeIndex = computed(() => (isWizard.value ? currentStep.value - 1 : 0))
 const activeComptage = computed(() => comptages[activeIndex.value])
 
 const modeOptions = computed<AutocompleteOption[]>(() =>
@@ -238,17 +272,17 @@ const selectedMode = computed({
 
 const stepsData = computed<Step[]>(() => [
     {
-        title: 'Comptage 1',
+        title: isMagasinMulti.value ? 'Comptage 1 · par article' : 'Comptage 1',
         state: currentStep.value === 1 ? 'current' : currentStep.value > 1 ? 'completed' : 'pending',
         clickable: currentStep.value > 1,
     },
     {
-        title: 'Comptage 2',
+        title: isMagasinMulti.value ? 'Comptage 2 · par emplacement' : 'Comptage 2',
         state: currentStep.value === 2 ? 'current' : currentStep.value > 2 ? 'completed' : currentStep.value < 2 ? 'available' : 'pending',
         clickable: currentStep.value > 2,
     },
     {
-        title: 'Comptage 3',
+        title: isMagasinMulti.value ? 'Comptage 3 · par article' : 'Comptage 3',
         state: currentStep.value === 3 ? 'current' : 'available',
         clickable: false,
     },

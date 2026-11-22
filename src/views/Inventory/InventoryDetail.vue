@@ -524,6 +524,7 @@ const generalInfoItems = computed(() => {
         { label: 'Libellé', value: inv.label || 'Non défini' },
         { label: "Date d'inventaire", value: formatDate(inv.date) },
         { label: 'Type', value: inv.inventory_type || 'Non défini' },
+        { label: 'Max assignments lancés (mobile)', value: (inv as any).max_entame_assignments ?? 'Défaut' },
         { label: 'Compte', value: inv.account_name || 'Non défini' },
         {
             label: 'En préparation',

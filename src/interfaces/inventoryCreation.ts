@@ -40,6 +40,7 @@ export interface InventoryHeader {
     libelle?: string;
     date?: string;
     inventory_type?: string;
+    max_entame_assignments?: string | number | null;
     compte?: Account | string; // Accepte soit un objet Account soit une string
     magasin?: Warehouse[];
 }

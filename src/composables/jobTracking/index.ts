@@ -12,7 +12,7 @@
  */
 
 // ===== IMPORTS VUE =====
-import { ref, computed, watch, markRaw, onMounted, nextTick } from 'vue'
+import { ref, shallowRef, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 
 // ===== IMPORTS PINIA =====
@@ -251,19 +251,35 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         }
     })
 
-    /** Lignes de suivi */
-    const trackingRows = ref<JobTrackingRow[]>([])
+    /** Lignes de suivi (shallowRef : évite les deep-watchs coûteux sur les rows) */
+    const trackingRows = shallowRef<JobTrackingRow[]>([])
 
     /** IDs des lignes sélectionnées */
     const selectedRows = ref<string[]>([])
 
-    // Watcher pour forcer le re-render des colonnes quand les données arrivent
-    watch(trackingRows, (newRows) => {
-        if (newRows && newRows.length > 0) {
-            // Incrémenter trackingKey pour forcer le re-render des colonnes dynamiques
-            trackingKey.value++
+    /** Signature des colonnes dynamiques (ordres de comptage) — évite un remount complet du tableau à chaque fetch */
+    const countingOrdersSignature = ref('1,2')
+
+    const updateCountingOrdersSignature = (rows: JobTrackingRow[]) => {
+        const ordersSet = new Set<number>([1, 2])
+        for (const row of rows) {
+            if (row.assignments && Array.isArray(row.assignments)) {
+                for (const ass of row.assignments) {
+                    if (ass.counting_order) ordersSet.add(ass.counting_order)
+                }
+            }
+            if (row.countingDiscrepancies) {
+                for (const key of Object.keys(row.countingDiscrepancies)) {
+                    const order = Number(key)
+                    if (!Number.isNaN(order)) ordersSet.add(order)
+                }
+            }
         }
-    }, { immediate: false })
+        const signature = Array.from(ordersSet).sort((a, b) => a - b).join(',')
+        if (signature !== countingOrdersSignature.value) {
+            countingOrdersSignature.value = signature
+        }
+    }
 
     /**
      * Traite un événement DataTable directement (sans vérification d'initialisation)
@@ -305,44 +321,23 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         }
 
         try {
-            // Activer le loading pour les événements DataTable
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
-                trackingLoadingLocal.value = true
-            }
-
+            trackingLoadingLocal.value = true
             await fetchTrackingData(finalQueryModel)
-
-            // Mettre à jour le cache après un appel réussi
             lastExecutedQueryModel = { ...finalQueryModel }
-
-            // Forcer le re-rendu de la DataTable pour tous les événements qui modifient les données
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
-                trackingKey.value++
-                trackingLoadingLocal.value = false
-            }
         } catch (error) {
-            console.error('[useJobTracking] ❌ Error in fetchTrackingData:', {
-                eventType,
-                error: error,
-                queryModel: finalQueryModel
-            })
+            logger.error('[useJobTracking] Error in fetchTrackingData', { eventType, error })
             await alertService.error({ text: 'Erreur lors du chargement des données de suivi' })
-            // Désactiver le loading en cas d'erreur
-            if (eventType === 'pagination' || eventType === 'page-size-changed' || eventType === 'filter' || eventType === 'search' || eventType === 'sort') {
-                trackingLoadingLocal.value = false
-            }
+        } finally {
+            trackingLoadingLocal.value = false
         }
     }
 
     /**
      * Handler unifié pour toutes les opérations de la DataTable Tracking
      */
-    const onTrackingTableEvent = async (eventType: string, queryModel: QueryModel) => {
-        console.log('[useJobTracking.onTrackingTableEvent] Event received:', eventType, 'initialized:', isInitialized.value, 'queue length:', pendingEventsQueue.length)
-
+    const onTrackingTableEvent = async (_eventType: string, queryModel: QueryModel) => {
         // Vérifier que les IDs requis sont disponibles avant de lancer l'API
         if (!inventoryId.value || !selectedStore.value) {
-            console.warn('[useJobTracking] Tracking API not called: missing inventoryId or selectedStore')
             return
         }
 
@@ -350,14 +345,11 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         // Ces événements sont souvent déclenchés automatiquement par le DataTable au montage
         // quand il restaure son état sauvegardé
         if (!isInitialized.value) {
-            console.log('[useJobTracking.onTrackingTableEvent] Queueing event:', eventType)
-            pendingEventsQueue.push({ eventType, queryModel })
+            pendingEventsQueue.push({ eventType: _eventType, queryModel })
             return
         }
 
-        // Traiter l'événement directement
-        console.log('[useJobTracking.onTrackingTableEvent] Processing event directly:', eventType)
-        await processEventDirectly(eventType, queryModel)
+        await processEventDirectly(_eventType, queryModel)
     }
 
     // ===== COMPUTED PROPERTIES =====
@@ -397,10 +389,30 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
      * En-tête court pour la colonne « session » (équipe) par comptage — sans « comptage » ni « Session »
      */
     const getSessionColumnHeader = (order: number): string => {
-        if (order === 1) return '1er'
-        if (order === 2) return '2ème'
-        if (order === 3) return '3ème'
-        return `${order}e`
+        const base = order === 1 ? '1er' : order === 2 ? '2ème' : order === 3 ? '3ème' : `${order}e`
+        return `${base}${countTypeSuffix(order)}`
+    }
+
+    /** Libellés courts des types de saisie (count_type) — MAGASIN à 3 comptages */
+    const COUNT_TYPE_LABELS: Record<string, string> = {
+        QTE_ARTICLE: 'Qté article',
+        QTE_EMPLACEMENT: 'Qté emplacement',
+        SCAN_UNITE: 'Scan unité',
+    }
+
+    /**
+     * Suffixe du type de saisie pour l'en-tête d'un comptage (MAGASIN avec plusieurs comptages).
+     * Les comptages supplémentaires (4e, …) reprennent le type du dernier comptage configuré.
+     */
+    const countTypeSuffix = (order: number): string => {
+        const inv = inventory.value
+        if (String(inv?.inventory_type || '').toUpperCase() !== 'MAGASIN') return ''
+        const countings: any[] = Array.isArray(inv?.comptages) ? inv.comptages : []
+        if (countings.length < 2) return ''
+        const sorted = [...countings].sort((a, b) => Number(a.order) - Number(b.order))
+        const match = sorted.find((c) => Number(c.order) === order) ?? sorted[sorted.length - 1]
+        const label = COUNT_TYPE_LABELS[String(match?.count_type ?? '')]
+        return label ? ` · ${label}` : ''
     }
 
     /** Helper : récupère le max des counting_order présents dans les lignes */
@@ -426,63 +438,28 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         return Math.max(maxOrder, 2)
     }
 
-    /** Helper : récupère tous les counting_order uniques présents dans les données */
     const getAvailableCountingOrders = (): number[] => {
-        if (!trackingRows.value.length) {
-            return [1, 2] // Par défaut, afficher au moins 1er et 2ème comptage
+        const fromSignature = countingOrdersSignature.value
+            .split(',')
+            .map((v) => Number(v))
+            .filter((n) => !Number.isNaN(n) && n > 0)
+
+        if (fromSignature.length > 0) {
+            return Array.from(new Set([...fromSignature, 1, 2])).sort((a, b) => a - b)
         }
 
-        const ordersSet = new Set<number>()
-        trackingRows.value.forEach(row => {
-            // Ajouter les counting_order des assignments
-            if (row.assignments && Array.isArray(row.assignments)) {
-                row.assignments.forEach(ass => {
-                    // Inclure tous les counting_order, même ceux avec status null (pour les colonnes futures)
-                    if (ass.counting_order) {
-                        ordersSet.add(ass.counting_order)
-                    }
-                })
-            }
-
-            // Ajouter les counting_order des données d'écarts (discrepancy_count_Xer)
-            if (row.countingDiscrepancies) {
-                Object.keys(row.countingDiscrepancies).forEach(key => {
-                    const order = parseInt(key)
-                    if (!isNaN(order)) {
-                        ordersSet.add(order)
-                    }
-                })
-            }
-        })
-
-        const orders = Array.from(ordersSet).sort((a, b) => a - b)
-        // Toujours inclure au moins 1 et 2
-        if (!orders.includes(1)) orders.unshift(1)
-        if (!orders.includes(2)) {
-            const index = orders.findIndex(o => o > 2)
-            if (index === -1) orders.push(2)
-            else orders.splice(index, 0, 2)
-        }
-
-        return orders
+        return [1, 2]
     }
 
-    /** Colonnes du DataTable - définies comme computed pour la réactivité (comme useInventoryResults) */
+    /** Colonnes du DataTable - redéfinies seulement si les ordres de comptage changent */
     const columns = computed<DataTableColumn[]>(() => {
-        // Forcer la dépendance à trackingKey pour que les colonnes soient recalculées à chaque refresh
-        const _forceUpdate = trackingKey.value;
+        // Signature stable des ordres de comptage (pas de remount à chaque page)
+        void countingOrdersSignature.value
 
         const cols: DataTableColumn[] = []
 
         /** Ordres de comptage : dérivés des assignments + clés discrepancy_count_Xer (alignés avec l’API) */
         const sessionOrders = getAvailableCountingOrders()
-
-        // Log pour déboguer la création des colonnes
-        logger.debug('columns computed - création des colonnes', {
-            trackingKey: trackingKey.value,
-            trackingRowsLength: trackingRows.value.length,
-            sessionOrders
-        })
 
         // Colonne cachée pour l'ID d'assignment (impression)
         cols.push({
@@ -912,25 +889,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 countingDiscrepancies
             }
 
-            logger.debug('Ligne créée pour job', {
-                jobId: job.job_id,
-                jobReference: row.jobReference,
-                assignmentsCount: row.assignments.length,
-                countingDiscrepancies: row.countingDiscrepancies,
-                assignments: row.assignments.map((a: any) => ({
-                    counting_order: a.counting_order,
-                    status: a.status,
-                    username: a.username
-                }))
-            })
-
             rows.push(row)
-        })
-
-        logger.debug('Lignes transformées', {
-            rowsCount: rows.length,
-            firstRow: rows[0],
-            firstRowAssignmentsCount: rows[0]?.assignments?.length
         })
 
         return rows
@@ -1006,8 +965,16 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
         // Adapter les noms de champs si nécessaire (mapping entre les champs du DataTable et ceux de l'API)
         const apiParams: Record<string, any> = {
-            page: parseInt(params.get('page') || '1'),
-            page_size: parseInt(params.get('pageSize') || '1000')
+            page: parseInt(params.get('page') || String(queryModel.page || 1), 10),
+            page_size: parseInt(params.get('pageSize') || String(queryModel.pageSize || 50), 10)
+        }
+
+        // Sécurité : ne jamais demander des volumes énormes par page
+        if (!Number.isFinite(apiParams.page_size) || apiParams.page_size <= 0) {
+            apiParams.page_size = 50
+        }
+        if (apiParams.page_size > 200) {
+            apiParams.page_size = 200
         }
 
         // Ajouter le tri si présent
@@ -1061,11 +1028,6 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         }
 
         try {
-            logger.debug('fetchTrackingData: début du chargement', {
-                inventoryId: inventoryId.value,
-                warehouseId: selectedStore.value,
-                queryModel
-            })
             const warehouseId = Number(selectedStore.value)
 
             // Convertir le QueryModel en paramètres API
@@ -1094,31 +1056,10 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 jobs = response.data
             }
 
-            logger.debug('Jobs chargés depuis discrepancies', {
-                jobsCount: jobs.length,
-                responseKeys: Object.keys(response || {}),
-                responseSuccess: response?.success,
-                firstJob: jobs[0],
-                firstJobAssignments: jobs[0]?.assignments?.length
-            })
-
             // Transformer les jobs en lignes pour le DataTable
             const transformedRows = transformDiscrepanciesToRows(jobs)
-            logger.debug('Lignes transformées pour le DataTable', {
-                rowsCount: transformedRows.length,
-                firstRow: transformedRows[0],
-                firstRowAssignments: transformedRows[0]?.assignments?.length,
-                firstRowJobReference: transformedRows[0]?.jobReference
-            })
-
-            // Assigner les données transformées
+            updateCountingOrdersSignature(transformedRows)
             trackingRows.value = transformedRows
-
-            // Log pour vérifier que les données sont bien assignées
-            logger.debug('Données assignées à trackingRows', {
-                trackingRowsLength: trackingRows.value.length,
-                firstTrackingRow: trackingRows.value[0]
-            })
         } catch (error) {
             logger.error('Erreur lors du chargement des données de suivi des jobs', error)
             trackingRows.value = []
@@ -1194,90 +1135,29 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 selectedStore.value = storeOptions.value[0].value
             }
 
-            // Charger les données immédiatement (non-bloquant)
-            if (selectedStore.value && inventoryId.value) {
-                // Charger avec un QueryModel par défaut
-                const defaultQueryModel: QueryModel = {
-                    page: 1,
-                    pageSize: 50,
-                    sort: [],
-                    filters: {},
-                    search: '',
-                    customParams: trackingCustomParams.value
-                }
-                fetchTrackingData(defaultQueryModel).catch((error) => {
-                    logger.warn('Erreur lors du chargement initial des jobs', error)
-                })
-            }
-
-            // Attendre que le DataTable ait fini de s'initialiser et de restaurer son état
+            // Laisser le DataTable émettre son état (localStorage / pageSize) avant le 1er fetch
             await nextTick()
-            // Ajouter un petit délai supplémentaire pour être sûr que tous les événements sont capturés
-            await new Promise(resolve => setTimeout(resolve, 50))
-            console.log('[useJobTracking.initialize] After nextTick + delay, queue length:', pendingEventsQueue.length)
+            await new Promise(resolve => setTimeout(resolve, 30))
 
             isInitialized.value = true
 
-            // Traiter les événements DataTable mis en file d'attente
-            // ⚠️ Logique harmonisée avec useAffecter.ts et useInventoryResults.ts
-            console.log('[useJobTracking.initialize] Processing pending events, queue length:', pendingEventsQueue.length)
-
-            if (pendingEventsQueue.length > 0) {
-                // Si des événements sont en file d'attente (DataTable a restauré son état),
-                // traiter le premier événement pour charger avec les bonnes données
-                const firstEvent = pendingEventsQueue[0]
-                console.log('[useJobTracking.initialize] Processing first queued event:', firstEvent.eventType, firstEvent.queryModel)
-                await processEventDirectly(firstEvent.eventType, firstEvent.queryModel)
-                pendingEventsQueue.shift() // Retirer le premier événement traité
-            }
-
-            // Traiter les événements restants en file d'attente (s'il y en a)
-            if (pendingEventsQueue.length > 0) {
-                console.log('[useJobTracking.initialize] Processing remaining queued events:', pendingEventsQueue.length)
-                for (const queuedEvent of pendingEventsQueue) {
-                    await processEventDirectly(queuedEvent.eventType, queuedEvent.queryModel)
-                }
-                pendingEventsQueue.length = 0 // Vider la file d'attente
-            }
-
-            // Si aucun événement en file d'attente, vérifier si le DataTable a un état sauvegardé
-            if (pendingEventsQueue.length === 0) {
-                console.log('[useJobTracking.initialize] No queued events, checking for saved DataTable state')
-
-                // Essayer de récupérer l'état sauvegardé du DataTable depuis localStorage
-                const savedState = localStorage.getItem('job_tracking_table')
-                if (savedState) {
-                    try {
-                        const parsedState = JSON.parse(savedState)
-                        console.log('[useJobTracking.initialize] Found saved DataTable state:', parsedState)
-
-                        // Créer un QueryModel depuis l'état sauvegardé
-                        const savedQueryModel: QueryModel = {
-                            page: parsedState.page || 1,
-                            pageSize: parsedState.pageSize || 50,
-                            sort: parsedState.sort || [],
-                            filters: parsedState.filters || {},
-                            search: parsedState.search || ''
-                        }
-
-                        console.log('[useJobTracking.initialize] Loading data with saved state:', savedQueryModel)
-                        await fetchTrackingData(savedQueryModel)
-                        return
-                    } catch (error) {
-                        console.warn('[useJobTracking.initialize] Error parsing saved state:', error)
+            // Un seul chargement : événement en file (état DataTable) ou défaut page 1
+            if (selectedStore.value && inventoryId.value) {
+                if (pendingEventsQueue.length > 0) {
+                    const firstEvent = pendingEventsQueue[0]
+                    pendingEventsQueue.length = 0
+                    await processEventDirectly(firstEvent.eventType, firstEvent.queryModel)
+                } else {
+                    const defaultQueryModel: QueryModel = {
+                        page: 1,
+                        pageSize: 50,
+                        sort: [],
+                        filters: {},
+                        search: '',
+                        customParams: trackingCustomParams.value
                     }
+                    await processEventDirectly('init', defaultQueryModel)
                 }
-
-                // Aucun état sauvegardé, chargement par défaut
-                console.log('[useJobTracking.initialize] No saved state, loading default data')
-                await fetchTrackingData({
-                    page: 1,
-                    pageSize: 50,
-                    sort: [],
-                    filters: {},
-                    search: '',
-                    customParams: trackingCustomParams.value
-                })
             }
         } catch (error) {
             logger.error('Erreur lors de l\'initialisation du suivi des jobs', error)
@@ -1356,19 +1236,65 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
     // ===== MÉTHODES D'IMPRESSION =====
 
     /**
+     * Charge les sessions (équipes mobiles) pour la popup d'impression.
+     * fetchSessions n'existe pas : on utilise l'API comptage + fallback depuis les lignes affichées.
+     */
+    const loadSessionsForPrint = async (): Promise<Array<{ id: number; username: string }>> => {
+        const byId = new Map<number, string>()
+
+        const register = (id: unknown, username: unknown) => {
+            const numId = Number(id)
+            if (!Number.isInteger(numId) || numId <= 0) return
+            const label = typeof username === 'string' && username.trim() ? username.trim() : `Session ${numId}`
+            if (!byId.has(numId)) byId.set(numId, label)
+        }
+
+        // Sessions présentes sur les jobs déjà chargés (rapide, sans attendre l'API)
+        for (const row of trackingRows.value) {
+            for (const assignment of row.assignments || []) {
+                const a = assignment as unknown as Record<string, unknown>
+                const session = a.session as { id?: number; username?: string } | undefined
+                register(a.session_id ?? session?.id, a.username ?? session?.username)
+            }
+        }
+
+        // API équipes mobiles (1er puis 2e comptage)
+        try {
+            await sessionStore.fetchMobileUsersForCountingOrder(1)
+            for (const session of sessionStore.getAllSessions) {
+                register(session.id, session.username)
+            }
+        } catch (error) {
+            logger.warn('Impossible de charger les sessions (comptage 1)', error)
+        }
+
+        if (byId.size === 0) {
+            try {
+                await sessionStore.fetchMobileUsersForCountingOrder(2)
+                for (const session of sessionStore.getAllSessions) {
+                    register(session.id, session.username)
+                }
+            } catch (error) {
+                logger.warn('Impossible de charger les sessions (comptage 2)', error)
+            }
+        }
+
+        return Array.from(byId.entries())
+            .map(([id, username]) => ({ id, username }))
+            .sort((a, b) => a.username.localeCompare(b.username, 'fr'))
+    }
+
+    /**
      * Affiche une popup pour sélectionner une session, puis les jobs, et génère les PDFs
      */
     const printJobs = async () => {
         try {
-            // Charger les sessions si nécessaire
-            // if (sessionStore.getAllSessions.length === 0) {
-            //     await sessionStore.fetchSessions()
-            // }
-
-            const sessions = sessionStore.getAllSessions
+            const sessions = await loadSessionsForPrint()
 
             if (sessions.length === 0) {
-                await alertService.error({ text: 'Aucune session disponible' })
+                await alertService.warning({
+                    text: 'Aucune session disponible. Vérifiez les affectations des jobs pour ce magasin.',
+                })
                 return
             }
 
@@ -1484,53 +1410,47 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
             const selectedJobIds = jobsSelection.value as number[]
 
-            // Pour chaque job sélectionné, générer les PDFs
-            await Swal.fire({
+            // Ne pas await : sinon le code se bloque tant que la popup n'est pas fermée
+            void Swal.fire({
                 title: 'Génération en cours...',
                 html: 'Veuillez patienter pendant la génération des PDFs',
                 allowOutsideClick: false,
                 allowEscapeKey: false,
+                showConfirmButton: false,
                 didOpen: () => {
                     Swal.showLoading()
                 }
             })
 
-            const pdfPromises: Promise<{ jobId: number; blob: Blob; filename: string }>[] = []
-            for (const jobId of selectedJobIds) {
-                try {
-                    // Note: L'API nécessite job_id et assignment_id
-                    // Pour l'instant, on génère avec assignment_id = 1 (à adapter selon les besoins)
-                    const blob = await jobStore.generateJobPDF(jobId, 1)
-                    const job = jobs.find(j => j.id === jobId)
-                    const filename = `job_${jobId}_${job?.reference || 'unknown'}.pdf`
-                    pdfPromises.push(Promise.resolve({ jobId, blob, filename }))
-                } catch (error) {
-                    logger.error(`Erreur lors de la génération du PDF pour le job ${jobId}`, error)
-                }
-            }
-
-            const pdfResults = await Promise.allSettled(pdfPromises)
-
-            // Télécharger tous les PDFs générés
             let successCount = 0
             let errorCount = 0
 
-            pdfResults.forEach((result) => {
-                if (result.status === 'fulfilled') {
-                    const { blob, filename } = result.value
-                    const url = window.URL.createObjectURL(blob)
-                    const link = document.createElement('a')
-                    link.href = url
-                    link.download = filename
-                    document.body.appendChild(link)
-                    link.click()
-                    document.body.removeChild(link)
-                    window.URL.revokeObjectURL(url)
+            for (const jobId of selectedJobIds) {
+                try {
+                    // assignment_id réel si présent dans les rows, sinon 1er assignment de la session
+                    const trackingRow = trackingRows.value.find((r) => r.jobId === jobId)
+                    let assignmentId = trackingRow?.assignmentId ?? null
+                    if (!assignmentId) {
+                        const jobFromSession = jobs.find(j => j.id === jobId) as { assignments?: Array<{ id?: number }> } | undefined
+                        assignmentId = jobFromSession?.assignments?.[0]?.id ?? null
+                    }
+                    if (!assignmentId) {
+                        errorCount++
+                        continue
+                    }
+
+                    const blob = await jobStore.generateJobPDF(jobId, assignmentId)
+                    const job = jobs.find(j => j.id === jobId)
+                    const filename = `job_${jobId}_${job?.reference || 'unknown'}.pdf`
+                    downloadBlobAsFile(blob, filename)
                     successCount++
-                } else {
+                } catch (error) {
+                    logger.error(`Erreur lors de la génération du PDF pour le job ${jobId}`, error)
                     errorCount++
                 }
-            })
+            }
+
+            Swal.close()
 
             await Swal.fire({
                 title: successCount > 0 ? 'Succès !' : 'Erreur',
@@ -1550,6 +1470,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 }
             })
         } catch (error: any) {
+            Swal.close()
             logger.error('Erreur lors de l\'impression des jobs', error)
             await alertService.error({
                 text: error?.response?.data?.message || error?.message || 'Erreur lors de l\'impression des jobs'

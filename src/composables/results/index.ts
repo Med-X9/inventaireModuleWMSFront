@@ -83,6 +83,7 @@ import type { SelectOption } from '@/interfaces/form'
 import { createPinia } from 'pinia'
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import i18n from '@/i18n'
+import { singleFlight } from '@/composables/useAsyncAction'
 
 /**
  * Configuration d'initialisation du composable useInventoryResults
@@ -167,9 +168,17 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     }
 
     // Paramètres personnalisés pour les appels API
+    /**
+     * Onglet affiché (MAGASIN à 3 comptages) : « emplacement » (défaut, une ligne par
+     * emplacement) ou « detail » (détail par article, lecture seule)
+     */
+    const resultsView = ref<'emplacement' | 'detail'>('emplacement')
+    const isDetailView = computed(() => resultsView.value === 'detail')
+
     const resultsCustomParams = computed(() => ({
         inventory_id: inventoryId.value,
-        store_id: selectedStore.value
+        store_id: selectedStore.value,
+        ...(isDetailView.value ? { view: 'detail' } : {})
     }))
 
     // ===== ÉTAT POUR LA VUE =====
@@ -221,10 +230,49 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         String(inventory.value?.inventory_type || 'GENERAL').toUpperCase()
     )
 
-    /** TOURNANT / MAGASIN : un seul comptage (pas d'écarts multi-passes) */
-    const isSingleCountingInventory = computed(() =>
-        inventoryType.value === 'TOURNANT' || inventoryType.value === 'MAGASIN'
+    /** Nombre de comptages configurés sur l'inventaire (0 si inconnu) */
+    const configuredCountingsCount = computed(() =>
+        Array.isArray(inventory.value?.comptages) ? inventory.value.comptages.length : 0
     )
+
+    /** MAGASIN à 3 comptages : écart par emplacement (lignes EMPLACEMENT / ARTICLE) */
+    const isLocationEcartInventory = computed(() =>
+        inventoryType.value === 'MAGASIN' && configuredCountingsCount.value >= 2
+    )
+
+    /** TOURNANT, ou MAGASIN avec un seul comptage (pas d'écarts multi-passes) */
+    const isSingleCountingInventory = computed(() =>
+        inventoryType.value === 'TOURNANT'
+        || (inventoryType.value === 'MAGASIN' && !isLocationEcartInventory.value)
+    )
+
+    /** Type de saisie par ordre de comptage (count_type renvoyé par l'API) */
+    const countTypeByOrder = computed<Record<number, string>>(() => {
+        const map: Record<number, string> = {}
+        const countings = Array.isArray(inventory.value?.comptages) ? inventory.value.comptages : []
+        countings.forEach((c: any) => {
+            if (c?.order != null && c?.count_type) map[Number(c.order)] = String(c.count_type)
+        })
+        return map
+    })
+
+    /** Libellé court du type de saisie (affiché dans l'en-tête du comptage) */
+    const COUNT_TYPE_LABELS: Record<string, string> = {
+        QTE_ARTICLE: 'Qté par article',
+        QTE_EMPLACEMENT: 'Qté par emplacement',
+        SCAN_UNITE: 'Scan par unité',
+    }
+
+    const countingHeaderLabel = (order: number, options: { singleCounting?: boolean }): string => {
+        const base = getCountingOrderLabel(order, options)
+        const typeLabel = isLocationEcartInventory.value
+            ? COUNT_TYPE_LABELS[countTypeByOrder.value[order] ?? '']
+            : undefined
+        return typeLabel ? `${base} · ${typeLabel}` : base
+    }
+
+    /** Ligne ARTICLE (écart par emplacement) : lecture seule, le résultat se modifie sur la ligne EMPLACEMENT */
+    const isReadOnlyArticleRow = (row: any): boolean => row?.row_type === 'ARTICLE'
 
     // Mode de sortie pour les requêtes
     // ⚠️ Le DataTable utilise maintenant uniquement QueryModel selon FRONTEND_QUERYMODEL_GUIDE.md
@@ -527,8 +575,8 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             singleCounting,
         }).join('-')
         const resultsHash = currentResults.length > 0
-            ? `${inventoryType.value}-${currentResults.length}-${ordersKey}-${currentResults[0]?.id || ''}-${currentResults[currentResults.length - 1]?.id || ''}`
-            : `empty-${inventoryType.value}-${ordersKey}`
+            ? `${inventoryType.value}-${isLocationEcartInventory.value}-${resultsView.value}-${currentResults.length}-${ordersKey}-${currentResults[0]?.id || ''}-${currentResults[currentResults.length - 1]?.id || ''}`
+            : `empty-${inventoryType.value}-${isLocationEcartInventory.value}-${resultsView.value}-${ordersKey}`
 
         if (columnsCache.value &&
             columnsCache.value.resultsLength === currentResults.length &&
@@ -755,7 +803,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             const priority = 10 - order // Priorité décroissante avec l'ordre
 
             cols.push({
-                headerName: getCountingOrderLabel(order, countingLabelOptions),
+                headerName: countingHeaderLabel(order, countingLabelOptions),
                 field: fieldName,
                 sortable: true,
                 dataType: 'number' as ColumnDataType,
@@ -766,7 +814,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 draggable: true,
                 autoSize: true,
                 icon: 'icon-calculator',
-                description: `Valeur du ${getCountingOrderLabel(order, countingLabelOptions)}`,
+                description: `Valeur du ${countingHeaderLabel(order, countingLabelOptions)}`,
                 priority: priority,
                 align: 'center',
                 badgeStyles: badgeStylesCommon,
@@ -947,6 +995,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             color: 'primary',
             onClick: async (result: InventoryResult) => {
                 try {
+                    if (isReadOnlyArticleRow(result)) {
+                        await alertService.info({ text: 'Le résultat se modifie sur la ligne « Emplacement » de cet emplacement.' })
+                        return
+                    }
                     // Extraire l'ID de l'écart de comptage depuis le résultat, le job ou les assignments
                     const ecartComptageId = extractEcartComptageId(result)
 
@@ -1060,6 +1112,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             color: 'success',
             onClick: async (result: InventoryResult) => {
                 try {
+                    if (isReadOnlyArticleRow(result)) {
+                        await alertService.info({ text: 'La validation se fait sur la ligne « Emplacement » de cet emplacement.' })
+                        return
+                    }
                     // Extraire l'ID de l'écart de comptage depuis le résultat, le job ou les assignments
                     const ecartComptageId = extractEcartComptageId(result)
 
@@ -1295,6 +1351,14 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         await refreshResults()
     }
 
+    /** Change d'onglet (emplacement / détail) puis recharge les résultats */
+    const setResultsView = async (view: 'emplacement' | 'detail') => {
+        if (resultsView.value === view) return
+        resultsView.value = view
+        await nextTick()
+        await reloadResults()
+    }
+
     /**
      * Récupère l'inventaire par sa référence
      *
@@ -1397,7 +1461,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
      * // Les 3 résultats sont maintenant validés
      * ```
      */
-    const handleBulkValidate = async (selectedResults: InventoryResult[]) => {
+    const handleBulkValidate = singleFlight(async (selectedResults: InventoryResult[]) => {
         if (selectedResults.length === 0) {
             await alertService.warning({ text: 'Veuillez sélectionner au moins un résultat à valider' })
             return
@@ -1437,7 +1501,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         } catch (error) {
             await alertService.error({ text: 'Erreur lors de la validation en masse' })
         }
-    }
+    })
 
     // ===== INITIALISATION =====
 
@@ -2114,9 +2178,26 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     /**
      * Handler pour lancer le comptage suivant
      */
-    const handleLaunchCounting = async () => {
-        await showLaunchCountingModal()
-    }
+    // Le lancement du comptage suivant se fait sur une page dédiée (plus de fenêtre plein écran)
+    const handleLaunchCounting = singleFlight(async () => {
+        if (!routerInstance || !inventoryReference.value) return
+
+        const warehouseRef = getSelectedWarehouseReference()
+        if (!warehouseRef) {
+            await alertService.warning({
+                text: 'Sélectionnez un magasin pour lancer un comptage.',
+            })
+            return
+        }
+
+        void routerInstance.push({
+            name: 'inventory-launch-counting',
+            params: {
+                reference: inventoryReference.value,
+                warehouse: warehouseRef,
+            },
+        })
+    })
 
     /**
      * Handler pour la résolution en masse de tous les écarts
@@ -2124,7 +2205,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
      * ⚠️ IMPORTANT: Cette fonction NE MODIFIE PAS localement le statut 'resolved'
      * Elle appelle seulement l'API et recharge les données pour refléter l'état réel du serveur
      */
-    const handleResolveAll = async () => {
+    const handleResolveAll = singleFlight(async () => {
         if (!inventoryId.value) {
             await alertService.warning({ text: 'Aucun inventaire sélectionné' })
             return
@@ -2198,7 +2279,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                 'Erreur lors de la résolution en masse des écarts'
             await alertService.error({ text: errorMessage })
         }
-    }
+    })
 
     /**
      * Handler pour le changement de magasin
@@ -2268,6 +2349,31 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
     }
 
     /**
+     * Navigation vers les pages d'export PDF (assignments terminés / transfert des comptages)
+     */
+    const handleGoToPdfPage = async (
+        routeName: 'inventory-pdf-finished' | 'inventory-pdf-transfer'
+    ) => {
+        if (!routerInstance || !inventoryReference.value) return
+
+        const warehouseRef = getSelectedWarehouseReference()
+        if (!warehouseRef) {
+            await alertService.warning({
+                text: "Sélectionnez un magasin pour accéder à l'export des fiches PDF.",
+            })
+            return
+        }
+
+        void routerInstance.push({
+            name: routeName,
+            params: {
+                reference: inventoryReference.value,
+                warehouse: warehouseRef,
+            },
+        })
+    }
+
+    /**
      * Configuration des boutons d'action
      */
     const actionButtons = computed<ButtonGroupButton[]>(() => {
@@ -2292,7 +2398,29 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             class: ACTION_BUTTON_CLASS,
             disabled: !inventoryReference.value || !selectedStore.value,
             visible: !!inventoryReference.value && !!selectedStore.value,
-            onClick: () => { void handleGoToStockGaps() }
+            onClick: () => handleGoToStockGaps()
+        })
+
+        buttons.push({
+            id: 'pdf-finished-assignments',
+            label: 'Assignments terminés (PDF)',
+            icon: 'mdi-file-pdf-box',
+            variant: 'default',
+            class: ACTION_BUTTON_CLASS,
+            disabled: !inventoryReference.value || !selectedStore.value,
+            visible: !!inventoryReference.value && !!selectedStore.value,
+            onClick: () => handleGoToPdfPage('inventory-pdf-finished')
+        })
+
+        buttons.push({
+            id: 'pdf-counting-transfer',
+            label: 'Transfert des comptages (PDF)',
+            icon: 'mdi-file-pdf-box',
+            variant: 'default',
+            class: ACTION_BUTTON_CLASS,
+            disabled: !inventoryReference.value || !selectedStore.value,
+            visible: !!inventoryReference.value && !!selectedStore.value,
+            onClick: () => handleGoToPdfPage('inventory-pdf-transfer')
         })
 
         buttons.push({
@@ -2303,8 +2431,8 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             class: ACTION_BUTTON_CLASS,
             disabled: !selectedStore.value,
             // Comptages suivants (3e+) : réservés aux inventaires GENERAL
-            visible: !!selectedStore.value && !isSingleCountingInventory.value,
-            onClick: () => { void handleLaunchCounting() }
+            visible: !!selectedStore.value && !isSingleCountingInventory.value && !isDetailView.value,
+            onClick: () => handleLaunchCounting()
         })
 
         buttons.push({
@@ -2314,8 +2442,8 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             variant: 'success',
             class: ACTION_BUTTON_CLASS,
             disabled: !inventoryId.value || !selectedStore.value || loading.value,
-            visible: !!inventoryId.value && !!selectedStore.value,
-            onClick: () => { void handleResolveAll() }
+            visible: !!inventoryId.value && !!selectedStore.value && !isDetailView.value,
+            onClick: () => handleResolveAll()
         })
 
         buttons.push({
@@ -2326,7 +2454,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             class: ACTION_BUTTON_CLASS,
             disabled: !inventoryId.value || !selectedStore.value || exportLoading.value,
             visible: !!inventoryId.value && !!selectedStore.value,
-            onClick: () => { void handleExportConsolidatedArticles() }
+            onClick: () => handleExportConsolidatedArticles()
         })
 
         buttons.push({
@@ -2337,7 +2465,7 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             class: ACTION_BUTTON_CLASS,
             disabled: !inventoryId.value || !selectedStore.value || exportResultsLoading.value,
             visible: !!inventoryId.value && !!selectedStore.value,
-            onClick: () => { void handleExportResultsData() }
+            onClick: () => handleExportResultsData()
         })
 
         return buttons.filter(b => b.visible !== false)
@@ -2412,6 +2540,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
         handleExportConsolidatedArticles,
         onStoreChanged,
         handleGoToJobTracking,
+        resultsView,
+        isDetailView,
+        isLocationEcartInventory,
+        setResultsView,
         resultsLoadingLocal: computed(() => resultsLoadingLocal.value),
         resultsKey,
         resultsTableRef,

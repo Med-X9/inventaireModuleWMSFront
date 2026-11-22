@@ -23,6 +23,7 @@ import { useInventoryStore } from '@/stores/inventory'
 import type { InventoryTable } from '@/models/Inventory'
 // Imports depuis le package @SMATCH-Digital-dev/vue-system-design (conforme à la documentation)
 import type { QueryModel, DataTableColumn, ActionConfig, ColumnDataType } from '@SMATCH-Digital-dev/vue-system-design'
+import { rowKey, singleFlight, singleFlightByKey } from '@/composables/useAsyncAction'
 
 // ===== CONSTANTES =====
 
@@ -402,7 +403,7 @@ export function useInventoryManagement() {
     /**
      * Suppression d'un inventaire avec confirmation
      */
-    const handleDelete = async (inventory: InventoryTable): Promise<void> => {
+    const handleDelete = singleFlightByKey(rowKey, async (inventory: InventoryTable): Promise<void> => {
         const confirmed = await alertService.confirm({
             title: 'Confirmer la suppression',
             text: `Supprimer l'inventaire "${inventory.label}" ?`
@@ -411,7 +412,7 @@ export function useInventoryManagement() {
             // TODO: Implement delete logic
             alertService.success({ text: 'Inventaire supprimé' })
         }
-    }
+    })
 
     // ===== GESTION DES MODALES =====
 
@@ -755,26 +756,26 @@ export function useInventoryManagement() {
     /**
      * Export des inventaires en CSV
      */
-    const handleExportCsv = async () => {
+    const handleExportCsv = singleFlight(async () => {
         try {
             await inventoryStore.exportInventories({ export: 'csv' })
             alertService.success({ text: 'Export CSV réussi' })
         } catch (error: any) {
             alertService.error({ text: error?.message || 'Erreur export CSV' })
         }
-    }
+    })
 
     /**
      * Export des inventaires en Excel
      */
-    const handleExportExcel = async () => {
+    const handleExportExcel = singleFlight(async () => {
         try {
             await inventoryStore.exportInventories({ export: 'excel' })
             alertService.success({ text: 'Export Excel réussi' })
         } catch (error: any) {
             alertService.error({ text: error?.message || 'Erreur export Excel' })
         }
-    }
+    })
 
     // ===== NAVIGATION =====
 

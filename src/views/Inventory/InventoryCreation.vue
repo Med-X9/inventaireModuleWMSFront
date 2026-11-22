@@ -101,6 +101,15 @@
                                         Le compte est requis
                                     </FormError>
                                 </FormGroup>
+
+                                <FormGroup>
+                                    <FormLabel>Max assignments lancés (mobile)</FormLabel>
+                                    <Input
+                                        v-model="state.header.max_entame_assignments"
+                                        type="number"
+                                        placeholder="Défaut serveur"
+                                    />
+                                </FormGroup>
                             </div>
 
                             <FormGroup class="mt-4">

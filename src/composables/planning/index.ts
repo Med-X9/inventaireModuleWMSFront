@@ -26,6 +26,7 @@ import { resolvePlanningContextIds } from '@/composables/planning/usePlanningCon
 import { usePlanningTableData } from '@/composables/planning/usePlanningTableData'
 import { usePlanningButtons } from '@/composables/planning/usePlanningButtons'
 import { useWarehouseSettingStatus } from '@/composables/useWarehouseSettingStatus'
+import { singleFlight } from '@/composables/useAsyncAction'
 
 // ===== COMPOSABLE =====
 
@@ -533,13 +534,13 @@ export function usePlanning(options?: PlanningOptions) {
     /**
      * Confirmer l'ajout des emplacements au job s?lectionn?
      */
-    const confirmAddToJob = async () => {
+    const confirmAddToJob = singleFlight(async () => {
         if (!selectedJobForModal.value) {
             return
         }
         await onSelectJobForLocation(selectedJobForModal.value)
         closeAddToJobModal()
-    }
+    })
 
     const onSelectJobForLocation = async (value: string | number | string[] | number[] | null) => {
         if (!value || typeof value !== 'string' || value.trim() === '') {

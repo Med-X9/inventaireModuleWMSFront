@@ -33,6 +33,7 @@ export interface InventoryDetails {
     date: string;
     status: string;
     inventory_type: string;
+    max_entame_assignments?: number | null;
     created_at: string;
     updated_at: string;
     en_preparation_status_date: string;
@@ -65,6 +66,8 @@ export interface CreateInventoryRequest {
     label: string;
     date: string;
     inventory_type: string;
+    /** Max d'assignments lancés (mobile) par utilisateur ; null = défaut serveur */
+    max_entame_assignments?: number | null;
     account_id: number;
     warehouse: InventoryWarehouse[];
     /** Absent à la création : les comptages sont configurés via POST .../countings/ */

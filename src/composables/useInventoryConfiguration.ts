@@ -1,4 +1,4 @@
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { ComptageConfig, ComptageMode } from '@/interfaces/inventoryCreation'
 import type { InventoryDetails } from '@/models/Inventory'
@@ -47,15 +47,52 @@ export function useInventoryConfiguration(reference: string) {
 
     const inventoryType = computed(() => inventory.value?.inventory_type?.toUpperCase() || '')
     const isGeneral = computed(() => inventoryType.value === 'GENERAL')
-    const isSingleCounting = computed(() =>
-        ['TOURNANT', 'MAGASIN'].includes(inventoryType.value)
+    const isMagasin = computed(() => inventoryType.value === 'MAGASIN')
+
+    // MAGASIN : choix du nombre de comptages (1 ou 3) ; 3 -> wizard de configuration (1 étape par comptage)
+    const comptagesChoice = ref<'1' | '3'>('1')
+    const isMagasinMulti = computed(() => isMagasin.value && comptagesChoice.value === '3')
+    // Wizard à 3 étapes : GENERAL, ou MAGASIN avec 3 comptages
+    const isWizard = computed(() => isGeneral.value || isMagasinMulti.value)
+    // Un seul comptage : TOURNANT, ou MAGASIN avec 1 comptage
+    const isSingleCounting = computed(
+        () => ['TOURNANT', 'MAGASIN'].includes(inventoryType.value) && !isMagasinMulti.value
     )
 
-    const totalSteps = computed(() => (isGeneral.value ? 3 : 1))
+    // MAGASIN 3 comptages : en vrac uniquement, saisie quantité
+    //   1er : par article · 2e : par emplacement · 3e : par article
+    const MAGASIN_STEP_LABELS = [
+        'Saisie quantité par article',
+        'Saisie quantité par emplacement',
+        'Saisie quantité par article',
+    ]
+
+    // MAGASIN : préremplit la configuration imposée selon le nombre de comptages
+    watch([inventoryType, comptagesChoice], () => {
+        currentStep.value = 1
+        showValidation.value = false
+        if (!isMagasin.value) return
+        if (isMagasinMulti.value) {
+            comptages.slice(0, 3).forEach((c) => {
+                resetComptageOptions(c)
+                c.mode = 'en vrac'
+                c.inputMethod = 'saisie'
+                syncInputMethodFlags(c)
+            })
+        } else {
+            resetComptageOptions(comptages[0])
+            comptages[0].mode = 'par article'
+        }
+    })
+
+    const totalSteps = computed(() => (isWizard.value ? 3 : 1))
     const isLastStep = computed(() => currentStep.value >= totalSteps.value)
 
     const availableModesForStep = (stepIndex: number): ComptageMode[] => {
-        if (isSingleCounting.value) {
+        if (isMagasin.value) {
+            return isMagasinMulti.value ? ['en vrac'] : ['par article']
+        }
+        if (!isGeneral.value) {
             return ['en vrac', 'par article']
         }
         return inventoryCreationService.getAvailableModesForStep(
@@ -105,11 +142,16 @@ export function useInventoryConfiguration(reference: string) {
         }
     }
 
-    const buildCountPayload = (comptage: ComptageConfig, order?: number) => {
-        if (comptage.mode === 'en vrac') {
+    // En vrac : dérive saisieQuantite / scannerUnitaire de la méthode opératoire choisie
+    const syncInputMethodFlags = (comptage: ComptageConfig | undefined) => {
+        if (comptage?.mode === 'en vrac') {
             comptage.saisieQuantite = comptage.inputMethod === 'saisie'
             comptage.scannerUnitaire = comptage.inputMethod === 'scanner'
         }
+    }
+
+    const buildCountPayload = (comptage: ComptageConfig, order?: number) => {
+        syncInputMethodFlags(comptage)
 
         const base: Record<string, unknown> = {
             count_mode: comptage.mode,
@@ -137,8 +179,8 @@ export function useInventoryConfiguration(reference: string) {
         } else if (comptage.mode === 'en vrac') {
             base.show_product = false
             base.has_article = false
-            base.has_quantity = true
-            base.stock_situation = !!comptage.guideQuantite
+            base.has_quantity = !!comptage.guideQuantite
+            base.stock_situation = false
         } else if (comptage.mode === 'par article') {
             base.stock_situation = false
             base.has_article = true
@@ -159,6 +201,7 @@ export function useInventoryConfiguration(reference: string) {
 
         if (comptage.mode === 'en vrac' && !comptage.inputMethod) return false
 
+        syncInputMethodFlags(comptage)
         try {
             inventoryCreationService.validateComptage(comptage)
             return true
@@ -169,6 +212,7 @@ export function useInventoryConfiguration(reference: string) {
 
     const validateAll = (): string[] => {
         const errors: string[] = []
+        comptages.forEach((c) => syncInputMethodFlags(c))
 
         if (isSingleCounting.value) {
             if (!comptages[0]?.mode) {
@@ -182,6 +226,26 @@ export function useInventoryConfiguration(reference: string) {
                     errors.push(e instanceof Error ? e.message : 'Configuration invalide')
                 }
             }
+            return errors
+        }
+
+        if (isMagasinMulti.value) {
+            comptages.slice(0, 3).forEach((c, i) => {
+                if (!c.mode) {
+                    errors.push(`Comptage ${i + 1} : le mode est requis`)
+                    return
+                }
+                if (c.mode === 'en vrac' && !c.inputMethod) {
+                    errors.push(`Comptage ${i + 1} : méthode opératoire requise`)
+                }
+                try {
+                    inventoryCreationService.validateComptage(c)
+                } catch (e) {
+                    errors.push(
+                        `Comptage ${i + 1} : ${e instanceof Error ? e.message : 'Configuration invalide'}`
+                    )
+                }
+            })
             return errors
         }
 
@@ -270,6 +334,8 @@ export function useInventoryConfiguration(reference: string) {
     }
 
     const submitConfiguration = async () => {
+        // Anti multi-clic : ignorer si un enregistrement est déjà en cours
+        if (saving.value) return false
         showValidation.value = true
         const validationErrors = validateAll()
         if (validationErrors.length > 0) {
@@ -284,7 +350,7 @@ export function useInventoryConfiguration(reference: string) {
         try {
             let payload: Record<string, unknown>
 
-            if (isGeneral.value) {
+            if (isWizard.value) {
                 payload = {
                     comptages: comptages.slice(0, 3).map((c, i) => buildCountPayload(c, i + 1)),
                 }
@@ -326,6 +392,11 @@ export function useInventoryConfiguration(reference: string) {
         inventoryType,
         isGeneral,
         isSingleCounting,
+        isMagasin,
+        MAGASIN_STEP_LABELS,
+        comptagesChoice,
+        isMagasinMulti,
+        isWizard,
         totalSteps,
         isLastStep,
         availableModesForStep,

@@ -156,6 +156,11 @@ export function useMonitoring(options?: MonitoringOptions) {
 
     const loading = computed(() => monitoringStore.loading)
     const monitoringData = ref<MonitoringStats | null>(null)
+    /** Réponses brutes de l'API (nombre de zones et de comptages variables) */
+    const rawZones = ref<ZoneMonitoringResponse[] | null>(null)
+    const rawGlobal = ref<GlobalMonitoringResponse['data'] | null>(null)
+    const lastUpdatedAt = ref<Date | null>(null)
+    const loadError = ref<string | null>(null)
     const refreshInterval = ref<NodeJS.Timeout | null>(null)
     const autoRefreshEnabled = ref(true)
     const refreshIntervalMs = ref(120000) // 2 minutes par défaut
@@ -764,11 +769,16 @@ export function useMonitoring(options?: MonitoringOptions) {
 
                 // Mapper les données du backend vers le format attendu
                 monitoringData.value = mapperDonneesBackend(byZone.data.zones, global.data)
+                rawZones.value = byZone.data.zones ?? []
+                rawGlobal.value = global.data
+                lastUpdatedAt.value = new Date()
+                loadError.value = null
             } else {
                 console.warn('Données de monitoring incomplètes', { byZone, global })
             }
         } catch (error) {
             console.error('Erreur lors du chargement du monitoring', error)
+            loadError.value = 'Impossible de rafraîchir les données du monitoring.'
             // En cas d'erreur, ne pas mettre à jour monitoringData pour garder les anciennes données
         }
     }
@@ -869,6 +879,10 @@ export function useMonitoring(options?: MonitoringOptions) {
         // État
         loading: readonly(loading),
         monitoringData: readonly(monitoringData),
+        rawZones,
+        rawGlobal,
+        lastUpdatedAt: readonly(lastUpdatedAt),
+        loadError: readonly(loadError),
         autoRefreshEnabled: readonly(autoRefreshEnabled),
         refreshIntervalMs: readonly(refreshIntervalMs),
 

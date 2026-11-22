@@ -72,4 +72,33 @@ router.afterEach(() => {
     appSetting.changeAnimation()
 })
 
+/**
+ * Anti multi-clic sur la navigation.
+ * Un double clic sur un lien / une action de ligne déclenchait deux router.push vers la
+ * même page : le premier était annulé et la page (chargée en lazy) rechargée.
+ * Tant qu'une navigation vers la MÊME destination est en cours, les appels suivants
+ * réutilisent la promesse en cours au lieu d'en relancer une.
+ * Une navigation vers une autre destination reste possible (comportement standard).
+ */
+type PushArg = Parameters<typeof router.push>[0]
+const originalPush = router.push.bind(router)
+let pendingNavigation: { fullPath: string; promise: ReturnType<typeof router.push> } | null = null
+
+router.push = (to: PushArg) => {
+    let fullPath: string
+    try {
+        fullPath = router.resolve(to).fullPath
+    } catch {
+        return originalPush(to) // laisser le routeur remonter l'erreur (route inconnue, param manquant…)
+    }
+    if (pendingNavigation && pendingNavigation.fullPath === fullPath) {
+        return pendingNavigation.promise
+    }
+    const promise = originalPush(to).finally(() => {
+        if (pendingNavigation?.promise === promise) pendingNavigation = null
+    })
+    pendingNavigation = { fullPath, promise }
+    return promise
+}
+
 export default router

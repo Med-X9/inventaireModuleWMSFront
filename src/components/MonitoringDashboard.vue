@@ -1,825 +1,356 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useMonitoring, type ZoneMonitoringData } from '@/composables/useMonitoring'
+import { computed, ref, watch } from 'vue'
+import { useMonitoring } from '@/composables/useMonitoring'
+import {
+    buildMonitoringViewModel,
+    countingLabel,
+    filterAndSortZones,
+    type ZoneSort,
+    type ZoneState,
+    type ZoneProgress,
+} from '@/composables/monitoring/zoneProgress'
 import MdiIcon from '@/components/MdiIcon.vue'
+import MonitoringProgressBar from '@/components/MonitoringProgressBar.vue'
 
 // ===== PROPS =====
-/**
- * Props pour le monitoring dashboard
- */
 interface Props {
     inventoryId?: number
     warehouseId?: number
 }
+const props = withDefaults(defineProps<Props>(), { inventoryId: undefined, warehouseId: undefined })
 
-const props = withDefaults(defineProps<Props>(), {
-    inventoryId: undefined,
-    warehouseId: undefined
-})
+// ===== DONNÉES =====
+const { loading, rawZones, rawGlobal, lastUpdatedAt, loadError, autoRefreshEnabled, refreshIntervalMs, chargerDonnees, toggleAutoRefresh } =
+    useMonitoring({ inventoryId: props.inventoryId, warehouseId: props.warehouseId })
 
-// ===== COMPOSABLE =====
-const {
-    loading,
-    monitoringData,
-    autoRefreshEnabled,
-    chargerDonnees,
-    toggleAutoRefresh
-} = useMonitoring({
-    inventoryId: props.inventoryId,
-    warehouseId: props.warehouseId
-})
+const vm = computed(() => buildMonitoringViewModel(rawZones.value, rawGlobal.value))
+const hasData = computed(() => rawZones.value !== null)
+const zoneCount = computed(() => vm.value.zones.length)
 
-// Classes CSS pour les LEDs selon le statut (taille augmentée quand peu de zones)
-const getLedClass = (status: string, large = false) => {
-    const size = large ? 'w-3 h-3 sm:w-3.5 sm:h-3.5' : 'w-2 h-2'
-    const baseClass = `${size} rounded-full inline-block shrink-0`
-    switch (status) {
-        case 'success':
-            return `${baseClass} bg-emerald-500`
-        case 'warning':
-            return `${baseClass} bg-[#FECD1C]`
-        case 'danger':
-            return `${baseClass} bg-red-500`
-        case 'info':
-            return `${baseClass} bg-blue-500`
-        default:
-            return `${baseClass} bg-slate-400`
+// ===== FILTRES / TRI / VUE =====
+const search = ref('')
+const stateFilter = ref<ZoneState | 'toutes'>('toutes')
+const sort = ref<ZoneSort>('nom')
+
+const VIEW_KEY = 'monitoring.view'
+const readView = (): 'auto' | 'cartes' | 'tableau' => {
+    try {
+        const v = localStorage.getItem(VIEW_KEY)
+        return v === 'cartes' || v === 'tableau' ? v : 'auto'
+    } catch {
+        return 'auto'
     }
 }
-
-// Formatage des pourcentages
-const formatPourcentage = (value: any) => {
-    if (value === undefined || value === null || isNaN(value)) {
-        return '0%'
+const viewChoice = ref<'auto' | 'cartes' | 'tableau'>(readView())
+watch(viewChoice, (v) => {
+    try {
+        localStorage.setItem(VIEW_KEY, v)
+    } catch {
+        /* stockage indisponible : préférence non mémorisée */
     }
-    return `${Number(value)}%`
+})
+/** Vue automatique : cartes jusqu'à 8 zones, tableau au-delà (lisible quel que soit le nombre de zones) */
+const view = computed(() => (viewChoice.value === 'auto' ? (zoneCount.value > 8 ? 'tableau' : 'cartes') : viewChoice.value))
+
+const visibleZones = computed(() =>
+    filterAndSortZones(vm.value.zones, { search: search.value, state: stateFilter.value, sort: sort.value })
+)
+
+const stateCounts = computed(() => {
+    const c = { toutes: zoneCount.value, en_cours: 0, non_demarre: 0, termine: 0 }
+    vm.value.zones.forEach((z) => c[z.state]++)
+    return c
+})
+
+const STATE_META: Record<ZoneState, { label: string; dot: string; badge: string }> = {
+    en_cours: { label: 'En cours', dot: 'bg-amber-400', badge: 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30' },
+    non_demarre: { label: 'Non démarrée', dot: 'bg-slate-400', badge: 'bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-700/60 dark:text-slate-300 dark:ring-slate-600' },
+    termine: { label: 'Terminée', dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' },
+}
+const FILTERS: Array<{ key: ZoneState | 'toutes'; label: string }> = [
+    { key: 'toutes', label: 'Toutes' },
+    { key: 'en_cours', label: 'En cours' },
+    { key: 'non_demarre', label: 'Non démarrées' },
+    { key: 'termine', label: 'Terminées' },
+]
+
+const toggleSortColumn = (asc: ZoneSort, desc: ZoneSort) => {
+    sort.value = sort.value === asc ? desc : asc
+}
+const sortIcon = (asc: ZoneSort, desc: ZoneSort) =>
+    sort.value === asc ? 'mdi-arrow-up' : sort.value === desc ? 'mdi-arrow-down' : 'mdi-unfold-more-horizontal'
+
+const resetFilters = () => {
+    search.value = ''
+    stateFilter.value = 'toutes'
 }
 
-// Formatage des nombres
-const formatNombre = (value: any) => {
-    if (value === undefined || value === null || isNaN(value)) {
-        return '0'
-    }
-    return Number(value).toString()
-}
-
-/** Nombre de zones affichées */
-const zoneCount = computed(() => monitoringData.value?.zones?.length ?? 0)
-
-/**
- * Peu de zones : agrandir les cartes et remplir la hauteur disponible (évite la « moitié d’écran vide »).
- * Beaucoup de zones : mosaïque compacte avec défilement.
- */
-/** Seuil : au-delà, mosaïque compacte + scroll pour exploiter l’écran sans tuiles géantes */
-const zonesSparse = computed(() => zoneCount.value >= 1 && zoneCount.value <= 8)
-
-/** Classes grille zones selon la densité */
-const zonesMosaicClass = computed(() => {
-    const n = zoneCount.value
-    const sparse = 'zones-mosaic zones-mosaic--sparse grid min-h-0'
-
-    if (!zonesSparse.value) {
-        return (
-            'zones-mosaic grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 ' +
-            'min-[1800px]:grid-cols-5 auto-rows-min overflow-y-auto pb-1'
-        )
-    }
-
-    if (n === 1) {
-        return `${sparse} h-full gap-4 grid-cols-1 grid-rows-1 auto-rows-[minmax(0,1fr)]`
-    }
-    if (n === 2) {
-        return `${sparse} h-full gap-4 grid-cols-1 md:grid-cols-2 md:grid-rows-1 auto-rows-[minmax(0,1fr)]`
-    }
-    if (n === 3) {
-        return `${sparse} h-full gap-4 grid-cols-1 lg:grid-cols-3 auto-rows-[minmax(0,1fr)]`
-    }
-    if (n === 4) {
-        return `${sparse} h-full gap-3 grid-cols-1 sm:grid-cols-2 grid-rows-2 auto-rows-[minmax(0,1fr)]`
-    }
-    /* 5–8 zones */
-    return `${sparse} h-full gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-[minmax(10rem,1fr)]`
-})
-
-/** Typo / espacements : mode sparse = contenu des cartes agrandi (pas seulement la boîte) */
-const zoneUi = computed(() => {
-    const s = zonesSparse.value
-    return {
-        card: s ? 'p-3 sm:p-4 md:p-5 rounded-xl' : 'p-1 rounded-lg',
-        header: s ? 'gap-2 mb-3 pb-3 border-b border-slate-200 dark:border-gray-700' : 'gap-1 mb-1 pb-1 border-b border-slate-200 dark:border-gray-700',
-        title: s ? 'text-sm sm:text-base md:text-lg font-bold leading-snug px-1' : 'text-xs font-semibold',
-        stack: s ? 'gap-3' : 'gap-0.5',
-        panel: s ? 'rounded-xl p-3 sm:p-4 shadow-md' : 'rounded-lg p-0.5',
-        jobRow: s ? 'gap-2 sm:gap-3 flex-wrap justify-center items-center' : 'gap-1',
-        panelTitle: s ? 'text-xs sm:text-sm font-bold mb-2 text-center tracking-tight' : 'text-[10px] mb-0.5 text-center font-semibold',
-        triple: s ? 'gap-2 sm:gap-3 flex-wrap sm:flex-nowrap justify-center' : 'gap-0.5',
-        cell: s ? 'rounded-lg p-2 sm:p-2.5 flex-1 min-w-[min(100%,7.5rem)] shadow-sm' : 'rounded p-0.5 flex-1 shadow-sm',
-        cellInner: s ? 'gap-1.5 sm:gap-2 justify-center items-center flex-wrap' : 'gap-1',
-        icon: s ? 'w-4 h-4 sm:w-5 sm:h-5 shrink-0' : 'w-3 h-3',
-        lbl: s ? 'text-xs sm:text-sm font-medium' : 'text-[10px] font-medium',
-        num: s ? 'text-base sm:text-lg md:text-xl font-bold tabular-nums' : 'text-sm font-bold',
-        pct: s ? 'text-xs sm:text-sm font-medium tabular-nums' : 'text-[10px] font-medium',
-        jobLbl: s ? 'text-xs sm:text-sm font-medium' : 'text-[10px]',
-        jobNum: s ? 'text-lg sm:text-xl md:text-2xl font-bold tabular-nums' : 'text-sm font-bold'
-    }
-})
-
-/** KPI globaux du haut : même logique d’échelle quand peu de zones */
-const globalKpiUi = computed(() => {
-    const s = zonesSparse.value
-    return {
-        grid: s ? 'gap-2 md:gap-3' : 'gap-1',
-        card: s ? 'rounded-xl p-2 sm:p-3 md:p-4 shadow-md' : 'rounded-lg p-1 shadow-sm',
-        icon: s ? 'w-5 h-5 sm:w-6 sm:h-6 shrink-0' : 'w-4 h-4',
-        label: s ? 'text-xs sm:text-sm font-medium' : 'text-xs',
-        value: s ? 'text-xl sm:text-2xl md:text-3xl font-bold tabular-nums leading-none' : 'text-xl font-bold',
-        pct: s ? 'text-xs sm:text-sm font-semibold' : 'text-xs font-medium'
-    }
-})
+// ===== FORMATAGE =====
+const nf = new Intl.NumberFormat('fr-FR')
+const fmt = (n: number) => nf.format(n || 0)
+const lastUpdatedLabel = computed(() =>
+    lastUpdatedAt.value ? lastUpdatedAt.value.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'
+)
+const refreshMinutes = computed(() => Math.round(refreshIntervalMs.value / 60000))
+const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' : ''} · ${fmt(z.emplacements)} empl.`
 </script>
 
 <template>
-    <div class="h-full min-h-0 flex flex-col bg-slate-500 dark:bg-slate-800 overflow-hidden">
-        <!-- En-tête minimaliste -->
-        <div
-            class="flex-shrink-0 flex justify-end items-center px-4 py-2 bg-white dark:bg-[#1b2e4b] border-b border-slate-200 dark:border-gray-700 z-10">
-            <div class="flex gap-2">
-                <button @click="chargerDonnees" :disabled="loading"
-                    class="w-7 h-7 flex items-center justify-center text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-all disabled:opacity-40 rounded hover:bg-slate-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/50">
-                    <span class="text-sm" :class="{ 'animate-spin': loading }">↻</span>
-                </button>
-                <button @click="toggleAutoRefresh" :class="[
-                    'w-7 h-7 flex items-center justify-center rounded transition-all focus:outline-none focus:ring-2 focus:ring-primary/50',
-                    autoRefreshEnabled
-                        ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-                        : 'text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 hover:bg-slate-100 dark:hover:bg-gray-700'
-                ]">
-                    <span class="w-1.5 h-1.5 rounded-full"
-                        :class="autoRefreshEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"></span>
-                </button>
+    <div class="h-full min-h-0 flex flex-col bg-slate-100 dark:bg-slate-900">
+        <!-- ===== Barre d'outils ===== -->
+        <div class="flex-shrink-0 border-b border-slate-200 bg-white/90 px-3 py-2.5 backdrop-blur dark:border-slate-700 dark:bg-slate-900/90 sm:px-4">
+            <div class="flex flex-wrap items-center gap-2">
+                <label class="relative min-w-[11rem] flex-1 sm:max-w-xs">
+                    <span class="sr-only">Rechercher une zone</span>
+                    <MdiIcon name="mdi-magnify" size="sm" class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                        v-model="search"
+                        type="search"
+                        placeholder="Rechercher une zone…"
+                        class="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                </label>
+
+                <div class="flex flex-wrap gap-1" role="group" aria-label="Filtrer par état">
+                    <button
+                        v-for="f in FILTERS"
+                        :key="f.key"
+                        type="button"
+                        :aria-pressed="stateFilter === f.key"
+                        class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        :class="stateFilter === f.key
+                            ? 'bg-slate-900 text-white ring-slate-900 dark:bg-white dark:text-slate-900 dark:ring-white'
+                            : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-600'"
+                        @click="stateFilter = f.key">
+                        <span v-if="f.key !== 'toutes'" class="h-1.5 w-1.5 rounded-full" :class="STATE_META[f.key as ZoneState].dot" />
+                        {{ f.label }}
+                        <span class="tabular-nums opacity-70">{{ stateCounts[f.key] }}</span>
+                    </button>
+                </div>
+
+                <div class="ml-auto flex flex-wrap items-center gap-2">
+                    <label class="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                        <span class="hidden sm:inline">Trier</span>
+                        <select
+                            v-model="sort"
+                            class="rounded-lg border border-slate-200 bg-white py-1.5 pl-2 pr-7 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+                            <option value="nom">Nom</option>
+                            <option value="avancement_asc">Moins avancées</option>
+                            <option value="avancement_desc">Plus avancées</option>
+                            <option value="jobs_desc">Plus de jobs</option>
+                        </select>
+                    </label>
+
+                    <div class="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800" role="group" aria-label="Mode d'affichage">
+                        <button
+                            v-for="opt in [{ k: 'cartes', icon: 'mdi-view-grid-outline', label: 'Cartes' }, { k: 'tableau', icon: 'mdi-table', label: 'Tableau' }]"
+                            :key="opt.k"
+                            type="button"
+                            :title="opt.label"
+                            :aria-pressed="view === opt.k"
+                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            :class="view === opt.k ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'"
+                            @click="viewChoice = opt.k as 'cartes' | 'tableau'">
+                            <MdiIcon :name="opt.icon" size="sm" />
+                            <span class="hidden md:inline">{{ opt.label }}</span>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-0.5 dark:border-slate-600 dark:bg-slate-800">
+                        <span class="hidden px-1 text-[11px] tabular-nums text-slate-500 lg:inline dark:text-slate-400" aria-live="polite">
+                            Mis à jour {{ lastUpdatedLabel }}
+                        </span>
+                        <button
+                            type="button"
+                            title="Rafraîchir maintenant"
+                            :disabled="loading"
+                            class="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-primary/40 dark:hover:bg-slate-700 dark:hover:text-white"
+                            @click="chargerDonnees">
+                            <MdiIcon name="mdi-refresh" size="sm" :class="{ 'animate-spin': loading }" />
+                        </button>
+                        <button
+                            type="button"
+                            :title="autoRefreshEnabled ? `Rafraîchissement auto toutes les ${refreshMinutes} min (cliquer pour arrêter)` : 'Rafraîchissement auto arrêté (cliquer pour activer)'"
+                            :aria-pressed="autoRefreshEnabled"
+                            class="flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            :class="autoRefreshEnabled ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400'"
+                            @click="toggleAutoRefresh">
+                            <span class="h-2 w-2 rounded-full" :class="autoRefreshEnabled ? 'animate-pulse bg-emerald-500' : 'bg-slate-400'" />
+                            Auto
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Contenu : scroll global si mosaïque dense ; sinon zones étirées (peu de cartes) sans bande vide -->
-        <div
-            class="flex-1 flex flex-col min-h-0 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600 scrollbar-track-transparent hover:scrollbar-thumb-slate-400 dark:hover:scrollbar-thumb-slate-500"
-            :class="monitoringData && zonesSparse ? 'overflow-hidden' : 'overflow-y-auto'"
-        >
+        <div class="flex-1 min-h-0 overflow-y-auto">
+            <div class="mx-auto max-w-[1920px] space-y-4 p-3 sm:p-4">
+                <!-- Erreur de rafraîchissement (les dernières données restent affichées) -->
+                <div v-if="loadError" role="alert" class="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
+                    <MdiIcon name="mdi-alert-circle-outline" size="sm" />
+                    {{ loadError }}
+                    <button type="button" class="ml-auto font-semibold underline-offset-2 hover:underline" @click="chargerDonnees">Réessayer</button>
+                </div>
 
-            <!-- Skeleton loading -->
-            <div v-if="loading && !monitoringData" class="monitoring-container bg-slate-500 dark:bg-slate-800 p-1">
-                <div class="flex flex-col gap-1">
-                    <!-- Skeleton métriques globales -->
-                    <div class="grid grid-cols-4 gap-1">
-                        <div v-for="i in 4" :key="`metric-${i}`"
-                            class="bg-white dark:bg-[#1b2e4b] rounded-lg p-1 shadow-sm">
-                            <div class="flex items-center justify-center gap-1">
-                                <div class="w-4 h-4 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                                <div class="h-3 w-16 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                                <div class="h-6 w-12 bg-slate-300 dark:bg-slate-700 rounded animate-pulse"></div>
-                            </div>
-                        </div>
+                <!-- ===== Chargement initial ===== -->
+                <div v-if="!hasData && loading" class="space-y-4" aria-busy="true">
+                    <div class="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))]">
+                        <div v-for="i in 4" :key="i" class="h-24 animate-pulse rounded-xl bg-white dark:bg-slate-800" />
                     </div>
-
-                    <!-- Skeleton zones en grille -->
-                    <div class="grid grid-cols-3 grid-rows-3 gap-1">
-                        <div v-for="i in 9" :key="`zone-${i}`"
-                            class="bg-white dark:bg-[#1b2e4b] rounded-lg border border-slate-200/60 dark:border-gray-700 p-1 shadow-sm">
-                            <!-- Skeleton en-tête zone -->
-                            <div
-                                class="flex items-center justify-between gap-1 mb-1 pb-1 border-b border-slate-200 dark:border-gray-700">
-                                <div class="w-2 h-2 bg-slate-300 dark:bg-slate-600 rounded-full animate-pulse"></div>
-                                <div class="flex-1 text-center">
-                                    <div class="h-3 w-20 bg-slate-200 dark:bg-slate-600 rounded animate-pulse mx-auto">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Skeleton métriques -->
-                            <div class="flex flex-col gap-0.5">
-                                <!-- JOB et Emplacements -->
-                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                                    <div class="flex items-center justify-center gap-1">
-                                        <div class="w-3 h-3 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
-                                        </div>
-                                        <div class="h-2 w-12 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
-                                        </div>
-                                        <div class="h-3 w-16 bg-slate-300 dark:bg-slate-700 rounded animate-pulse">
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- 1er comptage -->
-                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                                    <div
-                                        class="h-2 w-20 bg-slate-300 dark:bg-slate-700 rounded animate-pulse mx-auto mb-0.5">
-                                    </div>
-                                    <div class="flex gap-0.5">
-                                        <div v-for="j in 3" :key="`count1-${j}`"
-                                            class="flex-1 bg-white dark:bg-[#1b2e4b] rounded p-0.5 shadow-sm">
-                                            <div class="flex items-center justify-center gap-1">
-                                                <div
-                                                    class="w-3 h-3 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
-                                                </div>
-                                                <div
-                                                    class="h-2 w-10 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
-                                                </div>
-                                                <div
-                                                    class="h-3 w-6 bg-slate-300 dark:bg-slate-700 rounded animate-pulse">
-                                                </div>
-                                                <div
-                                                    class="h-2 w-8 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- 2ème comptage -->
-                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                                    <div
-                                        class="h-2 w-20 bg-slate-300 dark:bg-slate-700 rounded animate-pulse mx-auto mb-0.5">
-                                    </div>
-                                    <div class="flex gap-0.5">
-                                        <div v-for="j in 3" :key="`count2-${j}`"
-                                            class="flex-1 bg-white dark:bg-[#1b2e4b] rounded p-0.5 shadow-sm">
-                                            <div class="flex items-center justify-center gap-1">
-                                                <div
-                                                    class="w-3 h-3 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
-                                                </div>
-                                                <div
-                                                    class="h-2 w-10 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
-                                                </div>
-                                                <div
-                                                    class="h-3 w-6 bg-slate-300 dark:bg-slate-700 rounded animate-pulse">
-                                                </div>
-                                                <div
-                                                    class="h-2 w-8 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- 3ème comptage -->
-                                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-0.5">
-                                    <div
-                                        class="h-2 w-20 bg-slate-300 dark:bg-slate-700 rounded animate-pulse mx-auto mb-0.5">
-                                    </div>
-                                    <div
-                                        class="flex items-center justify-center gap-1 bg-white dark:bg-[#1b2e4b] rounded p-0.5 shadow-sm">
-                                        <div class="w-3 h-3 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                                        <div class="h-2 w-10 bg-slate-200 dark:bg-slate-600 rounded animate-pulse">
-                                        </div>
-                                        <div class="h-3 w-12 bg-slate-300 dark:bg-slate-700 rounded animate-pulse">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))]">
+                        <div v-for="i in 6" :key="i" class="h-44 animate-pulse rounded-xl bg-white dark:bg-slate-800" />
                     </div>
                 </div>
-            </div>
 
-            <!-- Dashboard -->
-            <div
-                v-else-if="monitoringData"
-                class="monitoring-container bg-slate-500 dark:bg-slate-800 p-1 flex flex-col flex-1 min-h-0 gap-2"
-            >
-                <div class="flex flex-col gap-2 flex-1 min-h-0 min-w-0">
-                    <!-- Métriques globales (taille augmentée si peu de zones) -->
-                    <div class="flex-shrink-0 grid grid-cols-2 md:grid-cols-4" :class="globalKpiUi.grid">
-                        <div
-                            class="bg-white dark:bg-[#1b2e4b] hover:shadow-md transition-all duration-300 flex flex-col justify-center min-h-[3.25rem]"
-                            :class="globalKpiUi.card">
-                            <div class="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
-                                <MdiIcon name="mdi-package-variant" :class="[globalKpiUi.icon, 'text-slate-500 dark:text-gray-400']" />
-                                <span :class="[globalKpiUi.label, 'text-slate-500 dark:text-gray-400']">Total JOB</span>
-                                <span :class="[globalKpiUi.value, 'text-slate-900 dark:text-white-light']">{{
-                                    formatNombre(monitoringData.total.totalJobs) }}</span>
+                <template v-else-if="hasData">
+                    <!-- ===== Indicateurs globaux ===== -->
+                    <section aria-label="Indicateurs globaux" class="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr))]">
+                        <div v-for="kpi in [
+                            { label: 'Zones', value: zoneCount, icon: 'mdi-map-marker-radius-outline' },
+                            { label: 'Jobs', value: vm.totals.jobs, icon: 'mdi-package-variant-closed' },
+                            { label: 'Emplacements', value: vm.totals.emplacements, icon: 'mdi-grid' },
+                            { label: 'Équipes', value: vm.totals.equipes, icon: 'mdi-account-group-outline' },
+                        ]" :key="kpi.label"
+                            class="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                <MdiIcon :name="kpi.icon" size="sm" />
+                            </span>
+                            <div class="min-w-0">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ kpi.label }}</div>
+                                <div class="text-xl font-bold tabular-nums text-slate-900 dark:text-white">{{ fmt(kpi.value) }}</div>
                             </div>
                         </div>
-                        <div
-                            class="bg-white dark:bg-[#1b2e4b] border border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-md transition-all duration-300 flex flex-col justify-center min-h-[3.25rem]"
-                            :class="globalKpiUi.card">
-                            <div class="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
-                                <MdiIcon name="mdi-check" :class="[globalKpiUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
-                                <span :class="[globalKpiUi.label, 'text-slate-500 dark:text-gray-400']">1er Clôturé</span>
-                                <span :class="[globalKpiUi.value, 'text-emerald-600 dark:text-emerald-400']">{{
-                                    formatNombre(monitoringData.total.premierComptage.cloture) }}</span>
-                                <span :class="[globalKpiUi.pct, 'text-emerald-600 dark:text-emerald-400']">({{
-                                    formatPourcentage(monitoringData.total.premierComptage.cloturePourcentage)
-                                    }})</span>
+
+                        <div v-for="c in vm.totals.countings" :key="`kpi-c${c.order}`"
+                            class="rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                            <div class="flex items-baseline justify-between gap-2">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ countingLabel(c.order) }}</div>
+                                <div class="text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{{ c.pctTermine }}%</div>
+                            </div>
+                            <MonitoringProgressBar :progress="c" size="md" class="mt-2" />
+                            <div class="mt-1.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                                {{ fmt(c.termine) }} / {{ fmt(c.total) }} jobs terminés
                             </div>
                         </div>
-                        <div
-                            class="bg-white dark:bg-[#1b2e4b] border border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-md transition-all duration-300 flex flex-col justify-center min-h-[3.25rem]"
-                            :class="globalKpiUi.card">
-                            <div class="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
-                                <MdiIcon name="mdi-check" :class="[globalKpiUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
-                                <span :class="[globalKpiUi.label, 'text-slate-500 dark:text-gray-400']">2ème Clôturé</span>
-                                <span :class="[globalKpiUi.value, 'text-emerald-600 dark:text-emerald-400']">{{
-                                    formatNombre(monitoringData.total.deuxiemeComptage.cloture) }}</span>
-                                <span :class="[globalKpiUi.pct, 'text-emerald-600 dark:text-emerald-400']">({{
-                                    formatPourcentage(monitoringData.total.deuxiemeComptage.cloturePourcentage)
-                                    }})</span>
-                            </div>
-                        </div>
-                        <div
-                            class="bg-white dark:bg-[#1b2e4b] border border-emerald-200/60 dark:border-emerald-800/60 hover:shadow-md transition-all duration-300 flex flex-col justify-center min-h-[3.25rem]"
-                            :class="globalKpiUi.card">
-                            <div class="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
-                                <MdiIcon name="mdi-check" :class="[globalKpiUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
-                                <span :class="[globalKpiUi.label, 'text-slate-500 dark:text-gray-400']">3ème Terminé</span>
-                                <span :class="[globalKpiUi.value, 'text-emerald-600 dark:text-emerald-400']">{{
-                                    formatNombre(monitoringData.total.troisiemeComptage.termine) }}</span>
-                                <span :class="[globalKpiUi.pct, 'text-emerald-600 dark:text-emerald-400']">({{
-                                    formatPourcentage(monitoringData.total.troisiemeComptage.terminePourcentage)
-                                    }})</span>
-                            </div>
-                        </div>
+                    </section>
+
+                    <!-- ===== Légende ===== -->
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400" aria-label="Légende">
+                        <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-emerald-500" />Terminé</span>
+                        <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-amber-400" />En cours</span>
+                        <span class="inline-flex items-center gap-1.5" title="En attente, affecté, prêt ou transféré au PDA sans être entamé"><span class="h-2.5 w-2.5 rounded-sm bg-slate-200 ring-1 ring-inset ring-slate-300 dark:bg-slate-700 dark:ring-slate-600" />Non lancé (y compris transféré au PDA)</span>
+                        <span class="ml-auto tabular-nums">{{ visibleZones.length }} / {{ zoneCount }} zone{{ zoneCount > 1 ? 's' : '' }}</span>
                     </div>
 
-                    <!-- Zones : étirées si peu de cartes ; compactes + scroll si beaucoup -->
-                    <div class="flex flex-1 flex-col min-h-0 min-w-0">
-                        <div :class="[zonesMosaicClass, zonesSparse ? 'flex-1 min-h-0 w-full' : '']">
-                        <div v-for="zone in monitoringData.zones" :key="zone.zoneId"
-                            class="min-w-0 bg-white dark:bg-[#1b2e4b] border border-slate-200/60 dark:border-gray-700 transition-all duration-300"
-                            :class="[
-                                zoneUi.card,
-                                zonesSparse
-                                    ? 'h-full min-h-0 flex flex-col overflow-hidden shadow-lg hover:shadow-xl'
-                                    : 'shadow-sm hover:shadow-lg'
-                            ]">
-                            <!-- En-tête zone -->
-                            <div class="flex items-center justify-between" :class="zoneUi.header">
-                                <span :class="[getLedClass(zone.statusLed, zonesSparse), 'animate-pulse']"></span>
-                                <div class="flex-1 min-w-0 text-center px-1">
-                                    <div :class="[zoneUi.title, 'text-slate-900 dark:text-white-light']">{{
-                                        zone.zoneDescription }}</div>
-                                </div>
-                            </div>
+                    <!-- ===== Aucun résultat ===== -->
+                    <div v-if="visibleZones.length === 0" class="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center dark:border-slate-600 dark:bg-slate-800">
+                        <MdiIcon name="mdi-map-search-outline" size="lg" class="text-slate-400" />
+                        <p class="mt-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                            {{ zoneCount === 0 ? 'Aucune zone avec des jobs pour ce magasin.' : 'Aucune zone ne correspond aux filtres.' }}
+                        </p>
+                        <button v-if="zoneCount > 0" type="button" class="mt-3 text-sm font-semibold text-primary hover:underline" @click="resetFilters">
+                            Réinitialiser les filtres
+                        </button>
+                    </div>
 
-                            <!-- Corps carte : typo plus grande si peu de zones -->
-                            <div
-                                class="flex flex-col"
-                                :class="[zoneUi.stack, zonesSparse ? 'flex-1 min-h-0 overflow-y-auto overscroll-contain' : '']"
-                            >
-                                <!-- JOB -->
-                                <div class="bg-slate-50 dark:bg-slate-700/50" :class="zoneUi.panel">
-                                    <div :class="['flex items-center justify-center', zoneUi.jobRow]">
-                                        <MdiIcon name="mdi-package-variant" :class="[zoneUi.icon, 'text-slate-500 dark:text-gray-400']" />
-                                        <span :class="[zoneUi.jobLbl, 'text-slate-500 dark:text-gray-400']">JOB</span>
-                                        <span :class="[zoneUi.jobNum, 'text-slate-900 dark:text-white-light']">
-                                            {{ formatNombre(zone.totalJobs) }} ({{
-                                            formatNombre(zone.totalEmplacements) }})
+                    <!-- ===== Vue cartes (grille fluide : 1 à N zones) ===== -->
+                    <section v-else-if="view === 'cartes'" aria-label="Zones" class="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))]">
+                        <article v-for="z in visibleZones" :key="z.id"
+                            class="flex flex-col rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
+                            <header class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <h3 class="truncate text-base font-semibold text-slate-900 dark:text-white" :title="z.name">{{ z.name }}</h3>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ zoneSubtitle(z) }}</p>
+                                </div>
+                                <span class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1" :class="STATE_META[z.state].badge">
+                                    <span class="h-1.5 w-1.5 rounded-full" :class="STATE_META[z.state].dot" />
+                                    {{ STATE_META[z.state].label }}
+                                </span>
+                            </header>
+
+                            <div class="mt-4 space-y-3">
+                                <div v-for="c in z.countings" :key="c.order">
+                                    <div class="mb-1 flex items-baseline justify-between text-xs">
+                                        <span class="font-medium text-slate-600 dark:text-slate-300">{{ countingLabel(c.order) }}</span>
+                                        <span class="tabular-nums text-slate-500 dark:text-slate-400">
+                                            <b class="text-slate-900 dark:text-white">{{ c.pctTermine }}%</b> · {{ c.termine }}/{{ c.total }}
                                         </span>
                                     </div>
-                                </div>
-
-                                <!-- 1er comptage -->
-                                <div class="bg-slate-50 dark:bg-slate-700/50" :class="zoneUi.panel">
-                                    <div :class="[zoneUi.panelTitle, 'text-slate-600 dark:text-gray-300']">
-                                        1er Comptage
-                                    </div>
-                                    <div :class="['flex', zoneUi.triple]">
-                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
-                                            <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <MdiIcon name="mdi-clock-outline" :class="[zoneUi.icon, 'text-[#FECD1C]']" />
-                                                <span :class="[zoneUi.lbl, 'text-[#FECD1C]']">Attente</span>
-                                                <span :class="[zoneUi.num, 'text-[#FECD1C]']">{{
-                                                    formatNombre(zone.premierComptage.nonEntame) }}</span>
-                                                <span :class="[zoneUi.pct, 'text-[#FECD1C]']">{{
-                                                    formatPourcentage(zone.premierComptage.nonEntamePourcentage)
-                                                    }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
-                                            <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <MdiIcon name="mdi-play-outline" :class="[zoneUi.icon, 'text-primary']" />
-                                                <span :class="[zoneUi.lbl, 'text-primary']">Entamé</span>
-                                                <span :class="[zoneUi.num, 'text-primary']">{{
-                                                    formatNombre(zone.premierComptage.enCours) }}</span>
-                                                <span :class="[zoneUi.pct, 'text-primary']">{{
-                                                    formatPourcentage(zone.premierComptage.enCoursPourcentage) }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
-                                            <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <MdiIcon name="mdi-check" :class="[zoneUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
-                                                <span :class="[zoneUi.lbl, 'text-emerald-600 dark:text-emerald-400']">Terminé</span>
-                                                <span :class="[zoneUi.num, 'text-emerald-600 dark:text-emerald-400']">{{
-                                                        formatNombre(zone.premierComptage.cloture) }}</span>
-                                                <span :class="[zoneUi.pct, 'text-emerald-600 dark:text-emerald-400']">{{
-                                                        formatPourcentage(zone.premierComptage.cloturePourcentage) }}</span>
-                                            </div>
-                                        </div>
+                                    <MonitoringProgressBar :progress="c" size="md" />
+                                    <div class="mt-1 flex flex-wrap gap-x-3 text-[11px] tabular-nums text-slate-500 dark:text-slate-400">
+                                        <span v-if="c.entame">{{ c.entame }} en cours</span>
+                                        <span v-if="c.nonLance">{{ c.nonLance }} non lancé{{ c.nonLance > 1 ? 's' : '' }}</span>
                                     </div>
                                 </div>
-
-                                <!-- 2e comptage -->
-                                <div class="bg-slate-50 dark:bg-slate-700/50" :class="zoneUi.panel">
-                                    <div :class="[zoneUi.panelTitle, 'text-slate-600 dark:text-gray-300']">
-                                        2ème Comptage
-                                    </div>
-                                    <div :class="['flex', zoneUi.triple]">
-                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
-                                            <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <MdiIcon name="mdi-clock-outline" :class="[zoneUi.icon, 'text-[#FECD1C]']" />
-                                                <span :class="[zoneUi.lbl, 'text-[#FECD1C]']">Attente</span>
-                                                <span :class="[zoneUi.num, 'text-[#FECD1C]']">{{
-                                                    formatNombre(zone.deuxiemeComptage.nonEntame) }}</span>
-                                                <span :class="[zoneUi.pct, 'text-[#FECD1C]']">{{
-                                                    formatPourcentage(zone.deuxiemeComptage.nonEntamePourcentage)
-                                                    }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
-                                            <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <MdiIcon name="mdi-play-outline" :class="[zoneUi.icon, 'text-primary']" />
-                                                <span :class="[zoneUi.lbl, 'text-primary']">Entamé</span>
-                                                <span :class="[zoneUi.num, 'text-primary']">{{
-                                                    formatNombre(zone.deuxiemeComptage.enCours) }}</span>
-                                                <span :class="[zoneUi.pct, 'text-primary']">{{
-                                                    formatPourcentage(zone.deuxiemeComptage.enCoursPourcentage)
-                                                    }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
-                                            <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <MdiIcon name="mdi-check" :class="[zoneUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
-                                                <span :class="[zoneUi.lbl, 'text-emerald-600 dark:text-emerald-400']">Terminé</span>
-                                                <span :class="[zoneUi.num, 'text-emerald-600 dark:text-emerald-400']">{{
-                                                        formatNombre(zone.deuxiemeComptage.cloture) }}</span>
-                                                <span :class="[zoneUi.pct, 'text-emerald-600 dark:text-emerald-400']">{{
-                                                        formatPourcentage(zone.deuxiemeComptage.cloturePourcentage)
-                                                    }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- 3e comptage -->
-                                <div class="bg-slate-50 dark:bg-slate-700/50" :class="zoneUi.panel">
-                                    <div :class="[zoneUi.panelTitle, 'text-slate-600 dark:text-gray-300']">
-                                        3ème Comptage
-                                    </div>
-                                    <div :class="['flex', zoneUi.triple]">
-                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
-                                            <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <MdiIcon name="mdi-clock-outline" :class="[zoneUi.icon, 'text-[#FECD1C]']" />
-                                                <span :class="[zoneUi.lbl, 'text-[#FECD1C]']">Attente</span>
-                                                <span :class="[zoneUi.num, 'text-[#FECD1C]']">{{
-                                                    formatNombre(zone.troisiemeComptage.nonEntame) }}</span>
-                                                <span :class="[zoneUi.pct, 'text-[#FECD1C]']">{{
-                                                    formatPourcentage(zone.troisiemeComptage.nonEntamePourcentage)
-                                                    }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
-                                            <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <MdiIcon name="mdi-play-outline" :class="[zoneUi.icon, 'text-primary']" />
-                                                <span :class="[zoneUi.lbl, 'text-primary']">Entamé</span>
-                                                <span :class="[zoneUi.num, 'text-primary']">{{
-                                                    formatNombre(zone.troisiemeComptage.enCours) }}</span>
-                                                <span :class="[zoneUi.pct, 'text-primary']">{{
-                                                    formatPourcentage(zone.troisiemeComptage.enCoursPourcentage)
-                                                    }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="bg-white dark:bg-[#0e1726]" :class="zoneUi.cell">
-                                            <div :class="['flex items-center', zoneUi.cellInner]">
-                                                <MdiIcon name="mdi-check" :class="[zoneUi.icon, 'text-emerald-600 dark:text-emerald-400']" />
-                                                <span :class="[zoneUi.lbl, 'text-emerald-600 dark:text-emerald-400']">Terminé</span>
-                                                <span :class="[zoneUi.num, 'text-emerald-600 dark:text-emerald-400']">{{
-                                                        formatNombre(zone.troisiemeComptage.termine) }}</span>
-                                                <span :class="[zoneUi.pct, 'text-emerald-600 dark:text-emerald-400']">{{
-                                                        formatPourcentage(zone.troisiemeComptage.terminePourcentage)
-                                                    }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                <p v-if="z.countings.length === 0" class="text-xs text-slate-400">Aucun comptage configuré.</p>
                             </div>
+                        </article>
+                    </section>
+
+                    <!-- ===== Vue tableau (adaptée aux nombreuses zones) ===== -->
+                    <section v-else aria-label="Zones" class="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                        <div class="max-h-[70vh] overflow-auto">
+                            <table class="w-full min-w-[640px] border-separate border-spacing-0 text-sm">
+                                <thead class="sticky top-0 z-10 bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500 dark:bg-slate-900 dark:text-slate-400">
+                                    <tr>
+                                        <th scope="col" class="sticky left-0 z-20 border-b border-slate-200 bg-slate-50 px-4 py-2.5 font-semibold dark:border-slate-700 dark:bg-slate-900">
+                                            <button type="button" class="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white" @click="sort = 'nom'">
+                                                Zone <MdiIcon v-if="sort === 'nom'" name="mdi-arrow-up" size="xs" />
+                                            </button>
+                                        </th>
+                                        <th scope="col" class="border-b border-slate-200 px-3 py-2.5 text-right font-semibold dark:border-slate-700">
+                                            <button type="button" class="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white" @click="sort = 'jobs_desc'">
+                                                Jobs <MdiIcon v-if="sort === 'jobs_desc'" name="mdi-arrow-down" size="xs" />
+                                            </button>
+                                        </th>
+                                        <th scope="col" class="hidden border-b border-slate-200 px-3 py-2.5 text-right font-semibold sm:table-cell dark:border-slate-700">Empl.</th>
+                                        <th v-for="o in vm.countingOrders" :key="`h${o}`" scope="col" class="min-w-[180px] border-b border-slate-200 px-3 py-2.5 font-semibold dark:border-slate-700">
+                                            <button type="button" class="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white" @click="toggleSortColumn('avancement_asc', 'avancement_desc')">
+                                                {{ countingLabel(o) }} <MdiIcon :name="sortIcon('avancement_asc', 'avancement_desc')" size="xs" />
+                                            </button>
+                                        </th>
+                                        <th scope="col" class="border-b border-slate-200 px-3 py-2.5 font-semibold dark:border-slate-700">État</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="z in visibleZones" :key="z.id" class="group">
+                                        <th scope="row" class="sticky left-0 border-b border-slate-100 bg-white px-4 py-2.5 text-left font-medium text-slate-900 group-hover:bg-slate-50 dark:border-slate-700/60 dark:bg-slate-800 dark:text-white dark:group-hover:bg-slate-700/40">
+                                            <span class="block max-w-[14rem] truncate" :title="z.name">{{ z.name }}</span>
+                                        </th>
+                                        <td class="border-b border-slate-100 px-3 py-2.5 text-right tabular-nums text-slate-700 group-hover:bg-slate-50 dark:border-slate-700/60 dark:text-slate-200 dark:group-hover:bg-slate-700/40">{{ fmt(z.jobs) }}</td>
+                                        <td class="hidden border-b border-slate-100 px-3 py-2.5 text-right tabular-nums text-slate-500 group-hover:bg-slate-50 sm:table-cell dark:border-slate-700/60 dark:text-slate-400 dark:group-hover:bg-slate-700/40">{{ fmt(z.emplacements) }}</td>
+                                        <td v-for="c in z.countings" :key="c.order" class="border-b border-slate-100 px-3 py-2.5 group-hover:bg-slate-50 dark:border-slate-700/60 dark:group-hover:bg-slate-700/40">
+                                            <div class="flex items-center gap-2">
+                                                <MonitoringProgressBar :progress="c" size="sm" class="flex-1" />
+                                                <span class="w-10 text-right text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ c.pctTermine }}%</span>
+                                            </div>
+                                            <div class="mt-0.5 text-[11px] tabular-nums text-slate-400">{{ c.termine }}/{{ c.total }}<template v-if="c.entame"> · {{ c.entame }} en cours</template></div>
+                                        </td>
+                                        <td class="border-b border-slate-100 px-3 py-2.5 group-hover:bg-slate-50 dark:border-slate-700/60 dark:group-hover:bg-slate-700/40">
+                                            <span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ring-1" :class="STATE_META[z.state].badge">
+                                                <span class="h-1.5 w-1.5 rounded-full" :class="STATE_META[z.state].dot" />{{ STATE_META[z.state].label }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                                <tfoot class="sticky bottom-0 bg-slate-50 font-semibold dark:bg-slate-900">
+                                    <tr>
+                                        <th scope="row" class="sticky left-0 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white">Total</th>
+                                        <td class="border-t border-slate-200 px-3 py-2.5 text-right tabular-nums dark:border-slate-700 dark:text-white">{{ fmt(vm.totals.jobs) }}</td>
+                                        <td class="hidden border-t border-slate-200 px-3 py-2.5 text-right tabular-nums sm:table-cell dark:border-slate-700 dark:text-slate-300">{{ fmt(vm.totals.emplacements) }}</td>
+                                        <td v-for="c in vm.totals.countings" :key="`t${c.order}`" class="border-t border-slate-200 px-3 py-2.5 dark:border-slate-700">
+                                            <div class="flex items-center gap-2">
+                                                <MonitoringProgressBar :progress="c" size="sm" class="flex-1" />
+                                                <span class="w-10 text-right text-xs tabular-nums text-slate-900 dark:text-white">{{ c.pctTermine }}%</span>
+                                            </div>
+                                        </td>
+                                        <td class="border-t border-slate-200 dark:border-slate-700" />
+                                    </tr>
+                                </tfoot>
+                            </table>
                         </div>
-                    </div>
-                    </div>
-                </div>
+                    </section>
+                </template>
             </div>
-
-            <!-- État vide -->
-            <div v-else class="flex items-center justify-center bg-white dark:bg-[#1b2e4b] py-8">
-                <div class="text-center">
-                    <button @click="chargerDonnees"
-                        class="w-8 h-8 flex items-center justify-center text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 transition-all rounded hover:bg-slate-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/50">
-                        ↻
-                    </button>
-                </div>
-            </div>
-
-        </div> <!-- Fin du contenu scrollable -->
+        </div>
     </div>
 </template>
-
-<style scoped>
-/* Animation pulse subtile pour les LEDs */
-@keyframes pulse {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.5;
-    }
-}
-
-.animate-pulse {
-    animation: pulse 2s ease-in-out infinite;
-}
-
-/* Animation shimmer pour le skeleton loading */
-@keyframes shimmer {
-    0% {
-        background-position: -200% 0;
-    }
-
-    100% {
-        background-position: 200% 0;
-    }
-}
-
-/* Amélioration du skeleton avec animation shimmer */
-.monitoring-container .bg-slate-200,
-.monitoring-container .bg-slate-300 {
-    background: linear-gradient(90deg, #e2e8f0 25%, #cbd5e1 50%, #e2e8f0 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-}
-
-.dark .monitoring-container .bg-slate-200,
-.dark .monitoring-container .bg-slate-300 {
-    background: linear-gradient(90deg, #374151 25%, #4a5568 50%, #374151 75%);
-    background-size: 200% 100%;
-}
-
-/* Styles pour la scrollbar personnalisée */
-.scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: rgb(148 163 184) transparent;
-}
-
-.scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgb(148 163 184);
-    border-radius: 3px;
-    border: none;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: rgb(100 116 139);
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb:active {
-    background-color: rgb(71 85 105);
-}
-
-.dark .scrollbar-thin {
-    scrollbar-color: rgb(71 85 105) transparent;
-}
-
-.dark .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgb(71 85 105);
-}
-
-.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: rgb(51 65 85);
-}
-
-.dark .scrollbar-thin::-webkit-scrollbar-thumb:active {
-    background-color: rgb(30 41 59);
-}
-
-/* Styles pour les boutons */
-button {
-    transition: all 0.2s ease-in-out;
-}
-
-button:focus {
-    outline: none;
-}
-
-button:disabled {
-    cursor: not-allowed;
-}
-
-/* Amélioration de l'animation de spin */
-.animate-spin {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-/* Variables CSS pour adaptation responsive - Base (mobile/tablette) */
-.monitoring-container {
-    --monitoring-padding: 0.25rem;
-    --monitoring-gap: 0.25rem;
-    --monitoring-text-xs: 0.75rem;
-    --monitoring-text-sm: 0.875rem;
-    --monitoring-text-xl: 1.25rem;
-    --monitoring-text-10: 0.625rem;
-    --monitoring-icon-sm: 0.75rem;
-    --monitoring-icon-md: 1rem;
-    --monitoring-icon-led: 0.5rem;
-    /* Variables pour le scroll */
-    --scroll-behavior: smooth;
-    --scroll-padding: 1rem;
-}
-
-/* Laptop (1366px - 1919px) */
-@media screen and (min-width: 1366px) and (max-width: 1919px) {
-    .monitoring-container {
-        --monitoring-padding: 0.5rem;
-        --monitoring-gap: 0.5rem;
-        --monitoring-text-xs: 0.875rem;
-        --monitoring-text-sm: 1rem;
-        --monitoring-text-xl: 1.5rem;
-        --monitoring-text-10: 0.75rem;
-        --monitoring-icon-sm: 1rem;
-        --monitoring-icon-md: 1.25rem;
-        --monitoring-icon-led: 0.625rem;
-    }
-
-    /* Amélioration du scroll sur laptop */
-    .scrollbar-thin::-webkit-scrollbar {
-        width: 8px;
-    }
-}
-
-/* Desktop (1920px - 2559px) */
-@media screen and (min-width: 1920px) and (max-width: 2559px) {
-    .monitoring-container {
-        --monitoring-padding: 0.75rem;
-        --monitoring-gap: 0.75rem;
-        --monitoring-text-xs: 1rem;
-        --monitoring-text-sm: 1.125rem;
-        --monitoring-text-xl: 1.75rem;
-        --monitoring-text-10: 0.875rem;
-        --monitoring-icon-sm: 1.25rem;
-        --monitoring-icon-md: 1.5rem;
-        --monitoring-icon-led: 0.75rem;
-    }
-
-    /* Scroll amélioré sur desktop */
-    .scrollbar-thin::-webkit-scrollbar {
-        width: 10px;
-    }
-
-    .scrollbar-thin::-webkit-scrollbar-thumb {
-        border-radius: 5px;
-    }
-}
-
-/* Tableau interactif / 4K (2560px - 3839px) */
-@media screen and (min-width: 2560px) and (max-width: 3839px) {
-    .monitoring-container {
-        --monitoring-padding: 1rem;
-        --monitoring-gap: 1rem;
-        --monitoring-text-xs: 1.125rem;
-        --monitoring-text-sm: 1.25rem;
-        --monitoring-text-xl: 2rem;
-        --monitoring-text-10: 1rem;
-        --monitoring-icon-sm: 1.5rem;
-        --monitoring-icon-md: 2rem;
-        --monitoring-icon-led: 1rem;
-    }
-
-    /* Scroll optimisé pour 4K */
-    .scrollbar-thin::-webkit-scrollbar {
-        width: 12px;
-    }
-
-    .scrollbar-thin::-webkit-scrollbar-thumb {
-        border-radius: 6px;
-    }
-}
-
-/* Optimisation spécifique pour 4K (3840x2160) */
-@media screen and (min-width: 3840px) {
-    .monitoring-container {
-        --monitoring-padding: 1.5rem;
-        --monitoring-gap: 1.5rem;
-        --monitoring-text-xs: 1.25rem;
-        --monitoring-text-sm: 1.5rem;
-        --monitoring-text-xl: 2.5rem;
-        --monitoring-text-10: 1.125rem;
-        --monitoring-icon-sm: 2rem;
-        --monitoring-icon-md: 2.5rem;
-        --monitoring-icon-led: 1.25rem;
-        max-width: 3840px;
-        margin: 0 auto;
-    }
-
-    /* Scroll ultra-large pour 4K */
-    .scrollbar-thin::-webkit-scrollbar {
-        width: 16px;
-    }
-
-    .scrollbar-thin::-webkit-scrollbar-thumb {
-        border-radius: 8px;
-    }
-}
-
-/* Classes utilitaires pour utiliser les variables */
-.monitoring-text-xs {
-    font-size: var(--monitoring-text-xs);
-}
-
-.monitoring-text-sm {
-    font-size: var(--monitoring-text-sm);
-}
-
-.monitoring-text-xl {
-    font-size: var(--monitoring-text-xl);
-}
-
-.monitoring-text-10 {
-    font-size: var(--monitoring-text-10);
-}
-
-.monitoring-icon-sm {
-    width: var(--monitoring-icon-sm);
-    height: var(--monitoring-icon-sm);
-}
-
-.monitoring-icon-md {
-    width: var(--monitoring-icon-md);
-    height: var(--monitoring-icon-md);
-}
-
-.monitoring-icon-led {
-    width: var(--monitoring-icon-led);
-    height: var(--monitoring-icon-led);
-}
-
-.monitoring-padding {
-    padding: var(--monitoring-padding);
-}
-
-.monitoring-gap {
-    gap: var(--monitoring-gap);
-}
-
-/* Utilitaires pour le scroll */
-.scroll-smooth {
-    scroll-behavior: var(--scroll-behavior);
-}
-
-.scroll-padding {
-    scroll-padding: var(--scroll-padding);
-}
-
-/* Amélioration de l'accessibilité */
-@media (prefers-reduced-motion: reduce) {
-
-    .animate-pulse,
-    .animate-spin,
-    .scrollbar-thin::-webkit-scrollbar-thumb,
-    button,
-    .monitoring-container>div {
-        animation: none !important;
-        transition: none !important;
-    }
-}
-
-/* Focus visible pour l'accessibilité */
-.focus-visible:focus-visible {
-    outline: 2px solid rgb(59 130 246);
-    outline-offset: 2px;
-}
-
-/* Amélioration du contraste en mode sombre */
-.dark .monitoring-container {
-    --monitoring-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-}
-
-.monitoring-container>div {
-    box-shadow: var(--monitoring-shadow, 0 1px 3px rgba(0, 0, 0, 0.1));
-}
-</style>

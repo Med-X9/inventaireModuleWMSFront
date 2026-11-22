@@ -24,6 +24,7 @@ import { useQueryModel } from '@SMATCH-Digital-dev/vue-system-design'
 import { convertQueryModelToQueryParams } from '@SMATCH-Digital-dev/vue-system-design'
 import type { QueryModel } from '@SMATCH-Digital-dev/vue-system-design'
 import type { Store, PlanningAction, ViewModeType } from '@/interfaces/planningManagement'
+import { singleFlight } from '@/composables/useAsyncAction'
 
 // ===== IMPORTS ICÔNES =====
 
@@ -551,8 +552,8 @@ export function usePlanningManagement(inventoryRef?: string) {
     /**
      * Navigation vers la page d'affectation
      */
-    const goToAffectation = (reference: string): void => {
-        router.push({ name: 'inventory-affecter', params: { reference } })
+    const goToAffectation = (reference: string, warehouse: string): void => {
+        router.push({ name: 'inventory-affecter', params: { reference, warehouse } })
     }
 
     /**
@@ -568,8 +569,8 @@ export function usePlanningManagement(inventoryRef?: string) {
     /**
      * Navigation vers la page de suivi des jobs
      */
-    const goToJobTracking = (reference: string): void => {
-        router.push({ name: 'inventory-job-tracking', params: { reference } })
+    const goToJobTracking = (reference: string, warehouse: string): void => {
+        router.push({ name: 'inventory-job-tracking', params: { reference, warehouse } })
     }
 
     /**
@@ -636,7 +637,7 @@ export function usePlanningManagement(inventoryRef?: string) {
     /**
      * Export des données en CSV
      */
-    const handleExportCsv = async () => {
+    const handleExportCsv = singleFlight(async () => {
         try {
             if (!inventoryId.value) {
                 await alertService.error({ text: 'ID d\'inventaire non disponible' })
@@ -663,12 +664,12 @@ export function usePlanningManagement(inventoryRef?: string) {
         } catch (error: any) {
             alertService.error({ text: error?.message || 'Erreur lors de l\'export CSV' })
         }
-    }
+    })
 
     /**
      * Export des données en Excel
      */
-    const handleExportExcel = async () => {
+    const handleExportExcel = singleFlight(async () => {
         try {
             if (!inventoryId.value) {
                 await alertService.error({ text: 'ID d\'inventaire non disponible' })
@@ -695,7 +696,7 @@ export function usePlanningManagement(inventoryRef?: string) {
         } catch (error: any) {
             alertService.error({ text: error?.message || 'Erreur lors de l\'export Excel' })
         }
-    }
+    })
 
     // ===== RETURN =====
 
