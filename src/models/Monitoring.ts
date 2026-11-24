@@ -12,9 +12,21 @@ export interface CountingAssignment {
 }
 
 /**
+ * Avancement des emplacements d'un comptage (renvoyé par l'API de monitoring)
+ */
+export interface LocationProgressFields {
+    count_mode?: string | null
+    total_emplacements?: number
+    emplacements_termines?: number
+    emplacements_termines_percent?: number
+    emplacements_en_attente?: number
+    emplacements_en_attente_percent?: number
+}
+
+/**
  * Réponse d'un comptage dans le monitoring par zone
  */
-export interface CountingMonitoring {
+export interface CountingMonitoring extends LocationProgressFields {
     counting_id: number
     counting_reference: string
     counting_order: number
@@ -49,7 +61,7 @@ export interface MonitoringByZoneResponse {
 /**
  * Réponse d'un comptage dans le monitoring global
  */
-export interface GlobalCountingMonitoring {
+export interface GlobalCountingMonitoring extends LocationProgressFields {
     counting_id: number
     counting_order: number
     jobs_termines: number

@@ -230,6 +230,10 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                             <div class="mt-1.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
                                 {{ fmt(c.termine) }} / {{ fmt(c.total) }} jobs terminés
                             </div>
+                            <div v-if="c.emplacements" class="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                                <b class="text-slate-900 dark:text-white">{{ fmt(c.emplacements.termines) }}</b> / {{ fmt(c.emplacements.total) }} emplacements terminés
+                                ({{ c.emplacements.pctTermines }}%) · {{ fmt(c.emplacements.enAttente) }} en attente
+                            </div>
                         </div>
                     </section>
 
@@ -280,6 +284,12 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                                         <span v-if="c.entame">{{ c.entame }} en cours</span>
                                         <span v-if="c.nonLance">{{ c.nonLance }} non lancé{{ c.nonLance > 1 ? 's' : '' }}</span>
                                     </div>
+                                    <div v-if="c.emplacements" class="mt-1 text-[11px] tabular-nums text-slate-500 dark:text-slate-400"
+                                        :title="c.emplacements.countMode ? `Comptage ${c.emplacements.countMode}` : undefined">
+                                        Emplacements :
+                                        <b class="text-emerald-600 dark:text-emerald-400">{{ c.emplacements.termines }}/{{ c.emplacements.total }} terminés ({{ c.emplacements.pctTermines }}%)</b>
+                                        · {{ c.emplacements.enAttente }} en attente ({{ c.emplacements.pctEnAttente }}%)
+                                    </div>
                                 </div>
                                 <p v-if="z.countings.length === 0" class="text-xs text-slate-400">Aucun comptage configuré.</p>
                             </div>
@@ -324,6 +334,9 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                                                 <span class="w-10 text-right text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ c.pctTermine }}%</span>
                                             </div>
                                             <div class="mt-0.5 text-[11px] tabular-nums text-slate-400">{{ c.termine }}/{{ c.total }}<template v-if="c.entame"> · {{ c.entame }} en cours</template></div>
+                                            <div v-if="c.emplacements" class="text-[11px] tabular-nums text-slate-500 dark:text-slate-400" :title="c.emplacements.countMode ? `Comptage ${c.emplacements.countMode}` : undefined">
+                                                Empl. : <b class="text-emerald-600 dark:text-emerald-400">{{ c.emplacements.termines }}/{{ c.emplacements.total }} ({{ c.emplacements.pctTermines }}%)</b> · {{ c.emplacements.enAttente }} en attente
+                                            </div>
                                         </td>
                                         <td class="border-b border-slate-100 px-3 py-2.5 group-hover:bg-slate-50 dark:border-slate-700/60 dark:group-hover:bg-slate-700/40">
                                             <span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ring-1" :class="STATE_META[z.state].badge">

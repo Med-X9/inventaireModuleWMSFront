@@ -6,19 +6,32 @@
  * - Règle métier : un job transféré au PDA mais pas encore entamé est « non lancé ».
  *   non lancé = jobs − (terminé + entamé)  (en attente, affectés, prêts et transférés).
  */
-import type { ZoneMonitoringResponse } from '@/models/Monitoring'
+import type { LocationProgressFields, ZoneMonitoringResponse } from '@/models/Monitoring'
 
 /** Sous-ensemble de la réponse global-monitoring utilisé pour les totaux */
 export interface GlobalTotalsInput {
     total_jobs?: number
     total_equipes?: number
-    countings?: Array<{ counting_order: number; jobs_termines?: number }>
+    countings?: Array<{ counting_order: number; jobs_termines?: number } & LocationProgressFields>
 }
 
 export type ZoneState = 'termine' | 'en_cours' | 'non_demarre'
 
+/** Avancement des emplacements d'un comptage (par article ou en vrac) */
+export interface LocationProgress {
+    /** Mode du comptage : « par article » ou « en vrac » */
+    countMode: string
+    total: number
+    termines: number
+    enAttente: number
+    pctTermines: number
+    pctEnAttente: number
+}
+
 export interface CountingProgress {
     order: number
+    /** Emplacements terminés / en attente (absent si l'API ne les fournit pas) */
+    emplacements?: LocationProgress
     total: number
     termine: number
     entame: number
@@ -75,6 +88,38 @@ export function buildCountingProgress(order: number, total: number, termine: num
     }
 }
 
+/** Construit l'avancement des emplacements depuis les champs de l'API (undefined si absents) */
+export function buildLocationProgress(src?: LocationProgressFields | null): LocationProgress | undefined {
+    if (!src || src.total_emplacements === undefined || src.total_emplacements === null) return undefined
+    const total = Number(src.total_emplacements)
+    const termines = Number(src.emplacements_termines ?? 0)
+    const enAttente = Number(src.emplacements_en_attente ?? Math.max(0, total - termines))
+    return {
+        countMode: src.count_mode ?? '',
+        total,
+        termines,
+        enAttente,
+        pctTermines: Number(src.emplacements_termines_percent ?? pct(termines, total)),
+        pctEnAttente: Number(src.emplacements_en_attente_percent ?? pct(enAttente, total)),
+    }
+}
+
+function sumLocationProgress(list: Array<LocationProgress | undefined>): LocationProgress | undefined {
+    const items = list.filter((x): x is LocationProgress => !!x)
+    if (!items.length) return undefined
+    const total = items.reduce((s, x) => s + x.total, 0)
+    const termines = items.reduce((s, x) => s + x.termines, 0)
+    const enAttente = items.reduce((s, x) => s + x.enAttente, 0)
+    return {
+        countMode: items[0].countMode,
+        total,
+        termines,
+        enAttente,
+        pctTermines: Math.round((total > 0 ? (termines / total) * 100 : 0) * 100) / 100,
+        pctEnAttente: Math.round((total > 0 ? (enAttente / total) * 100 : 0) * 100) / 100,
+    }
+}
+
 function zoneState(countings: CountingProgress[]): ZoneState {
     if (countings.length === 0) return 'non_demarre'
     if (countings.every((c) => c.total > 0 && c.termine >= c.total)) return 'termine'
@@ -104,7 +149,9 @@ export function buildMonitoringViewModel(
         const jobs = Number(z.nombre_jobs ?? 0)
         const countings = countingOrders.map((order) => {
             const c = z.countings?.find((x) => Number(x.counting_order) === order)
-            return buildCountingProgress(order, jobs, countOf(c, 'TERMINE'), countOf(c, 'ENTAME'), countOf(c, 'TRANSFERT'))
+            const progress = buildCountingProgress(order, jobs, countOf(c, 'TERMINE'), countOf(c, 'ENTAME'), countOf(c, 'TRANSFERT'))
+            progress.emplacements = buildLocationProgress(c)
+            return progress
         })
         return {
             id: Number(z.zone_id),
@@ -126,15 +173,20 @@ export function buildMonitoringViewModel(
         if (useGlobal) {
             // Seuls les jobs terminés sont fournis sans double comptage par l'API globale
             const g = globalRaw?.countings?.find((c) => Number(c.counting_order) === order)
-            return buildCountingProgress(order, globalJobs, Number(g?.jobs_termines ?? 0), 0, 0)
+            const progress = buildCountingProgress(order, globalJobs, Number(g?.jobs_termines ?? 0), 0, 0)
+            // Emplacements : l'API globale compte chaque emplacement une seule fois
+            progress.emplacements = buildLocationProgress(g) ?? sumLocationProgress(zones.map((zone) => zone.countings[i].emplacements))
+            return progress
         }
-        return buildCountingProgress(
+        const fallback = buildCountingProgress(
             order,
             sum((z) => z.countings[i].total),
             sum((z) => z.countings[i].termine),
             sum((z) => z.countings[i].entame),
             sum((z) => z.countings[i].transfert)
         )
+        fallback.emplacements = sumLocationProgress(zones.map((zone) => zone.countings[i].emplacements))
+        return fallback
     })
 
     return {
