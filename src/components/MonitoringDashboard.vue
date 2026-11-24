@@ -10,6 +10,7 @@ import {
     type ZoneProgress,
 } from '@/composables/monitoring/zoneProgress'
 import MdiIcon from '@/components/MdiIcon.vue'
+import MonitoringLocationStat from '@/components/MonitoringLocationStat.vue'
 import MonitoringProgressBar from '@/components/MonitoringProgressBar.vue'
 
 // ===== PROPS =====
@@ -230,10 +231,7 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                             <div class="mt-1.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
                                 {{ fmt(c.termine) }} / {{ fmt(c.total) }} jobs terminés
                             </div>
-                            <div v-if="c.emplacements" class="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
-                                <b class="text-slate-900 dark:text-white">{{ fmt(c.emplacements.termines) }}</b> / {{ fmt(c.emplacements.total) }} emplacements terminés
-                                ({{ c.emplacements.pctTermines }}%) · {{ fmt(c.emplacements.enAttente) }} en attente
-                            </div>
+                            <MonitoringLocationStat v-if="c.emplacements" :stat="c.emplacements" class="mt-3 border-t border-slate-100 pt-2.5 dark:border-slate-700" />
                         </div>
                     </section>
 
@@ -241,6 +239,7 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400" aria-label="Légende">
                         <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-emerald-500" />Terminé</span>
                         <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-amber-400" />En cours</span>
+                        <span class="inline-flex items-center gap-1.5" title="Barre « Emplacements » : emplacements dont la saisie a été envoyée"><span class="h-2.5 w-2.5 rounded-sm bg-sky-500" />Emplacement terminé</span>
                         <span class="inline-flex items-center gap-1.5" title="En attente, affecté, prêt ou transféré au PDA sans être entamé"><span class="h-2.5 w-2.5 rounded-sm bg-slate-200 ring-1 ring-inset ring-slate-300 dark:bg-slate-700 dark:ring-slate-600" />Non lancé (y compris transféré au PDA)</span>
                         <span class="ml-auto tabular-nums">{{ visibleZones.length }} / {{ zoneCount }} zone{{ zoneCount > 1 ? 's' : '' }}</span>
                     </div>
@@ -284,12 +283,7 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                                         <span v-if="c.entame">{{ c.entame }} en cours</span>
                                         <span v-if="c.nonLance">{{ c.nonLance }} non lancé{{ c.nonLance > 1 ? 's' : '' }}</span>
                                     </div>
-                                    <div v-if="c.emplacements" class="mt-1 text-[11px] tabular-nums text-slate-500 dark:text-slate-400"
-                                        :title="c.emplacements.countMode ? `Comptage ${c.emplacements.countMode}` : undefined">
-                                        Emplacements :
-                                        <b class="text-emerald-600 dark:text-emerald-400">{{ c.emplacements.termines }}/{{ c.emplacements.total }} terminés ({{ c.emplacements.pctTermines }}%)</b>
-                                        · {{ c.emplacements.enAttente }} en attente ({{ c.emplacements.pctEnAttente }}%)
-                                    </div>
+                                    <MonitoringLocationStat v-if="c.emplacements" :stat="c.emplacements" compact class="mt-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-900/40" />
                                 </div>
                                 <p v-if="z.countings.length === 0" class="text-xs text-slate-400">Aucun comptage configuré.</p>
                             </div>
@@ -334,9 +328,7 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                                                 <span class="w-10 text-right text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ c.pctTermine }}%</span>
                                             </div>
                                             <div class="mt-0.5 text-[11px] tabular-nums text-slate-400">{{ c.termine }}/{{ c.total }}<template v-if="c.entame"> · {{ c.entame }} en cours</template></div>
-                                            <div v-if="c.emplacements" class="text-[11px] tabular-nums text-slate-500 dark:text-slate-400" :title="c.emplacements.countMode ? `Comptage ${c.emplacements.countMode}` : undefined">
-                                                Empl. : <b class="text-emerald-600 dark:text-emerald-400">{{ c.emplacements.termines }}/{{ c.emplacements.total }} ({{ c.emplacements.pctTermines }}%)</b> · {{ c.emplacements.enAttente }} en attente
-                                            </div>
+                                            <MonitoringLocationStat v-if="c.emplacements" :stat="c.emplacements" compact class="mt-1.5" />
                                         </td>
                                         <td class="border-b border-slate-100 px-3 py-2.5 group-hover:bg-slate-50 dark:border-slate-700/60 dark:group-hover:bg-slate-700/40">
                                             <span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ring-1" :class="STATE_META[z.state].badge">
