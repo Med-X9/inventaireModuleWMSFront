@@ -19,12 +19,12 @@
             aria-valuemin="0"
             aria-valuemax="100"
             :aria-label="ariaLabel">
-            <div class="h-full bg-sky-500 transition-[width] duration-500 ease-out" :style="{ width: Math.min(100, stat.pctTermines) + '%' }" />
+            <div class="h-full bg-[var(--m-loc)] transition-[width] duration-500 ease-out" :style="{ width: Math.min(100, stat.pctTermines) + '%' }" />
         </div>
 
         <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] tabular-nums text-slate-500 dark:text-slate-400">
             <span class="inline-flex items-center gap-1">
-                <span class="h-2 w-2 rounded-sm bg-sky-500" />
+                <span class="h-2 w-2 rounded-sm bg-[var(--m-loc)]" />
                 <b class="text-slate-900 dark:text-white">{{ fmt(stat.termines) }}</b> terminé{{ stat.termines > 1 ? 's' : '' }}
             </span>
             <span class="inline-flex items-center gap-1">

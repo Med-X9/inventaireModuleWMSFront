@@ -34,6 +34,28 @@ export interface CountingMonitoring extends LocationProgressFields {
 }
 
 /**
+ * Équipe (assignment) d'un job pour un comptage
+ */
+export interface JobTeamResponse {
+    assignment_id: number
+    team_name: string
+    members?: string[]
+    counting_order: number | null
+    status: string
+}
+
+/**
+ * Job d'une zone avec ses équipes
+ */
+export interface ZoneJobResponse {
+    job_id: number
+    job_reference: string
+    status: string
+    nombre_emplacements: number
+    equipes: JobTeamResponse[]
+}
+
+/**
  * Réponse d'une zone dans le monitoring
  */
 export interface ZoneMonitoringResponse {
@@ -45,6 +67,7 @@ export interface ZoneMonitoringResponse {
     nombre_jobs: number
     nombre_emplacements: number
     countings: CountingMonitoring[]
+    jobs?: ZoneJobResponse[]
 }
 
 /**

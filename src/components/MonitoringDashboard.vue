@@ -12,6 +12,8 @@ import {
 import MdiIcon from '@/components/MdiIcon.vue'
 import MonitoringLocationStat from '@/components/MonitoringLocationStat.vue'
 import MonitoringProgressBar from '@/components/MonitoringProgressBar.vue'
+import MonitoringZoneJobs from '@/components/MonitoringZoneJobs.vue'
+import { MONITORING_CSS_VARS } from '@/constants/monitoringColors'
 
 // ===== PROPS =====
 interface Props {
@@ -64,9 +66,9 @@ const stateCounts = computed(() => {
 })
 
 const STATE_META: Record<ZoneState, { label: string; dot: string; badge: string }> = {
-    en_cours: { label: 'En cours', dot: 'bg-amber-400', badge: 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30' },
-    non_demarre: { label: 'Non démarrée', dot: 'bg-slate-400', badge: 'bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-700/60 dark:text-slate-300 dark:ring-slate-600' },
-    termine: { label: 'Terminée', dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' },
+    en_cours: { label: 'En cours', dot: 'bg-[var(--m-progress)]', badge: 'bg-[var(--m-progress)]/10 text-amber-700 ring-[var(--m-progress)]/40 dark:text-amber-300' },
+    non_demarre: { label: 'Non démarrée', dot: 'bg-[var(--m-wait)]', badge: 'bg-[var(--m-wait)]/15 text-slate-600 ring-[var(--m-wait)]/50 dark:text-slate-300' },
+    termine: { label: 'Terminée', dot: 'bg-[var(--m-done)]', badge: 'bg-[var(--m-done)]/10 text-emerald-700 ring-[var(--m-done)]/40 dark:text-emerald-300' },
 }
 const FILTERS: Array<{ key: ZoneState | 'toutes'; label: string }> = [
     { key: 'toutes', label: 'Toutes' },
@@ -80,6 +82,13 @@ const toggleSortColumn = (asc: ZoneSort, desc: ZoneSort) => {
 }
 const sortIcon = (asc: ZoneSort, desc: ZoneSort) =>
     sort.value === asc ? 'mdi-arrow-up' : sort.value === desc ? 'mdi-arrow-down' : 'mdi-unfold-more-horizontal'
+
+const expandedZones = ref<Set<number>>(new Set())
+const toggleZone = (id: number) => {
+    const next = new Set(expandedZones.value)
+    if (!next.delete(id)) next.add(id)
+    expandedZones.value = next
+}
 
 const resetFilters = () => {
     search.value = ''
@@ -97,7 +106,7 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
 </script>
 
 <template>
-    <div class="h-full min-h-0 flex flex-col bg-slate-100 dark:bg-slate-900">
+    <div class="h-full min-h-0 flex flex-col bg-slate-100 dark:bg-slate-900" :style="MONITORING_CSS_VARS">
         <!-- ===== Barre d'outils ===== -->
         <div class="flex-shrink-0 border-b border-slate-200 bg-white/90 px-3 py-2.5 backdrop-blur dark:border-slate-700 dark:bg-slate-900/90 sm:px-4">
             <div class="flex flex-wrap items-center gap-2">
@@ -203,44 +212,42 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                 </div>
 
                 <template v-else-if="hasData">
-                    <!-- ===== Indicateurs globaux ===== -->
-                    <section aria-label="Indicateurs globaux" class="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr))]">
+                    <!-- ===== Indicateurs globaux (compacts) ===== -->
+                    <section aria-label="Indicateurs globaux" class="flex flex-wrap items-stretch gap-2">
                         <div v-for="kpi in [
-                            { label: 'Zones', value: zoneCount, icon: 'mdi-map-marker-radius-outline' },
-                            { label: 'Jobs', value: vm.totals.jobs, icon: 'mdi-package-variant-closed' },
-                            { label: 'Emplacements', value: vm.totals.emplacements, icon: 'mdi-grid' },
-                            { label: 'Équipes', value: vm.totals.equipes, icon: 'mdi-account-group-outline' },
+                            { label: 'Zones', value: zoneCount, icon: 'mdi-map-marker-radius-outline', color: 'var(--m-wait)' },
+                            { label: 'Jobs', value: vm.totals.jobs, icon: 'mdi-package-variant-closed', color: 'var(--m-done)' },
+                            { label: 'Emplacements', value: vm.totals.emplacements, icon: 'mdi-grid', color: 'var(--m-loc)' },
+                            { label: 'Équipes', value: vm.totals.equipes, icon: 'mdi-account-group-outline', color: 'var(--m-team)' },
                         ]" :key="kpi.label"
-                            class="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                                <MdiIcon :name="kpi.icon" size="sm" />
+                            class="inline-flex items-center gap-2 rounded-lg border border-slate-200/80 bg-white py-1 pl-1.5 pr-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                            <span class="flex h-6 w-6 items-center justify-center rounded-md text-slate-800" :style="{ backgroundColor: `color-mix(in srgb, ${kpi.color} 35%, transparent)` }">
+                                <MdiIcon :name="kpi.icon" size="xs" />
                             </span>
-                            <div class="min-w-0">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ kpi.label }}</div>
-                                <div class="text-xl font-bold tabular-nums text-slate-900 dark:text-white">{{ fmt(kpi.value) }}</div>
-                            </div>
+                            <span class="text-base font-bold tabular-nums leading-none text-slate-900 dark:text-white">{{ fmt(kpi.value) }}</span>
+                            <span class="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ kpi.label }}</span>
                         </div>
 
                         <div v-for="c in vm.totals.countings" :key="`kpi-c${c.order}`"
-                            class="rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                            class="min-w-[210px] flex-1 rounded-lg border border-slate-200/80 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-800">
                             <div class="flex items-baseline justify-between gap-2">
                                 <div class="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ countingLabel(c.order) }}</div>
-                                <div class="text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{{ c.pctTermine }}%</div>
+                                <div class="text-base font-bold tabular-nums text-slate-900 dark:text-white">{{ c.pctTermine }}%</div>
                             </div>
-                            <MonitoringProgressBar :progress="c" size="md" class="mt-2" />
-                            <div class="mt-1.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
-                                {{ fmt(c.termine) }} / {{ fmt(c.total) }} jobs terminés
+                            <MonitoringProgressBar :progress="c" size="sm" class="mt-1" />
+                            <div class="mt-1 text-[11px] tabular-nums text-slate-500 dark:text-slate-400">
+                                {{ fmt(c.termine) }}/{{ fmt(c.total) }} jobs
                             </div>
-                            <MonitoringLocationStat v-if="c.emplacements" :stat="c.emplacements" class="mt-3 border-t border-slate-100 pt-2.5 dark:border-slate-700" />
+                            <MonitoringLocationStat v-if="c.emplacements" :stat="c.emplacements" compact class="mt-1.5 border-t border-slate-100 pt-1.5 dark:border-slate-700" />
                         </div>
                     </section>
 
                     <!-- ===== Légende ===== -->
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400" aria-label="Légende">
-                        <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-emerald-500" />Terminé</span>
-                        <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-amber-400" />En cours</span>
-                        <span class="inline-flex items-center gap-1.5" title="Barre « Emplacements » : emplacements dont la saisie a été envoyée"><span class="h-2.5 w-2.5 rounded-sm bg-sky-500" />Emplacement terminé</span>
-                        <span class="inline-flex items-center gap-1.5" title="En attente, affecté, prêt ou transféré au PDA sans être entamé"><span class="h-2.5 w-2.5 rounded-sm bg-slate-200 ring-1 ring-inset ring-slate-300 dark:bg-slate-700 dark:ring-slate-600" />Non lancé (y compris transféré au PDA)</span>
+                        <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--m-done)]" />Terminé</span>
+                        <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--m-progress)]" />En cours</span>
+                        <span class="inline-flex items-center gap-1.5" title="Barre « Emplacements » : emplacements dont la saisie a été envoyée"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--m-loc)]" />Emplacement terminé</span>
+                        <span class="inline-flex items-center gap-1.5" title="En attente, affecté, prêt ou transféré au PDA sans être entamé"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--m-wait)]/40 ring-1 ring-inset ring-[var(--m-wait)]" />Non lancé (y compris transféré au PDA)</span>
                         <span class="ml-auto tabular-nums">{{ visibleZones.length }} / {{ zoneCount }} zone{{ zoneCount > 1 ? 's' : '' }}</span>
                     </div>
 
@@ -258,7 +265,7 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                     <!-- ===== Vue cartes (grille fluide : 1 à N zones) ===== -->
                     <section v-else-if="view === 'cartes'" aria-label="Zones" class="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))]">
                         <article v-for="z in visibleZones" :key="z.id"
-                            class="flex flex-col rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
+                            class="flex flex-col rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
                             <header class="flex items-start justify-between gap-2">
                                 <div class="min-w-0">
                                     <h3 class="truncate text-base font-semibold text-slate-900 dark:text-white" :title="z.name">{{ z.name }}</h3>
@@ -270,7 +277,7 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                                 </span>
                             </header>
 
-                            <div class="mt-4 space-y-3">
+                            <div class="mt-3 space-y-2.5">
                                 <div v-for="c in z.countings" :key="c.order">
                                     <div class="mb-1 flex items-baseline justify-between text-xs">
                                         <span class="font-medium text-slate-600 dark:text-slate-300">{{ countingLabel(c.order) }}</span>
@@ -287,6 +294,17 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                                 </div>
                                 <p v-if="z.countings.length === 0" class="text-xs text-slate-400">Aucun comptage configuré.</p>
                             </div>
+
+                            <details class="group/jobs mt-3 border-t border-slate-100 pt-2 dark:border-slate-700">
+                                <summary class="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
+                                    <MdiIcon name="mdi-chevron-right" size="xs" class="transition-transform group-open/jobs:rotate-90" />
+                                    Jobs et équipes
+                                    <span class="ml-auto inline-flex items-center gap-1 rounded-full bg-[var(--m-team)]/25 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-800 dark:text-slate-100">
+                                        <MdiIcon name="mdi-account-group-outline" size="xs" />{{ z.equipes }}
+                                    </span>
+                                </summary>
+                                <MonitoringZoneJobs :jobs="z.jobsDetail" class="mt-1" />
+                            </details>
                         </article>
                     </section>
 
@@ -307,6 +325,7 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                                             </button>
                                         </th>
                                         <th scope="col" class="hidden border-b border-slate-200 px-3 py-2.5 text-right font-semibold sm:table-cell dark:border-slate-700">Empl.</th>
+                                        <th scope="col" class="border-b border-slate-200 px-3 py-2.5 text-right font-semibold dark:border-slate-700">Équipes</th>
                                         <th v-for="o in vm.countingOrders" :key="`h${o}`" scope="col" class="min-w-[180px] border-b border-slate-200 px-3 py-2.5 font-semibold dark:border-slate-700">
                                             <button type="button" class="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white" @click="toggleSortColumn('avancement_asc', 'avancement_desc')">
                                                 {{ countingLabel(o) }} <MdiIcon :name="sortIcon('avancement_asc', 'avancement_desc')" size="xs" />
@@ -316,12 +335,19 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="z in visibleZones" :key="z.id" class="group">
+                                    <template v-for="z in visibleZones" :key="z.id">
+                                    <tr class="group">
                                         <th scope="row" class="sticky left-0 border-b border-slate-100 bg-white px-4 py-2.5 text-left font-medium text-slate-900 group-hover:bg-slate-50 dark:border-slate-700/60 dark:bg-slate-800 dark:text-white dark:group-hover:bg-slate-700/40">
-                                            <span class="block max-w-[14rem] truncate" :title="z.name">{{ z.name }}</span>
+                                            <button type="button" class="flex max-w-[14rem] items-center gap-1 text-left" :aria-expanded="expandedZones.has(z.id)" title="Afficher les jobs et équipes" @click="toggleZone(z.id)">
+                                                <MdiIcon name="mdi-chevron-right" size="xs" class="shrink-0 transition-transform" :class="{ 'rotate-90': expandedZones.has(z.id) }" />
+                                                <span class="truncate">{{ z.name }}</span>
+                                            </button>
                                         </th>
                                         <td class="border-b border-slate-100 px-3 py-2.5 text-right tabular-nums text-slate-700 group-hover:bg-slate-50 dark:border-slate-700/60 dark:text-slate-200 dark:group-hover:bg-slate-700/40">{{ fmt(z.jobs) }}</td>
                                         <td class="hidden border-b border-slate-100 px-3 py-2.5 text-right tabular-nums text-slate-500 group-hover:bg-slate-50 sm:table-cell dark:border-slate-700/60 dark:text-slate-400 dark:group-hover:bg-slate-700/40">{{ fmt(z.emplacements) }}</td>
+                                        <td class="border-b border-slate-100 px-3 py-2.5 text-right group-hover:bg-slate-50 dark:border-slate-700/60 dark:group-hover:bg-slate-700/40">
+                                            <span class="inline-flex items-center gap-1 rounded-full bg-[var(--m-team)]/25 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-slate-800 dark:text-slate-100"><MdiIcon name="mdi-account-group-outline" size="xs" />{{ z.equipes }}</span>
+                                        </td>
                                         <td v-for="c in z.countings" :key="c.order" class="border-b border-slate-100 px-3 py-2.5 group-hover:bg-slate-50 dark:border-slate-700/60 dark:group-hover:bg-slate-700/40">
                                             <div class="flex items-center gap-2">
                                                 <MonitoringProgressBar :progress="c" size="sm" class="flex-1" />
@@ -336,12 +362,19 @@ const zoneSubtitle = (z: ZoneProgress) => `${fmt(z.jobs)} job${z.jobs > 1 ? 's' 
                                             </span>
                                         </td>
                                     </tr>
+                                    <tr v-if="expandedZones.has(z.id)">
+                                        <td :colspan="vm.countingOrders.length + 5" class="border-b border-slate-100 bg-slate-50/60 px-4 py-2 dark:border-slate-700/60 dark:bg-slate-900/40">
+                                            <MonitoringZoneJobs :jobs="z.jobsDetail" />
+                                        </td>
+                                    </tr>
+                                    </template>
                                 </tbody>
                                 <tfoot class="sticky bottom-0 bg-slate-50 font-semibold dark:bg-slate-900">
                                     <tr>
                                         <th scope="row" class="sticky left-0 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white">Total</th>
                                         <td class="border-t border-slate-200 px-3 py-2.5 text-right tabular-nums dark:border-slate-700 dark:text-white">{{ fmt(vm.totals.jobs) }}</td>
                                         <td class="hidden border-t border-slate-200 px-3 py-2.5 text-right tabular-nums sm:table-cell dark:border-slate-700 dark:text-slate-300">{{ fmt(vm.totals.emplacements) }}</td>
+                                        <td class="border-t border-slate-200 px-3 py-2.5 text-right tabular-nums dark:border-slate-700 dark:text-white">{{ fmt(vm.totals.equipes) }}</td>
                                         <td v-for="c in vm.totals.countings" :key="`t${c.order}`" class="border-t border-slate-200 px-3 py-2.5 dark:border-slate-700">
                                             <div class="flex items-center gap-2">
                                                 <MonitoringProgressBar :progress="c" size="sm" class="flex-1" />

@@ -24,8 +24,8 @@ const segments = computed(() => {
     const p = props.progress
     const total = p.total || 1
     return [
-        { key: 'termine', value: p.termine, class: 'bg-emerald-500' },
-        { key: 'entame', value: p.entame, class: 'bg-amber-400' },
+        { key: 'termine', value: p.termine, class: 'bg-[var(--m-done)]' },
+        { key: 'entame', value: p.entame, class: 'bg-[var(--m-progress)]' },
     ]
         .filter((s) => s.value > 0)
         .map((s) => ({ ...s, width: (s.value / total) * 100 }))

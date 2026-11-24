@@ -43,6 +43,22 @@ export interface CountingProgress {
     pctTermine: number
 }
 
+export interface ZoneJobTeam {
+    assignmentId: number
+    name: string
+    members: string[]
+    order: number | null
+    status: string
+}
+
+export interface ZoneJob {
+    id: number
+    reference: string
+    status: string
+    emplacements: number
+    teams: ZoneJobTeam[]
+}
+
 export interface ZoneProgress {
     id: number
     reference: string
@@ -50,6 +66,8 @@ export interface ZoneProgress {
     jobs: number
     emplacements: number
     equipes: number
+    /** Jobs de la zone avec leurs équipes */
+    jobsDetail: ZoneJob[]
     countings: CountingProgress[]
     /** Comptage « courant » : le plus avancé ayant une activité, sinon le 1er */
     current: CountingProgress | null
@@ -153,13 +171,28 @@ export function buildMonitoringViewModel(
             progress.emplacements = buildLocationProgress(c)
             return progress
         })
+        const jobsDetail: ZoneJob[] = (z.jobs ?? []).map((j) => ({
+            id: Number(j.job_id),
+            reference: j.job_reference,
+            status: j.status,
+            emplacements: Number(j.nombre_emplacements ?? 0),
+            teams: (j.equipes ?? []).map((t) => ({
+                assignmentId: Number(t.assignment_id),
+                name: t.team_name,
+                members: t.members ?? [],
+                order: t.counting_order ?? null,
+                status: t.status,
+            })),
+        }))
+        const distinctTeams = new Set(jobsDetail.flatMap((j) => j.teams.map((t) => t.name))).size
         return {
             id: Number(z.zone_id),
             reference: z.zone_reference ?? '',
             name: z.zone_name || z.zone_reference || `Zone ${z.zone_id}`,
             jobs,
             emplacements: Number(z.nombre_emplacements ?? 0),
-            equipes: Number(z.nombre_equipes ?? 0),
+            equipes: distinctTeams || Number(z.nombre_equipes ?? 0),
+            jobsDetail,
             countings,
             current: currentCounting(countings),
             state: zoneState(countings),
