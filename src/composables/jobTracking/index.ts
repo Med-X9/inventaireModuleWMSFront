@@ -122,6 +122,8 @@ export interface LocationStat {
     baseTotal?: number
 }
 
+const ordinal = (order: number): string => (order === 1 ? '1er' : `${order}e`)
+
 const buildLocationStat = (job: any, prefix: string): LocationStat | null => {
     const total = job[`${prefix}total`]
     if (total === undefined || total === null) return null
@@ -656,9 +658,10 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
         })
 
         // Nb d’écarts par comptage : discrepancy_count_1er, …_3er, …_4er → countingDiscrepancies['1'], … (une colonne par ordre)
-        sessionOrders.forEach((order) => {
+        // 2e vs 1er = colonne « Nb écarts 2e vs 1er » ; ensuite 3e vs 2e, 4e vs 3e, 5e vs 4e…
+        sessionOrders.filter((order) => order >= 3).forEach((order) => {
             cols.push({
-                headerName: `Nb écarts (${getSessionColumnHeader(order)})`,
+                headerName: `Nb écarts (${ordinal(order)} vs ${ordinal(order - 1)})`,
                 field: `counting_${order}_discrepancy`,
                 sortable: true,
                 filterable: false,
@@ -666,7 +669,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 width: 130,
                 minWidth: 100,
                 align: 'center' as const,
-                description: `Nombre d’écarts pour le comptage ${order} (discrepancy_count_${order}er si fourni par l’API)`,
+                description: `Écarts du ${ordinal(order)} comptage par rapport au ${ordinal(order - 1)} comptage`,
                 cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
                     let rowData: JobTrackingRow | null = null
 
@@ -755,7 +758,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
         // Colonne : Taux d'écart global (tous comptages)
         cols.push({
-            headerName: 'Taux écart global',
+            headerName: 'Taux écart (2e vs 1er)',
             field: 'discrepancyRate',
             sortable: true,
             filterable: false,
@@ -765,7 +768,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             align: 'center' as const,
             visible: true,
             editable: false,
-            description: 'Taux d\'écart global tous comptages confondus (en %)',
+            description: 'Taux d\'écart du 2e comptage par rapport au 1er (en %)',
             valueFormatter: (params: any) => {
                 const rate = params.value
                 if (rate === null || rate === undefined) return '-'
@@ -803,7 +806,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
 
         // Colonne : Nombre d'écarts global (tous comptages)
         cols.push({
-            headerName: 'Nb écarts global',
+            headerName: 'Nb écarts (2e vs 1er)',
             field: 'discrepancyCount',
             sortable: true,
             filterable: false,
@@ -813,7 +816,7 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             align: 'center' as const,
             visible: true,
             editable: false,
-            description: 'Nombre d\'écarts global tous comptages confondus',
+            description: 'Nombre d\'écarts du 2e comptage par rapport au 1er',
             cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
                 let rowData: JobTrackingRow | null = null
 
