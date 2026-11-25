@@ -1234,7 +1234,8 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 if (pendingEventsQueue.length > 0) {
                     const firstEvent = pendingEventsQueue[0]
                     pendingEventsQueue.length = 0
-                    await processEventDirectly(firstEvent.eventType, firstEvent.queryModel)
+                    // Premier chargement : type 'init' pour ne pas être ignoré comme événement vide (page 1, sans filtre)
+                    await processEventDirectly('init', firstEvent.queryModel)
                 } else {
                     const defaultQueryModel: QueryModel = {
                         page: 1,
