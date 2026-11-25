@@ -34,6 +34,16 @@ export const inventoryRoutes: RouteRecordRaw[] = [
         meta: { requiresAuth: true },
     },
     {
+        path: '/inventory/:reference/:warehouse/team-tracking',
+        name: 'inventory-team-tracking',
+        component: () => import(/* webpackChunkName: "inventory-team-tracking" */ '@/views/Inventory/Results/TeamTracking.vue'),
+        props: (route) => ({
+            reference: route.params.reference as string,
+            warehouse: route.params.warehouse as string,
+        }),
+        meta: { requiresAuth: true },
+    },
+    {
         path: '/inventory/:reference/:warehouse/pdf-finished',
         name: 'inventory-pdf-finished',
         component: () => import(/* webpackChunkName: "inventory-pdf-finished" */ '@/views/Inventory/Results/FinishedAssignmentsPdf.vue'),

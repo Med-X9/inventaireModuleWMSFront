@@ -321,7 +321,7 @@ const actionButtons = computed<ButtonGroupButton[]>(() => {
         }
     })
 
-    const goToPdfPage = (routeName: 'inventory-pdf-finished' | 'inventory-pdf-transfer') => {
+    const goToPdfPage = (routeName: 'inventory-pdf-finished' | 'inventory-pdf-transfer' | 'inventory-team-tracking') => {
         const warehouseRef =
             selectedWarehouse.value?.reference || selectedWarehouse.value?.warehouse_name
         if (!inventoryReference.value || !warehouseRef) {
@@ -332,6 +332,17 @@ const actionButtons = computed<ButtonGroupButton[]>(() => {
             params: { reference: inventoryReference.value, warehouse: warehouseRef }
         })
     }
+
+    buttons.push({
+        id: 'team-tracking',
+        label: 'Suivi par équipe',
+        icon: 'mdi-account-group-outline',
+        variant: 'default',
+        class: ACTION_BUTTON_CLASS,
+        disabled: !inventoryReference.value || !selectedWarehouse.value,
+        visible: true,
+        onClick: () => goToPdfPage('inventory-team-tracking')
+    })
 
     buttons.push({
         id: 'pdf-finished-assignments-page',
