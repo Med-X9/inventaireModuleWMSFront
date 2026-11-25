@@ -32,7 +32,7 @@
             <DataTable
                 :columns="columns"
                 :rowDataProp="rows"
-                :actions="[]"
+                :actions="actions"
                 :loading="loading"
                 :enableDynamicColumns="false"
                 :pagination="true"
@@ -40,19 +40,39 @@
                 emptyMessage="Aucune équipe avec des jobs affectés"
             />
         </div>
+
+        <TeamReassignDialog v-model="showReassign" :team="reassignTeam" @done="load" />
     </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { DataTable } from '@SMATCH-Digital-dev/vue-system-design'
-import { useTeamTracking } from '@/composables/useTeamTracking'
+import type { ActionConfig } from '@SMATCH-Digital-dev/vue-system-design'
+import TeamReassignDialog from '@/components/Inventory/TeamReassignDialog.vue'
+import { useTeamTracking, type TeamTrackingRow } from '@/composables/useTeamTracking'
 
 const props = defineProps<{ reference: string; warehouse: string }>()
 const router = useRouter()
 
 const { rows, columns, loading, errorMessage, warehouseLabel, load } = useTeamTracking(props.reference, props.warehouse)
+
+const showReassign = ref(false)
+const reassignTeam = ref<any>(null)
+
+const actions: ActionConfig<TeamTrackingRow>[] = [
+    {
+        label: 'Réaffecter',
+        icon: 'mdi-account-switch-outline',
+        color: 'primary',
+        onClick: (row) => {
+            reassignTeam.value = { session_id: row.sessionId, team: row.team, rawJobs: row.rawJobs }
+            showReassign.value = true
+        },
+        show: (row) => row.rawJobs.some((j) => j.status !== 'TERMINE')
+    }
+]
 
 const goToJobTracking = () => {
     void router.push({

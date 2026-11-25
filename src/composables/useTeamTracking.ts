@@ -30,7 +30,10 @@ interface TeamApi {
 
 export interface TeamTrackingRow {
     id: string
+    sessionId: number
     team: string
+    /** Lignes brutes (job, comptage, statut) pour la réaffectation */
+    rawJobs: TeamJobApi[]
     jobs: Array<Record<string, any>>
     jobsEnAttente: number
     jobsEntame: number
@@ -113,6 +116,8 @@ export function useTeamTracking(inventoryReference: string, warehouseParam: stri
             const teams: TeamApi[] = response.data?.data ?? []
             rows.value = teams.map((t) => ({
                 id: `team-${t.session_id}`,
+                sessionId: t.session_id,
+                rawJobs: t.jobs,
                 team: t.team_name ? `${t.team} (${t.team_name})` : t.team,
                 jobs: t.jobs.map((j) => ({
                     id: `${t.session_id}-${j.job_id}-${j.counting_order}`,

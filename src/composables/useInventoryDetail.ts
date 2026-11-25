@@ -639,130 +639,137 @@ export function useInventoryDetail(inventoryReference: string) {
     }
 
     /**
-     * Actions magasin selon le cycle Setting :
-     * Tous statuts → import stock
-     * EN ATTENTE → planif / affectation / import planning / lancer
-     * LANCEE → annuler lancement / terminer / suivi / KPI / résultats / monitoring
-     * TERMINEE → analyser
-     * ANALYSER → écarts stock / clôturer (MAGASIN)
-     * GENERAL/TOURNANT → clôturer depuis LANCEE
+     * Actions magasin par statut :
+     * EN ATTENTE → import planification, import stock, planification, affectation
+     * LANCEE (en réalisation) → monitoring, résultats, suivi équipe, suivi jobs, KPI, annuler, terminer
+     * TERMINEE → import stock, résultats, analyser (MAGASIN)
+     * ANALYSER → import stock, résultats, écarts stock, clôturer
+     * CLOTURE → import stock, résultats, écarts stock
+     * GENERAL/TOURNANT : clôture depuis LANCEE (comportement historique)
      */
-    const magasinsActions = computed<ActionConfig<MagasinTableRow>[]>(() => [
-        {
-            label: 'Planification',
-            icon: 'mdi-calendar-outline',
-            color: 'info',
-            onClick: (row) => goToWarehousePlanning(row.reference || ''),
-            show: (row) => getMagasinStatus(row) === 'EN ATTENTE',
-        },
-        {
-            label: 'Affectation',
-            icon: 'mdi-account-group-outline',
-            color: 'info',
-            onClick: (row) => goToWarehouseAffectation(row.reference || ''),
-            show: (row) => getMagasinStatus(row) === 'EN ATTENTE',
-        },
-        {
-            label: 'Import stock',
-            icon: 'mdi-file-excel-outline',
-            color: 'secondary',
-            onClick: (row) => goToWarehouseStockImport(row.reference || ''),
-            show: () => true,
-        },
-        {
-            label: 'Import planning',
-            icon: 'mdi-file-upload-outline',
-            color: 'primary',
-            onClick: () => {
-                openPlanningImportModal()
+    const magasinsActions = computed<ActionConfig<MagasinTableRow>[]>(() => {
+        const is = (row: MagasinTableRow, ...statuses: string[]) => statuses.includes(getMagasinStatus(row))
+        return [
+            // ----- EN ATTENTE -----
+            {
+                label: 'Import planification',
+                icon: 'mdi-file-upload-outline',
+                color: 'primary',
+                onClick: () => {
+                    openPlanningImportModal()
+                },
+                show: (row) => is(row, 'EN ATTENTE'),
             },
-            show: (row) => getMagasinStatus(row) === 'EN ATTENTE',
-        },
-        {
-            label: 'Lancer',
-            icon: 'mdi-play-outline',
-            color: 'success',
-            onClick: async (row) => {
-                await launchInventoryByWarehouseName(row.nom)
+            {
+                label: 'Planification',
+                icon: 'mdi-calendar-outline',
+                color: 'info',
+                onClick: (row) => goToWarehousePlanning(row.reference || ''),
+                show: (row) => is(row, 'EN ATTENTE'),
             },
-            show: (row) => getMagasinStatus(row) === 'EN ATTENTE',
-        },
-        {
-            label: 'Annuler lancement',
-            icon: 'mdi-close-circle-outline',
-            color: 'danger',
-            onClick: async (row) => {
-                await cancelWarehouseLaunchByRow(row)
+            {
+                label: 'Affectation',
+                icon: 'mdi-account-group-outline',
+                color: 'info',
+                onClick: (row) => goToWarehouseAffectation(row.reference || ''),
+                show: (row) => is(row, 'EN ATTENTE'),
             },
-            show: (row) => getMagasinStatus(row) === 'LANCEE',
-        },
-        {
-            label: 'Terminer',
-            icon: 'mdi-check-circle-outline',
-            color: 'success',
-            onClick: async (row) => {
-                await termineWarehouseByRow(row)
+            // ----- Import stock : EN ATTENTE, TERMINEE, ANALYSER, CLOTURE -----
+            {
+                label: 'Import stock',
+                icon: 'mdi-file-excel-outline',
+                color: 'secondary',
+                onClick: (row) => goToWarehouseStockImport(row.reference || ''),
+                show: (row) => is(row, 'EN ATTENTE', 'TERMINEE', 'ANALYSER', 'CLOTURE'),
             },
-            show: (row) => getMagasinStatus(row) === 'LANCEE',
-        },
-        {
-            label: 'Suivi',
-            icon: 'mdi-clipboard-text-outline',
-            color: 'info',
-            onClick: (row) => goToWarehouseTracking(row.reference || ''),
-            show: (row) => getMagasinStatus(row) === 'LANCEE',
-        },
-        {
-            label: 'KPI',
-            icon: 'mdi-view-dashboard-outline',
-            color: 'primary',
-            onClick: (row) => goToWarehouseKpiDashboard(row.reference || ''),
-            show: (row) => getMagasinStatus(row) === 'LANCEE',
-        },
-        {
-            label: 'Résultats',
-            icon: 'mdi-chart-bar',
-            color: 'primary',
-            onClick: (row) => goToWarehouseResults(row.reference || ''),
-            show: (row) => ['LANCEE', 'TERMINEE', 'ANALYSER', 'CLOTURE'].includes(getMagasinStatus(row)),
-        },
-        {
-            label: 'Monitoring',
-            icon: 'mdi-chart-box-outline',
-            color: 'info',
-            onClick: (row) => goToWarehouseMonitoring(row.reference || ''),
-            show: (row) => getMagasinStatus(row) === 'LANCEE',
-        },
-        {
-            label: 'Analyser',
-            icon: 'mdi-chart-timeline-variant',
-            color: 'warning',
-            onClick: async (row) => {
-                await analyserWarehouseByRow(row)
+            // ----- LANCEE (en réalisation) -----
+            {
+                label: 'Monitoring',
+                icon: 'mdi-chart-box-outline',
+                color: 'info',
+                onClick: (row) => goToWarehouseMonitoring(row.reference || ''),
+                show: (row) => is(row, 'LANCEE'),
             },
-            show: (row) => getMagasinStatus(row) === 'TERMINEE',
-        },
-        {
-            label: 'Écarts stock',
-            icon: 'mdi-scale-balance',
-            color: 'warning',
-            onClick: (row) => goToWarehouseStockGaps(row.reference || ''),
-            show: (row) => ['ANALYSER', 'CLOTURE'].includes(getMagasinStatus(row)),
-        },
-        {
-            label: 'Clôturer',
-            icon: 'mdi-lock-outline',
-            color: 'secondary',
-            onClick: async (row) => {
-                await closeWarehouseByRow(row)
+            // ----- Résultats : LANCEE, TERMINEE, ANALYSER, CLOTURE -----
+            {
+                label: 'Résultats',
+                icon: 'mdi-chart-bar',
+                color: 'primary',
+                onClick: (row) => goToWarehouseResults(row.reference || ''),
+                show: (row) => is(row, 'LANCEE', 'TERMINEE', 'ANALYSER', 'CLOTURE'),
             },
-            show: (row) => {
-                const status = getMagasinStatus(row)
-                if (isInventoryTypeMagasin.value) return status === 'ANALYSER'
-                return status === 'LANCEE'
+            {
+                label: 'Suivi équipe',
+                icon: 'mdi-account-group-outline',
+                color: 'info',
+                onClick: (row) => goToWarehouseTeamTracking(row.reference || ''),
+                show: (row) => is(row, 'LANCEE'),
             },
-        },
-    ])
+            {
+                label: 'Suivi jobs',
+                icon: 'mdi-clipboard-text-outline',
+                color: 'info',
+                onClick: (row) => goToWarehouseTracking(row.reference || ''),
+                show: (row) => is(row, 'LANCEE'),
+            },
+            {
+                label: 'KPIs',
+                icon: 'mdi-view-dashboard-outline',
+                color: 'primary',
+                onClick: (row) => goToWarehouseKpiDashboard(row.reference || ''),
+                show: (row) => is(row, 'LANCEE'),
+            },
+            {
+                label: 'Annuler',
+                icon: 'mdi-close-circle-outline',
+                color: 'danger',
+                onClick: async (row) => {
+                    await cancelWarehouseLaunchByRow(row)
+                },
+                show: (row) => is(row, 'LANCEE'),
+            },
+            {
+                label: 'Terminer',
+                icon: 'mdi-check-circle-outline',
+                color: 'success',
+                onClick: async (row) => {
+                    await termineWarehouseByRow(row)
+                },
+                show: (row) => is(row, 'LANCEE'),
+            },
+            // ----- TERMINEE -----
+            {
+                label: 'Analyser',
+                icon: 'mdi-chart-timeline-variant',
+                color: 'warning',
+                onClick: async (row) => {
+                    await analyserWarehouseByRow(row)
+                },
+                show: (row) => is(row, 'TERMINEE'),
+            },
+            // ----- ANALYSER / CLOTURE -----
+            {
+                label: 'Écarts stock',
+                icon: 'mdi-scale-balance',
+                color: 'warning',
+                onClick: (row) => goToWarehouseStockGaps(row.reference || ''),
+                show: (row) => is(row, 'ANALYSER', 'CLOTURE'),
+            },
+            {
+                label: 'Clôturer',
+                icon: 'mdi-lock-outline',
+                color: 'secondary',
+                onClick: async (row) => {
+                    await closeWarehouseByRow(row)
+                },
+                show: (row) => {
+                    // MAGASIN : depuis ANALYSER ; autres types : depuis LANCEE (historique)
+                    if (isInventoryTypeMagasin.value) return is(row, 'ANALYSER')
+                    return is(row, 'LANCEE')
+                },
+            },
+        ]
+    })
 
     // ===== NAVIGATION WAREHOUSE =====
     const goToWarehousePlanning = (warehouseReference: string) => {
@@ -792,6 +799,12 @@ export function useInventoryDetail(inventoryReference: string) {
     const goToWarehouseTracking = (warehouseReference: string) => {
         router.push({
             name: 'inventory-job-tracking',
+            params: { reference: inventoryReference, warehouse: warehouseReference }
+        })
+    }
+    const goToWarehouseTeamTracking = (warehouseReference: string) => {
+        router.push({
+            name: 'inventory-team-tracking',
             params: { reference: inventoryReference, warehouse: warehouseReference }
         })
     }
