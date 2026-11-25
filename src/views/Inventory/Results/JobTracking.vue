@@ -50,9 +50,9 @@
                 :rowDataProp="rows"
                 :actions="[]"
                 :currentPageProp="pagination.current_page"
-                :totalPagesProp="pagination.total_pages"
-                :totalItemsProp="trackingTotalItems"
-                :pageSizeProp="pagination.page_size"
+                :totalPagesProp="tableReady ? pagination.total_pages : undefined"
+                :totalItemsProp="tableReady ? trackingTotalItems : undefined"
+                :pageSizeProp="tableReady ? pagination.page_size : undefined"
                 :rowSelection="true"
                 :customDataTableParams="trackingCustomParams"
                 v-on="trackingTableEvents"
@@ -102,7 +102,7 @@
  */
 
 // ===== IMPORTS VUE =====
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 // ===== IMPORTS ROUTER =====
 import { useRoute, useRouter } from 'vue-router'
@@ -402,6 +402,16 @@ const mountTracking = async () => {
 
 onMounted(() => {
     void mountTracking()
+})
+
+/**
+ * Les props de pagination ne sont passées au DataTable qu'après son montage : à l'initialisation,
+ * ses watchers `immediate` appellent updatePaginationInfo avant sa déclaration
+ * (« Cannot access 'x' before initialization »).
+ */
+const tableReady = ref(false)
+watch(trackingTableRef, (table) => {
+    if (table && !tableReady.value) void nextTick(() => { tableReady.value = true })
 })
 
 /**
