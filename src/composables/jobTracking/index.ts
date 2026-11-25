@@ -734,23 +734,6 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             }
         } as any)
 
-        // Emplacements terminés / en attente du job (une ligne par job) + détail par comptage
-        cols.push({
-            headerName: 'Emplacements',
-            field: 'locationStats',
-            sortable: false,
-            filterable: false,
-            dataType: 'text' as ColumnDataType,
-            width: 190,
-            minWidth: 160,
-            align: 'center' as const,
-            allowWrap: true,
-            description: 'Emplacements terminés et en attente du job, tous comptages confondus',
-            cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
-                const rowData = (row && typeof row === 'object' ? row : paramsOrValue?.data ?? paramsOrValue) as JobTrackingRow | null
-                return renderLocationStat(rowData?.locationStats)
-            }) as any
-        })
         sessionOrders.forEach((order) => {
             cols.push({
                 headerName: `Emplacements (${getSessionColumnHeader(order)})`,
