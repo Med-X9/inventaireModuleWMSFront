@@ -410,8 +410,16 @@ onMounted(() => {
  * (« Cannot access 'x' before initialization »).
  */
 const tableReady = ref(false)
+const markTableReady = () => {
+    if (!tableReady.value) void nextTick(() => { tableReady.value = true })
+}
+// Activé quand le tableau est monté ET que les lignes (donc les totaux) sont chargées
+watch([trackingTableRef, () => rows.value.length], ([table, count]) => {
+    if (table && count > 0) markTableReady()
+})
+// Cas sans ligne : ne pas bloquer la pagination indéfiniment
 watch(trackingTableRef, (table) => {
-    if (table && !tableReady.value) void nextTick(() => { tableReady.value = true })
+    if (table) setTimeout(markTableReady, 3000)
 })
 
 /**
