@@ -97,6 +97,46 @@ export interface JobTrackingRow {
      * Données d'écarts par comptage (discrepancy_count_3er, discrepancy_count_4er, etc.)
      */
     countingDiscrepancies: Record<string, number | null>
+    /** Emplacements terminés / en attente du job (tous comptages) */
+    locationStats: LocationStat | null
+    /** Emplacements terminés / en attente par ordre de comptage */
+    countingLocationStats: Record<string, LocationStat>
+}
+
+/** Avancement des emplacements (terminés / en attente + pourcentages) */
+export interface LocationStat {
+    total: number
+    termines: number
+    enAttente: number
+    pctTermines: number
+    pctEnAttente: number
+}
+
+const buildLocationStat = (job: any, prefix: string): LocationStat | null => {
+    const total = job[`${prefix}total`]
+    if (total === undefined || total === null) return null
+    return {
+        total: Number(total),
+        termines: Number(job[`${prefix}termines`] ?? 0),
+        enAttente: Number(job[`${prefix}en_attente`] ?? 0),
+        pctTermines: Number(job[`${prefix}termines_percent`] ?? 0),
+        pctEnAttente: Number(job[`${prefix}en_attente_percent`] ?? 0)
+    }
+}
+
+/** Rendu HTML compact : « x terminés · y en attente (p%) » + mini-barre */
+const renderLocationStat = (stat: LocationStat | null | undefined): string => {
+    if (!stat || stat.total === 0) return '-'
+    const done = Math.min(100, stat.pctTermines)
+    return (
+        `<div style="min-width:120px;text-align:left">` +
+        `<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600">` +
+        `<span>${stat.termines}/${stat.total}</span><span>${stat.pctTermines}%</span></div>` +
+        `<div style="height:5px;border-radius:3px;background:#e2e8f0;overflow:hidden;margin:2px 0">` +
+        `<div style="height:100%;width:${done}%;background:#4A90E2"></div></div>` +
+        `<div style="font-size:11px;color:#64748b">${stat.termines} terminé${stat.termines > 1 ? 's' : ''} · ` +
+        `${stat.enAttente} en attente (${stat.pctEnAttente}%)</div></div>`
+    )
 }
 
 /**
@@ -637,6 +677,42 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             })
         })
 
+        // Emplacements terminés / en attente du job (une ligne par job) + détail par comptage
+        cols.push({
+            headerName: 'Emplacements',
+            field: 'locationStats',
+            sortable: false,
+            filterable: false,
+            dataType: 'text' as ColumnDataType,
+            width: 190,
+            minWidth: 160,
+            align: 'center' as const,
+            allowWrap: true,
+            description: 'Emplacements terminés et en attente du job, tous comptages confondus',
+            cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
+                const rowData = (row && typeof row === 'object' ? row : paramsOrValue?.data ?? paramsOrValue) as JobTrackingRow | null
+                return renderLocationStat(rowData?.locationStats)
+            }) as any
+        })
+        sessionOrders.forEach((order) => {
+            cols.push({
+                headerName: `Emplacements (${getSessionColumnHeader(order)})`,
+                field: `counting_${order}_locations`,
+                sortable: false,
+                filterable: false,
+                dataType: 'text' as ColumnDataType,
+                width: 190,
+                minWidth: 160,
+                align: 'center' as const,
+                allowWrap: true,
+                description: `Emplacements terminés et en attente du comptage ${order}`,
+                cellRenderer: ((paramsOrValue: any, column?: any, row?: any) => {
+                    const rowData = (row && typeof row === 'object' ? row : paramsOrValue?.data ?? paramsOrValue) as JobTrackingRow | null
+                    return renderLocationStat(rowData?.countingLocationStats?.[String(order)])
+                }) as any
+            })
+        })
+
         // Colonne : Taux d'écart global (tous comptages)
         cols.push({
             headerName: 'Taux écart global',
@@ -852,6 +928,16 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 }
             })
 
+            // Emplacements terminés / en attente par comptage (counting_{n}_emplacements_*)
+            const countingLocationStats: Record<string, LocationStat> = {}
+            Object.keys(job).forEach(key => {
+                const m = key.match(/^counting_(\d+)_emplacements_total$/)
+                if (m) {
+                    const stat = buildLocationStat(job, `counting_${m[1]}_emplacements_`)
+                    if (stat) countingLocationStats[m[1]] = stat
+                }
+            })
+
             // Déterminer l'assignment_id à utiliser pour l'impression
             // Priorité : 1er comptage, sinon 2e comptage, sinon null
             // Les assignments peuvent avoir counting_reference comme identifiant
@@ -886,7 +972,9 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 discrepancyCount,
                 discrepancyRate,
                 assignmentId,
-                countingDiscrepancies
+                countingDiscrepancies,
+                locationStats: buildLocationStat(job, 'emplacements_'),
+                countingLocationStats
             }
 
             rows.push(row)
