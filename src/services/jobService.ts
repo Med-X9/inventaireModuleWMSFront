@@ -133,6 +133,23 @@ export class JobService {
         return response.data;
     }
 
+    /** Pivot emplacement x comptage (statut par emplacement) */
+    static async getLocationsPivot(inventoryId: number, warehouseId: number): Promise<{
+        countings: number[]
+        rows: Array<{
+            job_id: number
+            job_reference: string
+            location_id: number
+            location_reference: string
+            statuses: Record<string, string>
+        }>
+    }> {
+        const response = await axiosInstance.get(
+            `${this.baseUrlInventory}${inventoryId}/warehouse/${warehouseId}/jobs/locations-pivot/`
+        );
+        return response.data?.data ?? { countings: [], rows: [] };
+    }
+
     /**
      * Récupérer les jobs avec écarts groupés par ordre de comptage
      * GET /web/api/inventory/<inventory_id>/warehouse/<warehouse_id>/jobs/discrepancies-by-counting/

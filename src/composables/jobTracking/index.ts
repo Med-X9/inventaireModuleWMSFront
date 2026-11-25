@@ -101,6 +101,8 @@ export interface JobTrackingRow {
     locationStats?: LocationStat | null
     /** Emplacements terminés / en attente par ordre de comptage */
     countingLocationStats?: Record<string, LocationStat>
+    /** Emplacements du job avec statut par comptage (pivot dépliable) */
+    locations?: Array<Record<string, any>>
 }
 
 /** Avancement des emplacements (terminés / en attente + pourcentages) */
@@ -110,6 +112,14 @@ export interface LocationStat {
     enAttente: number
     pctTermines: number
     pctEnAttente: number
+    /** 3e comptage et +: emplacements en écart rapportés au total du job (%) */
+    pctEcartSurTotal?: number
+    /** 3e comptage et +: emplacements terminés rapportés au total du job (%) */
+    pctTermineSurTotal?: number
+    /** 3e comptage et +: terminés rapportés aux emplacements en écart (%) */
+    pctTermineSurEcart?: number
+    /** Total des emplacements du job (base des pourcentages) */
+    baseTotal?: number
 }
 
 const buildLocationStat = (job: any, prefix: string): LocationStat | null => {
@@ -120,7 +130,15 @@ const buildLocationStat = (job: any, prefix: string): LocationStat | null => {
         termines: Number(job[`${prefix}termines`] ?? 0),
         enAttente: Number(job[`${prefix}en_attente`] ?? 0),
         pctTermines: Number(job[`${prefix}termines_percent`] ?? 0),
-        pctEnAttente: Number(job[`${prefix}en_attente_percent`] ?? 0)
+        pctEnAttente: Number(job[`${prefix}en_attente_percent`] ?? 0),
+        ...(job[`${prefix.replace('emplacements_', '')}ecart_sur_total_percent`] !== undefined
+            ? {
+                pctEcartSurTotal: Number(job[`${prefix.replace('emplacements_', '')}ecart_sur_total_percent`]),
+                pctTermineSurTotal: Number(job[`${prefix.replace('emplacements_', '')}termines_sur_total_percent`] ?? 0),
+                pctTermineSurEcart: Number(job[`${prefix.replace('emplacements_', '')}termines_sur_ecart_percent`] ?? 0),
+                baseTotal: Number(job.emplacements_base_total ?? 0)
+            }
+            : {})
     }
 }
 
@@ -135,7 +153,14 @@ const renderLocationStat = (stat: LocationStat | null | undefined): string => {
         `<div style="height:5px;border-radius:3px;background:#e2e8f0;overflow:hidden;margin:2px 0">` +
         `<div style="height:100%;width:${done}%;background:#4A90E2"></div></div>` +
         `<div style="font-size:11px;color:#64748b">${stat.termines} terminé${stat.termines > 1 ? 's' : ''} · ` +
-        `${stat.enAttente} en attente (${stat.pctEnAttente}%)</div></div>`
+        `${stat.enAttente} en attente (${stat.pctEnAttente}%)</div>` +
+        (stat.pctEcartSurTotal !== undefined
+            ? `<div style="font-size:11px;color:#64748b;border-top:1px solid #e2e8f0;margin-top:3px;padding-top:2px">` +
+              `<div>${stat.total} en écart sur ${stat.baseTotal} emplacements : <b>${stat.pctEcartSurTotal}%</b></div>` +
+              `<div>${stat.termines} faits sur ${stat.baseTotal} emplacements : <b>${stat.pctTermineSurTotal}%</b></div>` +
+              `<div>faits sur les écarts : <b>${stat.pctTermineSurEcart}%</b></div></div>`
+            : '') +
+        `</div>`
     )
 }
 
@@ -677,6 +702,38 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
             })
         })
 
+        // Pivot dépliable : emplacements du job avec leur statut par comptage (comme Affecter / Planning)
+        cols.push({
+            headerName: 'Détail emplacements',
+            field: 'locations',
+            sortable: false,
+            filterable: false,
+            dataType: 'text' as ColumnDataType,
+            width: 200,
+            editable: false,
+            visible: true,
+            icon: 'mdi-map-marker-outline',
+            description: 'Emplacements du job et statut par comptage',
+            nestedData: {
+                key: 'locations',
+                displayKey: 'reference',
+                countSuffix: 'emplacements',
+                expandable: true,
+                showCount: true,
+                title: 'Emplacements du job',
+                columns: [
+                    { field: 'reference', headerName: 'Emplacement', sortable: true, filterable: true, width: 160 },
+                    ...sessionOrders.map((order) => ({
+                        field: `counting_${order}_label`,
+                        headerName: getSessionColumnHeader(order),
+                        sortable: true,
+                        filterable: true,
+                        width: 130
+                    }))
+                ]
+            }
+        } as any)
+
         // Emplacements terminés / en attente du job (une ligne par job) + détail par comptage
         cols.push({
             headerName: 'Emplacements',
@@ -974,7 +1031,15 @@ export function useJobTracking(config?: UseJobTrackingConfig) {
                 assignmentId,
                 countingDiscrepancies,
                 locationStats: buildLocationStat(job, 'emplacements_'),
-                countingLocationStats
+                countingLocationStats,
+                locations: ((job as any).locations || []).map((loc: any) => {
+                    const item: Record<string, any> = { id: loc.id, reference: loc.location_reference }
+                    Object.keys(loc).forEach(k => {
+                        const mm = k.match(/^counting_(\d+)_status$/)
+                        if (mm) item[`counting_${mm[1]}_label`] = loc[k] === 'TERMINE' ? 'Terminé' : 'En attente'
+                    })
+                    return item
+                })
             }
 
             rows.push(row)
