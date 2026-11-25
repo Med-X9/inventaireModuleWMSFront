@@ -995,8 +995,10 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
             color: 'primary',
             onClick: async (result: InventoryResult) => {
                 try {
-                    if (isReadOnlyArticleRow(result)) {
-                        await alertService.info({ text: 'Le résultat se modifie sur la ligne « Emplacement » de cet emplacement.' })
+                    // Ligne article (écart par emplacement) : modification du résultat de l'article seul
+                    const articleProductId = isReadOnlyArticleRow(result) ? (result as any).product_id : undefined
+                    if (isReadOnlyArticleRow(result) && !articleProductId) {
+                        await alertService.error({ text: 'Identifiant de l\'article manquant : impossible de modifier cette ligne.' })
                         return
                     }
                     // Extraire l'ID de l'écart de comptage depuis le résultat, le job ou les assignments
@@ -1013,7 +1015,9 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
                         html: `
                             <div style="text-align: left; padding: 1rem 0;">
                                 <p style="color: #6b7280; font-size: 0.95rem; margin-bottom: 1rem;">
-                                    Entrez la nouvelle valeur du résultat final
+                                    ${articleProductId
+                                        ? 'Entrez le nouveau résultat final de cet article (le total de l\'emplacement sera recalculé)'
+                                        : 'Entrez la nouvelle valeur du résultat final'}
                                 </p>
                             </div>
                         `,
@@ -1085,8 +1089,11 @@ export function useInventoryResults(config?: UseInventoryResultsConfig) {
 
                     // Appeler l'API de mise à jour du résultat final
                     // Construire le payload : inclure justification seulement si elle est renseignée
-                    const updatePayload: { final_result: number; justification?: string } = {
+                    const updatePayload: { final_result: number; justification?: string; product_id?: number } = {
                         final_result: newValue
+                    }
+                    if (articleProductId) {
+                        updatePayload.product_id = Number(articleProductId)
                     }
                     if (justificationResult.value && typeof justificationResult.value === 'string' && justificationResult.value.trim()) {
                         updatePayload.justification = justificationResult.value.trim()

@@ -17,6 +17,8 @@ import type { AxiosResponse } from 'axios'
  */
 export interface UpdateFinalResultRequest {
     final_result: number
+    /** Écart par emplacement : modifie le résultat de cet article seul (le total est recalculé) */
+    product_id?: number
     justification?: string
     resolved?: boolean
 }
