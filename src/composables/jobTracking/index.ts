@@ -98,9 +98,9 @@ export interface JobTrackingRow {
      */
     countingDiscrepancies: Record<string, number | null>
     /** Emplacements terminés / en attente du job (tous comptages) */
-    locationStats: LocationStat | null
+    locationStats?: LocationStat | null
     /** Emplacements terminés / en attente par ordre de comptage */
-    countingLocationStats: Record<string, LocationStat>
+    countingLocationStats?: Record<string, LocationStat>
 }
 
 /** Avancement des emplacements (terminés / en attente + pourcentages) */
